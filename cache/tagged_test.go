@@ -24,7 +24,8 @@ func TestSimpleCacheTagged(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	hit := func(c *SimpleCache, key string) bool {
+	hit := func(t *testing.T, c *SimpleCache, key string) bool {
+		t.Helper()
 		_, err := c.Get(ctx, key)
 		if err != nil && !errors.Is(err, agentErrors.ErrCacheMiss) {
 			t.Fatalf("Get(%s) 意外错误: %v", key, err)
@@ -135,6 +136,32 @@ func TestSimpleCacheTagged(t *testing.T) {
 			wantTags: map[string][]string{"a": {"k2"}},
 		},
 		{
+			name: "过期未清理的条目可按标签删除且不残留索引",
+			run: func(t *testing.T, c *SimpleCache) {
+				if err := c.SetTagged(ctx, "k1", val, time.Millisecond, "a"); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(5 * time.Millisecond)
+				for range 2 {
+					if err := c.DeleteTag(ctx, "a"); err != nil {
+						t.Fatalf("删除过期条目的标签: %v", err)
+					}
+				}
+				if got := c.GetStats().Size; got != 0 {
+					t.Fatalf("DeleteTag 后条目数 = %d, 期望 0", got)
+				}
+				// 残留的 a→k1 索引会让下面的 DeleteTag 误删改挂标签 b 的 k1。
+				if err := c.SetTagged(ctx, "k1", val, time.Minute, "b"); err != nil {
+					t.Fatal(err)
+				}
+				if err := c.DeleteTag(ctx, "a"); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantHit:  map[string]bool{"k1": true},
+			wantTags: map[string][]string{"b": {"k1"}},
+		},
+		{
 			name: "同键换标签后旧标签不再关联",
 			run: func(t *testing.T, c *SimpleCache) {
 				seed(t, c)
@@ -221,7 +248,7 @@ func TestSimpleCacheTagged(t *testing.T) {
 			tt.run(t, c)
 
 			for key, want := range tt.wantHit {
-				if got := hit(c, key); got != want {
+				if got := hit(t, c, key); got != want {
 					t.Errorf("Get(%s) 命中 = %v, 期望 %v", key, got, want)
 				}
 			}
