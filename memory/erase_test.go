@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type eraseCall struct {
@@ -100,9 +101,14 @@ func (f *eraseFixture) eraseEntries(t *testing.T) []queueEntry {
 
 func newEraseFixture(t *testing.T, withErase bool) *eraseFixture {
 	t.Helper()
+	return newEraseFixtureWith(t, withErase, Config{})
+}
+
+func newEraseFixtureWith(t *testing.T, withErase bool, cfg Config) *eraseFixture {
+	t.Helper()
 	f := &eraseFixture{st: newHookStore(t), rec: &eraseRecorder{}, ctx: WithNamespace(context.Background(), testNS...),
 		now: time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)}
-	cfg := Config{Durable: f.st}
+	cfg.Durable = f.st
 	if withErase {
 		cfg.OnErase = f.rec.erase
 	}
@@ -172,6 +178,7 @@ func TestOnErase(t *testing.T) {
 				f.rec.set(1, nil)
 				require.NoError(t, f.m.Forget(f.ctx, "a"), "已经提交，擦除失败不返回")
 				require.Equal(t, 1, f.rec.count())
+				require.EqualValues(t, 1, f.m.EraseErrors(), "吞掉的擦除错误计数")
 				require.NoError(t, f.m.Forget(f.ctx, "a"))
 				require.Equal(t, 1, f.rec.count(), "已遗忘时直接返回，不擦除")
 				require.NoError(t, f.m.Maintain(f.ctx))
@@ -301,4 +308,94 @@ func TestForgetErasesAcrossSessions(t *testing.T) {
 	}
 	require.NoError(t, f.m.Forget(f.ctx, "s1"))
 	require.Equal(t, []eraseCall{{ns: testNS, scope: initialScope}}, f.rec.take())
+}
+
+func TestNewValidatesEraseWindow(t *testing.T) {
+	erase := func(context.Context, []string, string) error { return nil }
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr bool
+	}{
+		{name: "OnErase 且 RetireGrace 小于 EraseWithin", cfg: Config{OnErase: erase, RetireGrace: time.Minute, EraseWithin: 2 * time.Minute}, wantErr: true},
+		{name: "OnErase 且 RetireGrace 等于 EraseWithin", cfg: Config{OnErase: erase, RetireGrace: time.Minute, EraseWithin: time.Minute}},
+		{name: "OnErase 且 RetireGrace 大于 EraseWithin", cfg: Config{OnErase: erase, RetireGrace: 3 * time.Minute, EraseWithin: time.Minute}},
+		{name: "OnErase 为 nil 时不校验", cfg: Config{RetireGrace: time.Minute, EraseWithin: 2 * time.Minute}},
+		{name: "只设 OnErase 其余取默认值", cfg: Config{OnErase: erase}},
+		{name: "只设 OnErase 与超过默认 RetireGrace 的 EraseWithin", cfg: Config{OnErase: erase, EraseWithin: constants.DefaultMemoryRetireGrace + time.Second}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := tt.cfg
+			cfg.Durable = newHookStore(t)
+			_, err := New(cfg)
+			if tt.wantErr {
+				require.True(t, agentErrors.IsCode(err, agentErrors.CodeInvalidConfig), "%v", err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// clearCountingIndex 记录 Clear 的调用次数，用于确认 retire 不因前一步失败而跳过索引清理。
+type clearCountingIndex struct {
+	*MemoryIndex
+	mu     sync.Mutex
+	clears int
+}
+
+func (x *clearCountingIndex) Clear(ctx context.Context, ns []string) error {
+	x.mu.Lock()
+	x.clears++
+	x.mu.Unlock()
+	return x.MemoryIndex.Clear(ctx, ns)
+}
+
+func (x *clearCountingIndex) count() int {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.clears
+}
+
+// retire 的三步互不短路：RemoveScope 失败时索引清理与擦除照常执行。
+func TestRetireDoesNotShortCircuit(t *testing.T) {
+	x := &clearCountingIndex{MemoryIndex: NewMemoryIndex()}
+	f := newEraseFixtureWith(t, true, Config{Index: x, Embedder: bigramEmbedder{}, EmbedModel: "bigram"})
+	f.remember(t, "a")
+	errCrash := errors.New("模拟 RemoveScope 失败")
+	f.st.h.before = func(op, _, _ string) error {
+		if op == "removescope" {
+			return errCrash
+		}
+		return nil
+	}
+	f.rec.set(-1, nil)
+	err := f.m.Purge(f.ctx)
+	require.ErrorIs(t, err, errCrash)
+	require.ErrorIs(t, err, errEraseFailed, "错误汇总返回")
+	require.Equal(t, len(indexSpaces), x.count(), "RemoveScope 失败时仍清理每个索引空间")
+	require.Equal(t, []eraseCall{{ns: testNS, scope: initialScope}}, f.rec.take())
+}
+
+// RetireGrace 到期时擦除失败，retiring 条目保留，下一次清理重试；成功后移出。
+func TestRetireKeepsEntryWhenEraseFails(t *testing.T) {
+	f := newEraseFixture(t, true)
+	f.remember(t, "a")
+	retiring := func() int {
+		var ret retiringState
+		_, _, err := loadJSON(f.ctx, f.st, retiringID, &ret)
+		require.NoError(t, err)
+		return len(ret.Scopes)
+	}
+	require.NoError(t, f.m.Purge(f.ctx))
+	f.advance(f.m.cfg.RetireGrace)
+	f.rec.set(-1, nil)
+	require.ErrorIs(t, f.m.Maintain(f.ctx), errEraseFailed)
+	require.Equal(t, 1, retiring(), "擦除失败时保留 retiring 条目")
+	f.rec.set(0, nil)
+	f.rec.take()
+	require.NoError(t, f.m.Maintain(f.ctx))
+	require.Equal(t, []eraseCall{{ns: testNS, scope: initialScope}}, f.rec.take(), "下一次清理重试擦除")
+	require.Zero(t, retiring(), "成功后移出 retiring")
 }

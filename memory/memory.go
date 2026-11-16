@@ -115,6 +115,8 @@ type Memory struct {
 	eraseWithin time.Duration
 	// compactErrors 计数提交成功之后失败的压缩；compactions 计数成功切换的基础快照。
 	compactErrors, compactions atomic.Int64
+	// eraseErrors 计数提交之后失败的擦除（已交给维护重做）。
+	eraseErrors atomic.Int64
 	// droppedJobs 计数没有处理就丢弃的任务（跨越 Purge、没有作用域、state 超限或登记后发生了遗忘）。
 	droppedJobs atomic.Int64
 	// maintenance 计数 Maintain 的轮次，用于每 ReindexEvery 轮的定期维护。
@@ -158,6 +160,10 @@ func New(cfg Config) (*Memory, error) {
 		if d.zero {
 			d.set()
 		}
+	}
+	// Purge 之后旧作用域只在 RetireGrace 内重复擦除，短于 EraseWithin 时擦除窗口会提前结束。
+	if cfg.OnErase != nil && cfg.RetireGrace < cfg.EraseWithin {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "配置 OnErase 时 RetireGrace（%s）不得小于 EraseWithin（%s）", cfg.RetireGrace, cfg.EraseWithin).WithComponent("memory").WithOperation("new")
 	}
 	cfg.RecallK = min(cfg.RecallK, constants.MaxMemoryRecallK)
 	now := cfg.Now
