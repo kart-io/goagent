@@ -44,6 +44,9 @@ type ModelCache struct {
 
 const minTagKeyLen = 32
 
+// writeErrorDeleteTimeout 是写入失败后清理条目的删除超时。
+const writeErrorDeleteTimeout = time.Second
+
 // WithModelCache 为模型调用启用缓存。
 func (b *AgentBuilder[S]) WithModelCache(mc ModelCache) *AgentBuilder[S] {
 	b.config.ModelCache = &mc
@@ -313,7 +316,10 @@ func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cach
 	}
 	if err != nil {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_write_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
-		e.deleteKey(ctx) // 超时的写入可能已在服务端生效
+		// 超时的写入可能已在服务端生效；ctx 已超时或取消时原 ctx 的删除必然失败，改用脱离取消的短超时 ctx。
+		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeErrorDeleteTimeout)
+		defer cancel()
+		e.deleteKey(dctx)
 		return
 	}
 	if same, err := e.recheck(ctx); !same {

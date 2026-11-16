@@ -404,10 +404,11 @@ func TestModelCacheValidate(t *testing.T) {
 	}
 }
 
-// failingWriteCache 的写入总是失败，并记录 Delete 的键。
+// failingWriteCache 的写入总是失败，并记录 Delete 的键与收到的 ctx 是否已取消。
 type failingWriteCache struct {
 	cache.Bytes
-	deleted []string
+	deleted   []string
+	ctxErrors []error
 }
 
 func (f *failingWriteCache) SetBytes(context.Context, string, []byte, time.Duration) error {
@@ -420,17 +421,34 @@ func (f *failingWriteCache) SetTagged(context.Context, string, []byte, time.Dura
 
 func (f *failingWriteCache) DeleteTag(context.Context, string) error { return nil }
 
-func (f *failingWriteCache) Delete(_ context.Context, key string) error {
+func (f *failingWriteCache) Delete(ctx context.Context, key string) error {
 	f.deleted = append(f.deleted, key)
+	f.ctxErrors = append(f.ctxErrors, ctx.Err())
 	return nil
 }
 
 func TestModelCacheStoreWriteErrorDeletes(t *testing.T) {
-	for _, erase := range []EraseMode{EraseOff, EraseAuto} {
-		fc := &failingWriteCache{Bytes: cache.NewSimpleCache(time.Hour, cache.WithoutBackgroundCleanup())}
-		cfg := ModelCache{Cache: fc, TTL: time.Minute, TagKey: testTagKey, Erase: erase}
-		e := &modelCacheEntry{scope: &modelCacheScope{cfg: cfg, sessionID: "s1"}, key: "k1"}
-		e.store(context.Background(), &llm.StreamChunk{FinishReason: "stop", Content: "ok"}, func(*llm.StreamChunk) error { return nil })
-		require.Equal(t, []string{"k1"}, fc.deleted, "erase=%d", erase)
+	for _, tc := range []struct {
+		name      string
+		erase     EraseMode
+		cancelled bool
+	}{
+		{"EraseOff", EraseOff, false},
+		{"EraseAuto", EraseAuto, false},
+		{"ctx 已取消仍删除", EraseOff, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fc := &failingWriteCache{Bytes: cache.NewSimpleCache(time.Hour, cache.WithoutBackgroundCleanup())}
+			cfg := ModelCache{Cache: fc, TTL: time.Minute, TagKey: testTagKey, Erase: tc.erase}
+			e := &modelCacheEntry{scope: &modelCacheScope{cfg: cfg, sessionID: "s1"}, key: "k1"}
+			ctx, cancel := context.WithCancel(context.Background())
+			if tc.cancelled {
+				cancel()
+			}
+			defer cancel()
+			e.store(ctx, &llm.StreamChunk{FinishReason: "stop", Content: "ok"}, func(*llm.StreamChunk) error { return nil })
+			require.Equal(t, []string{"k1"}, fc.deleted)
+			require.Equal(t, []error{nil}, fc.ctxErrors, "Delete 收到的 ctx 不应已取消")
+		})
 	}
 }
