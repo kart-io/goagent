@@ -80,10 +80,45 @@ func (mc ModelCache) DeleteSession(ctx context.Context, sessionID string) error 
 	return t.DeleteTag(ctx, sessionTag(mc.TagKey, sessionID))
 }
 
+// shortTagKey 是 TagKey 不足时的错误文案，Build、Validate 与标签删除共用。
+const shortTagKey = "使用标签删除时 TagKey 至少 32 字节"
+
 // checkTagKey 拦截 TagKey 不足的标签删除：Worker 不经过 Builder 校验，算出的标签与写入时对不上，删除会静默落空。
 func (mc ModelCache) checkTagKey() error {
 	if len(mc.TagKey) < minTagKeyLen {
-		return agentErrors.NewInvalidConfigError("builder", "model_cache", "使用标签删除时 TagKey 至少 32 字节")
+		return agentErrors.NewInvalidConfigError("builder", "model_cache", shortTagKey)
+	}
+	return nil
+}
+
+// configRule 是一条配置规则：bad 成立时以 err 拒绝，或以 warn 告警。
+type configRule struct {
+	bad  func() bool
+	err  string
+	warn string
+}
+
+// rules 是与长期记忆无关的规则，Build 与 Validate 共用。
+func (mc ModelCache) rules() []configRule {
+	_, tagged := mc.tagged()
+	return []configRule{
+		{bad: func() bool { return mc.Cache == nil || mc.TTL <= 0 }, err: "Cache 不能为空且 TTL 必须大于 0"},
+		{bad: func() bool { return mc.Erase == EraseRequired && !tagged }, err: "EraseRequired 要求缓存实现 cache.Tagged"},
+		{bad: func() bool { return tagged && mc.Erase != EraseOff && len(mc.TagKey) < minTagKeyLen }, err: shortTagKey},
+	}
+}
+
+// Validate 检查与长期记忆无关的配置：Cache 非空、TTL 大于 0，以及会做标签删除时的 TagKey 长度。
+// Worker 不经过 Builder，应在启动时调用，避免配错后每轮维护反复收到 OnErase 失败。
+func (mc ModelCache) Validate() error {
+	return firstConfigError(mc.rules())
+}
+
+func firstConfigError(rules []configRule) error {
+	for _, r := range rules {
+		if r.err != "" && r.bad() {
+			return agentErrors.NewInvalidConfigError("builder", "model_cache", r.err)
+		}
 	}
 	return nil
 }
@@ -96,24 +131,15 @@ func (b *AgentBuilder[S]) validateModelCache() error {
 	_, tagged := mc.tagged()
 	m := b.config.LongTermMemory
 	ttlOverErase := func() bool { return m != nil && mc.TTL > m.EraseWithin() }
-	rules := []struct {
-		bad  func() bool
-		err  string
-		warn string
-	}{
-		{bad: func() bool { return mc.Cache == nil || mc.TTL <= 0 }, err: "Cache 不能为空且 TTL 必须大于 0"},
+	rules := append(mc.rules(), []configRule{
 		{bad: func() bool { return mc.Scope == nil && m == nil }, err: "没有可信的隔离身份：未配置长期记忆时必须提供 Scope"},
-		{bad: func() bool { return mc.Erase == EraseRequired && !tagged }, err: "EraseRequired 要求缓存实现 cache.Tagged"},
 		{bad: func() bool { return mc.Erase == EraseRequired && m != nil && !m.ErasesOnDelete() }, err: "EraseRequired 要求长期记忆配置 OnErase（用 ModelCache.Eraser()）"},
 		{bad: func() bool { return mc.Erase == EraseRequired && ttlOverErase() }, err: "EraseRequired 要求 TTL 不超过 memory.Config.EraseWithin：物理删除失败时残留时长的上限就是 TTL"},
-		{bad: func() bool { return tagged && mc.Erase != EraseOff && len(mc.TagKey) < minTagKeyLen }, err: "使用标签删除时 TagKey 至少 32 字节"},
 		{bad: func() bool { return mc.Erase == EraseAuto && !tagged }, warn: "缓存不支持按标签删除，被删内容的物理删除退回 TTL"},
 		{bad: func() bool { return mc.Erase != EraseRequired && ttlOverErase() }, warn: "TTL 超过 memory.Config.EraseWithin，被删内容可能在缓存中残留到 TTL"},
-	}
-	for _, r := range rules {
-		if r.err != "" && r.bad() {
-			return agentErrors.NewInvalidConfigError("builder", "model_cache", r.err)
-		}
+	}...)
+	if err := firstConfigError(rules); err != nil {
+		return err
 	}
 	for _, r := range rules {
 		if r.warn != "" && r.bad() {

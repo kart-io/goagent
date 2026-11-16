@@ -117,6 +117,7 @@ m, err := memory.New(memory.Config{
 
 - 配置了 `OnErase` 时，`memory.New` 要求 `RetireGrace >= EraseWithin`，否则返回配置错误。
 - 独立的 Worker 进程不经过 Builder，装配 `OnErase` 时必须使用与 Builder 相同的缓存后端，以及相同且至少 32 字节的 `TagKey`。否则标签对不上，删除会静默落空。`EraseRequired` 时 Builder 只能校验本进程的记忆实例。
+- Worker 启动时应调用 `mc.Validate()`，出错即退出。它检查 `Cache` 非空、`TTL` 大于 0、`EraseRequired` 时缓存实现 `cache.Tagged`，以及会做标签删除时 `TagKey` 的长度，与 Build 用的是同一组规则。不调用时，配错要等到第一次 `OnErase` 才暴露，之后每轮维护都会失败。
 - `OnErase` 持续失败时，每轮维护都会通过 `RunMaintenance` 的 `onError` 报错，并累计到 `Memory.EraseErrors()`（提交之后立即擦除失败的次数）。宿主应当监控它。
 - 多进程部署时，擦除重做的截止时间（`Until`）依赖各进程的时钟，时钟偏差会改变实际的删除时限。
 

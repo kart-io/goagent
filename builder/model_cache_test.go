@@ -363,3 +363,39 @@ func TestModelCacheEraseTagKeyCheck(t *testing.T) {
 		})
 	}
 }
+
+// Validate 供 Worker 启动时自检：只检查与长期记忆无关的规则，文案与 Build 一致。
+func TestModelCacheValidate(t *testing.T) {
+	sc := cache.NewSimpleCache(time.Minute)
+	valid := ModelCache{Cache: sc, TTL: time.Minute, TagKey: testTagKey}
+	with := func(f func(*ModelCache)) ModelCache { mc := valid; f(&mc); return mc }
+	for _, tt := range []struct {
+		name    string
+		mc      ModelCache
+		wantErr string
+	}{
+		{name: "合法配置，Worker 不需要 Scope", mc: valid},
+		{name: "Cache 为空", mc: with(func(m *ModelCache) { m.Cache = nil }), wantErr: "TTL 必须大于 0"},
+		{name: "TTL 为 0", mc: with(func(m *ModelCache) { m.TTL = 0 }), wantErr: "TTL 必须大于 0"},
+		{name: "TagKey 为空", mc: with(func(m *ModelCache) { m.TagKey = nil }), wantErr: "TagKey 至少 32 字节"},
+		{name: "TagKey 不足 32 字节", mc: with(func(m *ModelCache) { m.TagKey = []byte("short") }), wantErr: "TagKey 至少 32 字节"},
+		{name: "EraseOff 不要求 TagKey", mc: with(func(m *ModelCache) { m.TagKey = nil; m.Erase = EraseOff })},
+		{name: "缓存不支持 Tagged 不要求 TagKey", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute}},
+		{name: "EraseRequired 缓存不支持 Tagged", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Erase: EraseRequired}, wantErr: "cache.Tagged"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.mc.Validate()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
+			require.Contains(t, err.Error(), tt.wantErr)
+			// Build 对同一配置报同一条错误。
+			_, berr := NewSimpleBuilder(newScriptModel()).WithModelCache(with(func(m *ModelCache) { *m = tt.mc; m.Scope = fixedScope })).Build()
+			require.Error(t, berr)
+			require.Equal(t, err.Error(), berr.Error())
+		})
+	}
+}
