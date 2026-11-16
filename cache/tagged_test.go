@@ -390,3 +390,56 @@ func TestSimpleCacheTaggedNoMissedDelete(t *testing.T) {
 		})
 	}
 }
+
+// 人工复现无锁 Set 与 SetTagged 的交错：Set 换下带标签的 v1 后、取锁摘除旧索引前，SetTagged 写入 v2。
+// untagStale 必须保留 v2 仍带的标签，否则 DeleteTag 漏删 v2；v2 不再带的旧标签则应摘除。
+func TestSimpleCacheUntagStaleKeepsCurrentTags(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name     string
+		v2Tag    string
+		wantHit  bool
+		wantTags map[string][]string
+	}{
+		{name: "v2 仍带标签a：保留索引，DeleteTag 删除 v2", v2Tag: "a", wantHit: false, wantTags: map[string][]string{}},
+		{name: "v2 改带标签b：摘除a的旧索引，DeleteTag 不误删 v2", v2Tag: "b", wantHit: true, wantTags: map[string][]string{"b": {"k"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewSimpleCache(time.Minute, WithoutBackgroundCleanup())
+			defer c.Close()
+			if err := c.SetTagged(ctx, "k", []byte("v1"), time.Minute, "a"); err != nil {
+				t.Fatal(err)
+			}
+			// Set 的前半段：无锁换入不带标签的条目。
+			old, _ := c.data.Swap("k", &cacheEntry{value: []byte("plain"), expiresAt: time.Now().Add(time.Minute)})
+			if err := c.SetTagged(ctx, "k", []byte("v2"), time.Minute, tt.v2Tag); err != nil {
+				t.Fatal(err)
+			}
+			// Set 的后半段：取锁摘除 v1 留下的索引。
+			c.tagMu.Lock()
+			c.untagStale("k", old.(*cacheEntry).tags)
+			c.tagMu.Unlock()
+
+			if err := c.DeleteTag(ctx, "a"); err != nil {
+				t.Fatal(err)
+			}
+			got, err := c.Get(ctx, "k")
+			if hit := err == nil && string(got.([]byte)) == "v2"; hit != tt.wantHit {
+				t.Errorf("DeleteTag(a) 后读到 v2 = %v, 期望 %v", hit, tt.wantHit)
+			}
+			c.tagMu.Lock()
+			defer c.tagMu.Unlock()
+			if len(c.tags) != len(tt.wantTags) {
+				t.Errorf("标签索引 = %v, 期望 %v", c.tags, tt.wantTags)
+			}
+			for tag, keys := range tt.wantTags {
+				for _, k := range keys {
+					if _, ok := c.tags[tag][k]; !ok {
+						t.Errorf("标签 %s 缺少键 %s", tag, k)
+					}
+				}
+			}
+		})
+	}
+}
