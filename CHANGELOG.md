@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。
 - `memory.Config.OnErase`（`memory.EraseFunc`）：`Forget`、`Rewound` 提交之后与 `Purge` 清理旧作用域时清除派生副本，失败由维护在 `EraseWithin` 内重做；配置时要求 `RetireGrace >= EraseWithin`。配套新增 `Memory.CacheVersion`、`Memory.EraseErrors`（累计提交后立即擦除失败的次数）、`Memory.ErasesOnDelete`、`Memory.EraseWithin`。`ModelCache.Eraser()` 返回可直接用作 `OnErase` 的回调，`ModelCache.DeleteSession` 供宿主在删除或回退会话后清除该会话的缓存条目。
 - 长期记忆状态增加 `LastRewindSeq`，`Rewound` 提交时设置；只增字段，存储格式版本不变。
+- `memory.JobStats.InvalidTargets`：整理时模型的 update、invalidate 指向不存在的记忆、降级为新增的决定数，原先静默降级不计数；`Conflicts` 不含这类决定。只增字段，存储格式版本不变。
 
 ### 破坏性变更
 

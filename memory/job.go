@@ -55,7 +55,9 @@ type JobStats struct {
 	Records   int `json:"records,omitzero"`   // 写入的记录
 	Relations int `json:"relations,omitzero"` // 写入的关系派生
 	Dropped   int `json:"dropped,omitzero"`   // 缺少合法 from 而丢弃的关系
-	Conflicts int `json:"conflicts,omitzero"` // 复核不成立、降级为新增的整理决定
+	Conflicts int `json:"conflicts,omitzero"` // 复核不成立、降级为新增的整理决定，不含 InvalidTargets
+	// InvalidTargets 是模型给出的 update、invalidate 指向不在所展示记忆中的 target、降级为新增的整理决定。
+	InvalidTargets int `json:"invalid_targets,omitzero"`
 }
 
 func (j Job) source() Source { return Source{Session: j.Session, From: j.From, To: j.To, Job: j.Key} }

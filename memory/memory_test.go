@@ -19,6 +19,7 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/testing/mocks"
 )
 
 // bigramEmbedder 把字符对哈希到固定维度，文本重合越多向量越接近。
@@ -432,6 +433,52 @@ func TestWorkerExtractsAndSupersedes(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, JobDone, done.Status)
+}
+
+func TestWorkerCountsInvalidReconcileTargets(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		reply string
+		want  int
+	}{
+		{"update 指向不存在的记忆", `{"op":"update","target":"ghost","content":"用户住在上海浦东"}`, 1},
+		{"invalidate 指向不存在的记忆", `{"op":"invalidate","target":"ghost"}`, 1},
+		{"add 不带 target", `{"op":"add"}`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sessions := session.NewMemoryStore()
+			model := mocks.NewScriptedClient(
+				mocks.TextReply("抽取", `{"memories":[{"kind":"fact","content":"用户住在上海","importance":0.8}]}`),
+				mocks.ScriptedRule{Name: "整理", Match: mocks.RequestContains("已有记忆", "用户住在北京"), Reply: mocks.ScriptedReply{Text: tc.reply}},
+			)
+			m := newMemory(t, Config{Model: model, Sessions: sessions})
+			ctx := WithNamespace(context.Background(), "u")
+			_, err := m.Remember(ctx, Record{Content: "用户住在北京", Importance: 0.8})
+			require.NoError(t, err)
+
+			from, to := appendTurn(t, sessions, "s", false, llm.UserMessage("我住在上海"), llm.Message{Role: "assistant", Content: "好的"})
+			require.NoError(t, m.Enqueue(ctx, Job{Key: "s/1", Namespace: []string{"u"}, Session: "s", Scope: "0", From: from, To: to}))
+			_, err = m.ProcessPending(ctx)
+			require.NoError(t, err)
+
+			j, ok, err := m.Job(ctx, "s/1")
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, JobDone, j.Status)
+			require.Equal(t, tc.want, j.Stats.InvalidTargets)
+			require.Zero(t, j.Stats.Conflicts, "无效 target 不计入复核冲突")
+			require.Equal(t, 1, j.Stats.Records, "候选仍按新增写入")
+			all, err := listRecords(ctx, m, []string{"u"})
+			require.NoError(t, err)
+			var valid []string
+			for _, r := range all {
+				if r.Valid() {
+					valid = append(valid, r.Content)
+				}
+			}
+			require.ElementsMatch(t, []string{"用户住在北京", "用户住在上海"}, valid, "已有记忆不受影响")
+		})
+	}
 }
 
 func TestWorkerSkipsRewoundAndLearnsFromAborted(t *testing.T) {

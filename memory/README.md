@@ -49,7 +49,7 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Rewound(ctx, session, to)` | 宿主在 `session.Rewind` 后调用：有消息被遮蔽的轮次整轮失效，来自这些轮次的关系派生与实体名称删除，只被它们取代的旧记录与旧关系恢复；回退点切开一轮时为可见部分补登抽取任务；回退时仍在进行的轮次之后登记会被截断或丢弃 |
 | `Reindex(ctx, force)` | 为缺少当前版本向量的记录与实体补写向量（`force` 时全部重写），删除过期的键；换嵌入模型或升级后运行，不写记录 |
 | `Prune(ctx)` | 按 `Retention` 删除过期、超出容量与超过保留期的失效记录，以及保留期外的已完成任务与回退标记；Worker 处理完一批任务后执行 |
-| `Enqueue` / `Job` / `DroppedJobs` | 登记抽取任务（Builder 在每轮结束登记）/ 查询任务状态，已完成的任务带统计 `Stats`（写入的记录与关系、丢弃的关系、降级的整理决定）/ 因作用域切换、遗忘、回退或 state 超限而丢弃的任务数 |
+| `Enqueue` / `Job` / `DroppedJobs` | 登记抽取任务（Builder 在每轮结束登记）/ 查询任务状态，已完成的任务带统计 `Stats`（写入的记录与关系、丢弃的关系、复核不成立而降级的整理决定 `Conflicts`、模型给出不存在的 target 而降级为新增的整理决定 `InvalidTargets`）/ 因作用域切换、遗忘、回退或 state 超限而丢弃的任务数 |
 | `Run` / `ProcessPending` | Worker：每轮先执行 `Maintain`，再处理各命名空间的待处理任务；多个实例同时运行时由锁保证同一时刻只有一个在处理 |
 | `Maintain(ctx)` / `RunMaintenance(ctx, interval, onError)` | 不需要模型的维护：完成 Purge 遗留的旧作用域清理、Forget 崩溃后残留的向量清理，每 `ReindexEvery` 轮补写向量并清理过期的删除标记。**不运行 Worker 的部署必须运行 `RunMaintenance`** |
 | `Tools()` | `memory_search`、`memory_save`、`memory_forget` |

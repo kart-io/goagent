@@ -259,6 +259,7 @@ type jobPlan struct {
 	relations []relation
 	ends      resolvedEnds
 	dropped   int                  // 缺少 from 或 from 越界的关系
+	invalid   int                  // target 无效而降级为新增的整理决定
 	vectors   map[string][]float32 // 正文 → 向量：提交时记录的正文总是计划中出现过的某段正文
 }
 
@@ -354,6 +355,9 @@ func (m *Memory) planMemories(ctx context.Context, j Job, cands []candidate, p *
 			}
 		}
 		if k < 0 && reply.Op != opNoop {
+			if reply.Op == opUpdate || reply.Op == opInvalidate {
+				p.invalid++
+			}
 			reply.Op = opAdd
 		}
 		d.content = c.Content
@@ -475,7 +479,7 @@ func (m *Memory) commitJob(ctx context.Context, j Job, p *jobPlan) error {
 		if cur, ok := t.Jobs.Get(j.Key); !ok || cur.Status != JobPending {
 			return errNoChange
 		}
-		w.stats.Dropped = p.dropped
+		w.stats.Dropped, w.stats.InvalidTargets = p.dropped, p.invalid
 		entities := p.ends.effective(t)
 		refs := m.applyDecisions(t, j, p, now, &w)
 		w.relations = writeRelations(t, j, p.at, now, p.relations, refs, entities, p.ends.vectors)
