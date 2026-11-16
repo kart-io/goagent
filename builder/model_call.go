@@ -300,8 +300,9 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 			ctx = context.WithValue(ctx, modelMetadataKey{}, *saved.Metadata)
 		}
 		if record.Replayed && saved.Cached {
-			// 回放命中的记录：照常计入命中，但它没有预留，不能记账。
+			// 回放命中的记录：照常计入命中并标记 Cached，但它没有预留，不能记账。
 			replayedCache = true
+			observe.MarkCached(ctx)
 			if s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope); s != nil {
 				s.hits.Add(1)
 			}

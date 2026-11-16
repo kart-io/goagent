@@ -336,14 +336,43 @@ func TestModelCacheRunHitOutput(t *testing.T) {
 	require.Equal(t, miss.out.Metadata["usage_complete"], hit.out.Metadata["usage_complete"])
 }
 
+// 纯聊天路径：命中不是真实调用，answer_usage_reported 与工具流的 usage_complete 一样不因命中变成 false。
+func TestModelCacheRunPlainUsageReported(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		turn     []*llm.StreamChunk
+		wantMiss bool
+	}{
+		{name: "模型报告用量", turn: textTurn("答案"), wantMiss: true},
+		{name: "模型未报告用量", turn: []*llm.StreamChunk{{Delta: "答案"}, {Done: true, FinishReason: "stop"}}, wantMiss: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newCountingCache()
+			model := newCacheModel("dep", tc.turn, textTurn("多余"))
+			agent, err := NewSimpleBuilder(model).WithSessionID("s").
+				WithModelCache(ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}).Build()
+			require.NoError(t, err)
+			miss, err := agent.AsRunnable().Invoke(context.Background(), "问题")
+			require.NoError(t, err)
+			hit, err := agent.AsRunnable().Invoke(context.Background(), "问题")
+			require.NoError(t, err)
+			require.Equal(t, 1, model.calls())
+			require.Equal(t, int64(1), hit.Metadata["model_cache_hits"])
+			require.Equal(t, tc.wantMiss, miss.Metadata["answer_usage_reported"])
+			require.Equal(t, true, hit.Metadata["answer_usage_reported"])
+		})
+	}
+}
+
 // 带预算的持久运行：命中不预留不记账，恢复时从日志回放、不查缓存也不报 "usage has no reservation"。
 func TestModelCacheRunDurableBudget(t *testing.T) {
 	c := newCountingCache()
 	mc := ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}
+	sink := &cacheSink{}
 	run := func(store durable.Store, key string, model *cacheModel) (*AgentOutput, budget.Snapshot) {
 		ctrl, err := budget.NewDurable(budget.Config{RootKey: "root-" + key, Version: "v1", MaxModelRequests: 5}, store)
 		require.NoError(t, err)
-		ctx := durable.WithJournal(durable.WithExecutionKey(budget.WithController(context.Background(), ctrl), key), store)
+		ctx := durable.WithJournal(durable.WithExecutionKey(budget.WithController(observe.WithObserver(context.Background(), sink), ctrl), key), store)
 		agent, err := NewSimpleBuilder(model).WithDurableScope("cache").WithSessionID("s").WithModelCache(mc).Build()
 		require.NoError(t, err)
 		out, err := agent.AsRunnable().Invoke(ctx, "问题")
@@ -376,6 +405,10 @@ func TestModelCacheRunDurableBudget(t *testing.T) {
 	require.Equal(t, gets, c.gets.Load(), "恢复时从日志回放，不查缓存")
 	require.EqualValues(t, 1, c.sets.Load(), "回放不写缓存")
 	require.Equal(t, hitSnap, replaySnap, "预算只算真实调用")
+	require.Equal(t, int64(1), again.Metadata["model_cache_hits"])
+	replayed, ok := sink.find("model_replayed")
+	require.True(t, ok)
+	require.True(t, replayed.Cached, "回放命中记录的 model_replayed 带 Cached")
 }
 
 // 不满足写入条件的回答不写入缓存。
@@ -468,6 +501,39 @@ func TestModelCacheRunCorruptEntry(t *testing.T) {
 			_, err = agent.AsRunnable().Invoke(context.Background(), "问题")
 			require.NoError(t, err)
 			require.Equal(t, 2, model.calls(), "重新写入后命中")
+		})
+	}
+}
+
+// 后端把写入的字节以 string 原样返回时照常命中。
+func TestModelCacheRunValueTypes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		convert func([]byte) any
+	}{
+		{"[]byte", func(b []byte) any { return b }},
+		{"string", func(b []byte) any { return string(b) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			c := newCountingCache()
+			model := newCacheModel("dep", textTurn("答案"), textTurn("多余"))
+			agent, err := NewSimpleBuilder(model).WithSessionID("s").WithTools(plainTool()).
+				WithModelCache(ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}).Build()
+			require.NoError(t, err)
+			_, err = agent.AsRunnable().Invoke(ctx, "问题")
+			require.NoError(t, err)
+			keys := c.written()
+			require.Len(t, keys, 1)
+			v, err := c.SimpleCache.Get(ctx, keys[0])
+			require.NoError(t, err)
+			require.NoError(t, c.SimpleCache.Set(ctx, keys[0], tc.convert(v.([]byte)), time.Hour))
+
+			out, err := agent.AsRunnable().Invoke(ctx, "问题")
+			require.NoError(t, err)
+			require.Equal(t, "答案", out.Result)
+			require.Equal(t, 1, model.calls(), "命中，不再调用模型")
+			require.Zero(t, c.deletes.Load())
 		})
 	}
 }
@@ -575,21 +641,50 @@ func TestModelCacheRunForgetWithinTurn(t *testing.T) {
 	}
 }
 
-// 进行中的调用跨过一次 Forget 返回：写入前复核版本不一致，放弃写入。
+// setHookCache 在 SetTagged 写入前执行 before，模拟写前复核与写入之间的空窗。
+type setHookCache struct {
+	*countingCache
+	before func()
+}
+
+func (c *setHookCache) SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error {
+	c.before()
+	return c.countingCache.SetTagged(ctx, key, value, ttl, tags...)
+}
+
+// 记忆版本在写入前后任一复核点之前变化，条目都不会留在缓存里。
 func TestModelCacheRunVersionRecheck(t *testing.T) {
-	ctx := memory.WithNamespace(context.Background(), "t1", "alice")
-	m, _ := newTestMemory(t, ctx)
-	_, err := m.Remember(ctx, memory.Record{ID: "r1", Content: "无关的旧事", Importance: 0.1})
-	require.NoError(t, err)
-	c := newCountingCache()
-	model := newCacheModel("dep", textTurn("答案"))
-	model.block = func(context.Context) { require.NoError(t, m.Forget(ctx, "r1")) }
-	sink := &cacheSink{}
-	_, err = memoryAgent(t, m, ModelCache{Cache: c, TTL: time.Minute, TagKey: testTagKey}, model).AsRunnable().Invoke(observe.WithObserver(ctx, sink), "问题")
-	require.NoError(t, err)
-	require.Zero(t, c.sets.Load(), "调用期间发生删除，放弃写入")
-	_, ok := sink.find("model_cache_write_skipped")
-	require.True(t, ok)
+	for _, tc := range []struct {
+		name     string
+		inCall   bool // true：Forget 发生在模型调用期间；false：发生在 SetTagged 内部
+		wantSets int64
+	}{
+		{name: "调用期间删除，写前复核放弃写入", inCall: true, wantSets: 0},
+		{name: "SetTagged 内部删除，写后复核删除条目", inCall: false, wantSets: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := memory.WithNamespace(context.Background(), "t1", "alice")
+			m, _ := newTestMemory(t, ctx)
+			_, err := m.Remember(ctx, memory.Record{ID: "r1", Content: "无关的旧事", Importance: 0.1})
+			require.NoError(t, err)
+			forget := func() { require.NoError(t, m.Forget(ctx, "r1")) }
+			c := newCountingCache()
+			model := newCacheModel("dep", textTurn("答案"))
+			var backend cache.Cache = c
+			if tc.inCall {
+				model.block = func(context.Context) { forget() }
+			} else {
+				backend = &setHookCache{countingCache: c, before: forget}
+			}
+			sink := &cacheSink{}
+			_, err = memoryAgent(t, m, ModelCache{Cache: backend, TTL: time.Minute, TagKey: testTagKey}, model).AsRunnable().Invoke(observe.WithObserver(ctx, sink), "问题")
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSets, c.sets.Load())
+			require.Zero(t, c.size(), "条目不得留在缓存里")
+			_, ok := sink.find("model_cache_write_skipped")
+			require.True(t, ok)
+		})
+	}
 }
 
 // 两个 Builder 共用同一个 ModelCache：身份与请求相同时命中，客户端身份不同时不命中。

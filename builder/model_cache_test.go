@@ -70,6 +70,7 @@ func TestModelCacheValidation(t *testing.T) {
 		{name: "合法配置", mc: valid},
 		{name: "Cache 为空", mc: with(func(m *ModelCache) { m.Cache = nil }), wantErr: true},
 		{name: "TTL 为 0", mc: with(func(m *ModelCache) { m.TTL = 0 }), wantErr: true},
+		{name: "TTL 为负", mc: with(func(m *ModelCache) { m.TTL = -time.Second }), wantErr: true},
 		{name: "没有 Scope 也没有长期记忆", mc: with(func(m *ModelCache) { m.Scope = nil }), wantErr: true},
 		{name: "长期记忆下可省略 Scope", mc: with(func(m *ModelCache) { m.Scope = nil }), memory: noErase},
 		{name: "EraseRequired 缓存不支持 Tagged", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Scope: fixedScope, Erase: EraseRequired}, wantErr: true},
@@ -170,6 +171,16 @@ func TestModelCacheKey(t *testing.T) {
 		key, ok := modelCacheKey(in)
 		require.True(t, ok)
 		require.Equal(t, baseKey, key)
+	})
+	t.Run("schema 仅在超过 2^53 的整数上不同键不同", func(t *testing.T) {
+		a, b := baseKeyInput(), baseKeyInput()
+		a.Tools = []interfaces.Tool{stubTool{"t1", "d", `{"maximum":9007199254740993}`}}
+		b.Tools = []interfaces.Tool{stubTool{"t1", "d", `{"maximum":9007199254740992}`}}
+		ka, ok := modelCacheKey(a)
+		require.True(t, ok)
+		kb, ok := modelCacheKey(b)
+		require.True(t, ok)
+		require.NotEqual(t, ka, kb)
 	})
 	t.Run("schema 非法 JSON 不缓存", func(t *testing.T) {
 		in := baseKeyInput()
@@ -314,4 +325,41 @@ func TestModelCacheEraserAndDeleteSession(t *testing.T) {
 	off.Erase = EraseOff
 	require.Nil(t, off.Eraser())
 	require.Nil(t, ModelCache{Cache: untaggedCache{sc}}.Eraser())
+}
+
+// Worker 不经过 Builder 校验：会真正做标签删除时 TagKey 不足必须报错，不能静默落空；不做标签删除时保持空操作。
+func TestModelCacheEraseTagKeyCheck(t *testing.T) {
+	ctx := context.Background()
+	sc := cache.NewSimpleCache(time.Minute)
+	for _, tt := range []struct {
+		name      string
+		mc        ModelCache
+		nilEraser bool
+		wantErr   bool
+	}{
+		{name: "TagKey 为空", mc: ModelCache{Cache: sc}, wantErr: true},
+		{name: "TagKey 不足 32 字节", mc: ModelCache{Cache: sc, TagKey: []byte("short")}, wantErr: true},
+		{name: "EraseRequired 且 TagKey 不足", mc: ModelCache{Cache: sc, Erase: EraseRequired}, wantErr: true},
+		{name: "TagKey 合法", mc: ModelCache{Cache: sc, TagKey: testTagKey}},
+		{name: "EraseOff 不校验", mc: ModelCache{Cache: sc, Erase: EraseOff}, nilEraser: true},
+		{name: "缓存不支持 Tagged 不校验", mc: ModelCache{Cache: untaggedCache{sc}}, nilEraser: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			check := func(err error) {
+				if tt.wantErr {
+					require.Error(t, err)
+					require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
+					return
+				}
+				require.NoError(t, err)
+			}
+			check(tt.mc.DeleteSession(ctx, "s1"))
+			eraser := tt.mc.Eraser()
+			if tt.nilEraser {
+				require.Nil(t, eraser)
+				return
+			}
+			check(eraser(ctx, []string{"t", "a"}, "sc"))
+		})
+	}
 }

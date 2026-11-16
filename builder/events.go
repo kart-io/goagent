@@ -236,8 +236,10 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		copy := turn.Usage.Tokens()
 		usage.Add(&copy)
 	}
-	metadata["answer_usage_reported"] = turn.Usage != nil
-	if hits, ok := modelCacheHits(ctx); ok {
+	// 命中不是真实调用，没有用量可报告：与工具流的 usage_complete 一样只按真实调用判断。
+	hits, cached := modelCacheHits(ctx)
+	metadata["answer_usage_reported"] = turn.Usage != nil || hits > 0
+	if cached {
 		metadata["model_cache_hits"] = hits
 	}
 

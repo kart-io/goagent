@@ -30,8 +30,9 @@ const (
 
 // ModelCache 是模型调用缓存的配置。Worker 进程不经过 Builder，须用同一个 ModelCache（同一后端、同一 TagKey）装配 OnErase。
 type ModelCache struct {
+	// Cache 是缓存后端，Get 须原样返回写入的值（[]byte，或等价的 string）。
 	Cache cache.Cache
-	// TTL 必须大于 0；EraseRequired 时不得超过 memory.Config.EraseWithin。
+	// TTL 必须大于 0；EraseRequired 时不得超过 memory.Config.EraseWithin（仅在配置长期记忆时约束）。
 	TTL time.Duration
 	// Scope 返回可信的隔离身份，返回 false 时本次不缓存；配置了长期记忆时可省略，默认取绑定的命名空间。
 	Scope func(ctx context.Context) (string, bool)
@@ -60,6 +61,9 @@ func (mc ModelCache) Eraser() memory.EraseFunc {
 		return nil
 	}
 	return func(ctx context.Context, ns []string, scope string) error {
+		if err := mc.checkTagKey(); err != nil {
+			return err
+		}
 		return t.DeleteTag(ctx, memoryTag(mc.TagKey, ns, scope))
 	}
 }
@@ -70,7 +74,18 @@ func (mc ModelCache) DeleteSession(ctx context.Context, sessionID string) error 
 	if !ok || mc.Erase == EraseOff {
 		return nil
 	}
+	if err := mc.checkTagKey(); err != nil {
+		return err
+	}
 	return t.DeleteTag(ctx, sessionTag(mc.TagKey, sessionID))
+}
+
+// checkTagKey 拦截 TagKey 不足的标签删除：Worker 不经过 Builder 校验，算出的标签与写入时对不上，删除会静默落空。
+func (mc ModelCache) checkTagKey() error {
+	if len(mc.TagKey) < minTagKeyLen {
+		return agentErrors.NewInvalidConfigError("builder", "model_cache", "使用标签删除时 TagKey 至少 32 字节")
+	}
+	return nil
 }
 
 func (b *AgentBuilder[S]) validateModelCache() error {
@@ -222,7 +237,13 @@ func (e *modelCacheEntry) lookup(ctx context.Context, cacheable func(*llm.Stream
 		observe.Emit(ctx, observe.Event{Type: "model_cache_miss", Path: "cache"})
 		return nil
 	}
-	b, _ := v.([]byte)
+	var b []byte
+	switch x := v.(type) {
+	case []byte:
+		b = x
+	case string:
+		b = []byte(x)
+	}
 	turn, err := decodeCachedTurn(b)
 	if err == nil {
 		err = cacheableTurn(turn, cacheable)
@@ -240,15 +261,13 @@ func (e *modelCacheEntry) lookup(ctx context.Context, cacheable func(*llm.Stream
 }
 
 // store 写入真实调用的结果。写入前重读记忆版本：与键中的不同说明调用期间发生了删除，放弃写入。
+// 写入后再复核一次：复核与写入之间发生的删除可能早于标签登记而落空，此时删除刚写入的条目。
 // 失败只记录，不影响调用方。
 func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cacheable func(*llm.StreamChunk) error) {
 	if cacheableTurn(turn, cacheable) != nil {
 		return
 	}
-	now, err := e.scope.memoryVersion(ctx)
-	if err != nil || !slices.EqualFunc(now, e.version, func(a, b memory.NamespaceVersion) bool {
-		return slices.Equal(a.Namespace, b.Namespace) && a.Scope == b.Scope && a.LastForgetSeq == b.LastForgetSeq && a.LastRewindSeq == b.LastRewindSeq
-	}) {
+	if same, err := e.recheck(ctx); !same {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_write_skipped", Path: "cache", ErrorKind: observe.ErrorKind(err)})
 		return
 	}
@@ -261,7 +280,25 @@ func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cach
 	}
 	if err != nil {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_write_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		return
 	}
+	if same, err := e.recheck(ctx); !same {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_write_skipped", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		if derr := e.scope.cfg.Cache.Delete(ctx, e.key); derr != nil {
+			observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(derr)})
+		}
+	}
+}
+
+// recheck 重读记忆版本，返回是否与键中的相同；读取失败视为不同并返回该错误。
+func (e *modelCacheEntry) recheck(ctx context.Context) (bool, error) {
+	now, err := e.scope.memoryVersion(ctx)
+	if err != nil {
+		return false, err
+	}
+	return slices.EqualFunc(now, e.version, func(a, b memory.NamespaceVersion) bool {
+		return slices.Equal(a.Namespace, b.Namespace) && a.Scope == b.Scope && a.LastForgetSeq == b.LastForgetSeq && a.LastRewindSeq == b.LastRewindSeq
+	}), nil
 }
 
 // write 在物理删除可用时带会话与各读命名空间的标签写入，否则普通写入。

@@ -87,12 +87,13 @@ func modelCacheKey(in cacheKeyInput) (string, bool) {
 }
 
 // canonicalSchema 把 schema 解析后重新序列化，使键顺序不同的等价 schema 得到相同结果；空 schema 视为无参数。
+// 数字按原文保留，避免超过 2^53 的整数经 float64 合并成同一个键。
 func canonicalSchema(schema string) ([]byte, bool) {
 	if strings.TrimSpace(schema) == "" {
 		return nil, true
 	}
 	var v any
-	if err := json.Unmarshal([]byte(schema), &v); err != nil {
+	if err := json.Unmarshal([]byte(schema), &v, json.UseNumber); err != nil {
 		return nil, false
 	}
 	out, err := json.Marshal(v)
