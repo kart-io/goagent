@@ -7,6 +7,7 @@
 | 名称 | 说明 |
 |---|---|
 | `Cache` | 接口：`Get`/`Set`/`Delete`/`Clear`/`Has`/`GetStats` |
+| `Bytes` | 接口：`GetBytes`/`SetBytes`/`Delete`，只收发字节，供外部缓存（如 Redis）实现；`SimpleCache` 实现 |
 | `SimpleCache` | 内置实现，`sync.Map` + TTL，默认后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理；访问驱动模式见 `WithoutBackgroundCleanup` |
 | `Tagged` | 可选接口：`SetTagged` 写入条目并关联标签，`DeleteTag` 删除带该标签的全部条目；`SimpleCache` 实现，用于模型调用缓存的物理删除 |
 | `NoOpCache` | 禁用实现：不存储条目，读写均返回 `agentErrors.ErrCacheDisabled` |
@@ -14,7 +15,7 @@
 | `CacheStats` | 统计信息；`SimpleCache` 填写 `Hits`、`Misses`、`Size`、`HitRate` |
 | `CacheConfig` | 配置；`NewCacheFromConfig` 在 `Enabled` 为 false 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache` |
 
-`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；`SetTagged` 与 `DeleteTag` 须原子或线性一致，`DeleteTag` 返回后，之前开始的 `SetTagged` 不得留下带该标签且可读的条目（`SimpleCache` 用同一把锁保证）。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
+`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；一致性契约（"已完成"指 `SetTagged` 在 `DeleteTag` 开始前已返回）：S1（必须）`DeleteTag` 返回后，已完成的 `SetTagged` 写入的、带该标签的条目不可读，可用原子操作，也可用令牌或版本校验使旧写入在读取时失效，不要求事务或脚本；S2（实现须写明）这些条目何时物理删除，不能在 `DeleteTag` 返回时删除的情形须写明回收上限。`SimpleCache` 用同一把锁使 S2 在 `DeleteTag` 返回时成立。外部实现用 `cachetest.RunTagged` 验证契约。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
 
 缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
 

@@ -51,7 +51,7 @@ cachedTool := middleware.Wrap(originalTool, middleware.Caching(
 
 ```go
 mc := builder.ModelCache{
-    Cache:  c,                // cache.Cache；物理删除需要实现 cache.Tagged（SimpleCache 已实现）
+    Cache:  c,                // cache.Bytes；物理删除需同时实现 cache.Tagged（SimpleCache 已实现）
     TTL:    5 * time.Minute,  // 必须大于 0
     Scope:  func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
     Erase:  builder.EraseAuto, // EraseOff / EraseAuto（默认）/ EraseRequired
@@ -106,7 +106,7 @@ agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 | `EraseRequired` | 条件不满足时 `Build` 失败 | 有删除个人数据合规要求的生产环境 |
 
 - `EraseRequired` 要求 TTL 不超过 `memory.Config.EraseWithin`，这个约束只在配置了长期记忆时生效。不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。
-- 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL。
+- 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL；对 Redis 是 TTL 加过期回收周期（Redis 的过期回收没有硬上限）。
 - 遗忘与回退会清掉该命名空间当前作用域下的全部缓存条目，粒度较粗。
 - 记忆版本在召回（hydrateRecall）之后才读取。召回与读取版本之间发生的删除可能让条目带上删除后的版本写入：这种条目逻辑上不可达，物理残留以 TTL 为上限。
 

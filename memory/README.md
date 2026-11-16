@@ -70,7 +70,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 | 组件 | 进程内默认 | 共享后端（`goagent-contrib`） |
 |---|---|---|
-| 模型调用缓存 | `cache.SimpleCache` | `github.com/kart-io/goagent-contrib/cache/redis`（Redis 7 及以上，单机或 Cluster） |
+| 模型调用缓存 | `cache.SimpleCache` | `github.com/kart-io/goagent-contrib/cache/redis`（Redis 7 及以上，单机、哨兵与 Cluster） |
 | 向量索引 | `memory.MemoryIndex` | `github.com/kart-io/goagent-contrib/memory/pgvector` |
 
 换法：Redis 缓存实现 `cache.Bytes` 与 `cache.Tagged`，作为 `builder.ModelCache.Cache` 传入；pgvector 实现 `memory.Index`，作为 `memory.Config.Index` 传入。自行实现 `memory.Index` 时用 `memorytest.RunIndex` 验证契约。
