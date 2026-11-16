@@ -234,6 +234,9 @@ func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxRe
 			WithComponent("search_tool").
 			WithOperation("aggregated_search")
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	resultsChan := make(chan []SearchResult, len(a.engines))
 	errorsChan := make(chan error, len(a.engines))
@@ -273,6 +276,10 @@ func (a *AggregatedSearchEngine) Search(ctx context.Context, query string, maxRe
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
+	}
+	// 结果与取消同时就绪时 select 随机选中结果，已取消的请求不应返回结果
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	// 如果所有引擎都失败，返回错误
