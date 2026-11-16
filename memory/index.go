@@ -44,10 +44,10 @@ func spaceKey(ns []string) string { return strings.Join(ns, "\x00") }
 
 // Upsert 归一化并复制向量；拒绝零向量与非有限值。
 func (x *MemoryIndex) Upsert(_ context.Context, ns []string, id string, vector []float32) error {
-	if err := validNamespace(ns); err != nil {
+	if err := ValidateNamespace(ns); err != nil {
 		return err
 	}
-	unit, err := normalize(vector)
+	unit, err := NormalizeVector(vector)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (x *MemoryIndex) Search(_ context.Context, ns []string, vector []float32, k
 	if k <= 0 {
 		return nil, nil
 	}
-	unit, err := normalize(vector)
+	unit, err := NormalizeVector(vector)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +115,9 @@ func (x *MemoryIndex) Search(_ context.Context, ns []string, vector []float32, k
 	return hits[:min(k, len(hits))], nil
 }
 
-// normalize 以 float64 计算范数，避免大幅值 float32 平方溢出。
-func normalize(v []float32) ([]float64, error) {
+// NormalizeVector 把向量归一化为单位向量，以 float64 计算范数，避免大幅值 float32 平方溢出。
+// 零向量与含 NaN、Inf 的向量返回 CodeInvalidInput。供其他 Index 实现与 MemoryIndex 保持一致的校验与归一化。
+func NormalizeVector(v []float32) ([]float64, error) {
 	out := make([]float64, len(v))
 	scale := 0.0
 	for i, f := range v {

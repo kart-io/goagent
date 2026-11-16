@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 
+- `memory.ValidateNamespace` 与 `memory.NormalizeVector`：导出命名空间校验与向量归一化，供外部 `memory.Index` 实现（如 contrib 的 pgvector）与 `MemoryIndex` 保持同样的校验与错误码。
+
 - `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE.md#模型调用缓存)。
 - `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。
 - `memory.Config.OnErase`（`memory.EraseFunc`）：`Forget`、`Rewound` 提交之后与 `Purge` 清理旧作用域时清除派生副本，失败由维护在 `EraseWithin` 内重做；配置时要求 `RetireGrace >= EraseWithin`。配套新增 `Memory.CacheVersion`、`Memory.EraseErrors`（累计提交后立即擦除失败的次数）、`Memory.ErasesOnDelete`、`Memory.EraseWithin`。`ModelCache.Eraser()` 返回可直接用作 `OnErase` 的回调，`ModelCache.DeleteSession` 供宿主在删除或回退会话后清除该会话的缓存条目。

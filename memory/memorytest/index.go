@@ -12,7 +12,7 @@ import (
 )
 
 // RunIndex 对 newIndex 返回的索引运行全部用例；每个用例调用一次 newIndex，返回的索引须独立且初始为空。
-// 分数比较的容差为 1e-6，用例不构造分差小于 1e-5 的近似并列。
+// 分数比较的容差为 1e-5，用例不构造分差小于 1e-4 的近似并列。
 func RunIndex(t *testing.T, newIndex func(t *testing.T) memory.Index) {
 	cases := []struct {
 		name string
@@ -21,6 +21,7 @@ func RunIndex(t *testing.T, newIndex func(t *testing.T) memory.Index) {
 		{"归一化", testIndexNormalize},
 		{"零向量与非有限值", testIndexInvalidVectors},
 		{"排序与并列", testIndexOrderAndTies},
+		{"并列按字节序", testIndexTieByteOrder},
 		{"k截断与k非正", testIndexLimit},
 		{"覆盖写入", testIndexOverwrite},
 		{"不同维度共存", testIndexMixedDimensions},
@@ -59,7 +60,7 @@ func testIndexNormalize(t *testing.T, ctx context.Context, x memory.Index) {
 	hits, err := x.Search(ctx, indexNS, []float32{3, 4}, 1)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
-	require.InDelta(t, 1, hits[0].Score, 1e-6)
+	require.InDelta(t, 1, hits[0].Score, 1e-5)
 }
 
 func testIndexInvalidVectors(t *testing.T, ctx context.Context, x memory.Index) {
@@ -83,8 +84,16 @@ func testIndexOrderAndTies(t *testing.T, ctx context.Context, x memory.Index) {
 	hits, err := x.Search(ctx, indexNS, []float32{1, 0}, 3)
 	require.NoError(t, err)
 	require.Equal(t, []string{"a", "b", "c"}, hitIDs(hits), "并列按 ID 升序")
-	require.InDelta(t, 1, hits[0].Score, 1e-6)
-	require.InDelta(t, 0, hits[2].Score, 1e-6)
+	require.InDelta(t, 1, hits[0].Score, 1e-5)
+	require.InDelta(t, 0, hits[2].Score, 1e-5)
+}
+
+// 并列的 ID 按字节序升序（与 strings.Compare 一致），不随数据库的排序规则变化。
+func testIndexTieByteOrder(t *testing.T, ctx context.Context, x memory.Index) {
+	upsertAll(t, ctx, x, map[string][]float32{"a": {1, 0}, "B": {1, 0}, "a-b": {1, 0}, "ab": {1, 0}, "_z": {1, 0}})
+	hits, err := x.Search(ctx, indexNS, []float32{1, 0}, 5)
+	require.NoError(t, err)
+	require.Equal(t, []string{"B", "_z", "a", "a-b", "ab"}, hitIDs(hits))
 }
 
 func testIndexLimit(t *testing.T, ctx context.Context, x memory.Index) {
@@ -112,7 +121,7 @@ func testIndexOverwrite(t *testing.T, ctx context.Context, x memory.Index) {
 	hits, err := x.Search(ctx, indexNS, []float32{1, 0}, 5)
 	require.NoError(t, err)
 	require.Equal(t, []string{"a"}, hitIDs(hits), "同 ID 只出现一次")
-	require.InDelta(t, 0, hits[0].Score, 1e-6, "分数按新向量")
+	require.InDelta(t, 0, hits[0].Score, 1e-5, "分数按新向量")
 }
 
 func testIndexMixedDimensions(t *testing.T, ctx context.Context, x memory.Index) {

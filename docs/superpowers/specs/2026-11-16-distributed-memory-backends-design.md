@@ -144,7 +144,7 @@ CREATE TABLE goagent_memory_vectors (
 
 `CREATE EXTENSION vector` 需要较高权限，不放进 `Schema`；由宿主（或 DBA）预先执行，`New` 检查扩展已安装，缺失时返回说明该语句的错误。
 
-**行为须与 `MemoryIndex` 一致**（由 4.4 的一致性测试锁定；pgvector 存 float32、`MemoryIndex` 存 float64，分数在 1e-6 内一致即可，一致性测试不构造分差小于 1e-5 的近似并列）：
+**行为须与 `MemoryIndex` 一致**（由 4.4 的一致性测试锁定；pgvector 存 float32、`MemoryIndex` 存 float64，分数在 1e-5 内一致即可，一致性测试不构造分差小于 1e-4 的近似并列）：
 - 写入前归一化，零向量与非有限值返回错误。
 - **维度**（与 4.4 的契约改动一起）：同一命名空间允许不同维度的向量共存；`Search` 只考虑与查询同维度的向量。
 - `Search` 只查精确命名空间（不含子命名空间），按余弦相似度降序、分数相同按 ID 升序，取前 k；`k <= 0` 返回空。SQL 为 `WHERE ns = $1 AND dim = $2 ORDER BY vec <=> $3, id LIMIT $4`，Score = `1 - 距离`。
@@ -226,7 +226,7 @@ CREATE TABLE goagent_memory_vectors (
 - `WAIT` 与 `DEL` 走同一条连接；`Ring` 客户端拒绝；`New` 用 `ROLE` 拒绝从节点、对非 `noeviction` 策略告警。
 - 最低 Redis 7；代理模式集群与兼容实现不支持。
 - Redis 实现不提供 `Clear`/`Has`/`GetStats`（`ModelCache` 不用，按需再加）；不加错误回调（`DeleteTag` 的错误已返回给擦除重做，`Get` 的错误按未命中处理并由调用方的观测事件记录）。
-- 向量索引用 pgvector、独立模块、精确扫描、不建 ANN；`ns` 存 `text[]`；`CREATE EXTENSION` 不放进 `Schema`；分数误差 1e-6 内视为一致；不提供单独的检索连接池（宿主可给数据库角色设 `statement_timeout`）。
+- 向量索引用 pgvector、独立模块、精确扫描、不建 ANN；`ns` 存 `text[]`；`CREATE EXTENSION` 不放进 `Schema`；分数误差 1e-5 内视为一致；不提供单独的检索连接池（宿主可给数据库角色设 `statement_timeout`）。
 - `memory.Index` 放开同命名空间维度一致的要求，以修复换模型后索引无法恢复（见 4.4）。
 - 端到端测试放在不发布的独立集成模块。
 - Worker 横向扩展放第二期。

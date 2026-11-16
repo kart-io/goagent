@@ -98,7 +98,7 @@ func (m *Memory) MigrateFromStore(ctx context.Context, legacy MigrationSource, n
 
 func (m *Memory) migrateNamespace(ctx context.Context, legacy MigrationSource, ns []string, jobs []Job, opts MigrateOptions) NamespaceMigration {
 	r := NamespaceMigration{Namespace: ns}
-	if r.Err = validNamespace(ns); r.Err != nil {
+	if r.Err = ValidateNamespace(ns); r.Err != nil {
 		r.Status = MigrationFailed
 		return r
 	}
