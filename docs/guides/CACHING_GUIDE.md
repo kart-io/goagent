@@ -79,7 +79,13 @@ agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 命中不消耗 token，不占预算、不记账，turn 的 `Usage` 为零值。调用方判断是否命中：
 
 - observe 事件的 `Cached` 标记；
-- 输出元数据 `model_cache_hits`。`model_calls` 只计真实调用，`usage_complete` 不因命中变为 false。
+- 输出元数据 `model_cache_hits`。
+
+用量相关元数据按回合判断。"完全来自缓存"指回合内有命中且没有发出真实请求：
+
+- `model_calls` 是逻辑回合数，不计完全来自缓存的回合；同一轮内的重试不另计。
+- 回合内主客户端请求失败、经 RequestError 换客户端后命中时，失败的请求可能已消耗 token，这一回合按真实回合计入 `model_calls`；它没有用量报告，`usage_complete` 可能为 false。这种回合同时计入 `model_calls` 和 `model_cache_hits`，二者相加不等于总回合数。
+- 最终回答完全来自缓存时，`answer_usage_reported` 为 true：命中没有用量可报告，不视为缺失。
 
 事件流先发 `step: model_cached`，`Content` 非空时再发一整段 `text`，不重放多段增量。
 
