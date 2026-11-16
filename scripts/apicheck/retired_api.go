@@ -17,6 +17,7 @@ var retiredAPIEntries = func() map[string]bool {
 		"core/middleware":  {"CacheMiddleware", "CacheEntry", "cacheShard", "NewCacheMiddleware", "NewCacheMiddlewareWithShards"},
 		"core/execution":   {"RuntimeConfig", "DefaultRuntimeConfig", "RuntimeMetrics", "NewRuntimeMetrics"},
 		"core/durable":     {"operationVersionV1"},
+		"constants":        {"DefaultMiddlewareCacheShards", "MaxCacheShards"},
 	}
 	streams := []string{"StreamingAgent", "StreamOutput", "LegacyStreamChunk", "ChunkType", "ChunkMetadata", "StreamOptions", "ChunkTransformFunc", "DefaultStreamOptions", "StreamStatus", "StreamState", "StreamWriter", "StreamController", "StreamConsumer", "StreamMultiplexer", "NewStreamChunk", "NewTextChunk", "NewProgressChunk", "NewErrorChunk"}
 	entries["core"] = append(entries["core"], streams...)
