@@ -24,6 +24,7 @@ func RunIndex(t *testing.T, newIndex func(t *testing.T) memory.Index) {
 		{"k截断与k非正", testIndexLimit},
 		{"覆盖写入", testIndexOverwrite},
 		{"不同维度共存", testIndexMixedDimensions},
+		{"同ID换维度覆盖", testIndexOverwriteDimension},
 		{"精确命名空间", testIndexExactNamespace},
 		{"非法命名空间", testIndexInvalidNamespace},
 		{"删除", testIndexDelete},
@@ -128,6 +129,20 @@ func testIndexMixedDimensions(t *testing.T, ctx context.Context, x memory.Index)
 	ids, err := x.IDs(ctx, indexNS)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"x", "y"}, ids)
+}
+
+func testIndexOverwriteDimension(t *testing.T, ctx context.Context, x memory.Index) {
+	require.NoError(t, x.Upsert(ctx, indexNS, "a", []float32{1, 0}))
+	require.NoError(t, x.Upsert(ctx, indexNS, "a", []float32{1, 0, 0}))
+	ids, err := x.IDs(ctx, indexNS)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a"}, ids, "同 ID 只出现一次")
+	hits, err := x.Search(ctx, indexNS, []float32{1, 0}, 5)
+	require.NoError(t, err)
+	require.Empty(t, hits, "旧维度的向量已被覆盖")
+	hits, err = x.Search(ctx, indexNS, []float32{1, 0, 0}, 5)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a"}, hitIDs(hits))
 }
 
 func testIndexExactNamespace(t *testing.T, ctx context.Context, x memory.Index) {

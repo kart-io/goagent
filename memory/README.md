@@ -81,8 +81,8 @@ agent, err := builder.NewSimpleBuilder(client).
 - **每个持有记忆的进程都要接上擦除**：包括只跑 `memory/worker` 的进程，它执行的 `Forget`、`Purge` 也要通过 `OnErase` 调到共享缓存。
 - **切换缓存**：混合部署期间（部分实例仍用 `SimpleCache`）删除不会到达本地缓存，跨实例删除承诺不成立。建议一次性切换，或切换期间关闭 ModelCache。从 Redis 回退到本地无需迁移数据，Redis 中的条目按 TTL 过期。
 - **切换向量索引**：切到 pgvector 后表为空，召回暂时只有非向量分；宿主对现有命名空间逐个调用 `Reindex(ctx, false)` 回填。回退到本地索引同样靠 `Reindex`。
-- **Redis 淘汰策略**：令牌键不受淘汰影响（令牌设计）；条目集合等辅助结构要求 `noeviction`，或保证用量不触及 `maxmemory`。
-- **换嵌入模型**：`Index` 允许同一命名空间共存不同维度的向量，`Search` 只考虑与查询同维度的向量。换模型后新旧向量并存，召回按模型过滤，旧向量会占用 `Search` 的前 k 名额，召回条数可能少于 k，对各命名空间调用 `Reindex(ctx, false)` 清理旧模型的键后恢复。
+- **Redis 淘汰策略**：令牌设计使“删除后读不到”不受淘汰影响；“返回时已物理删除”要求 `maxmemory-policy` 为 `noeviction`（或用量不触及 `maxmemory`），否则被淘汰的成员集合会让部分条目只能等 TTL 回收。
+- **换嵌入模型**：`Index` 允许同一命名空间共存不同维度的向量，`Search` 只考虑与查询同维度的向量。维度变化时，旧向量因维度不同被 `Search` 跳过、不占名额，`Reindex(ctx, false)` 写入新键并删除旧键；同维度换模型时，旧向量仍会进入 `Search` 结果，靠 `adopted` 按模型过滤，占用前 k 名额、召回条数可能少于 k，须 `Reindex` 清理。
 
 ## 评测
 
