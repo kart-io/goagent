@@ -423,6 +423,8 @@ func TestModelCacheRunNotCached(t *testing.T) {
 		feedback bool
 		cancel   bool
 		sets     int64
+		// calls 非零时断言模型调用次数，确认回答确实产生过。
+		calls int
 	}{
 		{name: "出错", fail: errors.New("模型不可用")},
 		{name: "截断", turns: [][]*llm.StreamChunk{{{Delta: "半"}, {Done: true, FinishReason: "length"}}}},
@@ -430,7 +432,9 @@ func TestModelCacheRunNotCached(t *testing.T) {
 		{name: "空回答", turns: [][]*llm.StreamChunk{{{Done: true, FinishReason: "stop"}}}},
 		{name: "带 ProviderState", turns: [][]*llm.StreamChunk{{{Delta: "答"}, {Done: true, FinishReason: "stop", ProviderState: state}}}},
 		{name: "调用不存在的工具（反馈模式）", tools: true, feedback: true,
-			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, sets: 1},
+			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, sets: 1, calls: 2},
+		{name: "调用不存在的工具（非反馈模式）", tools: true,
+			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, calls: 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -458,8 +462,8 @@ func TestModelCacheRunNotCached(t *testing.T) {
 			require.NoError(t, err)
 			_, _ = agent.AsRunnable().Invoke(ctx, "问题")
 			require.Equal(t, tc.sets, c.sets.Load())
-			if tc.sets > 0 {
-				require.Equal(t, 2, model.calls())
+			if tc.calls > 0 {
+				require.Equal(t, tc.calls, model.calls())
 			}
 		})
 	}
@@ -714,6 +718,93 @@ func TestModelCacheSharedAcrossAgents(t *testing.T) {
 				calls += model.calls()
 			}
 			require.Equal(t, tc.calls, calls)
+		})
+	}
+}
+
+// 不调用 WithSessionID 时同一个 Builder 构建的 Agent 共用默认会话 ID：Scope 相同则命中，Scope 不同则各自调用模型。
+func TestModelCacheDefaultSessionID(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		scopes [2]string
+		calls  int
+	}{
+		{"Scope 相同命中", [2]string{"u1", "u1"}, 1},
+		{"Scope 不同不命中", [2]string{"u1", "u2"}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := cache.NewSimpleCache(time.Hour, cache.WithoutBackgroundCleanup())
+			model := newCacheModel("dep", textTurn("答案"), textTurn("答案"))
+			b := NewSimpleBuilder(model).WithTools(plainTool())
+			var sessions []string
+			for _, scope := range tc.scopes {
+				agent, err := b.WithModelCache(ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf(scope), TagKey: testTagKey}).Build()
+				require.NoError(t, err)
+				sessions = append(sessions, agent.config.SessionID)
+				out, err := agent.AsRunnable().Invoke(context.Background(), "问题")
+				require.NoError(t, err)
+				require.Equal(t, "答案", out.Result)
+			}
+			require.NotEmpty(t, sessions[0])
+			require.Equal(t, sessions[0], sessions[1], "两个 Agent 使用同一个默认会话 ID")
+			require.Equal(t, tc.calls, model.calls())
+		})
+	}
+}
+
+// 两个会话写入同一命名空间后执行一次 Forget：OnErase 收到该命名空间的 (ns, scope)，两个会话写入的条目都被物理删除。
+func TestModelCacheForgetErasesAcrossSessions(t *testing.T) {
+	ns := []string{"t1", "alice"}
+	for _, tc := range []struct {
+		name     string
+		sessions []string
+	}{
+		{"两个会话", []string{"s1", "s2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := memory.WithNamespace(context.Background(), ns...)
+			c := newCountingCache()
+			mc := ModelCache{Cache: c, TTL: time.Minute, TagKey: testTagKey}
+			type eraseCall struct {
+				ns    []string
+				scope string
+			}
+			var mu sync.Mutex
+			var erased []eraseCall
+			eraser := mc.Eraser()
+			m := newModelCacheMemory(t, memory.Config{OnErase: func(ctx context.Context, ns []string, scope string) error {
+				mu.Lock()
+				erased = append(erased, eraseCall{slices.Clone(ns), scope})
+				mu.Unlock()
+				return eraser(ctx, ns, scope)
+			}})
+			_, err := m.Remember(ctx, memory.Record{ID: "r1", Content: "用户养了一只猫", Importance: 0.1})
+			require.NoError(t, err)
+
+			for _, id := range tc.sessions {
+				model := newCacheModel("dep", textTurn("答案"))
+				agent, err := NewSimpleBuilder(model).WithSessionID(id).WithSessionLog(session.NewMemoryStore()).WithLongTermMemory(m).
+					WithTools(plainTool()).WithModelCache(mc).Build()
+				require.NoError(t, err)
+				_, err = agent.AsRunnable().Invoke(ctx, "问题")
+				require.NoError(t, err)
+				require.Equal(t, 1, model.calls(), "会话 %s 首次执行调用模型", id)
+			}
+			keys := c.written()
+			require.Len(t, keys, len(tc.sessions))
+			require.Len(t, slices.Compact(slices.Sorted(slices.Values(keys))), len(tc.sessions), "各会话写入不同的条目")
+			version, err := m.CacheVersion(ctx, [][]string{ns})
+			require.NoError(t, err)
+
+			require.NoError(t, m.Forget(ctx, "r1"))
+			mu.Lock()
+			require.Equal(t, []eraseCall{{ns, version[0].Scope}}, erased)
+			mu.Unlock()
+			for _, key := range keys {
+				ok, err := c.Has(ctx, key)
+				require.NoError(t, err)
+				require.False(t, ok, "条目 %s 已被物理删除", key)
+			}
 		})
 	}
 }

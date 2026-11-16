@@ -298,18 +298,6 @@ func TestOnErase(t *testing.T) {
 	}
 }
 
-// 擦除按命名空间与作用域进行：两个会话各自完成一轮后的一次 Forget 擦除整个命名空间恰好一次。
-func TestForgetErasesAcrossSessions(t *testing.T) {
-	f := newEraseFixture(t, true)
-	for _, s := range []string{"s1", "s2"} {
-		_, err := f.m.Remember(f.ctx, Record{ID: s, Content: "会话 " + s + " 的事实", Importance: 0.5,
-			Sources: []Source{{Session: s, From: 1, To: 2}}})
-		require.NoError(t, err)
-	}
-	require.NoError(t, f.m.Forget(f.ctx, "s1"))
-	require.Equal(t, []eraseCall{{ns: testNS, scope: initialScope}}, f.rec.take())
-}
-
 func TestNewValidatesEraseWindow(t *testing.T) {
 	erase := func(context.Context, []string, string) error { return nil }
 	tests := []struct {

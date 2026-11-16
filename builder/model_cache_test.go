@@ -61,23 +61,24 @@ func TestModelCacheValidation(t *testing.T) {
 	with := func(f func(*ModelCache)) ModelCache { mc := valid; f(&mc); return mc }
 
 	tests := []struct {
-		name    string
-		mc      ModelCache
-		memory  func(*testing.T) *memory.Memory
-		wantErr bool
-		warn    string
+		name   string
+		mc     ModelCache
+		memory func(*testing.T) *memory.Memory
+		// errContains 非空时期望构建失败，错误文案含该片段以确认触发的规则。
+		errContains string
+		warn        string
 	}{
 		{name: "合法配置", mc: valid},
-		{name: "Cache 为空", mc: with(func(m *ModelCache) { m.Cache = nil }), wantErr: true},
-		{name: "TTL 为 0", mc: with(func(m *ModelCache) { m.TTL = 0 }), wantErr: true},
-		{name: "TTL 为负", mc: with(func(m *ModelCache) { m.TTL = -time.Second }), wantErr: true},
-		{name: "没有 Scope 也没有长期记忆", mc: with(func(m *ModelCache) { m.Scope = nil }), wantErr: true},
+		{name: "Cache 为空", mc: with(func(m *ModelCache) { m.Cache = nil }), errContains: "Cache 不能为空"},
+		{name: "TTL 为 0", mc: with(func(m *ModelCache) { m.TTL = 0 }), errContains: "TTL 必须大于 0"},
+		{name: "TTL 为负", mc: with(func(m *ModelCache) { m.TTL = -time.Second }), errContains: "TTL 必须大于 0"},
+		{name: "没有 Scope 也没有长期记忆", mc: with(func(m *ModelCache) { m.Scope = nil }), errContains: "没有可信的隔离身份"},
 		{name: "长期记忆下可省略 Scope", mc: with(func(m *ModelCache) { m.Scope = nil }), memory: noErase},
-		{name: "EraseRequired 缓存不支持 Tagged", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Scope: fixedScope, Erase: EraseRequired}, wantErr: true},
-		{name: "EraseRequired 记忆未配置 OnErase", mc: with(func(m *ModelCache) { m.Erase = EraseRequired }), memory: noErase, wantErr: true},
-		{name: "EraseRequired 且 TTL 超过 EraseWithin", mc: with(func(m *ModelCache) { m.Erase = EraseRequired; m.TTL = 2 * time.Minute }), memory: withErase(time.Minute), wantErr: true},
+		{name: "EraseRequired 缓存不支持 Tagged", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Scope: fixedScope, Erase: EraseRequired}, errContains: "EraseRequired 要求缓存实现 cache.Tagged"},
+		{name: "EraseRequired 记忆未配置 OnErase", mc: with(func(m *ModelCache) { m.Erase = EraseRequired }), memory: noErase, errContains: "EraseRequired 要求长期记忆配置 OnErase"},
+		{name: "EraseRequired 且 TTL 超过 EraseWithin", mc: with(func(m *ModelCache) { m.Erase = EraseRequired; m.TTL = 2 * time.Minute }), memory: withErase(time.Minute), errContains: "EraseRequired 要求 TTL 不超过"},
 		{name: "EraseRequired 满足全部条件", mc: with(func(m *ModelCache) { m.Erase = EraseRequired }), memory: withErase(time.Minute)},
-		{name: "TagKey 不足 32 字节", mc: with(func(m *ModelCache) { m.TagKey = []byte("short") }), wantErr: true},
+		{name: "TagKey 不足 32 字节", mc: with(func(m *ModelCache) { m.TagKey = []byte("short") }), errContains: "TagKey 至少 32 字节"},
 		{name: "EraseOff 不要求 TagKey", mc: with(func(m *ModelCache) { m.TagKey = nil; m.Erase = EraseOff })},
 		{name: "EraseAuto 缓存不支持 Tagged 只警告", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Scope: fixedScope}, warn: "退回 TTL"},
 		{name: "非 EraseRequired 且 TTL 超过 EraseWithin 只警告", mc: with(func(m *ModelCache) { m.TTL = 2 * time.Minute }), memory: withErase(time.Minute), warn: "残留到 TTL"},
@@ -90,9 +91,10 @@ func TestModelCacheValidation(t *testing.T) {
 				b = b.WithSessionLog(session.NewMemoryStore()).WithLongTermMemory(tt.memory(t))
 			}
 			_, err := b.Build()
-			if tt.wantErr {
+			if tt.errContains != "" {
 				require.Error(t, err)
 				require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
+				require.Contains(t, err.Error(), tt.errContains)
 				return
 			}
 			require.NoError(t, err)
