@@ -965,36 +965,6 @@ func TestToolSelectorMiddleware_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestCacheMiddleware_ConcurrentAccess(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	var wg sync.WaitGroup
-	numGoroutines := 10
-
-	// First, populate cache
-	resp := &MiddlewareResponse{
-		Output:   "cached",
-		Metadata: map[string]interface{}{"original_input": "test-key"},
-	}
-	mw.OnAfter(context.Background(), resp)
-
-	// Concurrent reads
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			req := &MiddlewareRequest{
-				Input:    "test-key",
-				Metadata: make(map[string]interface{}),
-			}
-			modifiedReq, _ := mw.OnBefore(context.Background(), req)
-			assert.True(t, modifiedReq.Metadata["cache_hit"].(bool))
-		}()
-	}
-
-	wg.Wait()
-}
-
 func TestDefaultToolSelector(t *testing.T) {
 	tests := []struct {
 		query          string

@@ -595,14 +595,13 @@ func TestAgentBuilder_CompleteFlow(t *testing.T) {
 	loggingMW := middleware.NewLoggingMiddleware(func(msg string) {
 		// Silent logging for test
 	})
-	cacheMW := middleware.NewCacheMiddleware(1 * time.Minute)
 
 	// Build agent with everything
 	agent, err := NewAgentBuilder[*core.AgentState](llmClient).
 		WithSystemPrompt("You are a comprehensive assistant").
 		WithState(state).
 		WithTools(calcTool, searchTool).
-		WithMiddleware(loggingMW, cacheMW).
+		WithMiddleware(loggingMW).
 		WithMetadata("test", "complete").
 		WithMaxIterations(5).
 		WithTimeout(1 * time.Minute).
@@ -1269,17 +1268,4 @@ func TestAgentBuilder_FineGrainedOptions_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, output)
 	assert.Equal(t, "Test response", output.Result)
-}
-
-// 挂在 Builder 上的 CacheMiddleware 对相同输入命中缓存，不再调用模型。
-func TestCacheMiddlewareOnBuilder(t *testing.T) {
-	llmClient := NewMockLLMClient("第一次", "第二次")
-	agent, err := NewSimpleBuilder(llmClient).WithMiddleware(middleware.NewCacheMiddleware(time.Minute)).Build()
-	require.NoError(t, err)
-	first, err := agent.AsRunnable().Invoke(context.Background(), "同一个问题")
-	require.NoError(t, err)
-	second, err := agent.AsRunnable().Invoke(context.Background(), "同一个问题")
-	require.NoError(t, err)
-	assert.Equal(t, first.Result, second.Result)
-	assert.Equal(t, 1, llmClient.index, "命中缓存时不调用模型")
 }

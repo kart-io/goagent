@@ -11,7 +11,6 @@ import (
 	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/kart-io/goagent/internal/snapshot"
 )
 
 // Object pools for MiddlewareRequest and MiddlewareResponse to reduce allocations
@@ -208,11 +207,8 @@ func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareReques
 	return executeMiddleware(ctx, request, c.handler, c.middlewares.Load().items, true)
 }
 
-type chainContextKey struct{}
-
-// executeMiddleware 为各链共用错误恢复、请求关联与处理器输出缓存边界。
+// executeMiddleware 为各链共用错误恢复与请求关联。
 func executeMiddleware(ctx context.Context, request *MiddlewareRequest, handler Handler, middlewares []Middleware, after bool) (*MiddlewareResponse, error) {
-	ctx = context.WithValue(ctx, chainContextKey{}, true)
 	for i, mw := range middlewares {
 		entered := request
 		next, err := mw.OnBefore(ctx, request)
@@ -238,38 +234,23 @@ func executeMiddleware(ctx context.Context, request *MiddlewareRequest, handler 
 	}
 	ctx = context.WithValue(ctx, requestContextKey{}, request)
 	start := time.Now()
-	response, hit := request.Metadata["cached_response"].(*MiddlewareResponse)
-	hit = hit && response != nil
-	if !hit {
-		var err error
-		response, err = handler(ctx, request)
+	response, err := handler(ctx, request)
+	if err != nil {
+		for _, mw := range middlewares {
+			err = mw.OnError(ctx, err)
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
-			for _, mw := range middlewares {
-				err = mw.OnError(ctx, err)
-				if err == nil {
-					break
-				}
-			}
-			if err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
 	if response == nil {
 		response = &MiddlewareResponse{State: request.State, Metadata: make(map[string]interface{}), Headers: make(map[string]string)}
 	}
-	if hit {
-		response.Duration = 0
-	} else if response.Duration == 0 {
+	if response.Duration == 0 {
 		response.Duration = time.Since(start)
-	}
-	// 只缓存处理器结果；非幂等后处理在每个请求内各执行一次。
-	if !hit {
-		for _, mw := range middlewares {
-			if cache, ok := mw.(*CacheMiddleware); ok {
-				cache.storeResponse(cache.getCacheKey(request), response)
-			}
-		}
 	}
 	if after {
 		for i := len(middlewares) - 1; i >= 0; i-- {
@@ -508,239 +489,4 @@ func (m *TimingMiddleware) GetAverageLatency() time.Duration {
 		return 0
 	}
 	return m.total / time.Duration(m.counter)
-}
-
-// CacheMiddleware provides response caching with sharded locks for better concurrency
-//
-// 条目总数不超过 constants.DefaultMiddlewareCacheCapacity（按分片均分）；分片写满时先回收过期条目，
-// 仍满则淘汰最早过期的条目。读到过期条目时删除。
-type CacheMiddleware struct {
-	*BaseMiddleware
-	shards     []*cacheShard
-	numShards  uint32
-	ttl        time.Duration
-	shardLimit int
-}
-
-// cacheShard 单个缓存分片，减少锁竞争
-type cacheShard struct {
-	cache map[string]*CacheEntry
-	mu    sync.RWMutex
-}
-
-// CacheEntry represents a cached response
-type CacheEntry struct {
-	Response  *MiddlewareResponse
-	ExpiresAt time.Time
-}
-
-// NewCacheMiddleware creates a cache middleware with sharded locks
-func NewCacheMiddleware(ttl time.Duration) *CacheMiddleware {
-	return NewCacheMiddlewareWithShards(ttl, constants.DefaultMiddlewareCacheShards)
-}
-
-// NewCacheMiddlewareWithShards creates a cache middleware with specified number of shards
-func NewCacheMiddlewareWithShards(ttl time.Duration, numShards uint32) *CacheMiddleware {
-	if numShards > constants.MaxCacheShards {
-		panic(agentErrors.New(agentErrors.CodeInvalidConfig, "缓存分片数超过上限").WithComponent("cache_middleware").WithOperation("initialize"))
-	}
-	if numShards == 0 {
-		numShards = constants.DefaultMiddlewareCacheShards
-	}
-	// 确保是 2 的幂，方便取模
-	numShards = nextPowerOfTwo(numShards)
-
-	shards := make([]*cacheShard, numShards)
-	for i := range shards {
-		shards[i] = &cacheShard{
-			cache: make(map[string]*CacheEntry),
-		}
-	}
-
-	return &CacheMiddleware{
-		BaseMiddleware: NewBaseMiddleware("cache"),
-		shards:         shards,
-		numShards:      numShards,
-		ttl:            ttl,
-		shardLimit:     max(constants.DefaultMiddlewareCacheCapacity/int(numShards), 1),
-	}
-}
-
-// nextPowerOfTwo 返回大于等于 n 的最小 2 的幂
-func nextPowerOfTwo(n uint32) uint32 {
-	if n == 0 {
-		return 1
-	}
-	n--
-	n |= n >> 1
-	n |= n >> 2
-	n |= n >> 4
-	n |= n >> 8
-	n |= n >> 16
-	return n + 1
-}
-
-// getShard 根据 key 获取对应的分片
-func (m *CacheMiddleware) getShard(key string) *cacheShard {
-	hash := fnv32(key)
-	return m.shards[hash&(m.numShards-1)]
-}
-
-// fnv32 简单的 FNV-1a 哈希函数
-func fnv32(key string) uint32 {
-	hash := uint32(2166136261)
-	for i := 0; i < len(key); i++ {
-		hash ^= uint32(key[i])
-		hash *= 16777619
-	}
-	return hash
-}
-
-// OnBefore checks cache before execution
-func (m *CacheMiddleware) OnBefore(ctx context.Context, request *MiddlewareRequest) (*MiddlewareRequest, error) {
-	key := m.getCacheKey(request)
-	shard := m.getShard(key)
-
-	shard.mu.RLock()
-	entry, ok := shard.cache[key]
-	shard.mu.RUnlock()
-
-	if request.Metadata == nil {
-		request.Metadata = make(map[string]interface{})
-	}
-	delete(request.Metadata, "cache_hit")
-	delete(request.Metadata, "cached_response")
-	if ok && !time.Now().Before(entry.ExpiresAt) {
-		shard.mu.Lock()
-		if shard.cache[key] == entry {
-			delete(shard.cache, key)
-		}
-		shard.mu.Unlock()
-		ok = false
-	}
-	if ok {
-		if response, err := cloneCachedResponse(entry.Response); err == nil {
-			request.Metadata["cache_hit"] = true
-			request.Metadata["cached_response"] = response
-		}
-	} else {
-		// 未命中：处理器把请求元数据带入响应（Builder 即如此），OnAfter 据此写入缓存
-		request.Metadata["original_input"] = request.Input
-	}
-
-	return request, nil
-}
-
-// OnAfter caches successful responses
-func (m *CacheMiddleware) OnAfter(ctx context.Context, response *MiddlewareResponse) (*MiddlewareResponse, error) {
-	if managed, _ := ctx.Value(chainContextKey{}).(bool); !managed {
-		m.storeResponse(m.getCacheKeyFromResponse(response), response)
-	}
-	return response, nil
-}
-
-// storeResponse 对不透明宿主对象跳过缓存；绝不以浅拷贝冒充请求隔离。
-func (m *CacheMiddleware) storeResponse(key string, response *MiddlewareResponse) {
-	if key == "" || response.Error != nil {
-		return
-	}
-	cached, err := cloneCachedResponse(response)
-	if err != nil {
-		return
-	}
-	shard := m.getShard(key)
-	now := time.Now()
-	shard.mu.Lock()
-	if _, exists := shard.cache[key]; !exists && len(shard.cache) >= m.shardLimit {
-		shard.evict(now)
-	}
-	shard.cache[key] = &CacheEntry{Response: cached, ExpiresAt: now.Add(m.ttl)}
-	shard.mu.Unlock()
-}
-
-// evict 在持锁状态下腾出至少一个位置：先删全部过期条目，没有过期条目时删最早过期的一条。
-func (s *cacheShard) evict(now time.Time) {
-	var oldestKey string
-	var oldest time.Time
-	reclaimed := false
-	for k, e := range s.cache {
-		if !now.Before(e.ExpiresAt) {
-			delete(s.cache, k)
-			reclaimed = true
-		} else if oldestKey == "" || e.ExpiresAt.Before(oldest) {
-			oldestKey, oldest = k, e.ExpiresAt
-		}
-	}
-	if !reclaimed && oldestKey != "" {
-		delete(s.cache, oldestKey)
-	}
-}
-
-func cloneCachedResponse(response *MiddlewareResponse) (*MiddlewareResponse, error) {
-	// 有锁的 State 须实现快照协议；不改变业务状态的具体类型。
-	copy := *response
-	copy.State = nil
-	metadata := make(map[string]interface{}, len(response.Metadata))
-	for k, v := range response.Metadata {
-		if k != "original_input" && k != "cached_response" && k != "cache_hit" {
-			metadata[k] = v
-		}
-	}
-	copy.Metadata = metadata
-	cloned, err := snapshot.Clone(&copy)
-	if err != nil {
-		return nil, err
-	}
-	result := cloned.(*MiddlewareResponse)
-	if response.State != nil {
-		if st, ok := response.State.(*state.AgentState); ok && st != nil {
-			values, err := snapshot.Clone(st.Snapshot())
-			if err != nil {
-				return nil, err
-			}
-			result.State = state.NewAgentStateWithData(values.(map[string]interface{}))
-		} else {
-			cloned, err := snapshot.Clone(response.State)
-			if err != nil {
-				return nil, err
-			}
-			result.State = cloned.(state.State)
-		}
-	}
-	return result, nil
-}
-
-// getCacheKey generates a cache key from request
-func (m *CacheMiddleware) getCacheKey(request *MiddlewareRequest) string {
-	return fmt.Sprintf("%v", request.Input)
-}
-
-// getCacheKeyFromResponse generates a cache key from response metadata
-func (m *CacheMiddleware) getCacheKeyFromResponse(response *MiddlewareResponse) string {
-	if response.Metadata != nil {
-		if input, ok := response.Metadata["original_input"]; ok {
-			return fmt.Sprintf("%v", input)
-		}
-	}
-	return ""
-}
-
-// Clear removes all cached entries
-func (m *CacheMiddleware) Clear() {
-	for _, shard := range m.shards {
-		shard.mu.Lock()
-		shard.cache = make(map[string]*CacheEntry)
-		shard.mu.Unlock()
-	}
-}
-
-// Size returns the number of cached entries
-func (m *CacheMiddleware) Size() int {
-	total := 0
-	for _, shard := range m.shards {
-		shard.mu.RLock()
-		total += len(shard.cache)
-		shard.mu.RUnlock()
-	}
-	return total
 }

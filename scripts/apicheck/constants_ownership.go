@@ -23,7 +23,6 @@ var migratedConstantOwners = map[string]string{
 	"core/durable/inboxSeenLimit":            "constants.DurableInboxSeenLimit",
 	"core/durable/interruptAttempts":         "constants.DefaultInterruptAttempts",
 	"core/durable/maxReasonRunes":            "constants.InterruptMaxReasonRunes",
-	"core/middleware/defaultNumShards":       "constants.DefaultMiddlewareCacheShards",
 	"core/session/TypeAssistantMessage":      "constants.SessionEventAssistantMessage",
 	"core/session/TypeBoundarySnapshot":      "constants.SessionEventBoundarySnapshot",
 	"core/session/TypeHistoryRewrite":        "constants.SessionEventHistoryRewrite",

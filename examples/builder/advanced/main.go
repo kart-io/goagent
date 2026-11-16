@@ -3,7 +3,7 @@
 //
 // 本示例演示：
 // 1. 带自定义状态的 Agent（泛型）
-// 2. 带中间件的 Agent（缓存、限流、日志）
+// 2. 带中间件与模型调用缓存的 Agent（限流、日志、缓存）
 // 3. 带对话记忆的会话管理 Agent（多轮对话 + SessionID）
 // 4. 带元数据和遥测的 Agent（企业级监控）
 // 5. 输出格式控制（结合企业级配置）
@@ -19,6 +19,7 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/session"
@@ -27,6 +28,9 @@ import (
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
 )
+
+// exampleUserKey 是示例中携带用户 ID 的 ctx 键，实际应由认证中间件写入。
+type exampleUserKey struct{}
 
 func main() {
 	fmt.Println("=== Builder API - Advanced 层级示例 ===")
@@ -165,13 +169,13 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 	fmt.Println()
 }
 
-// 示例 2: 带中间件的 Agent
+// 示例 2: 带中间件与模型调用缓存的 Agent
 //
 // 使用的方法：
 // - Simple API: WithSystemPrompt, WithTools
-// - Advanced API: WithMiddleware
+// - Advanced API: WithMiddleware, WithModelCache
 func example2AgentWithMiddleware(apiKey, providerName string) {
-	fmt.Println("--- 示例 2: 带中间件的 Agent ---")
+	fmt.Println("--- 示例 2: 带中间件与模型调用缓存的 Agent ---")
 
 	// 创建 LLM 客户端
 	llmClient, err := createLLMClient(apiKey, providerName)
@@ -182,8 +186,8 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 	// 创建工具
 	calculator := createCalculatorTool()
 
-	// 中间件包裹每次 Execute 调用，提供日志、限流、缓存等横切能力
-	fmt.Println("注册中间件: 日志、限流（每分钟 10 次）、缓存（TTL 5 分钟）")
+	// 中间件包裹每次 Execute 调用，提供日志、限流等横切能力；模型调用缓存按隔离身份命中
+	fmt.Println("注册中间件: 日志、限流（每分钟 10 次）；模型调用缓存（TTL 5 分钟）")
 
 	// 配置 Agent
 	agent, err := builder.NewSimpleBuilder(llmClient).
@@ -195,15 +199,25 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 		WithMiddleware(
 			middleware.NewLoggingMiddleware(func(msg string) { fmt.Println("  " + msg) }),
 			middleware.NewRateLimiterMiddleware(10, time.Minute),
-			middleware.NewCacheMiddleware(5*time.Minute),
 		).
+		WithModelCache(builder.ModelCache{
+			Cache: cache.NewSimpleCache(5 * time.Minute),
+			TTL:   5 * time.Minute,
+			// 取不到用户 ID 时不缓存，避免不同用户互相命中
+			Scope: func(ctx context.Context) (string, bool) {
+				id, ok := ctx.Value(exampleUserKey{}).(string)
+				return id, ok && id != ""
+			},
+			// 示例密钥；生产环境应从密钥管理系统读取，不得写进代码
+			TagKey: []byte("example-tag-key-32-bytes-long!!!"),
+		}).
 		Build()
 	if err != nil {
 		log.Fatalf("创建 Agent 失败: %v", err)
 	}
 
 	// 使用 Agent 执行任务
-	result, err := agent.AsRunnable().Invoke(context.Background(), "计算 10 + 20")
+	result, err := agent.AsRunnable().Invoke(context.WithValue(context.Background(), exampleUserKey{}, "demo-user"), "计算 10 + 20")
 
 	if err != nil {
 		log.Printf("执行失败: %v", err)

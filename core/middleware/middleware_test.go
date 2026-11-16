@@ -267,78 +267,6 @@ func TestTimingMiddleware(t *testing.T) {
 	assert.Greater(t, avgLatency, time.Duration(0))
 }
 
-func TestCacheMiddleware(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	// First request (cache miss)
-	req1 := &MiddlewareRequest{
-		Input:    "test-key",
-		Metadata: make(map[string]interface{}),
-	}
-	modifiedReq1, err := mw.OnBefore(context.Background(), req1)
-	assert.NoError(t, err)
-	assert.NotContains(t, modifiedReq1.Metadata, "cache_hit")
-
-	// Cache the response
-	resp1 := &MiddlewareResponse{
-		Output:   "cached result",
-		Metadata: map[string]interface{}{"original_input": "test-key"},
-	}
-	_, err = mw.OnAfter(context.Background(), resp1)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, mw.Size())
-
-	// Second request (cache hit)
-	req2 := &MiddlewareRequest{
-		Input:    "test-key",
-		Metadata: make(map[string]interface{}),
-	}
-	modifiedReq2, err := mw.OnBefore(context.Background(), req2)
-	assert.NoError(t, err)
-	assert.True(t, modifiedReq2.Metadata["cache_hit"].(bool))
-	assert.NotNil(t, modifiedReq2.Metadata["cached_response"])
-
-	// Clear cache
-	mw.Clear()
-	assert.Equal(t, 0, mw.Size())
-}
-
-func TestCacheMiddleware_Expiration(t *testing.T) {
-	mw := NewCacheMiddleware(100 * time.Millisecond)
-
-	// Cache a response
-	req := &MiddlewareRequest{
-		Input:    "test-key",
-		Metadata: make(map[string]interface{}),
-	}
-	_, _ = mw.OnBefore(context.Background(), req)
-
-	resp := &MiddlewareResponse{
-		Output:   "cached result",
-		Metadata: map[string]interface{}{"original_input": "test-key"},
-	}
-	_, _ = mw.OnAfter(context.Background(), resp)
-
-	// Immediate check (should be cached)
-	req2 := &MiddlewareRequest{
-		Input:    "test-key",
-		Metadata: make(map[string]interface{}),
-	}
-	modifiedReq2, _ := mw.OnBefore(context.Background(), req2)
-	assert.True(t, modifiedReq2.Metadata["cache_hit"].(bool))
-
-	// Wait for expiration
-	time.Sleep(150 * time.Millisecond)
-
-	// Check again (should be expired)
-	req3 := &MiddlewareRequest{
-		Input:    "test-key",
-		Metadata: make(map[string]interface{}),
-	}
-	modifiedReq3, _ := mw.OnBefore(context.Background(), req3)
-	assert.NotContains(t, modifiedReq3.Metadata, "cache_hit")
-}
-
 func TestMiddlewareChain_ConcurrentExecution(t *testing.T) {
 	var counter int32
 
@@ -501,7 +429,6 @@ func BenchmarkMiddlewareChain_Execute(b *testing.B) {
 	chain.Use(
 		NewLoggingMiddleware(nil),
 		NewTimingMiddleware(),
-		NewCacheMiddleware(1*time.Minute),
 	)
 
 	req := &MiddlewareRequest{
@@ -512,27 +439,5 @@ func BenchmarkMiddlewareChain_Execute(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		chain.Execute(context.Background(), req)
-	}
-}
-
-func BenchmarkCacheMiddleware(b *testing.B) {
-	mw := NewCacheMiddleware(1 * time.Minute)
-
-	req := &MiddlewareRequest{
-		Input:    "test",
-		Metadata: make(map[string]interface{}),
-	}
-
-	// Populate cache
-	mw.OnBefore(context.Background(), req)
-	resp := &MiddlewareResponse{
-		Output:   "cached",
-		Metadata: map[string]interface{}{"original_input": "test"},
-	}
-	mw.OnAfter(context.Background(), resp)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		mw.OnBefore(context.Background(), req)
 	}
 }

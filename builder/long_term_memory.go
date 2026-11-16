@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -23,8 +22,7 @@ import (
 //     Request 钩子不得改写或移动召回消息，否则持久运行恢复时意图不一致。
 //   - 形成：每轮结束（含中止的轮次）按本轮绑定在 m 中登记抽取任务，由宿主运行的 m.Run 异步处理；任务按"会话/轮次"幂等。
 //
-// 需要模型自行检索或保存时，另行注册 m.Tools()。不能与 middleware.CacheMiddleware 同时使用：它按输入缓存回答，
-// 会跨命名空间命中。
+// 需要模型自行检索或保存时，另行注册 m.Tools()。
 func (b *AgentBuilder[S]) WithLongTermMemory(m *memory.Memory) *AgentBuilder[S] {
 	b.config.LongTermMemory = m
 	return b
@@ -36,11 +34,6 @@ func (b *AgentBuilder[S]) validateLongTermMemory() error {
 	}
 	if b.config.SessionLog == nil {
 		return agentErrors.NewInvalidConfigError("builder", "long_term_memory", "长期记忆需要 WithSessionLog：抽取任务从会话日志读取轮次")
-	}
-	for _, mw := range b.middlewares {
-		if _, ok := mw.(*middleware.CacheMiddleware); ok {
-			return agentErrors.NewInvalidConfigError("builder", "long_term_memory", "长期记忆不能与 CacheMiddleware 同时使用：缓存按输入命中，会把一个命名空间的回答返回给另一个")
-		}
 	}
 	return nil
 }

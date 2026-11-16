@@ -7,14 +7,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
-	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -172,15 +170,6 @@ func TestLongTermMemoryFiltersLegacyRecallBlocks(t *testing.T) {
 	for _, msg := range model.request(0).Messages {
 		require.NotContains(t, msg.Content, "旧召回")
 	}
-}
-
-func TestLongTermMemoryRejectsResponseCache(t *testing.T) {
-	ctx := memory.WithNamespace(context.Background(), "t1", "alice")
-	m, _ := newTestMemory(t, ctx)
-	_, err := NewSimpleBuilder(newScriptModel()).WithTools(plainTool()).WithSessionLog(session.NewMemoryStore()).WithSessionID("s").
-		WithMiddleware(middleware.NewCacheMiddleware(time.Minute)).WithLongTermMemory(m).Build()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "CacheMiddleware")
 }
 
 // memory_save 写入轮次绑定的写命名空间。

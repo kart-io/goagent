@@ -3,13 +3,11 @@ package middleware
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestRuntimeErrorGateMiddlewareClassification(t *testing.T) {
@@ -28,39 +26,6 @@ func TestRuntimeErrorGateMiddlewareClassification(t *testing.T) {
 		_, err := NewMiddlewareChain(handler).Use(mw).Execute(context.Background(), &MiddlewareRequest{})
 		require.True(t, agentErrors.IsCode(err, agentErrors.CodeMiddlewareExecution))
 	}
-}
-
-func TestReviewRT01CacheTransformIsolation(t *testing.T) {
-	cache := NewCacheMiddleware(time.Minute)
-	calls := 0
-	chain := NewMiddlewareChain(func(_ context.Context, r *MiddlewareRequest) (*MiddlewareResponse, error) {
-		calls++
-		return &MiddlewareResponse{Output: map[string]any{"文本": "答案"}, Metadata: r.Metadata, Headers: map[string]string{"键": "值"}, TokenUsage: &interfaces.TokenUsage{TotalTokens: 7}}, nil
-	})
-	chain.Use(cache, NewMiddlewareFunc("转换", nil, func(_ context.Context, r *MiddlewareResponse) (*MiddlewareResponse, error) {
-		r.Output.(map[string]any)["文本"] = r.Output.(map[string]any)["文本"].(string) + "!"
-		return r, nil
-	}, nil))
-	for i := 0; i < 3; i++ {
-		r, err := chain.Execute(context.Background(), &MiddlewareRequest{Input: "同键"})
-		require.NoError(t, err)
-		require.Equal(t, "答案!", r.Output.(map[string]any)["文本"])
-		require.Equal(t, 7, r.TokenUsage.TotalTokens)
-		r.Output.(map[string]any)["文本"] = "污染"
-		r.TokenUsage.TotalTokens = 999
-	}
-	require.Equal(t, 1, calls)
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r, err := chain.Execute(context.Background(), &MiddlewareRequest{Input: "同键"})
-			require.NoError(t, err)
-			require.Equal(t, "答案!", r.Output.(map[string]any)["文本"])
-		}()
-	}
-	wg.Wait()
 }
 
 func TestReviewRT04RecoveryObjects(t *testing.T) {
@@ -127,40 +92,5 @@ func TestReviewRT09SelectorMatches(t *testing.T) {
 		r, err := m.OnBefore(context.Background(), &MiddlewareRequest{Input: query})
 		require.NoError(t, err)
 		require.Len(t, r.Metadata["selected_tools"], want)
-	}
-}
-
-func TestReviewRT01CacheSnapshotsStateAndUnsupportedValues(t *testing.T) {
-	for _, unsupported := range []bool{false, true} {
-		t.Run(map[bool]string{true: "不可隔离则跳过", false: "嵌套状态隔离"}[unsupported], func(t *testing.T) {
-			calls := 0
-			cache := NewCacheMiddleware(time.Minute)
-			chain := NewMiddlewareChain(func(context.Context, *MiddlewareRequest) (*MiddlewareResponse, error) {
-				calls++
-				s := state.NewAgentStateWithData(map[string]any{"嵌套": map[string][]byte{"字节": {1}}})
-				var output any = []byte{3}
-				if unsupported {
-					output = make(chan int)
-				}
-				return &MiddlewareResponse{Output: output, State: s, Headers: map[string]string{"键": "值"}, Metadata: map[string]any{"嵌套": []int{5}}}, nil
-			}).Use(cache)
-			for i := 0; i < 3; i++ {
-				r, err := chain.Execute(context.Background(), &MiddlewareRequest{Input: "键"})
-				require.NoError(t, err)
-				require.Equal(t, "值", r.Headers["键"])
-				require.Equal(t, []int{5}, r.Metadata["嵌套"])
-				v, _ := r.State.Get("嵌套")
-				require.Equal(t, byte(1), v.(map[string][]byte)["字节"][0])
-				v.(map[string][]byte)["字节"][0] = 9
-				r.Headers["键"] = "污染"
-				r.Metadata["嵌套"].([]int)[0] = 9
-			}
-			if unsupported {
-				require.Equal(t, 3, calls)
-				require.Zero(t, cache.Size())
-			} else {
-				require.Equal(t, 1, calls)
-			}
-		})
 	}
 }

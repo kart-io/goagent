@@ -311,72 +311,6 @@ func TestTimingMiddleware_ConcurrentTimings(t *testing.T) {
 
 // ===== Cache Middleware Edge Cases =====
 
-func TestCacheMiddleware_OnAfter_WithError(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	resp := &MiddlewareResponse{
-		Output:   "result",
-		Error:    errors.New("request error"),
-		Metadata: map[string]interface{}{"original_input": "test"},
-	}
-
-	mw.OnAfter(context.Background(), resp)
-
-	// Error responses should not be cached
-	assert.Equal(t, 0, mw.Size())
-}
-
-func TestCacheMiddleware_GetCacheKeyFromResponse_NoMetadata(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	resp := &MiddlewareResponse{
-		Output: "result",
-		// No metadata
-	}
-
-	modifiedResp, err := mw.OnAfter(context.Background(), resp)
-	require.NoError(t, err)
-	// Cache should still work, just with empty key
-	assert.NotNil(t, modifiedResp)
-}
-
-func TestCacheMiddleware_GetCacheKeyFromResponse_NoOriginalInput(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	resp := &MiddlewareResponse{
-		Output:   "result",
-		Metadata: map[string]interface{}{"other_key": "value"},
-	}
-
-	mw.OnAfter(context.Background(), resp)
-
-	// 当 metadata 中没有 original_input 时，getCacheKeyFromResponse 返回空字符串
-	// 空键不会被缓存（这是正确的行为，避免缓存无法检索的条目）
-	assert.Equal(t, 0, mw.Size())
-}
-
-func TestCacheMiddleware_OnBefore_NilMetadata(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	// First populate cache
-	resp := &MiddlewareResponse{
-		Output:   "result",
-		Metadata: map[string]interface{}{"original_input": "test"},
-	}
-	mw.OnAfter(context.Background(), resp)
-
-	// Now try to get from cache with nil metadata
-	req := &MiddlewareRequest{
-		Input: "test",
-		// No metadata
-	}
-
-	modifiedReq, err := mw.OnBefore(context.Background(), req)
-	require.NoError(t, err)
-	// Should create metadata
-	assert.NotNil(t, modifiedReq.Metadata)
-}
-
 // ===== Retry Middleware Edge Cases =====
 
 // ===== MiddlewareRequest & Response Edge Cases =====
@@ -536,22 +470,6 @@ func TestRandomDelayMiddleware_OnBefore_ImmediateCancel(t *testing.T) {
 }
 
 // ===== Type Assertion Edge Cases =====
-
-func TestCacheMiddleware_OnAfter_InvalidCachedResponseType(t *testing.T) {
-	mw := NewCacheMiddleware(1 * time.Second)
-
-	resp := &MiddlewareResponse{
-		Output: "result",
-		Metadata: map[string]interface{}{
-			"cached_response": "not a response", // Wrong type
-		},
-	}
-
-	modifiedResp, err := mw.OnAfter(context.Background(), resp)
-	require.NoError(t, err)
-	// Should handle gracefully and cache the response
-	assert.NotNil(t, modifiedResp)
-}
 
 func TestTimingMiddleware_OnAfter_InvalidStartTimeType(t *testing.T) {
 	mw := NewTimingMiddleware()

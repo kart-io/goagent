@@ -14,6 +14,7 @@ var retiredAPIEntries = func() map[string]bool {
 		"cache":            {"CacheEntry", "InMemoryCache", "NewInMemoryCache", "LRUCache", "NewLRUCache", "MultiTierCache", "NewMultiTierCache"},
 		"tools/middleware": {"ToolMiddleware", "BaseToolMiddleware", "NewBaseToolMiddleware", "Chain", "createMiddlewareInvoker"},
 		"core":             {"RetryPolicy", "BackoffPolicy"},
+		"core/middleware":  {"CacheMiddleware", "CacheEntry", "cacheShard", "NewCacheMiddleware", "NewCacheMiddlewareWithShards"},
 		"core/execution":   {"RuntimeConfig", "DefaultRuntimeConfig", "RuntimeMetrics", "NewRuntimeMetrics"},
 		"core/durable":     {"operationVersionV1"},
 	}

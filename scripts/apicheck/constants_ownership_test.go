@@ -60,7 +60,6 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"core/durable/inboxSeenLimit":            "constants.DurableInboxSeenLimit",
 		"core/durable/interruptAttempts":         "constants.DefaultInterruptAttempts",
 		"core/durable/maxReasonRunes":            "constants.InterruptMaxReasonRunes",
-		"core/middleware/defaultNumShards":       "constants.DefaultMiddlewareCacheShards",
 		"core/session/TypeAssistantMessage":      "constants.SessionEventAssistantMessage",
 		"core/session/TypeBoundarySnapshot":      "constants.SessionEventBoundarySnapshot",
 		"core/session/TypeHistoryRewrite":        "constants.SessionEventHistoryRewrite",
@@ -85,7 +84,7 @@ func TestApprovedConstantEntrypointsCannotReturn(t *testing.T) {
 		"workflow/RejectResumeInput":             "constants.WorkflowRejectResumeInput",
 		"workflow/START":                         "constants.WorkflowStart",
 	}
-	require.Len(t, approved, 37)
+	require.Len(t, approved, 36)
 	require.Equal(t, approved, migratedConstantOwners)
 	for old, target := range approved {
 		t.Run(old, func(t *testing.T) {

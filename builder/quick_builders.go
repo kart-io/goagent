@@ -142,7 +142,6 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Sim
 // 配置:
 //   - 持续操作模式
 //   - 速率限制以防止过载
-//   - 缓存用于高效监控
 //   - 警报中间件用于通知
 func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*SimpleAgent, error) {
 	state := core.NewAgentState()
@@ -157,7 +156,6 @@ func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*Simple
 		WithTemperature(0.3).   // 平衡的模式识别
 		WithMiddleware(
 			middleware.NewRateLimiterMiddleware(60, time.Minute), // 限制为每分钟 60 次检查
-			middleware.NewCacheMiddleware(5*time.Minute),         // 缓存最近的检查
 			middleware.NewTimingMiddleware(),
 		).
 		WithMetadata("type", "monitoring").
@@ -176,7 +174,7 @@ func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*Simple
 // 配置:
 //   - MaxTokens: 4000 (更大上下文用于综合报告)
 //   - Temperature: 0.5 (平衡创造性和准确性)
-//   - Middleware: ToolSelector (用于搜索/抓取), Cache
+//   - Middleware: ToolSelector (用于搜索/抓取)
 func ResearchAgent(llmClient llm.Client, sources []string) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	if len(sources) > 0 {
@@ -192,7 +190,6 @@ func ResearchAgent(llmClient llm.Client, sources []string) (*SimpleAgent, error)
 		WithTemperature(0.5).
 		WithMaxIterations(15).
 		WithMiddleware(
-			middleware.NewCacheMiddleware(10*time.Minute), // 缓存研究结果
 			middleware.NewTimingMiddleware(),
 		).
 		WithMetadata("type", "research").

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/store/memory"
@@ -73,9 +75,6 @@ func basicMiddlewareDemo() {
 	// Add timing middleware
 	chain.Use(middleware.NewTimingMiddleware())
 
-	// Add cache middleware
-	chain.Use(middleware.NewCacheMiddleware(5 * time.Second))
-
 	// Execute request
 	state := core.NewAgentState()
 	state.Set("user", "Alice")
@@ -87,23 +86,36 @@ func basicMiddlewareDemo() {
 		Timestamp: time.Now(),
 	}
 
-	fmt.Println("  First request (cache miss):")
-	resp1, err := chain.Execute(context.Background(), request)
+	fmt.Println("  Request:")
+	resp, err := chain.Execute(context.Background(), request)
 	if err != nil {
 		fmt.Printf("  Error: %v\n", err)
 		return
 	}
-	fmt.Printf("  Response: %v\n", resp1.Output)
-	fmt.Printf("  Duration: %v\n", resp1.Duration)
+	fmt.Printf("  Response: %v\n", resp.Output)
+	fmt.Printf("  Duration: %v\n", resp.Duration)
 
-	fmt.Println("\n  Second request (cache hit):")
-	resp2, err := chain.Execute(context.Background(), request)
-	if err != nil {
-		fmt.Printf("  Error: %v\n", err)
-		return
+	// 响应缓存已移出中间件链：模型调用缓存通过 builder.WithModelCache 启用
+	mc := exampleModelCache()
+	fmt.Printf("\n  模型调用缓存配置示例：TTL=%v，标签密钥 %d 字节\n", mc.TTL, len(mc.TagKey))
+}
+
+// exampleUserKey 是示例中携带用户 ID 的 ctx 键，实际应由认证中间件写入。
+type exampleUserKey struct{}
+
+// exampleModelCache 返回可传给 builder.WithModelCache 的示例配置。
+func exampleModelCache() builder.ModelCache {
+	return builder.ModelCache{
+		Cache: cache.NewSimpleCache(5 * time.Minute),
+		TTL:   5 * time.Minute,
+		// 取不到用户 ID 时不缓存，避免不同用户互相命中
+		Scope: func(ctx context.Context) (string, bool) {
+			id, ok := ctx.Value(exampleUserKey{}).(string)
+			return id, ok && id != ""
+		},
+		// 示例密钥；生产环境应从密钥管理系统读取，不得写进代码
+		TagKey: []byte("example-tag-key-32-bytes-long!!!"),
 	}
-	fmt.Printf("  Response: %v\n", resp2.Output)
-	fmt.Printf("  Duration: %v (cached)\n", resp2.Duration)
 }
 
 // dynamicPromptDemo demonstrates dynamic prompt modification
@@ -360,9 +372,6 @@ func completeAgentDemo() {
 	// 9. Timing
 	timing := middleware.NewTimingMiddleware()
 
-	// 10. Cache
-	cache := middleware.NewCacheMiddleware(30 * time.Second)
-
 	// Add all middleware to chain (order matters!)
 	chain.Use(
 		logger,               // Log all requests/responses
@@ -371,7 +380,6 @@ func completeAgentDemo() {
 		rateLimiter,          // Apply rate limits
 		circuitBreaker,       // Circuit breaker protection
 		validationMiddleware, // Validate input
-		cache,                // Check cache
 		dynamicPrompt,        // Modify prompt
 		toolSelector,         // Select tools
 		transformMiddleware,  // Transform input/output
@@ -418,9 +426,6 @@ func completeAgentDemo() {
 	// Get average latency from timing middleware
 	avgLatency := timing.GetAverageLatency()
 	fmt.Printf("    - Average latency: %v\n", avgLatency)
-
-	// Check cache size
-	fmt.Printf("    - Cache size: %d entries\n", cache.Size())
 
 	// Check stored conversations
 	keys, _ := store.List(ctx, []string{"conversations", "agent-session-001"})
