@@ -35,12 +35,17 @@ type SimpleCache struct {
 	// maxEntries 为 0 表示不限条目数；size 是当前条目数，随每次成功插入与删除增减。
 	maxEntries int64
 	size       atomic.Int64
+
+	// tagMu 保护 tags，并串行化所有对 data 的写入，使标签索引与条目不会失步；读取不加锁。
+	tagMu sync.Mutex
+	tags  map[string]map[string]struct{}
 }
 
 // cacheEntry 缓存条目
 type cacheEntry struct {
 	value     interface{}
 	expiresAt time.Time
+	tags      []string
 }
 
 // SimpleCacheOption 配置缓存的清理生命周期。
@@ -79,6 +84,7 @@ func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
 		cancel:     cancel,
 		lazy:       cfg.lazy,
 		maxEntries: cfg.maxEntries,
+		tags:       make(map[string]map[string]struct{}),
 	}
 
 	c.nextCleanup.Store(time.Now().Add(max(ttl/2, time.Nanosecond)).UnixNano())
@@ -111,14 +117,29 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 
 // Set 设置缓存值
 func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	return c.set(key, value, ttl, nil)
+}
+
+// set 写入条目并以 tags 整体替换旧标签。
+func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags []string) error {
 	if ttl <= 0 {
 		ttl = c.ttl
 	}
 
-	if _, loaded := c.data.Swap(key, &cacheEntry{
+	c.tagMu.Lock()
+	old, loaded := c.data.Swap(key, &cacheEntry{
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
-	}); !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0 {
+		tags:      tags,
+	})
+	if loaded {
+		c.untag(key, old.(*cacheEntry).tags)
+	}
+	c.tag(key, tags)
+	over := !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0
+	c.tagMu.Unlock()
+
+	if over {
 		c.evict(key)
 	}
 	if c.lazy {
@@ -133,8 +154,12 @@ func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, tt
 
 // Delete 删除缓存值
 func (c *SimpleCache) Delete(ctx context.Context, key string) error {
-	if _, ok := c.data.LoadAndDelete(key); ok {
+	c.tagMu.Lock()
+	defer c.tagMu.Unlock()
+
+	if v, ok := c.data.LoadAndDelete(key); ok {
 		c.size.Add(-1)
+		c.untag(key, v.(*cacheEntry).tags)
 	}
 	return nil
 }
@@ -227,8 +252,12 @@ func (c *SimpleCache) cleanupExpired() {
 
 // remove 在条目仍是 value 时删除它并同步计数。
 func (c *SimpleCache) remove(key, value interface{}) {
+	c.tagMu.Lock()
+	defer c.tagMu.Unlock()
+
 	if c.data.CompareAndDelete(key, value) {
 		c.size.Add(-1)
+		c.untag(key.(string), value.(*cacheEntry).tags)
 	}
 }
 
