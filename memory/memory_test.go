@@ -176,12 +176,6 @@ func TestMemoryIndex(t *testing.T) {
 	}{
 		{"零向量", func(x *MemoryIndex) error { return x.Upsert(ctx, ns, "a", []float32{0, 0}) }},
 		{"非有限值", func(x *MemoryIndex) error { return x.Upsert(ctx, ns, "a", []float32{float32(math.NaN()), 1}) }},
-		{"维度不一致", func(x *MemoryIndex) error {
-			if err := x.Upsert(ctx, ns, "a", []float32{1, 0}); err != nil {
-				return err
-			}
-			return x.Upsert(ctx, ns, "b", []float32{1, 0, 0})
-		}},
 		{"没有命名空间", func(x *MemoryIndex) error { return x.Upsert(ctx, nil, "a", []float32{1}) }},
 	}
 	for _, tt := range tests {

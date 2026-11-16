@@ -97,7 +97,7 @@ func (r Record) validate() error {
 	if r.InvalidAt.IsZero() != (r.InvalidReason == "") {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "记录的失效时间与失效原因须同时设置").WithComponent("memory").WithOperation("validate")
 	}
-	return validNamespace(r.Namespace)
+	return ValidateNamespace(r.Namespace)
 }
 
 type namespaceKey struct{}
@@ -120,13 +120,14 @@ func requireNamespace(ctx context.Context) ([]string, error) {
 	if t, ok := TurnFrom(ctx); ok {
 		ns = slices.Clone(t.Write)
 	}
-	if err := validNamespace(ns); err != nil {
+	if err := ValidateNamespace(ns); err != nil {
 		return nil, err
 	}
 	return ns, nil
 }
 
-func validNamespace(ns []string) error {
+// ValidateNamespace 校验长期记忆的命名空间：非空，组件不能为空白，也不能含 NUL。违反时返回 CodeInvalidInput。
+func ValidateNamespace(ns []string) error {
 	if len(ns) == 0 || slices.ContainsFunc(ns, func(s string) bool { return strings.TrimSpace(s) == "" }) {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "长期记忆需要命名空间：用 memory.WithNamespace 绑定可信身份").WithComponent("memory").WithOperation("namespace")
 	}

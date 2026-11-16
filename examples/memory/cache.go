@@ -19,8 +19,8 @@ import (
 
 var tagKey = []byte(strings.Repeat("k", 32))
 
-// untaggedCache 只暴露 cache.Cache，隐藏 SimpleCache 的 Tagged 能力，模拟不支持按标签删除的后端。
-type untaggedCache struct{ cache.Cache }
+// untaggedCache 只暴露 cache.Bytes，隐藏 SimpleCache 的 Tagged 能力，模拟不支持按标签删除的后端。
+type untaggedCache struct{ cache.Bytes }
 
 func cacheConsistency(ctx context.Context, w io.Writer, root string) error {
 	return runSteps(w,

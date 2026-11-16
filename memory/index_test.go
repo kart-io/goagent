@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -246,4 +247,44 @@ func TestReindexRepairsIndex(t *testing.T) {
 
 	require.NoError(t, m.Reindex(ctx, true), "force 重写全部，结果相同")
 	require.Equal(t, want, indexKeys(x, []string{"u"}))
+}
+
+// dimEmbedder 返回固定维度的向量：第 0 维为 1，其余为 0.1，使不同文本得到同一向量，召回只看维度是否可比。
+type dimEmbedder struct{ dim int }
+
+func (e dimEmbedder) Embed(context.Context, string) ([]float32, error) {
+	v := make([]float32, e.dim)
+	for i := range v {
+		v[i] = 0.1
+	}
+	v[0] = 1
+	return v, nil
+}
+
+// 换嵌入模型（维度变化）后，旧向量与新向量在同一命名空间共存，Reindex 写入新键并删除旧模型的键。
+func TestReindexAfterEmbedModelChange(t *testing.T) {
+	x := NewMemoryIndex()
+	ctx := WithNamespace(context.Background(), "u")
+	fs, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+
+	m1 := newMemory(t, Config{Durable: fs, Index: x, Embedder: dimEmbedder{2}, EmbedModel: "m1"})
+	r, err := m1.Remember(ctx, Record{ID: "a", Content: "用户喜欢咖啡", Importance: 0.5})
+	require.NoError(t, err)
+	oldKeys := indexKeys(x, []string{"u"})
+	require.Len(t, oldKeys, 1)
+
+	m2 := newMemory(t, Config{Durable: fs, Index: x, Embedder: dimEmbedder{3}, EmbedModel: "m2"})
+	require.NoError(t, m2.Reindex(ctx, false))
+
+	k := recordKey(r)
+	k.Model = m2.modelTag
+	require.Equal(t, []string{k.String()}, indexKeys(x, []string{"u"}), "旧模型的键已删除，只剩 m2 的键")
+	require.NotContains(t, indexKeys(x, []string{"u"}), oldKeys[0])
+
+	got, err := m2.Recall(ctx, Query{Text: "咖啡"})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Greater(t, got[0].Relevance, 0.5, "召回按 m2 的向量命中")
+	checkIndex(t, m2, x, []string{"u"})
 }

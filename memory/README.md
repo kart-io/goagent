@@ -64,6 +64,26 @@ agent, err := builder.NewSimpleBuilder(client).
 - 召回：以查询中出现的实体与召回记录的实体为种子，取 `GraphHops` 跳内的有效边，按 Personalized PageRank 取至多 `GraphRelations` 条，放入召回块并由 `memory_search` 返回；也可直接调用 `Related`。
 - 社区：`Config.Communities` 为真时，Worker 处理完一批任务后用标签传播划分社区，为成员或关系变化的社区请求模型写摘要（`RefreshCommunities` 可手动执行）；召回时附上与种子最相关的 `GraphCommunities` 个摘要。
 
+## 分布式部署
+
+多个进程共享同一份长期记忆时，缓存与向量索引需要换成外部后端：
+
+| 组件 | 进程内默认 | 共享后端（`goagent-contrib`） |
+|---|---|---|
+| 模型调用缓存 | `cache.SimpleCache` | `github.com/kart-io/goagent-contrib/cache/redis`（Redis 7 及以上，单机、哨兵与 Cluster） |
+| 向量索引 | `memory.MemoryIndex` | `github.com/kart-io/goagent-contrib/memory/pgvector` |
+
+换法：Redis 缓存实现 `cache.Bytes` 与 `cache.Tagged`，作为 `builder.ModelCache.Cache` 传入；pgvector 实现 `memory.Index`，作为 `memory.Config.Index` 传入。自行实现 `memory.Index` 时用 `memorytest.RunIndex` 验证契约。
+
+部署须知：
+
+- **所有实例使用相同的 `TagKey`**：标签是 HMAC，`TagKey` 不同则同一记忆在各实例上的标签不同，`DeleteTag` 删不到其他实例写的条目。
+- **每个持有记忆的进程都要接上擦除**：包括只跑 `memory/worker` 的进程，它执行的 `Forget`、`Purge` 也要通过 `OnErase` 调到共享缓存。
+- **切换缓存**：混合部署期间（部分实例仍用 `SimpleCache`）删除不会到达本地缓存，跨实例删除承诺不成立。建议一次性切换，或切换期间关闭 ModelCache。从 Redis 回退到本地无需迁移数据，Redis 中的条目按 TTL 过期。
+- **切换向量索引**：切到 pgvector 后表为空，召回暂时只有非向量分；宿主对现有命名空间逐个调用 `Reindex(ctx, false)` 回填。回退到本地索引同样靠 `Reindex`。
+- **Redis 淘汰策略**：令牌设计使“删除后读不到”不受淘汰影响；“返回时已物理删除”要求 `maxmemory-policy` 为 `noeviction`（或用量不触及 `maxmemory`），否则被淘汰的成员集合会让部分条目只能等 TTL 回收。
+- **换嵌入模型**：`Index` 允许同一命名空间共存不同维度的向量，`Search` 只考虑与查询同维度的向量。维度变化时，旧向量因维度不同被 `Search` 跳过、不占名额，`Reindex(ctx, false)` 写入新键并删除旧键；同维度换模型时，旧向量仍会进入 `Search` 结果，靠 `adopted` 按模型过滤，占用前 k 名额、召回条数可能少于 k，须 `Reindex` 清理。
+
 ## 评测
 
 `memory/memeval` 与 `scripts/memeval` 在 LongMemEval、LOCOMO 上对比只看最近原文的基线与长期记忆、图谱、社区各配置，见设计文档第 6 节。

@@ -81,7 +81,7 @@ func TurnFrom(ctx context.Context) (TurnMemory, bool) {
 // Turn 按宿主绑定的命名空间生成本轮的记忆绑定。
 func (m *Memory) Turn(ctx context.Context) (TurnMemory, error) {
 	ns := NamespaceFrom(ctx)
-	if err := validNamespace(ns); err != nil {
+	if err := ValidateNamespace(ns); err != nil {
 		return TurnMemory{}, err
 	}
 	scope, s, err := m.read(ctx, ns)
@@ -203,7 +203,7 @@ func (m *Memory) Snapshot(ctx context.Context, query string) (Snapshot, error) {
 		ctx = WithTurn(ctx, t)
 	}
 	s := Snapshot{Protocol: RecallProtocol, Identity: m.identity, Turn: t}
-	if err := validNamespace(t.Write); err != nil {
+	if err := ValidateNamespace(t.Write); err != nil {
 		return Snapshot{}, err
 	}
 	q := Query{Text: query}

@@ -73,7 +73,7 @@ func (m *Memory) Enqueue(ctx context.Context, j Job) error {
 	if j.Key == "" || j.Session == "" || j.From <= 0 || j.To < j.From {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "抽取任务需要 Key、会话与合法的序号区间").WithComponent("memory").WithOperation("enqueue")
 	}
-	if err := validNamespace(j.Namespace); err != nil {
+	if err := ValidateNamespace(j.Namespace); err != nil {
 		return err
 	}
 	if j.Scope == "" {

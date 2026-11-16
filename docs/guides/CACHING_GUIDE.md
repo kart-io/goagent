@@ -51,7 +51,7 @@ cachedTool := middleware.Wrap(originalTool, middleware.Caching(
 
 ```go
 mc := builder.ModelCache{
-    Cache:  c,                // cache.Cache；物理删除需要实现 cache.Tagged（SimpleCache 已实现）
+    Cache:  c,                // cache.Bytes；物理删除需同时实现 cache.Tagged（SimpleCache 已实现）
     TTL:    5 * time.Minute,  // 必须大于 0
     Scope:  func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
     Erase:  builder.EraseAuto, // EraseOff / EraseAuto（默认）/ EraseRequired
@@ -106,7 +106,7 @@ agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 | `EraseRequired` | 条件不满足时 `Build` 失败 | 有删除个人数据合规要求的生产环境 |
 
 - `EraseRequired` 要求 TTL 不超过 `memory.Config.EraseWithin`，这个约束只在配置了长期记忆时生效。不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。
-- 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL。
+- 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL；对 Redis 是 TTL 加过期回收周期（Redis 的过期回收没有硬上限）。
 - 遗忘与回退会清掉该命名空间当前作用域下的全部缓存条目，粒度较粗。
 - 记忆版本在召回（hydrateRecall）之后才读取。召回与读取版本之间发生的删除可能让条目带上删除后的版本写入：这种条目逻辑上不可达，物理残留以 TTL 为上限。
 
@@ -136,6 +136,15 @@ m, err := memory.New(memory.Config{
 ### 升级
 
 `LastRewindSeq` 是只增字段，存储格式版本不变。混合版本部署时，旧程序重写 head 会把它清零，回退之后的条目重新可达；物理删除仍然生效。升级期间要避免新旧程序同时服务带回退操作的命名空间。
+
+## 分布式部署
+
+多进程共享长期记忆时，模型调用缓存可换成 Redis（`github.com/kart-io/goagent-contrib/cache/redis`，Redis 7 及以上）：它实现 `cache.Bytes` 与 `cache.Tagged`，作为 `builder.ModelCache.Cache` 传入。向量索引与完整部署说明见 [memory/README.md 的“分布式部署”](../../memory/README.md#分布式部署)。缓存相关须知：
+
+- **所有实例使用相同的 `TagKey`**：标签是 HMAC，`TagKey` 不同则同一记忆在各实例上的标签不同，`DeleteTag` 删不到其他实例写的条目。
+- **每个持有记忆的进程都要接上擦除**：包括只跑 `memory/worker` 的进程，它执行的 `Forget`、`Purge` 也要通过 `OnErase` 调到共享缓存。
+- **切换缓存**：混合部署期间（部分实例仍用 `SimpleCache`）删除不会到达本地缓存，跨实例删除承诺不成立。建议一次性切换，或切换期间关闭 ModelCache。从 Redis 回退到本地无需迁移数据，Redis 中的条目按 TTL 过期。
+- **Redis 淘汰策略**：令牌设计使“删除后读不到”不受淘汰影响；“返回时已物理删除”要求 `maxmemory-policy` 为 `noeviction`（或用量不触及 `maxmemory`），否则被淘汰的成员集合会让部分条目只能等 TTL 回收。
 
 ## 选用建议
 

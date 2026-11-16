@@ -31,8 +31,8 @@ const (
 // ModelCache 是模型调用缓存的配置。Worker 进程不经过 Builder，须用同一个 ModelCache（同一后端、同一 TagKey）装配 OnErase。
 // 客户端既没有声明 CacheIdentity、也解析不出模型名（请求的 Model 或客户端的 ModelName）时，该次调用静默不缓存。
 type ModelCache struct {
-	// Cache 是缓存后端，Get 须原样返回写入的值（[]byte，或等价的 string）。
-	Cache cache.Cache
+	// Cache 是缓存后端，只收发字节；EraseRequired 时还须实现 cache.Tagged。
+	Cache cache.Bytes
 	// TTL 必须大于 0；EraseRequired 时不得超过 memory.Config.EraseWithin（仅在配置长期记忆时约束）。
 	TTL time.Duration
 	// Scope 返回可信的隔离身份，返回 false 时本次不缓存；配置了长期记忆时可省略，默认取绑定的命名空间。
@@ -43,6 +43,9 @@ type ModelCache struct {
 }
 
 const minTagKeyLen = 32
+
+// writeErrorDeleteTimeout 是写入失败后清理条目的删除超时。
+const writeErrorDeleteTimeout = time.Second
 
 // WithModelCache 为模型调用启用缓存。
 func (b *AgentBuilder[S]) WithModelCache(mc ModelCache) *AgentBuilder[S] {
@@ -267,31 +270,25 @@ func cacheableTurn(turn *llm.StreamChunk, cacheable func(*llm.StreamChunk) error
 
 // lookup 返回可用的缓存回合。查找出错按未命中处理；值损坏或未通过 cacheable 时删除该条目并按未命中处理。
 func (e *modelCacheEntry) lookup(ctx context.Context, cacheable func(*llm.StreamChunk) error) *llm.StreamChunk {
-	v, err := e.scope.cfg.Cache.Get(ctx, e.key)
-	if err != nil && !errors.Is(err, agentErrors.ErrCacheMiss) {
-		observe.Emit(ctx, observe.Event{Type: "model_cache_read_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
-		return nil
-	}
-	if err != nil || v == nil {
+	b, err := e.scope.cfg.Cache.GetBytes(ctx, e.key)
+	if errors.Is(err, agentErrors.ErrCacheMiss) {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_miss", Path: "cache"})
 		return nil
 	}
-	var b []byte
-	switch x := v.(type) {
-	case []byte:
-		b = x
-	case string:
-		b = []byte(x)
+	if err != nil && !agentErrors.IsCode(err, agentErrors.CodeInvalidInput) {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_read_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		return nil
 	}
-	turn, err := decodeCachedTurn(b)
+	var turn *llm.StreamChunk
+	if err == nil {
+		turn, err = decodeCachedTurn(b)
+	}
 	if err == nil {
 		err = cacheableTurn(turn, cacheable)
 	}
 	if err != nil {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_invalid", Path: "cache", ErrorKind: observe.ErrorKind(err)})
-		if derr := e.scope.cfg.Cache.Delete(ctx, e.key); derr != nil {
-			observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(derr)})
-		}
+		e.deleteKey(ctx)
 		return nil
 	}
 	e.scope.hits.Add(1)
@@ -319,13 +316,22 @@ func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cach
 	}
 	if err != nil {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_write_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		// 超时的写入可能已在服务端生效；ctx 已超时或取消时原 ctx 的删除必然失败，改用脱离取消的短超时 ctx。
+		dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeErrorDeleteTimeout)
+		defer cancel()
+		e.deleteKey(dctx)
 		return
 	}
 	if same, err := e.recheck(ctx); !same {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_write_reverted", Path: "cache", ErrorKind: observe.ErrorKind(err)})
-		if derr := e.scope.cfg.Cache.Delete(ctx, e.key); derr != nil {
-			observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(derr)})
-		}
+		e.deleteKey(ctx)
+	}
+}
+
+// deleteKey 删除本条目的键，失败只记录事件。
+func (e *modelCacheEntry) deleteKey(ctx context.Context) {
+	if err := e.scope.cfg.Cache.Delete(ctx, e.key); err != nil {
+		observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
 	}
 }
 
@@ -345,7 +351,7 @@ func (e *modelCacheEntry) write(ctx context.Context, data []byte) error {
 	cfg := e.scope.cfg
 	t, ok := cfg.tagged()
 	if !ok || cfg.Erase == EraseOff {
-		return cfg.Cache.Set(ctx, e.key, data, cfg.TTL)
+		return cfg.Cache.SetBytes(ctx, e.key, data, cfg.TTL)
 	}
 	tags := make([]string, 0, 1+len(e.version))
 	tags = append(tags, sessionTag(cfg.TagKey, e.scope.sessionID))
