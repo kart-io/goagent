@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 新增
 
 - `memory.ValidateNamespace` 与 `memory.NormalizeVector`：导出命名空间校验与向量归一化，供外部 `memory.Index` 实现（如 contrib 的 pgvector）与 `MemoryIndex` 保持同样的校验与错误码。
-
-- `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE.md#模型调用缓存)。
-- `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。
+- `memory/memorytest.RunIndex`：`memory.Index` 的一致性测试，外部实现用它验证维度、归一化、排序与并列（按 ID 字节序）等契约。
+- `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。`ModelCache.Cache` 的类型为只收发字节的 `cache.Bytes`；写入缓存返回错误时发出 `model_cache_write_error`，并对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。`EraseOff` 下不输出"TTL 超过 EraseWithin"的构建期警告。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE.md#模型调用缓存)。
+- `cache.Bytes`（`GetBytes`、`SetBytes`、`Delete`）：只收发字节的缓存接口，Redis 等外部缓存只能存字节，误用在编译期暴露。`SimpleCache` 已实现，其 `GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`。
+- `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。一致性契约分两条：S1（必须）`DeleteTag` 返回后，在它开始前已完成的 `SetTagged` 写入的带该标签条目不可读；S2（实现须写明）这些条目何时物理删除及回收上限。外部实现不要求事务或脚本，可用令牌或版本校验使旧写入在读取时失效（如 contrib 的 `cache/redis`）。
+- `cache/cachetest.RunTagged`：`cache.Bytes` 与 `cache.Tagged` 的一致性测试，外部实现用它验证 S1 与多实例共享。
 - `memory.Config.OnErase`（`memory.EraseFunc`）：`Forget`、`Rewound` 提交之后与 `Purge` 清理旧作用域时清除派生副本，失败由维护在 `EraseWithin` 内重做；配置时要求 `RetireGrace >= EraseWithin`。配套新增 `Memory.CacheVersion`、`Memory.EraseErrors`（累计提交后立即擦除失败的次数）、`Memory.ErasesOnDelete`、`Memory.EraseWithin`。`ModelCache.Eraser()` 返回可直接用作 `OnErase` 的回调，`ModelCache.DeleteSession` 供宿主在删除或回退会话后清除该会话的缓存条目。
 - 长期记忆状态增加 `LastRewindSeq`，`Rewound` 提交时设置；只增字段，存储格式版本不变。
 - `memory.JobStats.InvalidTargets`：整理时模型的 update、invalidate 指向不存在的记忆、降级为新增的决定数，原先静默降级不计数；`Conflicts` 不含这类决定。只增字段，存储格式版本不变。
@@ -24,8 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 删除只被它使用的 `constants.DefaultMiddlewareCacheShards`、`constants.MaxCacheShards`；`constants.DefaultMiddlewareCacheCapacity` 保留，归工具缓存中间件使用。
 - `MonitoringAgent`、`ResearchAgent` 不再挂缓存中间件。
 - 混合版本部署：旧程序重写长期记忆的 head 会清零 `LastRewindSeq`，回退之后的缓存条目重新可达，物理删除仍然生效；升级期间避免新旧程序同时服务带回退操作的命名空间。
-- `builder.ModelCache.Cache` 的类型由 `cache.Cache` 改为只收发字节的 `cache.Bytes`（`GetBytes`、`SetBytes`、`Delete`），新增 `cache.Bytes` 接口；Redis 等外部缓存只能存字节，误用在编译期暴露。迁移：传 `*cache.SimpleCache` 的调用方无需改动；自定义缓存实现补上 `GetBytes`、`SetBytes` 两个方法（`Delete` 已有）；原先靠 `string` 与 `[]byte` 互通的值不再兼容，非 `[]byte` 的值按损坏条目删除并视为未命中。`SimpleCache` 的 `GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`。
-- `ModelCache` 写入缓存返回错误时，发出 `model_cache_write_error` 后对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。
 - `memory.Index` 契约变更：同一命名空间允许共存不同维度的向量，`Search` 只考虑与查询同维度的向量（原先维度不一致的 `Upsert` 与 `Search` 返回 `CodeInvalidInput`）。`MemoryIndex` 已按新契约实现；自定义 `Index` 实现需去掉维度一致检查，并可用新增的 `memorytest.RunIndex` 验证。原因：持久化索引换嵌入模型后，旧向量会使新向量一律被拒，`Reindex` 在写入阶段失败、清不掉旧键，索引无法恢复。迁移后新旧向量共存，召回按模型过滤，`Reindex` 收敛。
 
 ### 修复
@@ -33,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 长期记忆召回块按整段文本计量 `RecallRunes`：块头与行间换行也计入预算，`RecallBlock`/`Retrieve` 的结果不再超出配置值；预算容不下块头与任何一条时召回为空。原先按旧计量调好的预算需加上块头约 60 个字符。放不下的行被跳过、后面更短的行仍可写入，因此被省略的可能是中间任一条，包括过长的核心记忆。
   回放兼容性：召回协议版本不变，升级前写入持久日志的召回快照按新预算宽松还原，原先贴着预算的快照可能有若干行放不下，像已删除项一样丢弃；意图摘要按日志中的引用计算，不受影响。
 - `cache.SimpleCache.GetStats().Sets` 累计 `Set` 与 `SetTagged` 的写入次数，原先恒为 0。
-- `builder.ModelCache` 为 `EraseOff` 时不再输出"TTL 超过 EraseWithin"的构建期警告；`EraseAuto` 照旧警告。
 
 ## [0.53.0] - 2026-11-13
 
