@@ -752,7 +752,7 @@ func TestModelCacheDefaultSessionID(t *testing.T) {
 	}
 }
 
-// 多个会话写入同一命名空间后执行一次 Forget：OnErase 收到该命名空间的 (ns, scope)，两个会话写入的条目都被物理删除。
+// 多个会话写入同一命名空间后执行一次 Forget：OnErase 收到该命名空间的 (ns, scope)，各会话写入的条目都被物理删除。
 func TestModelCacheForgetErasesAcrossSessions(t *testing.T) {
 	ns := []string{"t1", "alice"}
 	for _, tc := range []struct {
