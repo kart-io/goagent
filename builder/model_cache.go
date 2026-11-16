@@ -108,7 +108,7 @@ func (mc ModelCache) rules() []configRule {
 	}
 }
 
-// Validate 检查与长期记忆无关的配置：Cache 非空、TTL 大于 0，以及会做标签删除时的 TagKey 长度。
+// Validate 检查与长期记忆无关的配置：Cache 非空、TTL 大于 0、EraseRequired 时缓存实现 cache.Tagged，以及会做标签删除时的 TagKey 长度。
 // Worker 不经过 Builder，应在启动时调用，避免配错后每轮维护反复收到 OnErase 失败。
 func (mc ModelCache) Validate() error {
 	return firstConfigError(mc.rules())
