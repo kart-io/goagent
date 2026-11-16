@@ -13,6 +13,7 @@
 [![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 [![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
 [![Last Commit](https://img.shields.io/github/last-commit/kart-io/goagent/master?style=flat-square&logo=github)](https://github.com/kart-io/goagent/commits/master/)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/costa92/badge.svg)](https://hub.xerj.org/contributors/costa92)
 
 [English](README.md) | [Chinese](README_CN.md)
 
