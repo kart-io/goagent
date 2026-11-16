@@ -658,9 +658,11 @@ func TestModelCacheRunVersionRecheck(t *testing.T) {
 		name     string
 		inCall   bool // true：Forget 发生在模型调用期间；false：发生在 SetTagged 内部
 		wantSets int64
+		event    string
+		absent   string
 	}{
-		{name: "调用期间删除，写前复核放弃写入", inCall: true, wantSets: 0},
-		{name: "SetTagged 内部删除，写后复核删除条目", inCall: false, wantSets: 1},
+		{name: "调用期间删除，写前复核放弃写入", inCall: true, wantSets: 0, event: "model_cache_write_skipped", absent: "model_cache_write_reverted"},
+		{name: "SetTagged 内部删除，写后复核删除条目", inCall: false, wantSets: 1, event: "model_cache_write_reverted", absent: "model_cache_write_skipped"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := memory.WithNamespace(context.Background(), "t1", "alice")
@@ -681,8 +683,10 @@ func TestModelCacheRunVersionRecheck(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.wantSets, c.sets.Load())
 			require.Zero(t, c.size(), "条目不得留在缓存里")
-			_, ok := sink.find("model_cache_write_skipped")
-			require.True(t, ok)
+			_, ok := sink.find(tc.event)
+			require.True(t, ok, "缺少 %s 事件", tc.event)
+			_, ok = sink.find(tc.absent)
+			require.False(t, ok, "不应发出 %s 事件", tc.absent)
 		})
 	}
 }

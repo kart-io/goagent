@@ -295,7 +295,7 @@ func (e *modelCacheEntry) store(ctx context.Context, turn *llm.StreamChunk, cach
 		return
 	}
 	if same, err := e.recheck(ctx); !same {
-		observe.Emit(ctx, observe.Event{Type: "model_cache_write_skipped", Path: "cache", ErrorKind: observe.ErrorKind(err)})
+		observe.Emit(ctx, observe.Event{Type: "model_cache_write_reverted", Path: "cache", ErrorKind: observe.ErrorKind(err)})
 		if derr := e.scope.cfg.Cache.Delete(ctx, e.key); derr != nil {
 			observe.Emit(ctx, observe.Event{Type: "model_cache_delete_error", Path: "cache", ErrorKind: observe.ErrorKind(derr)})
 		}
