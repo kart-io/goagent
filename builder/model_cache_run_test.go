@@ -996,3 +996,57 @@ func TestModelCacheRunCallAccounting(t *testing.T) {
 		})
 	}
 }
+
+// 持久工具流回放遇到缓存回合：回放结果的计数元数据与首次运行一致。
+func TestModelCacheRunDurableToolReplay(t *testing.T) {
+	noUsage := []*llm.StreamChunk{{Delta: "完成"}, {Done: true, FinishReason: "stop"}}
+	build := func(t *testing.T, model *cacheModel, mc ModelCache) *ConfigurableAgent[*core.AgentState] {
+		agent, err := NewSimpleBuilder(model).WithDurableScope("cache").WithSessionID("s").
+			WithTools(dispatcherFor(t, schemaTool(`{"type":"object"}`)).Tools()...).WithModelCache(mc).Build()
+		require.NoError(t, err)
+		return agent
+	}
+	for _, tc := range []struct {
+		name string
+		// prime 写入缓存；model 是持久运行使用的模型。
+		prime       func(t *testing.T, mc ModelCache)
+		model       func() *cacheModel
+		calls, hits int
+		answerUsage bool
+	}{
+		{name: "两轮都命中", calls: 0, hits: 2, answerUsage: true,
+			prime: func(t *testing.T, mc ModelCache) {
+				_, err := build(t, newCacheModel("dep", toolTurn("c1", "lookup", "{}"), textTurn("完成")), mc).AsRunnable().Invoke(context.Background(), "问题")
+				require.NoError(t, err)
+			},
+			model: func() *cacheModel { return newCacheModel("dep") }},
+		{name: "第一轮命中、最后一轮真实调用未报用量", calls: 1, hits: 1, answerUsage: false,
+			prime: func(t *testing.T, mc ModelCache) {
+				_, err := build(t, newCacheModel("dep", toolTurn("c1", "lookup", "{}")), mc).AsRunnable().Invoke(context.Background(), "问题")
+				require.Error(t, err, "第二步没有回合，执行失败，第一步已写入缓存")
+			},
+			model: func() *cacheModel { return newCacheModel("dep", noUsage) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newCountingCache()
+			mc := ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}
+			tc.prime(t, mc)
+			store, err := durable.NewFileStore(t.TempDir())
+			require.NoError(t, err)
+			ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "e1"), store)
+			model := tc.model()
+			first, err := build(t, model, mc).AsRunnable().Invoke(ctx, "问题")
+			require.NoError(t, err)
+			calls, gets := model.calls(), c.gets.Load()
+			replay, err := build(t, model, mc).AsRunnable().Invoke(ctx, "问题")
+			require.NoError(t, err)
+			require.Equal(t, calls, model.calls(), "回放不调用模型")
+			require.Equal(t, gets, c.gets.Load(), "回放从日志读取，不查缓存")
+			require.Equal(t, "完成", replay.Result)
+			for key, want := range map[string]any{"model_calls": tc.calls, "model_cache_hits": int64(tc.hits), "answer_usage_reported": tc.answerUsage} {
+				require.Equal(t, want, first.Metadata[key], "首次运行 %s", key)
+				require.Equal(t, first.Metadata[key], replay.Metadata[key], "回放 %s", key)
+			}
+		})
+	}
+}
