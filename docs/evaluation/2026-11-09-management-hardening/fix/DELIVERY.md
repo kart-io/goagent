@@ -8,7 +8,7 @@
 | goagent-examples | `main` | [3b6f8608f90d](https://github.com/kart-io/goagent-examples/commit/3b6f8608f90d6807ba432797044555812da4c044) |
 | goagent-harness | `main` | [912bca0a05c1](https://github.com/kart-io/goagent-harness/commit/912bca0a05c11c204b5cad695f0bd85fc0b10b5b) |
 
-三个关联仓库均已快进合入远端主分支，并通过 `git ls-remote` 核对主分支 SHA 与已验收提交一致。合入前确认远端主分支没有新增提交，未产生冲突或修改受测源码。先前推送的 `fix/management-hardening-20261109` 分支保留。
+三个关联仓库均已快进合入远端主分支，并通过 `git ls-remote` 核对主分支 SHA 与已验收提交一致。合入前确认远端主分支没有新增提交，未产生冲突或修改受测源码。先前推送的 `fix/management-hardening-20261109` 分支已于 2026-11-16 删除（见文末清理记录）。
 
 合入通过隔离工作树完成，原始本地工作区及其主分支指针保持原状，没有覆盖用户未提交修改。远端主分支已包含本次完整修复。
 
@@ -17,3 +17,7 @@
 原报告中的“未提交”以及 JSON 的 `committed: false` 是验收时点快照；后续提交状态以本记录与 Git 历史为准。原始证据和补丁指纹未改写。
 
 暂存检查中，归档 unified diff 的上下文前缀及原始失败日志含有预期空白告警，保留原始字节以维持可应用性和证据指纹；归档目录之外的实际源码与文档通过 `git diff --cached --check`。
+
+## 清理记录（2026-11-16）
+
+隔离工作树与原始证据目录 `.goagent-hardening-20261109-APraZJ/`（含 `evidence/` 102 份、`fix-evidence/` 70 份）及三个关联仓库的本地与远端 `fix/management-hardening-20261109` 分支均已删除。源码以上表提交为准，补丁及基线见 [patches/manifest.json](../patches/manifest.json) 与 [fix/patches/manifest.json](patches/manifest.json)，原始日志不再保留，其 SHA-256 仍记录在 [验证摘要](../verification.json) 与 [修复验证摘要](verification.json)。`review/`、`fix/` 记录及 JSON 中的绝对路径与链接是执行时路径，现已失效；为保持 [证据指纹](../review/evidence-sha256.json) 一致未改写。
