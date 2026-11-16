@@ -17,7 +17,8 @@ type NamespaceVersion struct {
 }
 
 // CacheVersion 读取每个读命名空间的最新版本，按命名空间排序；不取锁，只读 meta 与 head。
-// 作用域在两次读 meta 之间改变（Purge）时重读，与 read 一致。
+// 两次读 meta 之间作用域改变（Purge）时重读，最多 readAttempts 次后返回冲突；不读基础快照，所以不像 read 那样因压缩重读。
+// head 所在作用域已删除时按空 head 处理，是否采用由第二次读 meta 决定。
 func (m *Memory) CacheVersion(ctx context.Context, read [][]string) ([]NamespaceVersion, error) {
 	out := make([]NamespaceVersion, 0, len(read))
 	for _, ns := range read {
