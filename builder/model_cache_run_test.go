@@ -914,3 +914,81 @@ func TestModelCacheRunDeleteSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, model.calls(), "其他会话的条目仍命中")
 }
+
+// 工具流的计数按回合判断：回合内发出过真实请求就计入 model_calls，只有完全来自缓存的回合不计；
+// answer_usage_reported 只看最后一轮，前面回合的命中不影响它。
+func TestModelCacheRunCallAccounting(t *testing.T) {
+	noUsage := []*llm.StreamChunk{{Delta: "完成"}, {Done: true, FinishReason: "stop"}}
+	down := errors.New("主模型不可用")
+	failover := func(backup *cacheModel) func(context.Context, *RequestFailure) (RequestErrorDecision, error) {
+		return func(context.Context, *RequestFailure) (RequestErrorDecision, error) {
+			return RequestErrorDecision{Action: RequestRetry, Client: backup}, nil
+		}
+	}
+	build := func(t *testing.T, model, backup *cacheModel, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
+		b := NewSimpleBuilder(model).WithSessionID("s").WithTools(schemaTool(`{"type":"object"}`))
+		if backup != nil {
+			b = b.WithRequestError(1, failover(backup))
+		}
+		if mc != nil {
+			b = b.WithModelCache(*mc)
+		}
+		agent, err := b.Build()
+		require.NoError(t, err)
+		return agent
+	}
+	primaryDown := func() *cacheModel {
+		m := newCacheModel("primary")
+		m.reply = func(int) ([]*llm.StreamChunk, error) { return nil, down }
+		return m
+	}
+	for _, tc := range []struct {
+		name string
+		// run 按需先写入缓存，再返回被测 Agent。
+		run           func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState]
+		cached        bool
+		calls, hits   int
+		usageComplete bool
+		answerUsage   bool
+	}{
+		{name: "最终回答命中", cached: true, calls: 0, hits: 1, usageComplete: true, answerUsage: true,
+			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
+				_, err := build(t, newCacheModel("dep", textTurn("完成")), nil, mc).AsRunnable().Invoke(context.Background(), "问题")
+				require.NoError(t, err)
+				return build(t, newCacheModel("dep"), nil, mc)
+			}},
+		{name: "前一轮命中、最后一轮真实调用未报用量", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
+			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
+				first := newCacheModel("dep", toolTurn("c1", "lookup", "{}"))
+				_, err := build(t, first, nil, mc).AsRunnable().Invoke(context.Background(), "问题")
+				require.Error(t, err, "第二步没有回合，执行失败，第一步已写入缓存")
+				return build(t, newCacheModel("dep", noUsage), nil, mc)
+			}},
+		{name: "主模型失败后换备用模型命中", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
+			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
+				_, err := build(t, newCacheModel("backup", textTurn("完成")), nil, mc).AsRunnable().Invoke(context.Background(), "问题")
+				require.NoError(t, err)
+				return build(t, primaryDown(), newCacheModel("backup"), mc)
+			}},
+		{name: "主模型失败后换备用模型真实调用，无缓存", calls: 1, hits: -1, usageComplete: true, answerUsage: true,
+			run: func(t *testing.T, _ *ModelCache) *ConfigurableAgent[*core.AgentState] {
+				return build(t, primaryDown(), newCacheModel("backup", textTurn("完成")), nil)
+			}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mc *ModelCache
+			if tc.cached {
+				mc = &ModelCache{Cache: newCountingCache(), TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}
+			}
+			out, err := tc.run(t, mc).AsRunnable().Invoke(context.Background(), "问题")
+			require.NoError(t, err)
+			require.Equal(t, "完成", out.Result)
+			require.Equal(t, tc.calls, out.Metadata["model_calls"], "model_calls")
+			require.Equal(t, tc.usageComplete, out.Metadata["usage_complete"], "usage_complete")
+			require.Equal(t, tc.answerUsage, out.Metadata["answer_usage_reported"], "answer_usage_reported")
+			if tc.hits >= 0 {
+				require.Equal(t, int64(tc.hits), out.Metadata["model_cache_hits"])
+			}
+		})
+	}
+}

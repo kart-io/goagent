@@ -223,6 +223,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 	}
 	attempt := 0
 	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
+	before, counted := modelCacheCounts(ctx)
 	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: a.config.TemperatureSet}, emit)
 	if replan := (*replanRequest)(nil); errors.As(err, &replan) {
 		return nil, fmt.Errorf("RequestError 替换消息或客户端只作用于原生工具流：%w", replan.err)
@@ -236,11 +237,10 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		copy := turn.Usage.Tokens()
 		usage.Add(&copy)
 	}
-	// 命中不是真实调用，没有用量可报告：与工具流的 usage_complete 一样只按真实调用判断。
-	hits, cached := modelCacheHits(ctx)
-	metadata["answer_usage_reported"] = turn.Usage != nil || hits > 0
-	if cached {
-		metadata["model_cache_hits"] = hits
+	after, _ := modelCacheCounts(ctx)
+	metadata["answer_usage_reported"] = answerUsageReported(turn, counted && after.cachedSince(before))
+	if counted {
+		metadata["model_cache_hits"] = after.hits
 	}
 
 	recordAnswer(request, turn.Content)
@@ -251,6 +251,11 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		}
 	}
 	return a.finishEvents(ctx, request, input, turn.Content, usage, metadata, emit)
+}
+
+// answerUsageReported 判断最终回答的用量是否已报告：完全来自缓存的回合不是真实调用，没有用量可报告，视为已报告。
+func answerUsageReported(turn *llm.StreamChunk, cached bool) bool {
+	return turn.Usage != nil || cached
 }
 
 // recordAnswer 在记录轮次结束之前写入状态，使会话日志中的状态包含本轮回答。

@@ -108,6 +108,8 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 		return agentErrors.Newf(agentErrors.CodeExecutionLimit, "模型调用达到 MaxIterations 上限，尚未生成答案").WithComponent("builder").WithOperation("run_tool_events")
 	}
 	emptyRetries := 0
+	// cachedRounds 是完全来自缓存的回合数，不计入 model_calls。
+	cachedRounds := 0
 	// inputs 是尚未交给 PreStep 的用户输入条数，起始为轮次输入。
 	inputs := 1
 	// recall 是本轮的召回快照，第 0 步 PreStep 之前生成。
@@ -180,9 +182,15 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
 		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
+		before, counted := modelCacheCounts(ctx)
 		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, recall, emit)
 		if err != nil {
 			return nil, err
+		}
+		after, _ := modelCacheCounts(ctx)
+		turnCached := counted && after.cachedSince(before)
+		if turnCached {
+			cachedRounds++
 		}
 		messages = recovered
 		if redirected != nil {
@@ -204,11 +212,10 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			usage.Add(&copy)
 			reports++
 		}
-		// 命中不是真实调用：不计入 model_calls，usage_complete 按真实调用数比较。
-		modelCalls := round + 1
-		if hits, ok := modelCacheHits(ctx); ok {
-			modelCalls -= int(hits)
-			metadata["model_cache_hits"] = hits
+		// 完全来自缓存的回合不是真实调用：不计入 model_calls，usage_complete 按真实调用数比较。
+		modelCalls := round + 1 - cachedRounds
+		if counted {
+			metadata["model_cache_hits"] = after.hits
 		}
 		metadata["model_calls"] = modelCalls
 		metadata["usage_reports"] = reports
@@ -230,7 +237,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			if turn.FinishReason == "tool_calls" || strings.TrimSpace(turn.Content) == "" {
 				return nil, agentErrors.Newf(agentErrors.CodeInvalidOutput, "模型未返回最终答案或完整工具调用").WithComponent("builder").WithOperation("run_tool_events")
 			}
-			metadata["answer_usage_reported"] = turn.Usage != nil
+			metadata["answer_usage_reported"] = answerUsageReported(turn, turnCached)
 			final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
 			// 收件箱中的 Steer 唤醒续跑，下一步领取；否则询问 TurnStopping。TurnStopping 续跑后至少还要有一步带工具，
 			// 模型才能按反馈修改；额度不足时不询问，按原答复结束并标记 turn_stopping_skipped。

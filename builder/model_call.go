@@ -141,6 +141,9 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 		if counter, ok := ctx.Value(modelScopeKey{}).(*atomic.Int64); ok {
 			counter.Add(1)
 		}
+		if s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope); s != nil {
+			s.sent.Add(1)
+		}
 		emitted := false
 		turn, err := invoke(callCtx, func(event AgentEvent) error {
 			emitted = true

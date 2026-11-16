@@ -133,6 +133,7 @@ type modelCacheScope struct {
 	ltm       *memory.Memory // 可为 nil
 	read      [][]string     // 本轮 TurnMemory.Read
 	hits      *atomic.Int64  // 本次执行的命中计数
+	sent      *atomic.Int64  // 本次执行实际发出的模型请求数，含失败的请求
 }
 
 // withModelCacheScope 总是覆盖上层的值：工具里运行的子 Agent 不能沿用父 Agent 的范围与计数。
@@ -151,7 +152,7 @@ func (a *ConfigurableAgent[S]) modelCacheScope(ctx context.Context) *modelCacheS
 	if !ok {
 		return nil
 	}
-	s := &modelCacheScope{cfg: *mc, identity: id, sessionID: a.sessionLogID(ctx), hits: new(atomic.Int64)}
+	s := &modelCacheScope{cfg: *mc, identity: id, sessionID: a.sessionLogID(ctx), hits: new(atomic.Int64), sent: new(atomic.Int64)}
 	if m != nil {
 		// 没有本轮绑定就无法读取记忆版本，删除类操作之后可能取到旧答案：不缓存。
 		turn := sessionTurnFrom(ctx)
@@ -163,13 +164,24 @@ func (a *ConfigurableAgent[S]) modelCacheScope(ctx context.Context) *modelCacheS
 	return s
 }
 
-// modelCacheHits 返回本次执行的命中次数。
-func modelCacheHits(ctx context.Context) (int64, bool) {
+// modelCacheTally 是本次执行命中数与真实请求数的快照；Agent 在回合前后各取一次，判断该回合是否完全来自缓存。
+type modelCacheTally struct {
+	hits, sent int64
+}
+
+// modelCacheCounts 返回当前快照；不缓存时 ok 为 false。
+func modelCacheCounts(ctx context.Context) (t modelCacheTally, ok bool) {
 	s, _ := ctx.Value(modelCacheScopeKey{}).(*modelCacheScope)
 	if s == nil {
-		return 0, false
+		return modelCacheTally{}, false
 	}
-	return s.hits.Load(), true
+	return modelCacheTally{hits: s.hits.Load(), sent: s.sent.Load()}, true
+}
+
+// cachedSince 报告 before 之后的回合是否完全来自缓存：有命中且没有发出真实请求。
+// 回合内先有真实请求失败、再换客户端命中时，失败的请求可能已消耗 token，按真实调用计。
+func (t modelCacheTally) cachedSince(before modelCacheTally) bool {
+	return t.hits > before.hits && t.sent == before.sent
 }
 
 // cacheRequest 是计算缓存键所需的请求内容；client 为 nil 时不缓存。
