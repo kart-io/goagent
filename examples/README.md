@@ -23,6 +23,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [workflow/](workflow/) | `workflow` graph with branching and streaming events, offline (`go run ./examples/workflow [-stream]`) |
 | [human-in-the-loop/](human-in-the-loop/) | Persisted review gates: inspect checkpoints, approve/reject, edit state and resume in another process, offline |
 | [multi-agent-patterns/](multi-agent-patterns/) | `multiagent` presets (router, loop, parallel lookup, refund review, supervisor tools, fallback, composed graph) driven by `mocks.ScriptedClient`, offline |
+| [memory/](memory/) | 长期记忆的边界：命名空间隔离与删除、抽取管线、模型调用缓存一致性、召回预算与保留，用 `mocks.ScriptedClient` 与假 Embedder 离线断言 |
 | [human-in-the-loop-interrupt/](human-in-the-loop-interrupt/) | Node pauses mid-execution for human input and resumes across processes, offline |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
 | [error_handling/](error_handling/) | `errors` package: codes, context, wrapping, retry and fallback patterns |
