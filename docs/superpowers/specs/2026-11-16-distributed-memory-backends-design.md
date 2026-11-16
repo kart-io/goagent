@@ -107,6 +107,7 @@ if PTTL(t) < ttl then PEXPIRE t ttl  -- PTTL 为 -1（无过期）时也会设�
 - 另一个 `DeleteTag` 在 `ZREM` 与 `UNLINK` 之间崩溃。
 - `t:` 键被 `maxmemory` 淘汰（只有 `noeviction` 能避免；`t:` 带过期，`volatile-*` 策略同样会淘汰它）。
 - 已过期的键由 Redis 的过期回收周期清理，从内存中消失的时间没有硬上限。
+- `t:` 所在节点的时钟向前跳变：`reg` 按该节点 `TIME` 清理"已过期"成员，可能提前移除条目尚未过期的成员。
 
 因此 S2 的完整表述是：正常路径下 `DeleteTag` 返回时已物理删除；例外情形下在 TTL 加过期回收周期内回收。只有 `EraseRequired`（`TTL ≤ EraseWithin`）下这一兜底才落在 `EraseWithin` 内。
 
