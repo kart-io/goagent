@@ -107,21 +107,21 @@ func newCountingCache() *countingCache {
 	return &countingCache{SimpleCache: cache.NewSimpleCache(time.Hour, cache.WithoutBackgroundCleanup())}
 }
 
-func (c *countingCache) Get(ctx context.Context, key string) (interface{}, error) {
+func (c *countingCache) GetBytes(ctx context.Context, key string) ([]byte, error) {
 	c.gets.Add(1)
 	if c.getErr != nil {
 		return nil, c.getErr
 	}
-	return c.SimpleCache.Get(ctx, key)
+	return c.SimpleCache.GetBytes(ctx, key)
 }
 
-func (c *countingCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (c *countingCache) SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	c.sets.Add(1)
 	c.record(key)
 	if c.setErr != nil {
 		return c.setErr
 	}
-	return c.SimpleCache.Set(ctx, key, value, ttl)
+	return c.SimpleCache.SetBytes(ctx, key, value, ttl)
 }
 
 func (c *countingCache) SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error {
@@ -509,37 +509,24 @@ func TestModelCacheRunCorruptEntry(t *testing.T) {
 	}
 }
 
-// 后端把写入的字节以 string 原样返回时照常命中。
-func TestModelCacheRunValueTypes(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		convert func([]byte) any
-	}{
-		{"[]byte", func(b []byte) any { return b }},
-		{"string", func(b []byte) any { return string(b) }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			c := newCountingCache()
-			model := newCacheModel("dep", textTurn("答案"), textTurn("多余"))
-			agent, err := NewSimpleBuilder(model).WithSessionID("s").WithTools(plainTool()).
-				WithModelCache(ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}).Build()
-			require.NoError(t, err)
-			_, err = agent.AsRunnable().Invoke(ctx, "问题")
-			require.NoError(t, err)
-			keys := c.written()
-			require.Len(t, keys, 1)
-			v, err := c.SimpleCache.Get(ctx, keys[0])
-			require.NoError(t, err)
-			require.NoError(t, c.SimpleCache.Set(ctx, keys[0], tc.convert(v.([]byte)), time.Hour))
+// 后端里的值不是 []byte 时按损坏条目处理：删除并重新调用模型。
+func TestModelCacheRunNonBytesValue(t *testing.T) {
+	ctx := context.Background()
+	c := newCountingCache()
+	model := newCacheModel("dep", textTurn("答案"), textTurn("答案"))
+	agent, err := NewSimpleBuilder(model).WithSessionID("s").WithTools(plainTool()).
+		WithModelCache(ModelCache{Cache: c, TTL: time.Hour, Scope: scopeOf("u1"), TagKey: testTagKey}).Build()
+	require.NoError(t, err)
+	_, err = agent.AsRunnable().Invoke(ctx, "问题")
+	require.NoError(t, err)
+	keys := c.written()
+	require.Len(t, keys, 1)
+	require.NoError(t, c.SimpleCache.Set(ctx, keys[0], "字符串", time.Hour))
 
-			out, err := agent.AsRunnable().Invoke(ctx, "问题")
-			require.NoError(t, err)
-			require.Equal(t, "答案", out.Result)
-			require.Equal(t, 1, model.calls(), "命中，不再调用模型")
-			require.Zero(t, c.deletes.Load())
-		})
-	}
+	_, err = agent.AsRunnable().Invoke(ctx, "问题")
+	require.NoError(t, err)
+	require.Equal(t, 2, model.calls(), "非字节值按未命中处理")
+	require.EqualValues(t, 1, c.deletes.Load(), "删除损坏的条目")
 }
 
 // memoryAgent 构造带长期记忆与模型缓存的 Agent；log 为空时用新的会话日志，使历史与之前的执行相同。
@@ -676,7 +663,7 @@ func TestModelCacheRunVersionRecheck(t *testing.T) {
 			forget := func() { require.NoError(t, m.Forget(ctx, "r1")) }
 			c := newCountingCache()
 			model := newCacheModel("dep", textTurn("答案"))
-			var backend cache.Cache = c
+			var backend cache.Bytes = c
 			if tc.inCall {
 				model.block = func(context.Context) { forget() }
 			} else {

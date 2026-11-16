@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 删除只被它使用的 `constants.DefaultMiddlewareCacheShards`、`constants.MaxCacheShards`；`constants.DefaultMiddlewareCacheCapacity` 保留，归工具缓存中间件使用。
 - `MonitoringAgent`、`ResearchAgent` 不再挂缓存中间件。
 - 混合版本部署：旧程序重写长期记忆的 head 会清零 `LastRewindSeq`，回退之后的缓存条目重新可达，物理删除仍然生效；升级期间避免新旧程序同时服务带回退操作的命名空间。
+- `builder.ModelCache.Cache` 的类型由 `cache.Cache` 改为只收发字节的 `cache.Bytes`（`GetBytes`、`SetBytes`、`Delete`），新增 `cache.Bytes` 接口；Redis 等外部缓存只能存字节，误用在编译期暴露。迁移：传 `*cache.SimpleCache` 的调用方无需改动；自定义缓存实现补上 `GetBytes`、`SetBytes` 两个方法（`Delete` 已有）；原先靠 `string` 与 `[]byte` 互通的值不再兼容，非 `[]byte` 的值按损坏条目删除并视为未命中。`SimpleCache` 的 `GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`。
+- `ModelCache` 写入缓存返回错误时，发出 `model_cache_write_error` 后对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。
 
 ### 修复
 

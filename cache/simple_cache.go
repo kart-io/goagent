@@ -118,6 +118,24 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 	return entry.value, nil
 }
 
+// GetBytes 按 Get 的命中、过期与统计路径读取；值不是 []byte 时返回 CodeInvalidInput。
+func (c *SimpleCache) GetBytes(ctx context.Context, key string) ([]byte, error) {
+	v, err := c.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	b, ok := v.([]byte)
+	if !ok {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "缓存值类型为 %T，不是 []byte", v).WithComponent("cache").WithOperation("GetBytes")
+	}
+	return b, nil
+}
+
+// SetBytes 写入字节值。
+func (c *SimpleCache) SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	return c.Set(ctx, key, value, ttl)
+}
+
 // Set 设置缓存值。不带标签的写入不取 tagMu：带标签条目只在锁内写入，无锁写入不会让带标签条目变得可读。
 // 覆盖了带标签的旧条目时，再取锁摘除旧条目留下的索引；摘除之前 DeleteTag 可能多删这个新值，但不会漏删。
 func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {

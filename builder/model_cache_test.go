@@ -3,6 +3,7 @@ package builder
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -24,8 +25,8 @@ var testTagKey = bytes.Repeat([]byte("k"), 32)
 
 func fixedScope(context.Context) (string, bool) { return "tenant", true }
 
-// untaggedCache 只暴露 cache.Cache，隐藏 SimpleCache 的 Tagged 能力。
-type untaggedCache struct{ cache.Cache }
+// untaggedCache 只暴露 cache.Bytes，隐藏 SimpleCache 的 Tagged 能力。
+type untaggedCache struct{ cache.Bytes }
 
 func newModelCacheMemory(t *testing.T, cfg memory.Config) *memory.Memory {
 	t.Helper()
@@ -400,5 +401,36 @@ func TestModelCacheValidate(t *testing.T) {
 			require.Error(t, berr)
 			require.Equal(t, err.Error(), berr.Error())
 		})
+	}
+}
+
+// failingWriteCache 的写入总是失败，并记录 Delete 的键。
+type failingWriteCache struct {
+	cache.Bytes
+	deleted []string
+}
+
+func (f *failingWriteCache) SetBytes(context.Context, string, []byte, time.Duration) error {
+	return errors.New("写入失败")
+}
+
+func (f *failingWriteCache) SetTagged(context.Context, string, []byte, time.Duration, ...string) error {
+	return errors.New("写入失败")
+}
+
+func (f *failingWriteCache) DeleteTag(context.Context, string) error { return nil }
+
+func (f *failingWriteCache) Delete(_ context.Context, key string) error {
+	f.deleted = append(f.deleted, key)
+	return nil
+}
+
+func TestModelCacheStoreWriteErrorDeletes(t *testing.T) {
+	for _, erase := range []EraseMode{EraseOff, EraseAuto} {
+		fc := &failingWriteCache{Bytes: cache.NewSimpleCache(time.Hour, cache.WithoutBackgroundCleanup())}
+		cfg := ModelCache{Cache: fc, TTL: time.Minute, TagKey: testTagKey, Erase: erase}
+		e := &modelCacheEntry{scope: &modelCacheScope{cfg: cfg, sessionID: "s1"}, key: "k1"}
+		e.store(context.Background(), &llm.StreamChunk{FinishReason: "stop", Content: "ok"}, func(*llm.StreamChunk) error { return nil })
+		require.Equal(t, []string{"k1"}, fc.deleted, "erase=%d", erase)
 	}
 }
