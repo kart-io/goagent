@@ -233,7 +233,7 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 //
 // 使用的方法：
 // - Simple API: WithSystemPrompt, WithTools
-// - Core API: WithMemory, WithMaxConversationHistory
+// - Core API: WithSessionLog
 // - Advanced API: WithSessionID
 //
 // 本示例演示如何结合对话记忆和会话管理实现有状态的多轮对话。
