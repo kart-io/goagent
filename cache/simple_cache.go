@@ -36,7 +36,8 @@ type SimpleCache struct {
 	maxEntries int64
 	size       atomic.Int64
 
-	// tagMu 保护 tags，并串行化带标签的写入与所有删除；不带标签的 Set 与读取不加锁。
+	// tagMu 保护 tags，串行化带标签的写入、删除与所有索引变更；不带标签的 Set 与读取不加锁，
+	// 无锁 Set 换掉带标签条目是锁外的失效，之后再取锁摘除旧索引。
 	// 不变量：缓存只能多删、不能漏删——锁外任一可读的带标签条目都登记在其每个标签下，DeleteTag 因此删尽它。
 	tagMu sync.Mutex
 	tags  map[string]map[string]struct{}
