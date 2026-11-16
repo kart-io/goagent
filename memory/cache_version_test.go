@@ -2,11 +2,13 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestCacheVersion(t *testing.T) {
@@ -29,12 +31,12 @@ func TestCacheVersion(t *testing.T) {
 	tests := []struct {
 		name  string
 		act   func(t *testing.T, m *Memory)
-		check func(t *testing.T, before, after NamespaceVersion)
+		check func(t *testing.T, m *Memory, before, after NamespaceVersion)
 	}{
 		{
 			name: "新命名空间版本为零",
 			act:  func(t *testing.T, m *Memory) {},
-			check: func(t *testing.T, _, after NamespaceVersion) {
+			check: func(t *testing.T, _ *Memory, _, after NamespaceVersion) {
 				require.Equal(t, NamespaceVersion{Namespace: ns, Scope: initialScope}, after)
 			},
 		},
@@ -44,7 +46,7 @@ func TestCacheVersion(t *testing.T) {
 				remember(t, m)
 				require.NoError(t, m.Forget(ctx, "a"))
 			},
-			check: func(t *testing.T, before, after NamespaceVersion) {
+			check: func(t *testing.T, _ *Memory, before, after NamespaceVersion) {
 				require.Greater(t, after.LastForgetSeq, before.LastForgetSeq)
 				require.Equal(t, before.LastRewindSeq, after.LastRewindSeq)
 				require.Equal(t, before.Scope, after.Scope)
@@ -56,8 +58,14 @@ func TestCacheVersion(t *testing.T) {
 				remember(t, m)
 				require.NoError(t, m.Rewound(ctx, "s", 4))
 			},
-			check: func(t *testing.T, before, after NamespaceVersion) {
+			check: func(t *testing.T, m *Memory, before, after NamespaceVersion) {
 				require.Greater(t, after.LastRewindSeq, before.LastRewindSeq)
+				_, s, err := m.read(ctx, ns)
+				require.NoError(t, err)
+				require.Len(t, s.Markers, 1)
+				for _, mk := range s.Markers {
+					require.Equal(t, mk.Seq, after.LastRewindSeq, "LastRewindSeq 等于回退标记的 Seq")
+				}
 				require.Equal(t, before.LastForgetSeq, after.LastForgetSeq)
 				require.Equal(t, before.Scope, after.Scope)
 			},
@@ -68,7 +76,7 @@ func TestCacheVersion(t *testing.T) {
 				remember(t, m)
 				require.NoError(t, m.Purge(ctx))
 			},
-			check: func(t *testing.T, before, after NamespaceVersion) {
+			check: func(t *testing.T, _ *Memory, before, after NamespaceVersion) {
 				require.NotEqual(t, before.Scope, after.Scope)
 				require.Zero(t, after.LastForgetSeq)
 				require.Zero(t, after.LastRewindSeq)
@@ -80,7 +88,7 @@ func TestCacheVersion(t *testing.T) {
 			m := newMemory(t, Config{})
 			before := version(t, m)
 			tt.act(t, m)
-			tt.check(t, before, version(t, m))
+			tt.check(t, m, before, version(t, m))
 		})
 	}
 
@@ -138,4 +146,45 @@ func TestLastRewindSeqSurvivesCompaction(t *testing.T) {
 	_, s, err := reader.read(ctx, testNS)
 	require.NoError(t, err)
 	require.Equal(t, want, s.LastRewindSeq)
+}
+
+// 读取 head 期间发生 Purge：两次读到的 meta 不同时重读；每次都变则超过 readAttempts 后返回冲突。
+func TestCacheVersionRetriesAcrossPurge(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		// purges 是在读取旧作用域 head 之前切换作用域的次数上限；-1 表示每次都切换。
+		purges    int
+		wantScope string
+		wantErr   bool
+	}{
+		{name: "切换一次后重读并返回新作用域", purges: 1, wantScope: "new-1"},
+		{name: "每次读取都切换时返回冲突", purges: -1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newHookStore(t)
+			m := durableMemory(t, st, Config{})
+			_, err := m.mutate(ctx, testNS, "", func(t *tx) error { t.SetLastRewindSeq(t.nextSeq()); return nil })
+			require.NoError(t, err)
+			cur, n := initialScope, 0
+			st.h.before = func(op, scope, id string) error {
+				if op == "load" && id == headID && scope == scopeName(testNS, cur) && (tt.purges < 0 || n < tt.purges) {
+					n++
+					cur = fmt.Sprintf("new-%d", n)
+					setMeta(t, st, testNS, metaState{Current: cur, Purges: int64(n)})
+				}
+				return nil
+			}
+			got, err := m.CacheVersion(ctx, [][]string{testNS})
+			if tt.wantErr {
+				require.True(t, agentErrors.IsCode(err, agentErrors.CodeConflict), "%v", err)
+				require.Equal(t, readAttempts, n, "每次尝试都读到了切换")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, []NamespaceVersion{{Namespace: testNS, Scope: tt.wantScope}}, got, "不返回旧作用域的版本")
+			require.Equal(t, tt.purges, n)
+		})
+	}
 }
