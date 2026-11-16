@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-13
+
 ### 新增
 
 - `cache.WithMaxEntries(n)`：限制 `SimpleCache` 条目数，超出时先回收过期条目再淘汰其他条目。
@@ -63,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools`：`WithMiddleware`/`MiddlewareTool` 移入 `tools/middleware`，改为 `middleware.Wrap(tool, middlewares...)` 与 `*middleware.WrappedTool`，用法不变。`tools` 根包不再导入 `tools/middleware`，只用 Builder 的程序不再链接其日志中间件带入的 OTLP/gRPC：`builder` 的依赖包由 394 个降到 183 个；`apicheck` 拒绝 `tools` 根包重新导入 `tools/middleware`。迁移：`tools.WithMiddleware(` 改为 `middleware.Wrap(`。
 - `tools`：删除没有生产使用方、与 Dispatcher 平行的 `ToolExecutor`（`NewToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ExecutorOption` 及 `With*`）、`ToolGraph`/`ToolGraphBuilder`/`ToolNode`，以及三套工具结果缓存 `ToolCache`/`SimpleToolCache`/`MemoryToolCache`/`ShardedToolCache`、`CachedTool`/`NewCachedTool`、`NewHighPerformanceCache`/`NewLowMemoryCache` 与分片缓存选项；对应示例 `retry-jitter`、`optimization/02-cache-presets`、`advanced/parallel-execution` 一并删除。迁移：工具调用经 `tools.NewDispatcher`（并发、超时、持久回放与重试策略见 `DispatchConfig`），结果缓存用 `tools/middleware.Caching`。
 - `core`：删除没有实现方的旧 Agent 契约 `Agent`、`BaseAgent`、`AgentExecutor`、`AgentInput`/`AgentOutput`/`AgentOptions`/`AgentStep`/`AgentToolCall`、`FastInvoker`/`TryInvokeFast`/`IsFastInvoker`、`DefaultAgentOptions` 与执行器选项（`BaseAgent.Invoke` 恒返回未实现）；`observability` 删除包装它的 `InstrumentedAgent`/`WrapAgent`。`Runnable`、`StreamRunnable`、`Callback`、`Generator` 不变。依赖它们的示例 `basic/01-simple-agent`、`basic/03-agent-with-memory`、`basic/09-deepseek-simple/invokefast`、`generator/` 一并删除。迁移：Agent 用 `builder` 构建并经 `AsRunnable()` 接入 `core.Runnable`。
-- `interfaces`：删除没有实现与使用方的 `Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory` 删除同样无人使用的 `ConversationStore`。键值存储用 `store.Store`，对话历史用 `MemoryManager`。
+- `interfaces`：删除没有实现与使用方的 `Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory` 删除同样无人使用的 `ConversationStore`。键值存储用 `store.Store`，对话历史用会话日志（`builder.WithSessionLog`）。
 - `llm/cache`：整包删除。语义缓存键只含消息文本与模型名，不区分会话与用户，共用时会跨用户返回他人回答或被投毒，且仓库与扩展中没有使用方。需要时由宿主按租户/会话作用域实现。
 - `tools/shell`：子进程只继承宿主的 `PATH`、`LANG`、`LC_ALL`、`TZ`、`TMPDIR`，不再继承全部环境；白名单中的 `cat` 等可读取 `/proc/self/environ`，此前宿主的 API key 会进入工具结果。需要其他变量时用 `WithEnv` 显式透传。
 - `tools/middleware.Caching`：缓存键按会话（`tools.WithSessionID`）与 `ToolInput.CallerID` 隔离，自定义 `WithCacheKeyFunc` 只决定作用域内的键；默认缓存最多 `constants.DefaultMiddlewareCacheCapacity`（10000）条。此前不同会话或调用者以相同参数调用会命中彼此的结果，模型变换参数可使内存在 TTL 内无界增长。
@@ -76,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `management.CreateSession`：指定的版本不是当前发布版本时，额外要求 `agent.publish` 权限；此前只有 `session.write` 权限即可让未发布的版本上线。
 - `tools/http`：非公网地址检查按内嵌的 IPv4 判断 NAT64（`64:ff9b::/96`）与 6to4（`2002::/16`）地址，拒绝本地 NAT64（`64:ff9b:1::/48`）与 Teredo（`2001::/32`）；此前 `64:ff9b::a9fe:a9fe` 等地址可经 NAT64 网关访问元数据服务。
 - `builder`：删除 `WithMemory`、`WithMaxConversationHistory`、`WithMemoryFailurePolicy`/`MemoryFailurePolicy`、`AgentConfig.MaxConversationHistory`/`MemoryFailurePolicy` 与 `constants.DefaultConversationHistory`。多轮历史只来自会话日志：此前同时配置时双写，Rewind 后旧记忆仍保留被撤销的轮次；旧路径固定使用 `WithSessionID`，请求经 `tools.WithSessionID` 指定的会话会读写同一份记忆而串会话。迁移：`WithMemory(m)` 改为 `WithSessionLog(session.NewMemoryStore())`（持久化用 `session.NewFileStore`）；`WithMaxConversationHistory(n)` 改为 `WithCompaction(contextpolicy.NewCompaction(...))`；删除 `WithMemoryFailurePolicy`，会话日志写入失败即本轮失败。`interfaces.MemoryManager` 与 `memory` 包随后被长期记忆替换，见下一条。
-- `memory`、`interfaces`：删除 `interfaces.MemoryManager`/`Conversation`/`Case`，以及 `memory` 包原有的 `InMemoryManager`、`HierarchicalMemory`、`ShortTermMemory`、`LongTermMemory`、`MemoryConsolidator`、`InMemoryVectorStore`、`EmbeddingVectorStore`、`ChromaVectorStore`、`StoreOptions`、`MemoryType` 等全部类型，与 `constants` 中的 `VectorStoreType*`、`EmbedderProvider*`、`DefaultMemory*`。原实现长期层正文只在内存、重启后向量命中无法还原；TTL、Metadata、Priority 不生效；案例检索对任意查询全量命中且分数固定；空删除、负 limit 与重复 Shutdown 会 panic；没有命名空间，不同调用方互相覆盖与读取。迁移：对话历史见上一条；案例与长期事实改用 `memory.New(memory.Config{Store: ...})` 的 `Remember`/`Recall`，读写前用 `memory.WithNamespace` 绑定可信身份；纯键值数据直接用 `store.Store`；外部向量库实现 `memory.Index`。
+- `memory`、`interfaces`：删除 `interfaces.MemoryManager`/`Conversation`/`Case`，以及 `memory` 包原有的 `InMemoryManager`、`HierarchicalMemory`、`ShortTermMemory`、`LongTermMemory`、`MemoryConsolidator`、`InMemoryVectorStore`、`EmbeddingVectorStore`、`ChromaVectorStore`、`StoreOptions`、`MemoryType` 等全部类型，与 `constants` 中的 `VectorStoreType*`、`EmbedderProvider*`、`DefaultMemory*`。原实现长期层正文只在内存、重启后向量命中无法还原；TTL、Metadata、Priority 不生效；案例检索对任意查询全量命中且分数固定；空删除、负 limit 与重复 Shutdown 会 panic；没有命名空间，不同调用方互相覆盖与读取。迁移：对话历史见上一条；案例与长期事实改用 `memory.New(memory.Config{Durable: ...})` 的 `Remember`/`Recall`，读写前用 `memory.WithNamespace` 绑定可信身份；纯键值数据直接用 `store.Store`；外部向量库实现 `memory.Index`。
 - `constants`：删除 376 个在本仓库与 harness/examples/contrib 代码、文档中均无引用的常量（如 `Status*`/`TaskState*`/`AgentState*`/`ConnectionState*` 状态词汇、多数 `ContentType*`、`DeepSeek*` 默认值、`store.go` 中的存储常量），`store.go` 文件随之删除。迁移：仍需要的值在调用方所属包内定义。
 ### 修复与验证
 
@@ -1290,7 +1292,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.50.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/kart-io/goagent/compare/v0.52.0...v0.53.0
+[0.52.0]: https://github.com/kart-io/goagent/compare/v0.51.0...v0.52.0
+[0.51.0]: https://github.com/kart-io/goagent/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/kart-io/goagent/compare/v0.49.2...v0.50.0
 [0.49.0]: https://github.com/kart-io/goagent/compare/v0.48.1...v0.49.0
 [0.48.1]: https://github.com/kart-io/goagent/compare/v0.48.0...v0.48.1
