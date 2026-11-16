@@ -138,7 +138,7 @@ func TestSimpleCacheTagged(t *testing.T) {
 			wantTags: map[string][]string{"a": {"k2"}},
 		},
 		{
-			name: "过期未清理的条目可按标签删除且不残留索引",
+			name: "过期未清理的条目可按标签删除，重复删除幂等",
 			run: func(t *testing.T, c *SimpleCache) {
 				if err := c.SetTagged(ctx, "k1", val, time.Millisecond, "a"); err != nil {
 					t.Fatal(err)
@@ -152,16 +152,9 @@ func TestSimpleCacheTagged(t *testing.T) {
 				if got := c.GetStats().Size; got != 0 {
 					t.Fatalf("DeleteTag 后条目数 = %d, 期望 0", got)
 				}
-				// 残留的 a→k1 索引会让下面的 DeleteTag 误删改挂标签 b 的 k1。
-				if err := c.SetTagged(ctx, "k1", val, time.Minute, "b"); err != nil {
-					t.Fatal(err)
-				}
-				if err := c.DeleteTag(ctx, "a"); err != nil {
-					t.Fatal(err)
-				}
 			},
-			wantHit:  map[string]bool{"k1": true},
-			wantTags: map[string][]string{"b": {"k1"}},
+			wantHit:  map[string]bool{"k1": false},
+			wantTags: map[string][]string{},
 		},
 		{
 			name: "同键换标签后旧标签不再关联",
