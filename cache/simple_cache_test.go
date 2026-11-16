@@ -184,6 +184,46 @@ func TestSimpleCacheStatsCountsSets(t *testing.T) {
 	}
 }
 
+func TestSimpleCacheStatsCountsConcurrentSets(t *testing.T) {
+	const workers, perWorker = 8, 500
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name  string
+		write func(c *SimpleCache, key string) error
+	}{
+		{"Set", func(c *SimpleCache, key string) error { return c.Set(ctx, key, 1, 0) }},
+		{"SetTagged", func(c *SimpleCache, key string) error { return c.SetTagged(ctx, key, []byte("v"), 0, "t") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewSimpleCache(time.Minute, WithoutBackgroundCleanup())
+			defer c.Close()
+			var wg sync.WaitGroup
+			errs := make(chan error, workers)
+			for w := range workers {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for i := range perWorker {
+						// 键空间小于写入次数，覆盖同一键也要各计一次。
+						if err := tc.write(c, "k"+string(rune('a'+(w*perWorker+i)%16))); err != nil {
+							errs <- err
+							return
+						}
+					}
+				}()
+			}
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				t.Fatal(err)
+			}
+			if got := c.GetStats().Sets; got != workers*perWorker {
+				t.Fatalf("Sets = %d, want %d", got, workers*perWorker)
+			}
+		})
+	}
+}
+
 func TestSimpleCache_Concurrent(t *testing.T) {
 	cache := NewSimpleCache(1 * time.Minute)
 	defer cache.Close()

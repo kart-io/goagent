@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"hash/maphash"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,7 +24,7 @@ type SimpleCache struct {
 	// 统计信息
 	hits   atomic.Int64
 	misses atomic.Int64
-	sets   stripedCounter
+	sets   atomic.Int64
 
 	// 生命周期管理
 	ctx         context.Context
@@ -43,27 +42,6 @@ type SimpleCache struct {
 	// 不变量：缓存只能多删、不能漏删——锁外任一可读的带标签条目都登记在其每个标签下，DeleteTag 因此删尽它。
 	tagMu sync.Mutex
 	tags  map[string]map[string]struct{}
-}
-
-// stripedCounter 按键散列到多个独立缓存行计数：无锁 Set 的写入热路径上，单个共享原子变量的缓存行争用使 8 核并发写入慢约四成。
-type stripedCounter struct {
-	seed    maphash.Seed
-	stripes [16]struct {
-		n atomic.Int64
-		_ [56]byte
-	}
-}
-
-func (s *stripedCounter) add(key string) {
-	s.stripes[maphash.String(s.seed, key)%uint64(len(s.stripes))].n.Add(1)
-}
-
-func (s *stripedCounter) load() int64 {
-	var n int64
-	for i := range s.stripes {
-		n += s.stripes[i].n.Load()
-	}
-	return n
 }
 
 // cacheEntry 缓存条目
@@ -111,7 +89,6 @@ func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
 		maxEntries: cfg.maxEntries,
 		tags:       make(map[string]map[string]struct{}),
 	}
-	c.sets.seed = maphash.MakeSeed()
 
 	c.nextCleanup.Store(time.Now().Add(max(ttl/2, time.Nanosecond)).UnixNano())
 	if !c.lazy {
@@ -181,7 +158,7 @@ func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags
 
 // afterInsert 累计写入次数，在新增键时计数并按需淘汰，再按需执行惰性清理。
 func (c *SimpleCache) afterInsert(key string, loaded bool) {
-	c.sets.add(key)
+	c.sets.Add(1)
 	if !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0 {
 		c.evict(key)
 	}
@@ -252,7 +229,7 @@ func (c *SimpleCache) GetStats() CacheStats {
 	return CacheStats{
 		Hits:    hits,
 		Misses:  misses,
-		Sets:    c.sets.load(),
+		Sets:    c.sets.Load(),
 		Size:    size,
 		HitRate: hitRate,
 	}
