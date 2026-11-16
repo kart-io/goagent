@@ -17,7 +17,7 @@
 ## 2. 目标、非目标、反目标
 
 **目标**
-- G1：contrib 新模块 `cache/redis`，实现 `cache.Cache` 与 `cache.Tagged`，在 Redis 单机、哨兵、原生 Cluster 下满足 4.4 的契约 S1，正常路径满足 S2。
+- G1：contrib 新模块 `cache/redis`，实现 `cache.Bytes` 与 `cache.Tagged`（见 4.4），在 Redis 单机、哨兵、原生 Cluster 下满足 4.4 的契约 S1，正常路径满足 S2。
 - G2：contrib 新模块 `memory/pgvector`，实现 `memory.Index`，行为与 `MemoryIndex` 一致（见 4.3）。
 - G3：goagent 增加两套后端无关的一致性测试：`cache/cachetest`（Tagged 契约）、`memory/memorytest` 增加 Index 契约；`SimpleCache`、`MemoryIndex` 与两个新模块都跑同一套。
 - G4：用 Docker 启动真实 Redis（含 Cluster）与 pgvector 运行集成测试，脚本与 `scripts/test-pgstore.sh` 同构。
@@ -87,12 +87,12 @@ if PTTL(t) < ttl then PEXPIRE t ttl  -- PTTL 为 -1（无过期）时也会设�
   3. `SET e:<key> <编码(值, {tag: 令牌})> PX ttl`。
   4. 每个标签再 `reg` 一次，与 `DeleteTag` 的"先移除成员、后删条目"配合（见下方论证 P2）。
   5. **复查**：再读一次各标签令牌，任一与第 1 步不同或缺失则 `DEL e:<key>` 并返回 nil。
-- `Get(key)`：`GET e:<key>`，解码出标签令牌；再一步 pipeline 读各 `g:<tag>` 逐个比较。任何一个不相等或缺失 → 返回未命中，并 `DEL e:<key>`（可能误删同一时刻写入的新值，属允许的多删）。无标签条目直接返回。
+- `GetBytes(key)`：`GET e:<key>`，解码出标签令牌；再一步 pipeline 读各 `g:<tag>` 逐个比较。任何一个不相等或缺失 → 返回未命中，并 `DEL e:<key>`（可能误删同一时刻写入的新值，属允许的多删）。无标签条目直接返回。
 - `DeleteTag(tag)`
   1. `DEL g:<tag>`。完成即满足 S1：此后所有带旧令牌的条目读取都未命中；下一次 `SetTagged` 生成新令牌。`WaitReplicas > 0` 时见"复制与持久化"。
   2. `ZSCAN t:<tag>` 分批（默认每批 500）；每批**先 `ZREM t:<tag> 本批成员`，完成后再 `UNLINK` 本批的 `e:` 键**（跨槽的键按节点分组发送）。**不在最后删除 `t:<tag>`**：集合清空时 Redis 自动删除它；整体删除会抹掉并发写入刚登记的新成员。
   - 返回错误时由 `memory` 的擦除重做在 `EraseWithin` 内重试。
-- `Set`/`Delete`/`Has`/`Clear`/`GetStats`：实现 `cache.Cache`。`Has` 与 `Get` 同样校验令牌。`Clear` 用 `SCAN` 分批删除前缀下的 `e:` 与 `g:` 键，**不删 `t:` 键**（并发写入可能刚登记成员；残留成员只会让以后多删，由 `reg` 剪除与 TTL 回收），不得 `FLUSHDB`。
+- `SetBytes`（无标签写入）为 `SET e:<key> PX ttl`；`Delete` 为 `DEL e:<key>`。只实现 `cache.Bytes` 与 `cache.Tagged`，不实现 `cache.Cache`，因此没有 `Clear`、`Has`、`GetStats`。
 
 **正确性论证**（实现的测试须覆盖这些交错）。契约见 4.4：S1 为安全性（读不到），S2 为物理删除。"已完成"指 `SetTagged` 在 `DeleteTag` 开始前已返回；与之并发的写入可以排在删除前或后。
 
@@ -115,9 +115,7 @@ if PTTL(t) < ttl then PEXPIRE t ttl  -- PTTL 为 -1（无过期）时也会设�
 - 对连接的节点执行 `ROLE`，返回从节点 → 拒绝；
 - `CONFIG GET maxmemory-policy` 不是 `noeviction` → 记录告警（说明 S2 的淘汰例外）；`CONFIG` 被禁用的托管服务跳过此检查。
 
-**值编码**：`cache.Tagged.SetTagged` 只收 `[]byte`；`cache.Cache.Set` 收 `interface{}`，本实现见 7 节待定问题。条目格式带版本前缀，便于以后演进。
-
-**统计**：`GetStats` 的 Hits/Misses/Sets 为本进程计数（`atomic.Int64`）；`Size` 返回 -1（不做全量 SCAN），godoc 写明。
+**值编码**：只存 `[]byte`（接口已收窄，见 4.4）。条目格式带版本前缀，便于以后演进。
 
 **配置**：`redis.Config{Client, Prefix, DeleteBatch, WaitReplicas, WaitTimeout}`；`New` 时 `PING` 校验连通、校验服务端版本 ≥ 7，并执行上述前提检查。
 
@@ -162,8 +160,17 @@ CREATE TABLE goagent_memory_vectors (
   - S1（必须）：`DeleteTag` 返回后，在它开始前已完成的 `SetTagged` 写入的、带该标签的条目不可读。可用原子操作，或用令牌/版本校验使旧写入在读取时失效（引用 Redis 实现为例）。
   - S2（实现须写明）：这些条目何时从存储中物理删除；不能在返回时删除的情形须写明回收上限。
 - **`memory.Index` 契约改动**：去掉"同一命名空间内维度须一致"，改为"不同维度的向量可共存，`Search` 只考虑与查询同维度的向量"。`MemoryIndex` 同步修改。理由：持久化索引下更换嵌入模型（维度变化）后，命名空间里留着旧模型向量，新向量写入一律被拒，`Reindex` 在写入阶段失败、走不到清理旧键那一步（`memory/indexing.go` 的 `reindex`），索引无法自行恢复；进程内索引每次重启为空，这个问题此前没有暴露。放开维度后，新旧模型向量共存，`adopted` 已按模型过滤召回结果，`Reindex` 写入新向量并清理旧模型的键。同维度换模型本来就靠 `adopted` 过滤，不受影响。
+- **新接口 `cache.Bytes`，`ModelCache.Cache` 改用它**（用户决定，破坏性改动）。`cache.Cache` 的 `Set` 收任意 Go 值，Redis 只能存字节，工具缓存中间件写的是 `*interfaces.ToolOutput`，`string` 写入读回会变成 `[]byte`；收窄后误用在编译期暴露。
+  ```go
+  type Bytes interface {
+      GetBytes(ctx context.Context, key string) ([]byte, error) // 未命中返回 errors.ErrCacheMiss
+      SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error
+      Delete(ctx context.Context, key string) error
+  }
+  ```
+  `SimpleCache` 实现它（`GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`，`ModelCache` 按损坏条目删除）。`ModelCache` 内部改用 `GetBytes`/`SetBytes`，去掉对 `string` 的兼容分支；`EraseRequired` 仍通过类型断言要求同时实现 `cache.Tagged`。CHANGELOG 写迁移步骤：传 `SimpleCache` 的调用方无需改动；自定义实现补上两个方法。
 - **`builder.ModelCache` 写入报错时也删除**：`store` 在 `write` 返回错误时调用一次 `Delete(key)`（超时可能已在服务端生效），减少只能靠 TTL 回收的残留。
-- 新包 `cache/cachetest`：`RunTagged(t, open func(t *testing.T, name string) TaggedCache)`，同一 `name` 打开的是共享同一份数据的两个实例（模拟两个进程），不同 `name` 互相隔离。覆盖：S1、幂等删除、标签替换、TTL、并发 `SetTagged`×`DeleteTag`（确定性 + 压力两类）、跨实例删除、`Clear` 只清自身。`SimpleCache` 测试改为调用它；`SimpleCache` 特有的"不误删"测试（`cache/tagged_test.go` 中依赖原子实现的用例）留在原文件，不进入通用套件。
+- 新包 `cache/cachetest`：`RunTagged(t, open func(t *testing.T, name string) interface{ cache.Bytes; cache.Tagged })`，同一 `name` 打开的是共享同一份数据的两个实例（模拟两个进程），不同 `name` 互相隔离。覆盖：S1、幂等删除、标签替换、TTL、并发 `SetTagged`×`DeleteTag`（确定性 + 压力两类）、跨实例删除、不同 `name` 互不影响。`SimpleCache` 测试改为调用它；`SimpleCache` 特有的"不误删"测试（`cache/tagged_test.go` 中依赖原子实现的用例）留在原文件，不进入通用套件。
 - `memory/memorytest` 新增 `RunIndex(t, newIndex func(t) memory.Index)`：覆盖 4.3 列出的全部行为，含不同维度共存；另加一个 `Memory` 级测试：换嵌入模型（维度变化）后 `Reindex` 收敛——旧模型的键被删、新模型召回正常。`MemoryIndex` 测试改为调用它。
 - 文档：`CACHING_GUIDE.md`、`memory/README.md` 增加"分布式部署"小节，内容见 4.6。
 
@@ -173,8 +180,8 @@ CREATE TABLE goagent_memory_vectors (
 - `scripts/test-pgvector.sh`：Docker 启动固定版本的 `pgvector/pgvector:0.8.x-pg17` 跑 `memory/pgvector` 测试；连接变量 `GOAGENT_PGVECTOR_DSN`。
 - 两个模块都调用 4.4 的一致性测试。
 - Redis 特有测试：
-  - 令牌键被删除后旧条目不复活；Cluster 下跨槽写入与删除正常；`Clear` 不影响前缀外的键。
-  - 确定性交错（测试钩子注入）：SetTagged 第 4、5 步之间注入 `DeleteTag`，条目被删且读不到；两个 `DeleteTag` 并发且中间有完成的写入（P2 的场景），返回后条目物理不存在；第 3 步失败注入，条目不可读；`Clear` 与写入交错，条目不可读且之后的 `DeleteTag` 能删掉它。
+  - 令牌键被删除后旧条目不复活；Cluster 下跨槽写入与删除正常；不同前缀互不影响。
+  - 确定性交错（测试钩子注入）：SetTagged 第 4、5 步之间注入 `DeleteTag`，条目被删且读不到；两个 `DeleteTag` 并发且中间有完成的写入（P2 的场景），返回后条目物理不存在；第 3 步失败注入，条目不可读。
   - `t:` 集合有界：写入大量短 TTL 条目并过期后，集合大小回落；`t:` 键带过期。
   - `WaitReplicas`：单机无从节点时 `DeleteTag` 超时返回错误；Cluster 下用 `CLIENT PAUSE` 暂停从节点，断言返回错误。
 - 端到端：一个测试用两个 `builder.ModelCache`（模拟两个进程，共享同一 Redis）+ 共享 pgstore 记忆，进程甲 `Forget`，断言进程乙的缓存条目被物理删除、不再命中。需要同时连 Redis 与 Postgres，放在单独的仅测试模块 `integration/distributedmemory`（不发布），使 `cache/redis` 的使用者不必引入 pgx 与 pgstore；任一连接变量缺失即跳过。
@@ -210,15 +217,15 @@ CREATE TABLE goagent_memory_vectors (
 - 主从切换回滚：可配置等待从节点确认（`WaitReplicas`，默认 0），不配置时为文档写明的弱保证。
 - 物理删除标准：`EraseWithin` 之后主节点上不存在；持久化文件与备份由运维负责。审核后细化为 4.2 末尾的表述（正常路径删除；例外情形在 TTL 加过期回收周期内回收）。
 - 默认部署仍为本地，分布式模块显式选用；测试用 Docker 启动真实 Redis。
-- **待定：`cache.Cache.Set` 收任意 Go 值与 Redis 只能存字节的冲突。** 工具缓存中间件（`tools/middleware/caching.go`）往 `cache.Cache` 写 `*interfaces.ToolOutput`，Redis 实现存不了；`string` 写入后读回会变成 `[]byte`。
+- 缓存接口收窄：新增只收发字节的 `cache.Bytes`，`ModelCache.Cache` 改用它，接受破坏性改动（4.4）。
 
 ## 8. 设计者的决定（可推翻）
 
 - 令牌用随机数、`DeleteTag` 以删除令牌键生效、`SetTagged` 写后复查（来自动工检查）。
-- 采纳审核意见修正删除协议：成员集合改为以过期时刻为分数的 ZSET（剪除过期成员，集合有界）；写者"登记 → 写条目 → 再登记 → 复查"；`DeleteTag` 每批"先移除成员、后删条目"，不整体删除集合；`Clear` 不删集合；各步不合并 pipeline。也考虑过"每代一个成员集合"（`t:<tag>:<令牌>`），能同样避免抹掉新成员，但需要额外记录旧代集合以便清理，未采用。
+- 采纳审核意见修正删除协议：成员集合改为以过期时刻为分数的 ZSET（剪除过期成员，集合有界）；写者"登记 → 写条目 → 再登记 → 复查"；`DeleteTag` 每批"先移除成员、后删条目"，不整体删除集合；各步不合并 pipeline。也考虑过"每代一个成员集合"（`t:<tag>:<令牌>`），能同样避免抹掉新成员，但需要额外记录旧代集合以便清理，未采用。
 - `WAIT` 与 `DEL` 走同一条连接；`Ring` 客户端拒绝；`New` 用 `ROLE` 拒绝从节点、对非 `noeviction` 策略告警。
 - 最低 Redis 7；代理模式集群与兼容实现不支持。
-- `Size` 返回 -1；不加错误回调（`DeleteTag` 的错误已返回给擦除重做，`Get` 的错误按未命中处理并由调用方的观测事件记录）。
+- Redis 实现不提供 `Clear`/`Has`/`GetStats`（`ModelCache` 不用，按需再加）；不加错误回调（`DeleteTag` 的错误已返回给擦除重做，`Get` 的错误按未命中处理并由调用方的观测事件记录）。
 - 向量索引用 pgvector、独立模块、精确扫描、不建 ANN；`ns` 存 `text[]`；`CREATE EXTENSION` 不放进 `Schema`；分数误差 1e-6 内视为一致；不提供单独的检索连接池（宿主可给数据库角色设 `statement_timeout`）。
 - `memory.Index` 放开同命名空间维度一致的要求，以修复换模型后索引无法恢复（见 4.4）。
 - 端到端测试放在不发布的独立集成模块。
