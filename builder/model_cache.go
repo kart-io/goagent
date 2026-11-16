@@ -136,7 +136,7 @@ func (b *AgentBuilder[S]) validateModelCache() error {
 		{bad: func() bool { return mc.Erase == EraseRequired && m != nil && !m.ErasesOnDelete() }, err: "EraseRequired 要求长期记忆配置 OnErase（用 ModelCache.Eraser()）"},
 		{bad: func() bool { return mc.Erase == EraseRequired && ttlOverErase() }, err: "EraseRequired 要求 TTL 不超过 memory.Config.EraseWithin：物理删除失败时残留时长的上限就是 TTL"},
 		{bad: func() bool { return mc.Erase == EraseAuto && !tagged }, warn: "缓存不支持按标签删除，被删内容的物理删除退回 TTL"},
-		{bad: func() bool { return mc.Erase != EraseRequired && ttlOverErase() }, warn: "TTL 超过 memory.Config.EraseWithin，被删内容可能在缓存中残留到 TTL"},
+		{bad: func() bool { return mc.Erase == EraseAuto && ttlOverErase() }, warn: "TTL 超过 memory.Config.EraseWithin，被删内容可能在缓存中残留到 TTL"},
 	}...)
 	if err := firstConfigError(rules); err != nil {
 		return err

@@ -101,7 +101,7 @@ agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 
 | 模式 | 行为 | 适用 |
 |---|---|---|
-| `EraseOff` | 只做逻辑删除，旧条目留到 TTL 到期 | 进程内缓存、TTL 很短，或没有合规要求 |
+| `EraseOff` | 只做逻辑删除，旧条目留到 TTL 到期；TTL 超过 `EraseWithin` 时不警告 | 进程内缓存、TTL 很短，或没有合规要求 |
 | `EraseAuto`（默认） | 缓存实现 `cache.Tagged` 且记忆配置了 `OnErase` 时物理删除，否则退回 TTL。缓存不支持 `Tagged` 时构建会记录警告；记忆没有配置 `OnErase` 时同样退回 TTL，但不会有警告，需要自行装配（用 `mc.Eraser()`）；TTL 超过 `EraseWithin` 时也会警告 | 大多数场景 |
 | `EraseRequired` | 条件不满足时 `Build` 失败 | 有删除个人数据合规要求的生产环境 |
 

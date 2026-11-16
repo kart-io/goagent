@@ -124,7 +124,7 @@ memory.Config{
 | `Erase` 为 `EraseRequired` 且 `TTL > memory.Config.EraseWithin` | 配置错误：物理删除失败时，残留时长的上限就是 TTL |
 | 缓存实现了 `cache.Tagged`，`Erase` 不是 `EraseOff`，但 `len(TagKey) < 32` | 配置错误 |
 | `Erase` 为 `EraseAuto` 且缓存未实现 `cache.Tagged` | 构建成功，记录一条警告：物理删除退回 TTL |
-| `Erase` 不是 `EraseRequired` 且 `TTL > memory.Config.EraseWithin` | 构建成功，记录一条警告：被删内容可能在缓存中残留到 TTL |
+| `Erase` 为 `EraseAuto` 且 `TTL > memory.Config.EraseWithin` | 构建成功，记录一条警告：被删内容可能在缓存中残留到 TTL |
 
 独立的 Worker 进程不经过 Builder，必须用同一个 `ModelCache`（同一后端、同一 `TagKey`）装配 `OnErase`。这一点写进使用文档。`EraseRequired` 时，Builder 只能校验本进程的记忆实例。
 

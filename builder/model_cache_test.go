@@ -81,7 +81,8 @@ func TestModelCacheValidation(t *testing.T) {
 		{name: "TagKey 不足 32 字节", mc: with(func(m *ModelCache) { m.TagKey = []byte("short") }), errContains: "TagKey 至少 32 字节"},
 		{name: "EraseOff 不要求 TagKey", mc: with(func(m *ModelCache) { m.TagKey = nil; m.Erase = EraseOff })},
 		{name: "EraseAuto 缓存不支持 Tagged 只警告", mc: ModelCache{Cache: untaggedCache{sc}, TTL: time.Minute, Scope: fixedScope}, warn: "退回 TTL"},
-		{name: "非 EraseRequired 且 TTL 超过 EraseWithin 只警告", mc: with(func(m *ModelCache) { m.TTL = 2 * time.Minute }), memory: withErase(time.Minute), warn: "残留到 TTL"},
+		{name: "EraseAuto 且 TTL 超过 EraseWithin 只警告", mc: with(func(m *ModelCache) { m.TTL = 2 * time.Minute }), memory: withErase(time.Minute), warn: "残留到 TTL"},
+		{name: "EraseOff 且 TTL 超过 EraseWithin 不警告", mc: with(func(m *ModelCache) { m.Erase = EraseOff; m.TTL = 2 * time.Minute }), memory: withErase(time.Minute)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

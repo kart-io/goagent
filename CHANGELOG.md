@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 长期记忆召回块按整段文本计量 `RecallRunes`：块头与行间换行也计入预算，`RecallBlock`/`Retrieve` 的结果不再超出配置值；预算容不下块头与任何一条时召回为空。原先按旧计量调好的预算需加上块头约 60 个字符。
 - `cache.SimpleCache.GetStats().Sets` 累计 `Set` 与 `SetTagged` 的写入次数，原先恒为 0。
+- `builder.ModelCache` 为 `EraseOff` 时不再输出"TTL 超过 EraseWithin"的构建期警告；`EraseAuto` 照旧警告。
 
 ## [0.53.0] - 2026-11-13
 
