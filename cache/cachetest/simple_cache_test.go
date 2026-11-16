@@ -20,6 +20,11 @@ func TestSimpleCache(t *testing.T) {
 		if !ok {
 			pool = map[string]*cache.SimpleCache{}
 			pools[t] = pool
+			t.Cleanup(func() {
+				mu.Lock()
+				defer mu.Unlock()
+				delete(pools, t)
+			})
 		}
 		c, ok := pool[name]
 		if !ok {

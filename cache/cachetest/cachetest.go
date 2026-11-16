@@ -170,6 +170,14 @@ func caseConcurrentNoMissedDelete(t *testing.T, open func(*testing.T, string) Ca
 	}
 	shared := open(t, "x")
 	deleter := open(t, "x")
+	// 在测试协程里先打开全部实例，后端的 require/Skip 不能在其他协程执行。
+	writerCaches := make([]Cache, writers)
+	for w := range writers {
+		writerCaches[w] = open(t, "x")
+	}
+	// 热循环里每个协程共用一个 ctx，避免逐次创建的 ctx 累积。
+	loopCtx, cancelLoop := context.WithTimeout(context.Background(), duration+2*opWait)
+	defer cancelLoop()
 
 	var started, finished atomic.Int64
 	stopDel := make(chan struct{})
@@ -183,7 +191,7 @@ func caseConcurrentNoMissedDelete(t *testing.T, open func(*testing.T, string) Ca
 			default:
 			}
 			started.Add(1)
-			if err := deleter.DeleteTag(opCtx(t), "s"); err != nil {
+			if err := deleter.DeleteTag(loopCtx, "s"); err != nil {
 				t.Errorf("DeleteTag: %v", err)
 				return
 			}
@@ -197,10 +205,10 @@ func caseConcurrentNoMissedDelete(t *testing.T, open func(*testing.T, string) Ca
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			c := open(t, "x")
+			c := writerCaches[w]
 			for i := 0; time.Now().Before(deadline); i++ {
 				key := fmt.Sprintf("w%d-k%d", w, i%keysPerWriter)
-				if err := c.SetTagged(opCtx(t), key, []byte(fmt.Sprintf("v%d", i)), longTTL, "s"); err != nil {
+				if err := c.SetTagged(loopCtx, key, []byte(fmt.Sprintf("v%d", i)), longTTL, "s"); err != nil {
 					t.Errorf("SetTagged(%s): %v", key, err)
 					return
 				}
@@ -217,7 +225,7 @@ func caseConcurrentNoMissedDelete(t *testing.T, open func(*testing.T, string) Ca
 					}
 					time.Sleep(time.Millisecond)
 				}
-				_, err := c.GetBytes(opCtx(t), key)
+				_, err := c.GetBytes(loopCtx, key)
 				if !assert.Truef(t, errors.Is(err, agentErrors.ErrCacheMiss), "写入返回后开始的 DeleteTag 已返回，%s 仍可读: err=%v", key, err) {
 					return
 				}
