@@ -262,17 +262,31 @@ func TestRecallBlockWholeTextWithinRecallRunes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newMemory(t, Config{Durable: base.cfg.Durable, RecallRunes: tc.budget})
-			block, err := m.RecallBlock(ctx, "咖啡")
+			got, err := m.Retrieve(ctx, "咖啡")
 			require.NoError(t, err)
+			block := got.Text
 			require.LessOrEqual(t, utf8.RuneCountInString(block), m.cfg.RecallRunes)
-			if tc.want < 0 {
-				return
+			snap, err := m.Snapshot(ctx, "咖啡")
+			require.NoError(t, err)
+
+			var written []string
+			if block != "" {
+				written = strings.Split(strings.TrimPrefix(block, head), "\n")
 			}
-			if tc.want == 0 {
-				require.Empty(t, block)
-				return
+			if tc.want >= 0 {
+				require.Len(t, written, tc.want)
+				if tc.want > 0 {
+					require.Equal(t, head+strings.Join(lines[:tc.want], "\n"), block)
+				}
 			}
-			require.Equal(t, head+strings.Join(lines[:tc.want], "\n"), block)
+			// 报告的记录与快照引用须与块内的行逐行对应，被省略的行不出现在其中。
+			require.Len(t, got.Records, len(written))
+			require.Len(t, snap.Refs, len(written))
+			for i, line := range written {
+				require.Contains(t, line, " "+got.Records[i].ID+" ", "第 %d 行", i)
+				require.Equal(t, RefRecord, snap.Refs[i].Kind)
+				require.Equal(t, got.Records[i].ID, snap.Refs[i].ID, "第 %d 行", i)
+			}
 		})
 	}
 }
