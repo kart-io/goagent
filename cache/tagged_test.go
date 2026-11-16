@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -305,5 +307,93 @@ func TestSimpleCacheTaggedConcurrent(t *testing.T) {
 	defer c.tagMu.Unlock()
 	if len(c.tags) != 0 {
 		t.Errorf("残留标签索引: %v", c.tags)
+	}
+}
+
+// 不带标签的 Set 不取锁：与 SetTagged、DeleteTag 并发时，DeleteTag 返回后此前完成的 SetTagged 写入的值不可读（不漏删），
+// 全部结束后标签索引与条目一一对应（无锁覆盖留下的索引已被摘除）。
+func TestSimpleCacheTaggedNoMissedDelete(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		// tag 返回第 g 个协程第 i 次写入使用的标签。
+		tag func(g, i int) string
+	}{
+		{name: "各协程使用自己的标签", tag: func(g, i int) string { return fmt.Sprintf("g%d", g) }},
+		{name: "协程之间共享标签", tag: func(g, i int) string { return fmt.Sprintf("t%d", i%3) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewSimpleCache(time.Minute, WithoutBackgroundCleanup())
+			defer c.Close()
+			keys := []string{"k0", "k1", "k2", "k3"}
+			var seq atomic.Int64
+			value := func() []byte { return []byte(fmt.Sprintf("v%d", seq.Add(1))) }
+
+			var wg sync.WaitGroup
+			errs := make(chan error, 64)
+			for g := range 8 {
+				// 写入方：SetTagged 之后 DeleteTag，随后读到的值不得是自己写入的那个。
+				wg.Add(2)
+				go func() {
+					defer wg.Done()
+					for i := range 300 {
+						key, tag, v := keys[(g+i)%len(keys)], tt.tag(g, i), value()
+						if err := c.SetTagged(ctx, key, v, time.Minute, tag, "all"); err != nil {
+							errs <- err
+							return
+						}
+						if err := c.DeleteTag(ctx, tag); err != nil {
+							errs <- err
+							return
+						}
+						if got, err := c.Get(ctx, key); err == nil && string(got.([]byte)) == string(v) {
+							errs <- fmt.Errorf("DeleteTag(%s) 返回后仍读到 %s 的值 %s", tag, key, v)
+							return
+						}
+					}
+				}()
+				// 干扰方：无锁 Set 覆盖同一批键。
+				go func() {
+					defer wg.Done()
+					for i := range 300 {
+						_ = c.Set(ctx, keys[(g*7+i)%len(keys)], value(), time.Minute)
+					}
+				}()
+			}
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				t.Error(err)
+			}
+			// 最后一次写入是无锁 Set 的键，其旧条目的索引必须已被摘除。
+			for _, key := range keys[:2] {
+				if err := c.SetTagged(ctx, key, value(), time.Minute, "last"); err != nil {
+					t.Fatal(err)
+				}
+				if err := c.Set(ctx, key, value(), time.Minute); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			c.tagMu.Lock()
+			defer c.tagMu.Unlock()
+			for tag, set := range c.tags {
+				for key := range set {
+					v, ok := c.data.Load(key)
+					if !ok || !slices.Contains(v.(*cacheEntry).tags, tag) {
+						t.Errorf("标签 %s 残留索引 %s", tag, key)
+					}
+				}
+			}
+			c.data.Range(func(key, v any) bool {
+				for _, tag := range v.(*cacheEntry).tags {
+					if _, ok := c.tags[tag][key.(string)]; !ok {
+						t.Errorf("条目 %s 的标签 %s 未登记", key, tag)
+					}
+				}
+				return true
+			})
+		})
 	}
 }

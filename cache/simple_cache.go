@@ -36,7 +36,8 @@ type SimpleCache struct {
 	maxEntries int64
 	size       atomic.Int64
 
-	// tagMu 保护 tags，并串行化所有对 data 的写入，使标签索引与条目不会失步；读取不加锁。
+	// tagMu 保护 tags，并串行化带标签的写入与所有删除；不带标签的 Set 与读取不加锁。
+	// 不变量：缓存只能多删、不能漏删——锁外任一可读的带标签条目都登记在其每个标签下，DeleteTag 因此删尽它。
 	tagMu sync.Mutex
 	tags  map[string]map[string]struct{}
 }
@@ -115,12 +116,23 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 	return entry.value, nil
 }
 
-// Set 设置缓存值
+// Set 设置缓存值。不带标签的写入不取 tagMu：带标签条目只在锁内写入，无锁写入不会让带标签条目变得可读。
+// 覆盖了带标签的旧条目时，再取锁摘除旧条目留下的索引；摘除之前 DeleteTag 可能多删这个新值，但不会漏删。
 func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
-	return c.set(key, value, ttl, nil)
+	if ttl <= 0 {
+		ttl = c.ttl
+	}
+	old, loaded := c.data.Swap(key, &cacheEntry{value: value, expiresAt: time.Now().Add(ttl)})
+	if loaded && len(old.(*cacheEntry).tags) > 0 {
+		c.tagMu.Lock()
+		c.untagStale(key, old.(*cacheEntry).tags)
+		c.tagMu.Unlock()
+	}
+	c.afterInsert(key, loaded)
+	return nil
 }
 
-// set 写入条目并以 tags 整体替换旧标签。
+// set 在 tagMu 下写入带标签的条目，并以 tags 整体替换旧标签。
 func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags []string) error {
 	if ttl <= 0 {
 		ttl = c.ttl
@@ -136,10 +148,15 @@ func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags
 		c.untag(key, old.(*cacheEntry).tags)
 	}
 	c.tag(key, tags)
-	over := !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0
 	c.tagMu.Unlock()
 
-	if over {
+	c.afterInsert(key, loaded)
+	return nil
+}
+
+// afterInsert 在新增键时计数并按需淘汰，再按需执行惰性清理。
+func (c *SimpleCache) afterInsert(key string, loaded bool) {
+	if !loaded && c.size.Add(1) > c.maxEntries && c.maxEntries > 0 {
 		c.evict(key)
 	}
 	if c.lazy {
@@ -149,7 +166,6 @@ func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags
 			c.cleanupExpired()
 		}
 	}
-	return nil
 }
 
 // Delete 删除缓存值

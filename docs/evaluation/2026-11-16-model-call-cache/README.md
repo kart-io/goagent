@@ -59,9 +59,9 @@ TMPDIR=/tmp GOTMPDIR=/tmp taskset -c 2,3,6-27 go test -run '^$' -bench Benchmark
 - `goagent-contrib/management/harness` 在 master 上就失败（依赖 goagent-harness 模块缓存版本的 `background/notify.go` 调用 `h.SteerOnce` 参数不符），两边一致。该失败会让类型检查止于依赖，因此对它补做了源码 grep，也没有引用。模块缓存中的 goagent-harness 各版本同样没有引用。
 - 完成后已删除 worktree 与临时文件；下游四个仓库的 `git status` 与操作前一致（goagent-contrib 仍只有用户原有的未提交 `durable/pgstore/memory_test.go`）。
 
-## 4. SimpleCache 并发写入：全局写锁的开销
+## 4. SimpleCache 并发写入：标签索引的锁开销
 
-本分支的 `SimpleCache.Set` 从无锁的 `sync.Map.Swap` 改为在 `tagMu` 下写入，使标签索引与条目一致；工具缓存（`tools/middleware/caching.go`）也走这条路径。
+本分支给 SimpleCache 加了标签索引。最初 `Set` 也改为在 `tagMu` 下写入，并发写入因此退化 3.9 至 4.6 倍；工具缓存（`tools/middleware/caching.go`）只用 `Set`，也付出了这份代价。现在不带标签的 `Set` 恢复无锁的 `sync.Map.Swap`，只有覆盖了带标签的旧条目时才取锁，摘除旧条目留下的索引；`SetTagged`、`DeleteTag`、`Delete` 与过期清理仍在锁内。
 
 基准：`cache/simple_cache_bench_test.go` 的 `BenchmarkSimpleCacheSetParallel`（`b.RunParallel`），配置与工具缓存相同（`WithoutBackgroundCleanup`、`WithMaxEntries(10000)`），1024 个键交错覆盖，不触发淘汰。master 对照在 `git worktree add /tmp/mc-master master` 上运行同一基准的 Set 子项（master 没有 SetTagged），测完已删除 worktree。
 
@@ -69,21 +69,22 @@ TMPDIR=/tmp GOTMPDIR=/tmp taskset -c 2,3,6-27 go test -run '^$' -bench Benchmark
 
 ### 结果（5 次运行的范围，单位 ns/op）
 
-| 子项 | GOMAXPROCS | master | 本分支 | 本分支 / master |
-|---|---|---|---|---|
-| Set | 1 | 140.3 - 141.6 | 152.4 - 153.7 | 约 1.08 倍 |
-| Set | 8 | 44.2 - 47.0 | 206.6 - 209.9 | 约 4.6 倍 |
-| Set | 24 | 59.3 - 61.9 | 233.6 - 237.4 | 约 3.9 倍 |
-| SetTagged | 1 | — | 272.0 - 274.6 | — |
-| SetTagged | 8 | — | 300.3 - 310.3 | — |
-| SetTagged | 24 | — | 321.0 - 351.4 | — |
+| 子项 | GOMAXPROCS | master | 本分支（改前，全局锁） | 本分支（现在） | 现在 / master |
+|---|---|---|---|---|---|
+| Set | 1 | 142.0 - 143.8 | 152.4 - 153.7 | 144.3 - 158.7 | 约 1.0 - 1.1 倍 |
+| Set | 8 | 44.6 - 48.5 | 206.6 - 209.9 | 51.9 - 63.1 | 约 1.2 - 1.3 倍 |
+| Set | 24 | 59.3 - 63.1 | 233.6 - 237.4 | 65.0 - 77.1 | 约 1.1 - 1.2 倍 |
+| SetTagged | 1 | — | 272.0 - 274.6 | 273.4 - 283.1 | — |
+| SetTagged | 8 | — | 300.3 - 310.3 | 310.1 - 382.3 | — |
+| SetTagged | 24 | — | 321.0 - 351.4 | 346.3 - 367.1 | — |
 
-内存：Set 在 master 为 136 B/op、4 次分配，本分支 152 B/op、4 次分配（条目多了 tags 字段）；SetTagged 为 184 B/op、5 次分配。
+"改前"一列是上一轮的数据；master 与"现在"两列来自本轮，同一台机器上依次运行。内存：Set 在 master 为 136 B/op、4 次分配，本分支为 152 B/op、4 次分配（条目多了 tags 字段）；SetTagged 为 184 B/op、5 次分配。
 
 ### 结论
 
-- 单协程写入几乎不变（约 +8%）；并发写入从随核数扩展变为串行，8 与 24 协程时每次 Set 慢 3.9 - 4.6 倍，超过 2 倍，作为顾虑记录，本次不改锁。
-- 绝对值上，24 协程争用时每次 Set 约 0.24 微秒，整体约 400 万次写入每秒；工具缓存每次工具调用最多写一次，模型缓存每次模型调用最多写一次（推断：两者的调用本身在毫秒到秒级，写锁开销在实际负载中占比很小；未用真实工具负载测量）。
+- 不带标签的 Set 在 8 核和 24 核下与 master 相差 1.1 至 1.3 倍（按区间两端算，最坏 1.41 倍），在 1.5 倍的目标以内；剩下的差距主要来自条目多出的 tags 字段，以及运行之间的波动（本分支 8 核 5 次运行的极差约 20%）。
+- 带标签的写入仍然串行，开销与改前相同；只有模型调用缓存使用它，每次模型调用最多写一次。
+- 正确性：带标签条目只在锁内写入，所以锁外任何可读的带标签条目都已登记在它的每个标签下，DeleteTag 会把它们删尽，不会漏删。无锁 Set 覆盖带标签条目后、取锁摘除旧索引之前，DeleteTag 可能多删这个不带标签的新值，这是可以接受的。并发测试是 `cache/tagged_test.go` 的 `TestSimpleCacheTaggedNoMissedDelete`。
 
 复现命令：
 

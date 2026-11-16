@@ -14,7 +14,7 @@ import (
 //   - 标签关联的条目很多时应分批删除，避免单次操作长时间阻塞后端。
 //   - SetTagged 与 DeleteTag 之间必须原子或线性一致：DeleteTag 返回后，在它之前开始的 SetTagged 不得留下带该标签且可读的条目。
 //     分两步写值与标签集合的后端（如 Redis 先 SET 再 SADD）须用事务或脚本合成一步，否则 DeleteTag 夹在两步之间会漏删。
-//     SimpleCache 在同一把 tagMu 下写入条目并登记标签，DeleteTag 也持有 tagMu，两者互斥。
+//     SimpleCache 在同一把 tagMu 下写入条目并登记标签，DeleteTag 也持有 tagMu，两者互斥；不带标签的 Set 不取锁，只可能让 DeleteTag 多删。
 type Tagged interface {
 	// SetTagged 写入条目并关联标签。对同一个键重复调用时，新标签集合整体替换旧的。
 	SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error
@@ -54,6 +54,20 @@ func (c *SimpleCache) tag(key string, tags []string) {
 			c.tags[t] = set
 		}
 		set[key] = struct{}{}
+	}
+}
+
+// untagStale 摘除被无锁 Set 覆盖的旧条目留下的索引，保留当前条目仍带的标签；调用方须持有 tagMu。
+// 带标签条目只在锁内写入，锁内读到的当前条目就是 key 下唯一可能可读的带标签条目，保留它的标签即不会漏删。
+func (c *SimpleCache) untagStale(key string, tags []string) {
+	var keep []string
+	if v, ok := c.data.Load(key); ok {
+		keep = v.(*cacheEntry).tags
+	}
+	for _, t := range tags {
+		if !slices.Contains(keep, t) {
+			c.untag(key, []string{t})
+		}
 	}
 }
 
