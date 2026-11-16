@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.1] - 2026-11-16
+
+### 修复
+
+- `tools/search`：`AggregatedSearchEngine.Search` 在请求已取消时可能仍返回结果（结果与取消信号同时就绪时随机选中结果），现在一律返回取消错误。
+
 ## [0.54.0] - 2026-11-16
 
 ### 新增
@@ -1320,7 +1326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.54.1...HEAD
+[0.54.1]: https://github.com/kart-io/goagent/compare/v0.54.0...v0.54.1
 [0.54.0]: https://github.com/kart-io/goagent/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/kart-io/goagent/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/kart-io/goagent/compare/v0.51.0...v0.52.0
