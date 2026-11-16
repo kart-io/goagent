@@ -33,7 +33,7 @@
 2. **同一个 `ModelCache` 同时用于两个 Builder（两个 Agent 共用后端）**。期望隔离身份相同、请求相同时可以命中，客户端身份不同时不命中。测试在 Task 5 的 `TestModelCacheSharedAcrossAgents`。
 3. **缓存后端的 `Get` 返回 `ErrCacheMiss` 以外的错误（例如 Redis 断开）**。期望按未命中继续调用模型，并记录这个错误，不让整轮失败。测试在 Task 5 的 `TestModelCacheBackendErrors`。
 4. **请求钩子或 `RequestError` 换了客户端之后再调用**。期望用新客户端的身份重算键，不命中旧客户端的条目。测试在 Task 5 的 `TestModelCacheReplannedClient`。
-5. **一次 `Forget` 时同一命名空间有多个会话在跑**。期望所有会话的条目都被删除，后续请求都不命中。测试在 Task 3 的 `TestForgetErasesAcrossSessions`（memory 侧）。
+5. **一次 `Forget` 时同一命名空间有多个会话在跑**。期望所有会话的条目都被删除，后续请求都不命中。测试在 builder 的 `TestModelCacheForgetErasesAcrossSessions`。
 
 ---
 
@@ -176,10 +176,10 @@
   - 登记之后命名空间被 Purge 过（作用域已变），`Maintain` 直接注销这条登记，不调用 `OnErase`。
   - `OnErase == nil` 时不登记 `queueErase`，`ErasesOnDelete()` 返回 false。
   
-  另写 `TestForgetErasesAcrossSessions`（Review Focus 第 5 条）：同一命名空间下两个会话各自完成一轮，然后一次 `Forget`，`OnErase` 收到的 `(ns, scope)` 恰好一次，且覆盖这个命名空间。
+  另写 `TestModelCacheForgetErasesAcrossSessions`（Review Focus 第 5 条）：同一命名空间下两个会话各自完成一轮，然后一次 `Forget`，`OnErase` 收到的 `(ns, scope)` 恰好一次，且覆盖这个命名空间。
 
 - [ ] **Step 2: 运行，确认失败**
-  `taskset -c 2,3,6-27 go test ./memory -run 'TestOnErase|TestForgetErasesAcrossSessions'`，预期编译失败。
+  `taskset -c 2,3,6-27 go test ./memory -run 'TestOnErase'` 与 `taskset -c 2,3,6-27 go test ./builder -run 'TestModelCacheForgetErasesAcrossSessions'`，预期编译失败。
 
 - [ ] **Step 3: 实现**
   - `Forget` 和 `Rewound` 在 `OnErase != nil` 时，通过 `withBeforeSave` 登记 `queueEntry{Namespace, Scope: t.scope, Reason: queueErase, Until: now + EraseWithin}`，与现有的 `queueIndex` 登记并列。提交后调用一次 `OnErase`，错误不返回给调用方，交给维护重做。
