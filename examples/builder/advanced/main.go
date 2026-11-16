@@ -201,6 +201,7 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 			middleware.NewRateLimiterMiddleware(10, time.Minute),
 		).
 		WithModelCache(builder.ModelCache{
+			// 条目有效期取下面的 TTL；NewSimpleCache 的参数只是未指定 TTL 时的默认值，并决定后台清理周期（其一半）
 			Cache: cache.NewSimpleCache(5 * time.Minute),
 			TTL:   5 * time.Minute,
 			// 取不到用户 ID 时不缓存，避免不同用户互相命中

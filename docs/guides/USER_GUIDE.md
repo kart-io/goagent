@@ -218,16 +218,21 @@ agent, err := builder.NewSimpleBuilder(client).
 ```go
 import (
     "context"
+    "time"
 
+    "github.com/kart-io/goagent/builder"
     "github.com/kart-io/goagent/cache"
 )
 
+// client 是 llm.Client，创建方式见 QUICKSTART.md 与 docs/api/LLM_API.md；
+// tenantUser 是宿主自己的函数，从已认证的请求上下文取出"租户/用户"身份，取不到时返回 false；
+// tagKey 是至少 32 字节的 []byte，生产环境从密钥管理读取，不写进代码。
 agent, err := builder.NewSimpleBuilder(client).
     WithModelCache(builder.ModelCache{
         Cache:  cache.NewSimpleCache(5 * time.Minute),
         TTL:    5 * time.Minute,
         Scope:  func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
-        TagKey: tagKey, // 至少 32 字节，生产环境从密钥管理读取
+        TagKey: tagKey,
     }).
     Build()
 ```
