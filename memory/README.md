@@ -15,7 +15,7 @@
 
 ## 命名空间
 
-所有读写都在 `memory.WithNamespace(ctx, ...)` 绑定的命名空间内进行，没有绑定时返回错误。命名空间须由宿主依据可信身份（如租户与用户）给出，不能取自模型或用户输入。
+所有读写都在 `memory.WithNamespace(ctx, ...)` 绑定的命名空间内进行，没有绑定时返回 `errors.CodeInvalidInput`。命名空间须由宿主依据可信身份（如租户与用户）给出，不能取自模型或用户输入。
 
 ## 使用
 
@@ -41,11 +41,11 @@ agent, err := builder.NewSimpleBuilder(client).
 | 方法 | 说明 |
 |---|---|
 | `Remember(ctx, Record)` | 写入或覆盖一条记录；先写索引再写正文 |
-| `Recall(ctx, Query)` | 混合召回：向量相似度与字符对重合取较大者为相关性，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权；更新访问时间 |
+| `Recall(ctx, Query)` | 混合召回：向量相似度与字符对重合取较大者为相关性，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权；查询含字符对时不返回相关性为 0 的记录；更新访问时间 |
 | `RecallBlock(ctx, query)` / `Retrieve(ctx, query)` | 核心记忆在前、召回结果在后的注入文本，不超过 `RecallRunes`；`Retrieve` 另返回写入块中的记录、关系与社区，`Sessions()` 给出它们依据的会话 |
 | `Snapshot(ctx, query)` / `Hydrate(ctx, s, refs)` | 召回分两步：`Snapshot` 只返回引用（可写入持久日志），`Hydrate` 按引用还原召回块，丢弃已删除、失效或不在读绑定内的项；宿主绑定的命名空间与快照不同时返回 `errors.ErrMemoryNamespaceChanged` |
 | `Turn(ctx)` / `WithTurn` / `CheckTurn` | 轮次的记忆绑定 `TurnMemory`：轮次内的读写与任务都使用开始时的写命名空间 |
-| `Forget(ctx, id)` / `Purge(ctx)` | 使一条记录失效 / 删除整个命名空间 |
+| `Forget(ctx, id)` / `Purge(ctx)` | 使一条记录失效 / 删除整个命名空间。记录向量在 `Index` 的 `append(ns, "#"+scope)` 下（实体在其下的 `#entity`），键形如 `ID#实例号.ContentRev#模型摘要`，`scope` 可从 `CacheVersion` 取得，据此核对遗忘后的清理 |
 | `Rewound(ctx, session, to)` | 宿主在 `session.Rewind` 后调用：有消息被遮蔽的轮次整轮失效，来自这些轮次的关系派生与实体名称删除，只被它们取代的旧记录与旧关系恢复；回退点切开一轮时为可见部分补登抽取任务；回退时仍在进行的轮次之后登记会被截断或丢弃 |
 | `Reindex(ctx, force)` | 为缺少当前版本向量的记录与实体补写向量（`force` 时全部重写），删除过期的键；换嵌入模型或升级后运行，不写记录 |
 | `Prune(ctx)` | 按 `Retention` 删除过期、超出容量与超过保留期的失效记录，以及保留期外的已完成任务与回退标记；Worker 处理完一批任务后执行 |
@@ -70,14 +70,27 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ## 抽取流程
 
-1. 轮次结束（含中止）后 Builder 登记任务，Key 为"会话/turn/start 序号"，重复登记不产生新任务。
+1. 轮次结束（含中止）后 Builder 登记任务，Key 为 `会话 ID/轮次起始序号`（如 `s1/1`；回退切开一轮时补登的任务为 `会话 ID/起始/截止`），重复登记不产生新任务。
 2. Worker 从会话日志读该轮的消息（跳过召回块，以及 `memory_search`、`memory_save`、`memory_forget` 的调用与结果）。轮次已被退回时跳过；中止的轮次只写一条教训。
-3. 抽取模型输出候选；每个候选与同类最相似的 `ReconcileCandidates` 条旧记录比较，判定新增、合并更新、否定旧记录或忽略。
+3. 抽取模型输出候选；每个候选与同类最相似的 `ReconcileCandidates` 条旧记录比较，判定新增、合并更新、否定旧记录或忽略。相关性大于 0 即入选，没有更高的下限；没有入选记录时直接新增，不请求模型。
 4. 未参与反思的情景累计重要度达到 `ReflectionThreshold` 时提炼结论。
-5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；失败按 `JobAttempts` 重试后标记 failed。
+5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；失败按 `JobAttempts` 重试后标记 failed。回复不是合法 JSON 时，同一次尝试内把原回复交回模型修正一次，所以每个请求在一次尝试内至多发两次；因截断（`finish_reason` 不是 `stop`）的回复不修正。
 6. 任务存于命名空间的 state，与登记它的作用域绑定：Purge 之后旧作用域的任务随之消失，处理中的任务写回时发现作用域已切换即丢弃；登记之后该命名空间发生过 Forget 的任务也丢弃，不让遗忘的内容被重新抽取。丢弃计入 `DroppedJobs`。
 
 多个 Worker 可以同时运行，同一时刻只有持锁的一个在处理。召回会读取命名空间内的全部记录，命名空间较大时用 `Retention.MaxRecords` 限制规模。
+
+## Worker 回复格式
+
+`Model` 的每次回复取第一个 `{` 到最后一个 `}` 之间的内容解析为 JSON，可以带代码块或前后说明。各类请求期望的字段（以 `worker.go`、`graph.go`、`community.go` 中的提示词与结构体为准）：
+
+| 请求 | 回复 |
+|---|---|
+| 抽取 | `{"memories":[{"kind":"fact\|episode\|skill","content":"…","keywords":[],"entities":[],"importance":0.0}]}`；`Graph` 为真时同一对象另含 `"relations":[{"from":0,"subject":{"name":"…","type":"…","aliases":[]},"predicate":"…","object":{…},"fact":"…","exclusive":true}]`，`from` 是 `memories` 的下标 |
+| 整理 | `{"op":"add\|update\|invalidate\|noop","target":"已有记忆的 id","content":"update 时合并后的完整内容"}` |
+| 教训（中止的轮次） | `{"lesson":"…","keywords":[],"importance":0.0}`，`lesson` 为空时不写 |
+| 反思 | `{"insights":[{"content":"…","keywords":[],"importance":0.0}]}` |
+| 实体判重 | `{"resolutions":[{"index":0,"duplicate_of":"候选实体的 id，不是同一对象时为空串"}]}` |
+| 社区摘要 | `{"name":"…","summary":"…"}` |
 
 ## 从 G0 迁移
 

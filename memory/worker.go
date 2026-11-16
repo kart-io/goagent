@@ -51,7 +51,7 @@ func (m *Memory) Run(ctx context.Context, onError func(error)) error {
 }
 
 // ProcessPending 执行一轮 Worker（设计 4.3）：持 memory/worker 锁，先 Maintain，再按 queue 分片中的登记逐个作用域处理待处理的任务，
-// 返回处理的任务数。任务自身的失败记入任务，不作为返回错误；每个任务之后保存心跳，失去锁时结束本轮并返回 ErrLeaseLost。
+// 返回本轮取出的待处理任务数，含被丢弃（dropped）与处理失败的任务。任务自身的失败记入任务，不作为返回错误；每个任务之后保存心跳，失去锁时结束本轮并返回 ErrLeaseLost。
 // 没有待处理任务的登记在 state 锁内移除。
 func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 	if m.cfg.Model == nil || m.cfg.Sessions == nil {

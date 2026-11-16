@@ -30,7 +30,7 @@ go run ./examples/workflow
 
 ## 会话与恢复
 
-WithSessionID 与 WithMemory 组合记忆；WithSessionLog 使用会话日志推导模型历史。它们不能替代宿主的待澄清任务管理。
+WithSessionID 设置会话 ID；WithSessionLog 使用会话日志推导模型历史；WithLongTermMemory 接入跨会话的长期记忆（需要 WithSessionLog）。它们不能替代宿主的待澄清任务管理。
 
 会话历史、Agent 会话状态检查点和工作流 durable.Store 职责不同。RunID/CallID/Agent作用域来自宿主并跨恢复稳定；新任务不能误用已完成运行身份。统一装配见 [宿主接入](HOST_INTEGRATION.md)。
 

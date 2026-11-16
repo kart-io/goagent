@@ -94,6 +94,7 @@ type Config struct {
 	Retention           Retention     `json:"retention"`
 
 	// Now 是时钟，nil 时用 time.Now；评测与回放注入固定时间，使新近性不随运行耗时变化。不进入 Identity。
+	// 对话时间（抽取提示中的日期、记录的 ValidFrom、关系的生效时间）取会话事件的 Time，不受它控制，只在事件缺少时间时回退到它。
 	Now func() time.Time `json:"-"`
 }
 
@@ -463,6 +464,7 @@ func (m *Memory) readRecall(ctx context.Context, ns []string) (recallView, error
 }
 
 // Recall 在当前命名空间的有效记录中混合召回：向量相似度与文本重合取较大者为相关性，再与新近性、重要性加权。
+// 查询文本含字符对（至少两个字母或数字）时，相关性为 0 的记录不返回。
 // 只读；TrackAccess 开启时在返回后异步记录访问时间。
 func (m *Memory) Recall(ctx context.Context, q Query) ([]Scored, error) {
 	ns, err := requireNamespace(ctx)

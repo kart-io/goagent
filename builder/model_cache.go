@@ -29,6 +29,7 @@ const (
 )
 
 // ModelCache 是模型调用缓存的配置。Worker 进程不经过 Builder，须用同一个 ModelCache（同一后端、同一 TagKey）装配 OnErase。
+// 客户端既没有声明 CacheIdentity、也解析不出模型名（请求的 Model 或客户端的 ModelName）时，该次调用静默不缓存。
 type ModelCache struct {
 	// Cache 是缓存后端，Get 须原样返回写入的值（[]byte，或等价的 string）。
 	Cache cache.Cache
