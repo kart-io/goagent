@@ -21,3 +21,5 @@
 ## 清理记录（2026-11-16）
 
 隔离工作树与原始证据目录 `.goagent-hardening-20261109-APraZJ/`（含 `evidence/` 102 份、`fix-evidence/` 70 份）及三个关联仓库的本地与远端 `fix/management-hardening-20261109` 分支均已删除。源码以上表提交为准，补丁及基线见 [patches/manifest.json](../patches/manifest.json) 与 [fix/patches/manifest.json](patches/manifest.json)，原始日志不再保留，其 SHA-256 仍记录在 [验证摘要](../verification.json) 与 [修复验证摘要](verification.json)。`review/`、`fix/` 记录及 JSON 中的绝对路径与链接是执行时路径，现已失效；为保持 [证据指纹](../review/evidence-sha256.json) 一致未改写。
+
+清理时按指纹逐一核对 `review/` 下 51 份登记文件：50 份一致；`REVIEW.md` 只在 `0e4db8bc` 提交过一次，该提交中的内容即与登记值不符，应为登记后又修改过，现有内容是否为复审原文无法由指纹证明。登记值未改动。
