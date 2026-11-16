@@ -22,11 +22,11 @@ const (
 
 func extraction(ctx context.Context, w io.Writer, root string) error {
 	return runSteps(w,
-		step{"条目3 跨会话召回，召回正文不进会话日志", func() error { return crossSessionRecall(ctx, w, root) }},
-		step{"条目9 重复登记幂等，失败后重试同一任务", func() error { return enqueueIdempotent(ctx, w, root) }},
-		step{"条目10 新事实取代旧事实，重复事实不写入", func() error { return supersede(ctx, w, root) }},
-		step{"条目18 抽取失败、非法候选与整理降级", func() error { return extractionFailures(ctx, w, root) }},
-		step{"条目19 中止轮次只写教训，召回块与记忆工具不被抽取", func() error { return abortedAndToolSkipping(ctx, w, root) }},
+		step{"跨会话召回，召回正文不进会话日志", func() error { return crossSessionRecall(ctx, w, root) }},
+		step{"重复登记幂等，失败后重试同一任务", func() error { return enqueueIdempotent(ctx, w, root) }},
+		step{"新事实取代旧事实，重复事实不写入", func() error { return supersede(ctx, w, root) }},
+		step{"抽取失败、非法候选与整理降级", func() error { return extractionFailures(ctx, w, root) }},
+		step{"中止轮次只写教训，召回块与记忆工具不被抽取", func() error { return abortedAndToolSkipping(ctx, w, root) }},
 	)
 }
 
@@ -281,12 +281,13 @@ func extractionFailures(ctx context.Context, w io.Writer, root string) error {
 		status         memory.JobStatus
 		records        int
 		conflicts      int
+		invalidTargets int
 	}{
-		{"s-down", "我要订去成都的票", memory.JobFailed, 0, 0},
-		{"s-not-json", "随便聊聊", memory.JobFailed, 0, 0},
-		{"s-bad-candidates", "我养了一只猫", memory.JobDone, 1, 0},
-		{"s-concurrent-edit", "我在广州上班", memory.JobDone, 1, 1},
-		{"s-unknown-target", "我把猫送给朋友了", memory.JobDone, 1, 0},
+		{"s-down", "我要订去成都的票", memory.JobFailed, 0, 0, 0},
+		{"s-not-json", "随便聊聊", memory.JobFailed, 0, 0, 0},
+		{"s-bad-candidates", "我养了一只猫", memory.JobDone, 1, 0, 0},
+		{"s-concurrent-edit", "我在广州上班", memory.JobDone, 1, 1, 0},
+		{"s-unknown-target", "我把猫送给朋友了", memory.JobDone, 1, 0, 1},
 	}
 	keys := make([]string, len(cases))
 	for i, c := range cases {
@@ -309,7 +310,8 @@ func extractionFailures(ctx context.Context, w io.Writer, root string) error {
 		checks = append(checks,
 			check{c.session + " 状态", j.Status, c.status},
 			check{c.session + " 写入记录", j.Stats.Records, c.records},
-			check{c.session + " 降级的整理决定", j.Stats.Conflicts, c.conflicts},
+			check{c.session + " 复核不成立而降级的整理决定", j.Stats.Conflicts, c.conflicts},
+			check{c.session + " target 不存在而降级的整理决定", j.Stats.InvalidTargets, c.invalidTargets},
 			check{c.session + " 失败时记录了错误", j.Status == memory.JobFailed && j.Error == "", false},
 		)
 	}
@@ -387,6 +389,10 @@ func abortedAndToolSkipping(ctx context.Context, w io.Writer, root string) error
 	if err != nil {
 		return err
 	}
+	reqs := chat.Requests()
+	if len(reqs) != 3 {
+		return fmt.Errorf("主模型应收到 3 次请求（取消、调用工具、回答），实际 %d 次", len(reqs))
+	}
 	_, _ = fmt.Fprintf(w, "    中止轮次 %s 写入 %d 条教训：%v\n", abortedKey, aborted.Stats.Records, contents(lessons))
 	forbidden := []string{strings.TrimSpace(memory.RecallPrefix), "memory_search", "用户常用的航空公司是东航"}
 	var found []string
@@ -401,7 +407,7 @@ func abortedAndToolSkipping(ctx context.Context, w io.Writer, root string) error
 		check{"教训类别的记录", contents(lessons), []string{"订票前先确认出发日期，避免请求超时被中止"}},
 		check{"工具轮次的任务状态", toolJob.Status, memory.JobDone},
 		check{"主模型脚本全部用完（工具确实被调用）", chat.Remaining(), 0},
-		check{"memory_search 的结果里确有记忆正文", slices.ContainsFunc(chat.Requests()[2].Messages, func(m llm.Message) bool {
+		check{"memory_search 的结果里确有记忆正文", slices.ContainsFunc(reqs[2].Messages, func(m llm.Message) bool {
 			return m.Role == "tool" && strings.Contains(m.Content, "用户常用的航空公司是东航")
 		}), true},
 		check{"抽取请求含本轮用户原话", strings.Contains(extractReq, "我常用哪家航空公司？"), true},

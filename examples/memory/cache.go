@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 	"github.com/kart-io/goagent/testing/mocks"
@@ -23,9 +24,9 @@ type untaggedCache struct{ cache.Cache }
 
 func cacheConsistency(ctx context.Context, w io.Writer, root string) error {
 	return runSteps(w,
-		step{"条目8 ModelCache 的擦除模式在构建时校验", func() error { return eraseBuildRules(ctx, root) }},
-		step{"条目8 Forget/Rewound/Purge 之后缓存不再命中", func() error { return eraseMatrix(ctx, w, root) }},
-		step{"条目6 Rewound 之后不再召回，被取代的旧记录恢复", func() error { return rewoundRestores(ctx, w, root) }},
+		step{"ModelCache 的擦除模式在构建时校验", func() error { return eraseBuildRules(ctx, root) }},
+		step{"Forget/Rewound/Purge 之后缓存不再命中", func() error { return eraseMatrix(ctx, w, root) }},
+		step{"Rewound 之后不再召回，被取代的旧记录恢复", func() error { return rewoundRestores(ctx, w, root) }},
 	)
 }
 
@@ -34,19 +35,20 @@ func newCache() *cache.SimpleCache {
 }
 
 func eraseBuildRules(ctx context.Context, root string) error {
+	// wantErr 为空表示应能构建；否则是构建错误中应出现的关键字，错误码一律为 CodeInvalidConfig。
 	cases := []struct {
-		name      string
-		mc        builder.ModelCache
-		onErase   bool
-		wantBuild bool
+		name    string
+		mc      builder.ModelCache
+		onErase bool
+		wantErr string
 	}{
-		{"EraseRequired 条件齐备", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, true, true},
-		{"EraseRequired 且 TTL 超过 EraseWithin", builder.ModelCache{Cache: newCache(), TTL: time.Hour, TagKey: tagKey, Erase: builder.EraseRequired}, true, false},
-		{"EraseRequired 且缓存不支持 Tagged", builder.ModelCache{Cache: untaggedCache{newCache()}, TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, true, false},
-		{"EraseRequired 且 TagKey 不足 32 字节", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: []byte("short"), Erase: builder.EraseRequired}, true, false},
-		{"EraseRequired 且记忆未配置 OnErase", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, false, false},
-		{"EraseAuto 且记忆未配置 OnErase（静默退回 TTL）", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey}, false, true},
-		{"EraseOff 且 TTL 很长", builder.ModelCache{Cache: newCache(), TTL: time.Hour, Erase: builder.EraseOff}, true, true},
+		{"EraseRequired 条件齐备", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, true, ""},
+		{"EraseRequired 且 TTL 超过 EraseWithin", builder.ModelCache{Cache: newCache(), TTL: time.Hour, TagKey: tagKey, Erase: builder.EraseRequired}, true, "EraseWithin"},
+		{"EraseRequired 且缓存不支持 Tagged", builder.ModelCache{Cache: untaggedCache{newCache()}, TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, true, "cache.Tagged"},
+		{"EraseRequired 且 TagKey 不足 32 字节", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: []byte("short"), Erase: builder.EraseRequired}, true, "TagKey"},
+		{"EraseRequired 且记忆未配置 OnErase", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey, Erase: builder.EraseRequired}, false, "OnErase"},
+		{"EraseAuto 且记忆未配置 OnErase（静默退回 TTL）", builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: tagKey}, false, ""},
+		{"EraseOff 且 TTL 很长", builder.ModelCache{Cache: newCache(), TTL: time.Hour, Erase: builder.EraseOff}, true, ""},
 	}
 	var checks []check
 	for i, c := range cases {
@@ -61,11 +63,24 @@ func eraseBuildRules(ctx context.Context, root string) error {
 		_, err = e.agent(mocks.NewScriptedClient(), func(b *builder.SimpleAgentBuilder) *builder.SimpleAgentBuilder {
 			return b.WithModelCache(c.mc)
 		})
-		checks = append(checks, check{c.name + " 能否构建（错误：" + fmt.Sprint(err) + "）", err == nil, c.wantBuild})
+		checks = append(checks, configErr(c.name+" 构建", err, c.wantErr))
 	}
 	short := builder.ModelCache{Cache: newCache(), TTL: time.Minute, TagKey: []byte("short"), Erase: builder.EraseRequired}
-	checks = append(checks, check{"独立 Worker 用 Validate 提前发现 TagKey 过短", short.Validate() != nil, true})
+	checks = append(checks, configErr("独立 Worker 用 Validate 提前发现 TagKey 过短", short.Validate(), "TagKey"))
 	return verify(checks...)
+}
+
+// configErr 断言 err 是含关键字 want 的配置错误；want 为空时断言没有错误。
+func configErr(what string, err error, want string) check {
+	type outcome struct {
+		code    agentErrors.ErrorCode
+		hasWant bool
+	}
+	got := outcome{code: agentErrors.GetCode(err), hasWant: err != nil && strings.Contains(err.Error(), want)}
+	if want == "" {
+		return check{what + "（错误：" + fmt.Sprint(err) + "）", got, outcome{}}
+	}
+	return check{what + "（错误：" + fmt.Sprint(err) + "）", got, outcome{code: agentErrors.CodeInvalidConfig, hasWant: true}}
 }
 
 // eraseOp 是一种删除操作；session 已先被退回到空（重新生成），Rewound 按宿主契约紧跟其后调用。
@@ -240,6 +255,9 @@ func rewoundRestores(ctx context.Context, w io.Writer, root string) error {
 	afterRewind, err := e.mem.Recall(actx, memory.Query{})
 	if err != nil {
 		return err
+	}
+	if len(beforeRewind) != 1 {
+		return fmt.Errorf("回退前应只有 1 条有效记录，实际 %#v", contents(beforeRewind))
 	}
 	beijing := beforeRewind[0].ID
 	rewound, err := e.mem.Get(actx, beijing)

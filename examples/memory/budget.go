@@ -7,7 +7,6 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -17,11 +16,11 @@ import (
 
 func budgetRetention(ctx context.Context, w io.Writer, root string) error {
 	return runSteps(w,
-		step{"条目13 核心记忆总在召回块最前", func() error { return pinnedFirst(ctx, root) }},
-		step{"条目14 召回块按 rune 截断", func() error { return recallRunes(ctx, w, root) }},
-		step{"条目15 权重、半衰期与类别过滤", func() error { return ranking(ctx, w, root) }},
-		step{"条目16 TTL、容量淘汰与失效保留期", func() error { return retention(ctx, w, root) }},
-		step{"条目21 换嵌入模型后 Reindex", func() error { return reindex(ctx, w, root) }},
+		step{"核心记忆总在召回块最前", func() error { return pinnedFirst(ctx, root) }},
+		step{"召回块按 rune 截断", func() error { return recallRunes(ctx, w, root) }},
+		step{"权重、半衰期与类别过滤", func() error { return ranking(ctx, w, root) }},
+		step{"TTL、容量淘汰与失效保留期", func() error { return retention(ctx, w, root) }},
+		step{"换嵌入模型后 Reindex", func() error { return reindex(ctx, w, root) }},
 	)
 }
 
@@ -90,10 +89,11 @@ func recallRunes(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	actx := memory.WithNamespace(ctx, alice...)
-	recs := []memory.Record{{Kind: memory.KindFact, Content: "用户是素食者，任何行程都不要安排含肉的餐食", Importance: 0.5, Pinned: true}}
+	// 每行带 [类别 ID 日期] 前缀，短 ID 让预算能放下多条，便于观察截断。
+	recs := []memory.Record{{ID: "veg", Kind: memory.KindFact, Content: "用户是素食者，行程不要安排含肉的餐食", Importance: 0.5, Pinned: true}}
 	for i := range 10 {
-		recs = append(recs, memory.Record{Kind: memory.KindEpisode, Importance: float64(i+1) / 10,
-			Content: fmt.Sprintf("第%d次旅行：用户去了第%d个城市，住了三晚，主要参观博物馆与老街，体验当地的早市与小吃", i+1, i+1)})
+		recs = append(recs, memory.Record{ID: fmt.Sprintf("trip%d", i+1), Kind: memory.KindEpisode, Importance: float64(i+1) / 10,
+			Content: fmt.Sprintf("第%d次旅行：用户去了第%d个城市，参观博物馆与老街", i+1, i+1)})
 	}
 	if _, err := remember(actx, e.mem, recs...); err != nil {
 		return err
@@ -105,6 +105,9 @@ func recallRunes(ctx context.Context, w io.Writer, root string) error {
 	ranked, err := e.mem.Recall(actx, memory.Query{Text: "旅行计划", K: 20})
 	if err != nil {
 		return err
+	}
+	if len(got.Records) < 2 {
+		return fmt.Errorf("预算 %d 应至少写入核心记忆与一条召回结果，实际 %d 条：\n%s", budget, len(got.Records), got.Text)
 	}
 	var inBlock, missingInText, leaked []string
 	for _, r := range got.Records {
@@ -125,15 +128,12 @@ func recallRunes(ctx context.Context, w io.Writer, root string) error {
 			rankedPrefix = append(rankedPrefix, r.Content)
 		}
 	}
-	// 实测 RecallRunes 只约束条目部分，RecallPrefix 与固定说明行不计入（文档写的是整个块不超过，见 README）。
-	items := got.Text[strings.Index(got.Text, "\n- ")+1:]
-	runes, header := utf8.RuneCountInString(items), utf8.RuneCountInString(got.Text)-utf8.RuneCountInString(items)
-	_, _ = fmt.Fprintf(w, "    条目部分 %d 个 rune（%d 字节），块头另占 %d 个 rune，写入 %d/%d 条记录\n", runes, len(items), header, len(got.Records), len(recs))
+	runes := utf8.RuneCountInString(got.Text)
+	_, _ = fmt.Fprintf(w, "    召回块 %d 个 rune（%d 字节），写入 %d/%d 条记录\n", runes, len(got.Text), len(got.Records), len(recs))
 	return verify(
-		check{"条目部分不超过 RecallRunes（rune 数 " + fmt.Sprint(runes) + "）", runes <= budget, true},
-		check{"按 rune 而非字节计（条目字节数超过预算）", len(items) > budget, true},
+		check{"整块不超过 RecallRunes（rune 数 " + fmt.Sprint(runes) + "）", runes <= budget, true},
+		check{"按 rune 而非字节计（块的字节数超过预算）", len(got.Text) > budget, true},
 		check{"发生了截断", len(got.Records) < len(recs), true},
-		check{"至少写入一条召回结果", len(got.Records) >= 2, true},
 		check{"核心记忆排在第一", got.Records[0].Pinned, true},
 		check{"Retrieval.Records 都出现在块中", missingInText, []string(nil)},
 		check{"不在 Retrieval.Records 的记录未出现在块中", leaked, []string(nil)},
@@ -296,47 +296,31 @@ func retention(ctx context.Context, w io.Writer, root string) error {
 	return verify(append(checks, check{"过期的情景不再召回", contents(rs), []string(nil)})...)
 }
 
-// recordingIndex 记下写入过向量的命名空间，便于检查 Memory 放在子命名空间里的版本化键。
-type recordingIndex struct {
-	*memory.MemoryIndex
-	mu  sync.Mutex
-	nss map[string][]string
-}
-
-func (x *recordingIndex) Upsert(ctx context.Context, ns []string, id string, v []float32) error {
-	x.mu.Lock()
-	x.nss[strings.Join(ns, "\x1f")] = slices.Clone(ns)
-	x.mu.Unlock()
-	return x.MemoryIndex.Upsert(ctx, ns, id, v)
-}
-
-// keysOf 返回全部命名空间中含 id 的键。
-func (x *recordingIndex) keysOf(ctx context.Context, id string) ([]string, error) {
-	x.mu.Lock()
-	nss := make([][]string, 0, len(x.nss))
-	for _, ns := range x.nss {
-		nss = append(nss, ns)
+// vectorKeys 按 memory README 公开的布局列出记录 id 的向量键：键在 append(ns, "#"+scope) 下，形如 ID#实例号.ContentRev#模型摘要。
+func vectorKeys(ctx context.Context, idx *memory.MemoryIndex, m *memory.Memory, ns []string, id string) ([]string, error) {
+	vs, err := m.CacheVersion(ctx, [][]string{ns})
+	if err != nil {
+		return nil, err
 	}
-	x.mu.Unlock()
+	if len(vs) != 1 {
+		return nil, fmt.Errorf("CacheVersion 应返回 1 个命名空间的版本，实际 %#v", vs)
+	}
+	ids, err := idx.IDs(ctx, append(slices.Clone(ns), "#"+vs[0].Scope))
+	if err != nil {
+		return nil, err
+	}
 	var out []string
-	for _, ns := range nss {
-		ids, err := x.IDs(ctx, ns)
-		if err != nil {
-			return nil, err
-		}
-		for _, k := range ids {
-			if strings.Contains(k, id) {
-				out = append(out, k)
-			}
+	for _, k := range ids {
+		if strings.HasPrefix(k, id+"#") {
+			out = append(out, k)
 		}
 	}
-	slices.Sort(out)
 	return out, nil
 }
 
 func reindex(ctx context.Context, w io.Writer, root string) error {
 	concepts := [][]string{{"猫", "宠物", "喵"}, {"咖啡", "拿铁", "美式"}, {"跑步", "健身", "运动"}}
-	idx := &recordingIndex{MemoryIndex: memory.NewMemoryIndex(), nss: map[string][]string{}}
+	idx := memory.NewMemoryIndex()
 	e, err := newEnv(root, "reindex", memory.Config{Index: idx, Embedder: fakeEmbedder{concepts: concepts}, EmbedModel: "fake-v1"})
 	if err != nil {
 		return err
@@ -382,7 +366,7 @@ func reindex(ctx context.Context, w io.Writer, root string) error {
 	if err != nil {
 		return err
 	}
-	keysBefore, err := idx.keysOf(ctx, recs[1].ID)
+	keysBefore, err := vectorKeys(ctx, idx, m2, alice, recs[1].ID)
 	if err != nil {
 		return err
 	}
@@ -392,7 +376,7 @@ func reindex(ctx context.Context, w io.Writer, root string) error {
 	if err := m2.Maintain(ctx); err != nil {
 		return err
 	}
-	keysAfter, err := idx.keysOf(ctx, recs[1].ID)
+	keysAfter, err := vectorKeys(ctx, idx, m2, alice, recs[1].ID)
 	if err != nil {
 		return err
 	}

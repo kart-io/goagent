@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -89,12 +90,7 @@ func newEnv(root, name string, cfg memory.Config) (*env, error) {
 		return nil, err
 	}
 	e := &env{store: fs, sessions: session.NewMemoryStore(), clock: newClock()}
-	cfg.Durable = fs
-	cfg.Sessions = e.sessions
-	if cfg.Now == nil {
-		cfg.Now = e.clock.Now
-	}
-	if e.mem, err = memory.New(cfg); err != nil {
+	if e.mem, err = e.sibling(cfg); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -112,7 +108,7 @@ func (e *env) agent(chat *mocks.ScriptedClient, extra func(*builder.SimpleAgentB
 	return b.Build()
 }
 
-// turn 以 ns 与会话 sid 跑一轮，返回本轮登记的抽取任务 Key（"会话/turn/start 序号"）。
+// turn 以 ns 与会话 sid 跑一轮，返回本轮登记的抽取任务 Key（"会话 ID/轮次起始序号"）。
 func (e *env) turn(ctx context.Context, a *builder.ConfigurableAgent[*core.AgentState], ns []string, sid, input string) (string, *builder.AgentOutput, error) {
 	ctx = tools.WithSessionID(memory.WithNamespace(ctx, ns...), sid)
 	out, err := a.AsRunnable().Invoke(ctx, input)
@@ -136,8 +132,8 @@ func (e *env) lastTurnKey(ctx context.Context, sid string) (string, error) {
 	return "", fmt.Errorf("会话 %s 没有 turn/start", sid)
 }
 
-// regenerate 只退回会话日志、不调用 Memory.Rewound，模拟"重新生成"以得到完全相同的请求。
-// 按宿主契约 Rewind 之后应调用 Rewound，而它会使该命名空间的缓存全部失效（见 eraseOps 的 Rewound 行）。
+// regenerate 只退回会话日志、故意不调用 Memory.Rewound，作为缓存命中的正向对照。
+// 这违反宿主契约（Rewind 之后必须调用 Rewound），不要照抄；正确做法见 eraseOps 的 Rewound 行。
 func (e *env) regenerate(ctx context.Context, sid string) error {
 	evs, err := e.sessions.Read(ctx, sid, 0)
 	if err != nil {
@@ -145,6 +141,22 @@ func (e *env) regenerate(ctx context.Context, sid string) error {
 	}
 	_, err = session.Rewind(ctx, e.sessions, sid, 0, session.LastSeq(evs))
 	return err
+}
+
+// step 是场景中的一个边界用例；runSteps 逐个执行并输出通过标记，失败时带上用例名返回。
+type step struct {
+	name string
+	run  func() error
+}
+
+func runSteps(w io.Writer, steps ...step) error {
+	for _, s := range steps {
+		if err := s.run(); err != nil {
+			return fmt.Errorf("%s：%w", s.name, err)
+		}
+		_, _ = fmt.Fprintf(w, "  - %s：通过\n", s.name)
+	}
+	return nil
 }
 
 // check 是一条断言：got 与 want 深度相等才算通过，失败信息带上实际观察到的值。
@@ -157,7 +169,7 @@ func verify(checks ...check) error {
 	var errs []error
 	for _, c := range checks {
 		if !reflect.DeepEqual(c.got, c.want) {
-			errs = append(errs, fmt.Errorf("%s：期望 %v，实际 %v", c.what, c.want, c.got))
+			errs = append(errs, fmt.Errorf("%s：期望 %#v，实际 %#v", c.what, c.want, c.got))
 		}
 	}
 	return errors.Join(errs...)
@@ -232,7 +244,7 @@ func requestText(req llm.CompletionRequest) string {
 	return b.String()
 }
 
-// sibling 在同一份存储上再开一个 Memory 实例（如换了权重或嵌入模型的新版本程序），共享时钟与会话日志。
+// sibling 在 env 的存储上开一个 Memory 实例（如换了权重或嵌入模型的新版本程序），共享时钟与会话日志。
 func (e *env) sibling(cfg memory.Config) (*memory.Memory, error) {
 	cfg.Durable = e.store
 	cfg.Sessions = e.sessions

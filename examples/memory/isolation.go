@@ -15,22 +15,6 @@ import (
 	"github.com/kart-io/goagent/testing/mocks"
 )
 
-// step 是场景中的一个边界用例；runSteps 逐个执行并输出通过标记，失败时带上用例名返回。
-type step struct {
-	name string
-	run  func() error
-}
-
-func runSteps(w io.Writer, steps ...step) error {
-	for _, s := range steps {
-		if err := s.run(); err != nil {
-			return fmt.Errorf("%s：%w", s.name, err)
-		}
-		_, _ = fmt.Fprintf(w, "  - %s：通过\n", s.name)
-	}
-	return nil
-}
-
 var (
 	alice = []string{"t1", "alice"}
 	bob   = []string{"t1", "bob"}
@@ -38,11 +22,11 @@ var (
 
 func isolation(ctx context.Context, w io.Writer, root string) error {
 	return runSteps(w,
-		step{"条目1 未绑定命名空间时拒绝读写", func() error { return unboundRejected(ctx, root) }},
-		step{"条目2 命名空间隔离", func() error { return namespaceIsolation(ctx, root) }},
-		step{"条目4 Forget 后不召回、进行中的轮次不能让它复活", func() error { return forgetNoResurrect(ctx, w, root) }},
-		step{"条目5 Purge 整个命名空间", func() error { return purgeNamespace(ctx, w, root) }},
-		step{"条目7 Snapshot/Hydrate 的命名空间绑定与删除优先", func() error { return snapshotHydrate(ctx, root) }},
+		step{"未绑定命名空间时拒绝读写", func() error { return unboundRejected(ctx, root) }},
+		step{"命名空间隔离", func() error { return namespaceIsolation(ctx, root) }},
+		step{"Forget 后不召回、进行中的轮次不能让它复活", func() error { return forgetNoResurrect(ctx, w, root) }},
+		step{"Purge 整个命名空间", func() error { return purgeNamespace(ctx, w, root) }},
+		step{"Snapshot/Hydrate 的命名空间绑定与删除优先", func() error { return snapshotHydrate(ctx, root) }},
 	)
 }
 
@@ -82,28 +66,29 @@ func unboundRejected(ctx context.Context, root string) error {
 			name string
 			do   func(context.Context) error
 		}{t.Name(), func(c context.Context) error {
-			out, err := t.Invoke(c, &interfaces.ToolInput{Args: args})
-			if err == nil && out != nil && !out.Success {
-				err = errors.New(out.Error)
-			}
+			_, err := t.Invoke(c, &interfaces.ToolInput{Args: args})
 			return err
 		}})
 	}
-	var accepted []string
+	// 只断言"有错误"不够：Get、Forget 与 memory_forget 在绑定后也会因记录不存在而报错，必须是未绑定特有的 CodeInvalidInput。
+	var checks []check
 	for _, op := range ops {
-		if op.do(ctx) == nil {
-			accepted = append(accepted, op.name)
-		}
+		err := op.do(ctx)
+		checks = append(checks, check{fmt.Sprintf("未绑定时 %s 的错误码（错误：%v）", op.name, err), agentErrors.GetCode(err), agentErrors.CodeInvalidInput})
 	}
-	all, err := m.Recall(memory.WithNamespace(ctx, alice...), memory.Query{})
+	// 正向对照：同样的 Remember 绑定命名空间后成功，且只看得到这一条，说明未绑定的写入没有落到任何命名空间。
+	actx := memory.WithNamespace(ctx, alice...)
+	if _, err := m.Remember(actx, memory.Record{Kind: memory.KindFact, Content: "绑定后写入的内容"}); err != nil {
+		return fmt.Errorf("绑定后 Remember 应成功：%w", err)
+	}
+	all, err := m.Recall(actx, memory.Query{})
 	if err != nil {
 		return err
 	}
-	return verify(
-		check{"未绑定时仍被接受的操作", accepted, []string(nil)},
-		check{"绑定后看到的记录数（未绑定的写入不应落到任何命名空间）", len(all), 0},
+	return verify(append(checks,
+		check{"绑定后看到的记录", contents(all), []string{"绑定后写入的内容"}},
 		check{"覆盖的操作数（8 个方法 + 3 个工具）", len(ops), 11},
-	)
+	)...)
 }
 
 func namespaceIsolation(ctx context.Context, root string) error {
@@ -123,8 +108,8 @@ func namespaceIsolation(ctx context.Context, root string) error {
 	}
 	const id = "favorite-color"
 	for _, o := range owners {
-		if _, err := e.mem.Remember(memory.WithNamespace(ctx, o.ns...), memory.Record{ID: id, Kind: memory.KindFact, Content: o.content, Importance: 0.5}); err != nil {
-			return fmt.Errorf("%v 写入：%w", o.ns, err)
+		if _, err := remember(memory.WithNamespace(ctx, o.ns...), e.mem, memory.Record{ID: id, Kind: memory.KindFact, Content: o.content, Importance: 0.5}); err != nil {
+			return fmt.Errorf("%v：%w", o.ns, err)
 		}
 	}
 	var checks []check
@@ -219,17 +204,14 @@ func purgeNamespace(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	actx, bctx := memory.WithNamespace(ctx, alice...), memory.WithNamespace(ctx, bob...)
-	for _, r := range []struct {
-		ctx context.Context
-		rec memory.Record
-	}{
-		{actx, memory.Record{Kind: memory.KindFact, Content: "用户叫爱丽丝", Pinned: true, Importance: 1}},
-		{actx, memory.Record{Kind: memory.KindFact, Content: "用户在上海工作", Importance: 0.7}},
-		{bctx, memory.Record{ID: "bob-city", Kind: memory.KindFact, Content: "用户在深圳工作", Importance: 0.7}},
-	} {
-		if _, err := e.mem.Remember(r.ctx, r.rec); err != nil {
-			return err
-		}
+	if _, err := remember(actx, e.mem,
+		memory.Record{Kind: memory.KindFact, Content: "用户叫爱丽丝", Pinned: true, Importance: 1},
+		memory.Record{Kind: memory.KindFact, Content: "用户在上海工作", Importance: 0.7},
+	); err != nil {
+		return err
+	}
+	if _, err := remember(bctx, e.mem, memory.Record{ID: "bob-city", Kind: memory.KindFact, Content: "用户在深圳工作", Importance: 0.7}); err != nil {
+		return err
 	}
 	// 第 1 轮正常结束、任务待处理；第 2 轮回答期间执行 Purge，本轮的任务登记在旧作用域上。
 	chat := mocks.NewScriptedClient(
@@ -286,7 +268,7 @@ func purgeNamespace(ctx context.Context, w io.Writer, root string) error {
 		check{"Purge 前第 1 轮任务待处理", pending.Status, memory.JobPending},
 		check{"Purge 后记录", len(all), 0},
 		check{"Purge 后核心记忆", len(pinned), 0},
-		check{"旧作用域的第 1 轮任务仍可查到", job1Found, false},
+		check{"旧作用域的第 1 轮任务已查不到", !job1Found, true},
 		check{"Purge 之前开始的第 2 轮任务被丢弃（DroppedJobs 增量）", e.mem.DroppedJobs() - dropped, int64(1)},
 		check{"ProcessPending 处理的任务数", processed, 0},
 		check{"抽取模型被调用次数", ext.Calls(), 0},

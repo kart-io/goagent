@@ -32,7 +32,7 @@ func (w *lockedWriter) String() string {
 	return w.buf.String()
 }
 
-// 示例离线运行：每个场景都应写出完成标记。Worker 或 Agent 挂住时由超时兜底，并打印已有输出便于定位。
+// 示例离线运行，全部断言通过时 run 返回 nil。Worker 或 Agent 挂住时由超时兜底，并打印已有输出便于定位。
 func TestMemoryDemo(t *testing.T) {
 	out := &lockedWriter{}
 	done := make(chan error, 1)
@@ -43,12 +43,9 @@ func TestMemoryDemo(t *testing.T) {
 	case <-time.After(60 * time.Second):
 		t.Fatalf("示例未在 60 秒内结束：\n%s", out.String())
 	}
-	for _, marker := range []string{"A 隔离与删除 完成", "B 抽取管线 完成", "C 缓存一致性 完成", "D 预算与保留 完成"} {
-		require.Contains(t, out.String(), marker+"\n")
-	}
 }
 
-// 条目 17：并发写入只断言不变量，不断言谁赢。起跑线用 channel 对齐，结果与调度顺序无关。
+// 并发写入只断言不变量，不断言谁赢。起跑线用 channel 对齐，结果与调度顺序无关。
 func TestMemoryConcurrentWrites(t *testing.T) {
 	const writers = 8
 	cases := []struct {
