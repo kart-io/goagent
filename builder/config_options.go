@@ -67,6 +67,9 @@ type AgentConfig struct {
 	// LongTermMemory 是 WithLongTermMemory 接入的长期记忆。
 	LongTermMemory *memory.Memory `json:"-"`
 
+	// ModelCache 是 WithModelCache 配置的模型调用缓存。
+	ModelCache *ModelCache `json:"-"`
+
 	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
 	ReturnDirectTools []string
 
