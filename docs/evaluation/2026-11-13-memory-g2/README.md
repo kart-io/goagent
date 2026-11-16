@@ -72,3 +72,38 @@ graph 分题型（答对数 / 平均上下文字符）：
   - G2 为什么不再产生超长合并记录（锁外一次规划、同一任务内的候选不再逐条滚动并入同一条记录，或者抽取波动）未逐一验证。准确率没有下降，召回块只用了约 45% 的预算，提高 `RecallK` 可能还有空间。
 
 逐题结果见 `locomo-200.jsonl`、`locomo-200-r2.jsonl`，汇总见对应的 `.md`，运行日志不保留。第 2 次有 1 道 memory 题（conv-44/88）召回为空。
+
+## 加锁时长（2026-11-16）
+
+对应设计第 8 节的性能门槛：`Forget`、`Update`（正文变化）加锁 p50 比基线增加不超过 2ms；Worker 一轮（5 条记录、10 条关系）各次 head 提交的加锁时长之和，p50 不超过基线的 1.5 倍。
+
+- 代码：基线 `6cf097ee`，G2 为 `bd872ef7`（master），两边使用同一份 `memory/g2perf_test.go`。
+- 数据：5k 记录，真实中文与低压缩率两组（`benchDatasets`）；Lock 测试开启 `Graph`、`Communities`，Worker 测试开启 `Graph`、关闭反思，共 60 轮。
+- 介质：tmpfs（`/tmp`，fsync 几乎没有开销，只反映 CPU 与编码）和 NVMe ext4（`MEMORY_STATE_BENCH_DIR`，含两次 fsync）。设计第 14、16 节的数字来自 tmpfs。
+- 命令（CPU 排除核 0、8）：
+
+```bash
+MEMORY_G2_PERF=1 [MEMORY_STATE_BENCH_DIR=$HOME/.cache/goagent-bench] \
+  taskset -c 2,3,6-27 go test -count=1 -run TestG2Perf -v ./memory/
+```
+
+加锁 p50（基线 → G2，括号内为增量）：
+
+| 介质 | 数据 | Update 正文 | Forget |
+|---|---|---|---|
+| tmpfs | 真实中文 | 1.8 → 3.4ms（+1.6） | 2.2 → 3.1ms（+0.9） |
+| tmpfs | 低压缩率 | 1.8 → 2.9ms（+1.1） | 2.2 → 2.8ms（+0.6） |
+| NVMe | 真实中文 | 12.4 → 13.9ms（+1.5） | 12.7 → 13.6ms（+0.9） |
+| NVMe | 低压缩率 | 12.5 → 13.3ms（+0.8） | 13.1 → 13.6ms（+0.5） |
+
+Worker 一轮加锁之和（基线 → G2）：
+
+| 介质 | 数据 | 每轮提交 | p50 | p95 |
+|---|---|---|---|---|
+| tmpfs | 真实中文 | 7.0 → 1.1 | 38.6 → 3.9ms | 50.0 → 7.0ms |
+| tmpfs | 低压缩率 | 7.0 → 1.1 | 39.7 → 3.8ms | 48.8 → 8.0ms |
+| NVMe | 真实中文 | 7.0 → 1.1 | 113.8 → 14.6ms | 125.8 → 20.8ms |
+| NVMe | 低压缩率 | 7.0 → 1.1 | 116.5 → 14.6ms | 124.3 → 18.6ms |
+
+- 两项门槛都满足。余量最小的是 tmpfs 真实中文的 Update，+1.6ms，离门槛 0.4ms；设计第 14 节记录的 G2a 为 +1.3ms，G2b–G2d 又增加了约 0.3ms。
+- NVMe 上单次提交约 11ms 是 fsync 的固定开销，增量与 tmpfs 相近；Worker 降到基线的 13%（tmpfs 为 10%），主要因为提交次数从 7 次降到 1.1 次。
