@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 混合版本部署：旧程序重写长期记忆的 head 会清零 `LastRewindSeq`，回退之后的缓存条目重新可达，物理删除仍然生效；升级期间避免新旧程序同时服务带回退操作的命名空间。
 - `builder.ModelCache.Cache` 的类型由 `cache.Cache` 改为只收发字节的 `cache.Bytes`（`GetBytes`、`SetBytes`、`Delete`），新增 `cache.Bytes` 接口；Redis 等外部缓存只能存字节，误用在编译期暴露。迁移：传 `*cache.SimpleCache` 的调用方无需改动；自定义缓存实现补上 `GetBytes`、`SetBytes` 两个方法（`Delete` 已有）；原先靠 `string` 与 `[]byte` 互通的值不再兼容，非 `[]byte` 的值按损坏条目删除并视为未命中。`SimpleCache` 的 `GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`。
 - `ModelCache` 写入缓存返回错误时，发出 `model_cache_write_error` 后对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。
+- `memory.Index` 契约变更：同一命名空间允许共存不同维度的向量，`Search` 只考虑与查询同维度的向量（原先维度不一致的 `Upsert` 与 `Search` 返回 `CodeInvalidInput`）。`MemoryIndex` 已按新契约实现；自定义 `Index` 实现需去掉维度一致检查，并可用新增的 `memorytest.RunIndex` 验证。原因：持久化索引换嵌入模型后，旧向量会使新向量一律被拒，`Reindex` 在写入阶段失败、清不掉旧键，索引无法恢复。迁移后新旧向量共存，召回按模型过滤，`Reindex` 收敛。
 
 ### 修复
 

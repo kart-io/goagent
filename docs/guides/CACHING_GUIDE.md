@@ -137,6 +137,26 @@ m, err := memory.New(memory.Config{
 
 `LastRewindSeq` 是只增字段，存储格式版本不变。混合版本部署时，旧程序重写 head 会把它清零，回退之后的条目重新可达；物理删除仍然生效。升级期间要避免新旧程序同时服务带回退操作的命名空间。
 
+## 分布式部署
+
+多个进程共享同一份长期记忆时，缓存与向量索引需要换成外部后端：
+
+| 组件 | 进程内默认 | 共享后端（`goagent-contrib`） |
+|---|---|---|
+| 模型调用缓存 | `cache.SimpleCache` | `github.com/kart-io/goagent-contrib/cache/redis`（Redis 7 及以上，单机或 Cluster） |
+| 向量索引 | `memory.MemoryIndex` | `github.com/kart-io/goagent-contrib/memory/pgvector` |
+
+换法：Redis 缓存实现 `cache.Bytes` 与 `cache.Tagged`，作为 `builder.ModelCache.Cache` 传入；pgvector 实现 `memory.Index`，作为 `memory.Config.Index` 传入。自行实现 `memory.Index` 时用 `memorytest.RunIndex` 验证契约。
+
+部署须知：
+
+- **所有实例使用相同的 `TagKey`**：标签是 HMAC，`TagKey` 不同则同一记忆在各实例上的标签不同，`DeleteTag` 删不到其他实例写的条目。
+- **每个持有记忆的进程都要接上擦除**：包括只跑 `memory/worker` 的进程，它执行的 `Forget`、`Purge` 也要通过 `OnErase` 调到共享缓存。
+- **切换缓存**：混合部署期间（部分实例仍用 `SimpleCache`）删除不会到达本地缓存，跨实例删除承诺不成立。建议一次性切换，或切换期间关闭 ModelCache。从 Redis 回退到本地无需迁移数据，Redis 中的条目按 TTL 过期。
+- **切换向量索引**：切到 pgvector 后表为空，召回暂时只有非向量分；宿主对现有命名空间逐个调用 `Reindex(ctx, false)` 回填。回退到本地索引同样靠 `Reindex`。
+- **Redis 淘汰策略**：令牌键不受淘汰影响（令牌设计）；条目集合等辅助结构要求 `noeviction`，或保证用量不触及 `maxmemory`。
+- **换嵌入模型**：`Index` 允许同一命名空间共存不同维度的向量，`Search` 只考虑与查询同维度的向量。换模型后新旧向量并存，召回按模型过滤，旧向量会占用 `Search` 的前 k 名额，召回条数可能少于 k，对各命名空间调用 `Reindex(ctx, false)` 清理旧模型的键后恢复。
+
 ## 选用建议
 
 - 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。

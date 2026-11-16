@@ -20,6 +20,7 @@ type Hit struct {
 // Index 是按命名空间隔离的向量索引，是记录库的投影：丢失后可用 Memory.Reindex 重建。
 // 各方法都只作用于给定的精确命名空间，不包括它的子命名空间：Memory 把每个作用域放在 ns 之下的子命名空间中，
 // 按前缀实现的 Clear(ns) 会删掉这些作用域的向量。Search 先过滤再取 k 个。
+// 同一命名空间可以共存不同维度的向量（换嵌入模型后新旧向量并存直到 Reindex 清理），Search 只考虑与查询同维度的向量。
 type Index interface {
 	Upsert(ctx context.Context, namespace []string, id string, vector []float32) error
 	Delete(ctx context.Context, namespace []string, id string) error
@@ -41,7 +42,7 @@ func NewMemoryIndex() *MemoryIndex { return &MemoryIndex{spaces: map[string]map[
 
 func spaceKey(ns []string) string { return strings.Join(ns, "\x00") }
 
-// Upsert 归一化并复制向量；同一命名空间内维度须一致，拒绝零向量与非有限值。
+// Upsert 归一化并复制向量；拒绝零向量与非有限值。
 func (x *MemoryIndex) Upsert(_ context.Context, ns []string, id string, vector []float32) error {
 	if err := validNamespace(ns); err != nil {
 		return err
@@ -56,12 +57,6 @@ func (x *MemoryIndex) Upsert(_ context.Context, ns []string, id string, vector [
 	if space == nil {
 		space = map[string][]float64{}
 		x.spaces[spaceKey(ns)] = space
-	}
-	for other, v := range space {
-		if other != id && len(v) != len(unit) {
-			return agentErrors.Newf(agentErrors.CodeInvalidInput, "向量维度 %d 与索引中的 %d 不一致", len(unit), len(v)).WithComponent("memory").WithOperation("index_upsert")
-		}
-		break
 	}
 	space[id] = unit
 	return nil
@@ -100,7 +95,7 @@ func (x *MemoryIndex) Search(_ context.Context, ns []string, vector []float32, k
 	var hits []Hit
 	for id, v := range x.spaces[spaceKey(ns)] {
 		if len(v) != len(unit) {
-			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "查询向量维度 %d 与索引中的 %d 不一致", len(unit), len(v)).WithComponent("memory").WithOperation("index_search")
+			continue
 		}
 		dot := 0.0
 		for i := range v {
