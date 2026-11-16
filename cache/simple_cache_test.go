@@ -154,6 +154,36 @@ func TestSimpleCache_Stats(t *testing.T) {
 	}
 }
 
+func TestSimpleCacheStatsCountsSets(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name  string
+		write func(c *SimpleCache) error
+		want  int64
+	}{
+		{"Set", func(c *SimpleCache) error { return c.Set(ctx, "k", 1, 0) }, 1},
+		{"SetTagged", func(c *SimpleCache) error { return c.SetTagged(ctx, "k", []byte("v"), 0, "t") }, 1},
+		{"覆盖同一键各计一次", func(c *SimpleCache) error {
+			if err := c.Set(ctx, "k", 1, 0); err != nil {
+				return err
+			}
+			return c.SetTagged(ctx, "k", []byte("v"), 0, "t")
+		}, 2},
+		{"未写入", func(*SimpleCache) error { return nil }, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := NewSimpleCache(time.Minute, WithoutBackgroundCleanup())
+			defer c.Close()
+			if err := tc.write(c); err != nil {
+				t.Fatal(err)
+			}
+			if got := c.GetStats().Sets; got != tc.want {
+				t.Fatalf("Sets = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSimpleCache_Concurrent(t *testing.T) {
 	cache := NewSimpleCache(1 * time.Minute)
 	defer cache.Close()
