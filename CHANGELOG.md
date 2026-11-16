@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MonitoringAgent`、`ResearchAgent` 不再挂缓存中间件。
 - 混合版本部署：旧程序重写长期记忆的 head 会清零 `LastRewindSeq`，回退之后的缓存条目重新可达，物理删除仍然生效；升级期间避免新旧程序同时服务带回退操作的命名空间。
 
+### 修复
+
+- 长期记忆召回块按整段文本计量 `RecallRunes`：块头与行间换行也计入预算，`RecallBlock`/`Retrieve` 的结果不再超出配置值；预算容不下块头与任何一条时召回为空。原先按旧计量调好的预算需加上块头约 60 个字符。
+
 ## [0.53.0] - 2026-11-13
 
 ### 新增

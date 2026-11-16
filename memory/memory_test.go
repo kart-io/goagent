@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -204,7 +205,7 @@ func TestMemoryIndex(t *testing.T) {
 }
 
 func TestRecallBlockPinnedFirstWithinBudget(t *testing.T) {
-	m := newMemory(t, Config{RecallRunes: 150})
+	m := newMemory(t, Config{RecallRunes: 220})
 	ctx := WithNamespace(context.Background(), "u")
 	_, err := m.Remember(ctx, Record{Content: "用户叫小明", Pinned: true, Importance: 1})
 	require.NoError(t, err)
@@ -221,6 +222,58 @@ func TestRecallBlockPinnedFirstWithinBudget(t *testing.T) {
 	empty, err := newMemory(t, Config{}).RecallBlock(ctx, "咖啡")
 	require.NoError(t, err)
 	require.Empty(t, empty)
+}
+
+func TestRecallBlockWholeTextWithinRecallRunes(t *testing.T) {
+	base := newMemory(t, Config{})
+	ctx := WithNamespace(context.Background(), "u")
+	for _, r := range []Record{
+		{Content: "用户叫小明", Pinned: true, Importance: 1},
+		{Content: "用户喜欢咖啡", Importance: 0.9},
+		{Content: "用户每天早上喝一杯咖啡", Importance: 0.5},
+	} {
+		_, err := base.Remember(ctx, r)
+		require.NoError(t, err)
+	}
+	full, err := base.RecallBlock(ctx, "咖啡")
+	require.NoError(t, err)
+	head := RecallPrefix + recallHeader
+	lines := strings.Split(strings.TrimPrefix(full, head), "\n")
+	require.Len(t, lines, 3)
+	require.Contains(t, lines[0], "小明", "核心记忆排在最前")
+	h := utf8.RuneCountInString(head)
+	one := h + utf8.RuneCountInString(lines[0])
+	two := one + 1 + utf8.RuneCountInString(lines[1])
+
+	for _, tc := range []struct {
+		name   string
+		budget int
+		want   int // 写入的行数
+	}{
+		{"小于块头", h - 1, 0},
+		{"刚好容纳块头", h, 0},
+		{"差一个字符容不下核心记忆", one - 1, 0},
+		{"刚好容纳块头与核心记忆", one, 1},
+		{"第二行差一个字符", two - 1, 1},
+		{"刚好容纳两行", two, 2},
+		{"预算 200", 200, -1},
+		{"默认预算", 0, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMemory(t, Config{Durable: base.cfg.Durable, RecallRunes: tc.budget})
+			block, err := m.RecallBlock(ctx, "咖啡")
+			require.NoError(t, err)
+			require.LessOrEqual(t, utf8.RuneCountInString(block), m.cfg.RecallRunes)
+			if tc.want < 0 {
+				return
+			}
+			if tc.want == 0 {
+				require.Empty(t, block)
+				return
+			}
+			require.Equal(t, head+strings.Join(lines[:tc.want], "\n"), block)
+		})
+	}
 }
 
 func TestPruneRetention(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -138,14 +139,17 @@ type recallItem struct {
 	community *Community
 }
 
-// render 按顺序在 RecallRunes 内写入各行，返回召回内容与实际写入的引用。
+// render 按顺序写入各行，使含块头与换行在内的整个召回块不超过 RecallRunes，返回召回内容与实际写入的引用。
 func (m *Memory) render(items []recallItem) (Retrieval, []Ref) {
 	var out Retrieval
 	var lines []string
 	var refs []Ref
-	budget := m.cfg.RecallRunes
+	budget := m.cfg.RecallRunes - utf8.RuneCountInString(RecallPrefix+recallHeader)
 	for _, it := range items {
-		n := len([]rune(it.line))
+		n := utf8.RuneCountInString(it.line)
+		if len(lines) > 0 {
+			n++ // 与上一行之间的换行
+		}
 		if n > budget {
 			continue
 		}
