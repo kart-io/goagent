@@ -108,6 +108,10 @@ if PTTL(t) < ttl then PEXPIRE t ttl  -- PTTL 为 -1（无过期）时也会设�
 - `t:` 键被 `maxmemory` 淘汰（只有 `noeviction` 能避免；`t:` 带过期，`volatile-*` 策略同样会淘汰它）。
 - 已过期的键由 Redis 的过期回收周期清理，从内存中消失的时间没有硬上限。
 - `t:` 所在节点的时钟向前跳变：`reg` 按该节点 `TIME` 清理"已过期"成员，可能提前移除条目尚未过期的成员。
+- `e:` 所在节点的时钟向后跳变：条目实际存活超过 TTL，其成员已按 `t:` 节点的时钟先被剪除。
+- 主从切换丢失已向客户端确认的 `ZREM`、`UNLINK` 或 `reg`：条目在新主节点上物理存在，但令牌已删除，读不到。
+
+`WaitReplicas` 只等待令牌删除的复制，`ZREM`、`UNLINK` 在 `WAIT` 之后发出，`reg` 属于 `SetTagged`，都不在等待范围内，因此不缩小最后一条的窗口。
 
 因此 S2 的完整表述是：正常路径下 `DeleteTag` 返回时已物理删除；例外情形下在 TTL 加过期回收周期内回收。只有 `EraseRequired`（`TTL ≤ EraseWithin`）下这一兜底才落在 `EraseWithin` 内。
 
@@ -123,7 +127,7 @@ if PTTL(t) < ttl then PEXPIRE t ttl  -- PTTL 为 -1（无过期）时也会设�
 **支持范围**：Redis ≥ 7 的单机、哨兵、原生 Cluster。云厂商的代理模式集群、KeyDB、Dragonfly 等兼容实现不在支持与测试范围内，文档写明。
 
 **复制与持久化**（用户决定）：
-- `WaitReplicas int`（默认 0）、`WaitTimeout`（默认 1 秒）。大于 0 时，`DeleteTag` 第 1 步在**同一条连接**上发送 `DEL g:<tag>` 与 `WAIT WaitReplicas WaitTimeout`（`WAIT` 只统计本连接此前的写入）：Cluster 用 `MasterForKey(g:<tag>)` 取得主节点客户端再取单连接；单机与哨兵直接取单连接。确认数不足返回错误，由擦除重做重试。
+- `WaitReplicas int`（默认 0）、`WaitTimeout`（默认 1 秒）。大于 0 时，`DeleteTag` 第 1 步在**同一条连接**上先删除 `g:<tag>`，再发送 `WAIT WaitReplicas WaitTimeout`（`WAIT` 只统计本连接此前的写入）。删除用单键脚本：`DEL` 返回 0 时先 `SET` 随机值再 `DEL`，保证产生复制流——令牌已被删（重试或并发删除）时普通 `DEL` 是空操作，不推进本连接的复制偏移，新连接上的 `WAIT` 会立即按已确认返回：Cluster 用 `MasterForKey(g:<tag>)` 取得主节点客户端再取单连接；单机与哨兵直接取单连接。确认数不足返回错误，由擦除重做重试。
 - `WAIT` 只说明删除已复制到若干从节点，不保证主从切换时被提升的正是这些从节点；文档写明它降低而非消除切换回滚的窗口。默认 0 是弱保证：切换或从持久化重启的窗口内，已删除条目可能重新可读；有合规要求的部署须设置。
 - 物理删除的标准：`EraseWithin` 之后，该条目在主节点上不可访问，且已从主节点内存删除或处于 S2 例外中（在 TTL 加过期回收周期内回收）。RDB/AOF 文件、备份与从节点上的残留由运维负责，部署文档给出建议（缩短备份保留、AOF 重写周期等）。
 
