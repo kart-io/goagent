@@ -235,6 +235,8 @@ const (
 	queueJobs queueReason = "jobs"
 	// queueIndex：Forget 提交之后可能残留向量，等待维护执行 Reindex(false)。
 	queueIndex queueReason = "index"
+	// queueErase：Forget 或 Rewound 提交之后等待 OnErase 擦除派生副本，维护重做到 Until。
+	queueErase queueReason = "erase"
 )
 
 // queueEntry 是 queue 分片中的一条登记。
@@ -242,6 +244,8 @@ type queueEntry struct {
 	Namespace []string    `json:"namespace"`
 	Scope     string      `json:"scope"`
 	Reason    queueReason `json:"reason"`
+	// Until 只用于 queueErase：开始时刻不早于它的一次擦除成功后才注销。
+	Until time.Time `json:"until,omitzero"`
 }
 
 func (e queueEntry) key() string { return string(e.Reason) + ":" + scopeName(e.Namespace, e.Scope) }
@@ -327,6 +331,7 @@ func (m *Memory) queued(ctx context.Context) ([]queueEntry, error) {
 
 // Maintain 执行不需要模型的维护：清理 retiring（含 RetireGrace 到期后的再次清理）；移除非当前作用域的登记；
 // 处理"索引待清理"登记——先在 state 锁内移除登记再执行 Reindex(false)，期间提交的 Forget 会重新登记；
+// 处理擦除登记——调用 OnErase，到期且成功后在 state 锁内移除；
 // 每 ReindexEvery 轮对有登记的命名空间执行 Reindex(false)，并回收超过 MemoryTombstoneRetention 的墓碑。
 // Worker 每轮先调用它；不运行 Worker 的部署须运行 RunMaintenance。各步的错误合并返回，不影响其余步骤。
 func (m *Memory) Maintain(ctx context.Context) error {
@@ -354,6 +359,8 @@ func (m *Memory) Maintain(ctx context.Context) error {
 				continue
 			}
 			reindex[key] = e.Namespace
+		case e.Reason == queueErase:
+			errs = append(errs, m.maintainErase(ctx, e))
 		case periodic:
 			reindex[key] = e.Namespace
 		}

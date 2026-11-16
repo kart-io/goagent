@@ -109,17 +109,17 @@ func (m *Memory) cleanupRetiring(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// retire 删除一个旧作用域（含 state 与访问记录），再清空它的记录与实体索引命名空间。
+// retire 删除一个旧作用域（含 state 与访问记录），清空它的记录与实体索引命名空间，并擦除派生副本。
+// 各步互不短路：作用域已经切走，任何一步都可以独立完成，失败的由下一次清理重做。
 func (m *Memory) retire(ctx context.Context, name string, e retiringEntry) error {
-	if err := m.cfg.Durable.(durable.Scoped).RemoveScope(ctx, name); err != nil {
-		return err
+	errs := []error{m.cfg.Durable.(durable.Scoped).RemoveScope(ctx, name)}
+	if m.cfg.Index != nil {
+		for _, sp := range indexSpaces {
+			errs = append(errs, m.cfg.Index.Clear(ctx, sp.namespace(e.Namespace, e.Scope)))
+		}
 	}
-	if m.cfg.Index == nil {
-		return nil
-	}
-	var errs []error
-	for _, sp := range indexSpaces {
-		errs = append(errs, m.cfg.Index.Clear(ctx, sp.namespace(e.Namespace, e.Scope)))
+	if m.cfg.OnErase != nil {
+		errs = append(errs, m.cfg.OnErase(ctx, e.Namespace, e.Scope))
 	}
 	return errors.Join(errs...)
 }

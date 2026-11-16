@@ -52,6 +52,9 @@ type Config struct {
 	StateCacheBytes int `json:"-"`
 	// EraseWithin 是遗忘或删除之后、旧内容从基础快照中物理擦除的时限，默认 5 分钟（增量提交第 6 节）。
 	EraseWithin time.Duration `json:"-"`
+	// OnErase 在 Forget、Rewound 提交之后与 Purge 的旧作用域清理时调用，清除依据这些记忆生成的派生副本（如模型缓存）；
+	// 失败时由维护在 EraseWithin 内重做。为 nil 时不擦除。
+	OnErase EraseFunc `json:"-"`
 	// RollbackWindow 大于 0 时开启删除日志：遗忘与 Purge 先记入日志，数据回滚之后宿主据此重放删除；Prune 删除超过窗口的条目。
 	// 默认 0（关闭），此时数据回滚不能保证删除承诺。
 	RollbackWindow time.Duration `json:"-"`
@@ -581,13 +584,21 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 		}
 	}
 	opts := []mutateOption{shrinking()}
-	if m.cfg.Index != nil {
-		// 提交之后、删除向量之前崩溃会留下残留：先登记"索引待清理"，由维护执行 Reindex(false)（设计 4.3）。
+	if m.cfg.Index != nil || m.cfg.OnErase != nil {
+		// 提交之后、删除向量之前崩溃会留下残留：先登记"索引待清理"，由维护执行 Reindex(false)（设计 4.3）；擦除同样先登记，由维护重做到 Until。
 		opts = append(opts, withBeforeSave(func(ctx context.Context, t *tx) error {
 			if r, ok := t.Records.Get(id); !ok || r.InvalidReason == ReasonForgotten {
 				return nil
 			}
-			return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueIndex})
+			if m.cfg.Index != nil {
+				if err := m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueIndex}); err != nil {
+					return err
+				}
+			}
+			if m.cfg.OnErase != nil {
+				return m.registerErase(ctx, ns, t.scope)
+			}
+			return nil
 		}))
 	}
 	var old Record
@@ -609,6 +620,7 @@ func (m *Memory) Forget(ctx context.Context, id string) error {
 	if err != nil || old.ID == "" {
 		return err
 	}
+	m.eraseCommitted(ctx, ns, scope)
 	return errors.Join(m.dropIndex(ctx, ns, scope, recordSpace, recordKey(old)), m.indexAfter(ctx, ns, scope, c))
 }
 
@@ -708,14 +720,20 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 		return nil
 	}, shrinking(), withBeforeSave(func(ctx context.Context, t *tx) error {
 		// beforeSave 在 fn 之前运行，与 fn 看到同一份修改前的 state。
-		if len(cutTurns(t, sessionID, to, now)) == 0 {
-			return nil
+		if len(cutTurns(t, sessionID, to, now)) > 0 {
+			if err := m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueJobs}); err != nil {
+				return err
+			}
 		}
-		return m.register(ctx, queueEntry{Namespace: ns, Scope: t.scope, Reason: queueJobs})
+		if m.cfg.OnErase != nil {
+			return m.registerErase(ctx, ns, t.scope)
+		}
+		return nil
 	}))
 	if err != nil {
 		return err
 	}
+	m.eraseCommitted(ctx, ns, scope)
 	m.droppedJobs.Add(dropped)
 	errs := []error{m.dropIndex(ctx, ns, scope, recordSpace, keysOf(gone)...), m.indexAfter(ctx, ns, scope, c)}
 	var vecs [][]float32
