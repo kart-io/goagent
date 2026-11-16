@@ -323,7 +323,7 @@ func (m *Memory) decode(ctx context.Context, st durable.Store, ns []string, scop
 	if ov.items() > 0 {
 		cur = ov.apply(base)
 	}
-	cur.Seq, cur.CommitID, cur.NextIncarnation, cur.LastForgetSeq, cur.MarkerHorizon, cur.MigrationID = h.Seq, h.CommitID, h.NextIncarnation, h.LastForgetSeq, h.MarkerHorizon, h.MigrationID
+	cur.Seq, cur.CommitID, cur.NextIncarnation, cur.LastForgetSeq, cur.LastRewindSeq, cur.MarkerHorizon, cur.MigrationID = h.Seq, h.CommitID, h.NextIncarnation, h.LastForgetSeq, h.LastRewindSeq, h.MarkerHorizon, h.MigrationID
 	return view{cur: cur, base: base, baseIdx: baseIdx, deps: deps, ov: ov, idx: newRecallIndex(baseIdx, ov)}, nil
 }
 

@@ -30,6 +30,7 @@ type stateScalars struct {
 	CommitID        string `json:"commit_id"`
 	NextIncarnation int64  `json:"next_incarnation"`
 	LastForgetSeq   int64  `json:"last_forget_seq"`
+	LastRewindSeq   int64  `json:"last_rewind_seq,omitzero"`
 	MarkerHorizon   int64  `json:"marker_horizon,omitzero"`
 	MigrationID     string `json:"migration_id,omitempty"`
 }
@@ -92,7 +93,7 @@ func decompress(packed []byte, size int) ([]byte, error) {
 }
 
 func (s *state) scalars() stateScalars {
-	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, MarkerHorizon: s.MarkerHorizon, MigrationID: s.MigrationID}
+	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, LastRewindSeq: s.LastRewindSeq, MarkerHorizon: s.MarkerHorizon, MigrationID: s.MigrationID}
 }
 
 // split 把 s 的条目轮流分到 stateChunks 块。state 中的对象都属于它的命名空间（不变量 4），对象的 Namespace 不写入，
@@ -259,7 +260,7 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 	if chunks[0].Scalars == nil || *chunks[0].Scalars != h {
 		return state{}, badFraming("版本头与数据块不一致")
 	}
-	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, MarkerHorizon: h.MarkerHorizon, MigrationID: h.MigrationID}
+	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, LastRewindSeq: h.LastRewindSeq, MarkerHorizon: h.MarkerHorizon, MigrationID: h.MigrationID}
 	merges := []func(){
 		func() {
 			s.Records = mergeChunks(chunks, func(c *stateChunk) []Record { return c.Records }, func(v Record) string { return v.ID })

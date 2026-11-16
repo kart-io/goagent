@@ -148,6 +148,8 @@ func (t *tx) NextIncarnation() int64     { return t.scalars.NextIncarnation }
 func (t *tx) SetNextIncarnation(n int64) { t.scalars.NextIncarnation = n }
 func (t *tx) LastForgetSeq() int64       { return t.scalars.LastForgetSeq }
 func (t *tx) SetLastForgetSeq(n int64)   { t.scalars.LastForgetSeq = n }
+func (t *tx) LastRewindSeq() int64       { return t.scalars.LastRewindSeq }
+func (t *tx) SetLastRewindSeq(n int64)   { t.scalars.LastRewindSeq = n }
 func (t *tx) MarkerHorizon() int64       { return t.scalars.MarkerHorizon }
 func (t *tx) SetMarkerHorizon(n int64)   { t.scalars.MarkerHorizon = n }
 func (t *tx) MigrationID() string        { return t.scalars.MigrationID }
@@ -156,7 +158,7 @@ func (t *tx) SetMigrationID(id string)   { t.scalars.MigrationID = id }
 // working 返回工作副本（已含本次修改）。
 func (t *tx) working() state {
 	return state{Seq: t.scalars.Seq, CommitID: t.scalars.CommitID, NextIncarnation: t.scalars.NextIncarnation,
-		LastForgetSeq: t.scalars.LastForgetSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID,
+		LastForgetSeq: t.scalars.LastForgetSeq, LastRewindSeq: t.scalars.LastRewindSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID,
 		Records: t.Records.m, Entities: t.Entities.m, Edges: t.Edges.m, Communities: t.Communities.m, Jobs: t.Jobs.m, DoneJobs: t.DoneJobs.m,
 		Markers: t.Markers.m, Finished: t.Finished.m}
 }

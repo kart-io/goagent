@@ -646,6 +646,7 @@ func (m *Memory) Rewound(ctx context.Context, sessionID string, to int64) error 
 		patch := cutTurns(t, sessionID, to, now)
 		mk := rewindMarker{Session: sessionID, To: to, Seq: t.nextSeq(), At: now}
 		t.Markers.Put(mk.key(), mk)
+		t.SetLastRewindSeq(mk.Seq)
 		for _, k := range t.Jobs.Keys() {
 			if j, _ := t.Jobs.Get(k); j.Status == JobPending && rewound([]Source{j.source()}, sessionID, to) {
 				j.Status, j.Error = JobDropped, errJobStale.Error()

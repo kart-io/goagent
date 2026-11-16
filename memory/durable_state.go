@@ -59,6 +59,7 @@ type state struct {
 	CommitID        string                  `json:"commit_id"`
 	NextIncarnation int64                   `json:"next_incarnation"`
 	LastForgetSeq   int64                   `json:"last_forget_seq"`
+	LastRewindSeq   int64                   `json:"last_rewind_seq,omitzero"`
 	MarkerHorizon   int64                   `json:"marker_horizon,omitzero"`
 	MigrationID     string                  `json:"migration_id,omitempty"`
 	Records         map[string]Record       `json:"records"`
