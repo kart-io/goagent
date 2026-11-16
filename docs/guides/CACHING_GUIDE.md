@@ -102,6 +102,7 @@ agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 - `EraseRequired` 要求 TTL 不超过 `memory.Config.EraseWithin`，这个约束只在配置了长期记忆时生效。不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。
 - 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL。
 - 遗忘与回退会清掉该命名空间当前作用域下的全部缓存条目，粒度较粗。
+- 记忆版本在召回（hydrateRecall）之后才读取。召回与读取版本之间发生的删除可能让条目带上删除后的版本写入：这种条目逻辑上不可达，物理残留以 TTL 为上限。
 
 ### 装配 OnErase
 

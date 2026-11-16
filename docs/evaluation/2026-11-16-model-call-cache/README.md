@@ -10,7 +10,7 @@
 
 - CPU：Intel Core i7-14700KF，28 个逻辑核；运行时 `taskset -c 2,3,6-27`（核 0、8 有故障，已排除）。
 - 存储：FileStore 目录为 `b.TempDir()`，`TMPDIR=GOTMPDIR=/tmp`，/tmp 是 tmpfs（内存），不是机械盘；因此 FileStore 的文件读写接近内存速度，生产用磁盘或 PostgreSQL 时 CacheVersion 的绝对耗时会更高。
-- Go 1.27.3，`-benchtime=2s`，连续运行 3 次。
+- Go 1.27.3，`-benchtime=2s`，连续运行 3 次。（推断：样本量只有 3 次运行，表中范围足以判断量级，不足以做统计意义上的比较。）
 
 ### 数据规模
 
@@ -27,10 +27,10 @@
 
 ### 结论
 
-- CacheVersion 约占带长期记忆的命中路径的 10%（20.7 / 205 微秒）；其余约 90% 是长期记忆召回等与缓存无关的步骤（1000 条记录的召回与历史注入），这部分在未命中时同样存在。
+- CacheVersion 约占带长期记忆的命中路径的 10%（20.7 / 205 微秒）；其余约 90% 是长期记忆召回等与缓存无关的步骤（推断：主要是 1000 条记录的召回与历史注入，未单独度量），这部分在未命中时同样存在。
 - 命中路径的缓存自身开销（无长期记忆那一行）约 22 微秒，相对一次真实模型调用（百毫秒到秒级）可以忽略。
-- CacheVersion 不取锁、只读 meta 与 head，耗时与记录条数无关，只随读命名空间数量线性增长。
-- pgstore 组：基准已写好，没有 `GOAGENT_PGSTORE_DSN` 时 `b.Skip`；pgstore 组需在 goagent-contrib 环境中另行运行。本次未测，其结果可能因网络往返显著高于 FileStore。
+- CacheVersion 不取锁、只读 meta 与 head（推断：据此耗时与记录条数无关，只随读命名空间数量线性增长；本次只测了 1000 条、单个命名空间）。
+- pgstore 组：pgstore 实现位于 goagent-contrib，本模块无法构造，基准中该组无条件 `b.Skip`；pgstore 组需在 goagent-contrib 环境中另行运行。本次未测，其结果可能因网络往返显著高于 FileStore。
 
 复现命令：
 

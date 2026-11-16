@@ -76,12 +76,12 @@ func (c *MiddlewareChain) Size() int
 | `NewCircuitBreakerMiddleware(maxFailures, resetTimeout)` | 连续失败达到阈值后打开并拒绝请求（成功清零计数，自身的拒绝不计为失败）；超过 resetTimeout 后半开，半开时成功则关闭、失败则重新打开 |
 | `NewValidationMiddleware(validators...)` | `OnBefore` 中依次执行校验函数 |
 | `NewTransformMiddleware(inputFn, outputFn)` | 转换 `Input` 与 `Output` |
-
-整轮响应缓存中间件已删除。缓存模型答案用 `builder.WithModelCache`，见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
 | `NewAuthenticationMiddleware(authFunc)` | `authFunc` 返回 false 或错误时拒绝请求 |
 | `NewDynamicPromptMiddleware(modifier)` | `Input` 为字符串时，用 modifier 的结果并附加 `State` 中的 `user_name`、`conversation_history` |
 | `NewToolSelectorMiddleware(tools, maxTools)` | 按输入选出工具名写入 `Metadata["selected_tools"]`；`WithSelector` 自定义选择函数。不改变 Builder 实际提供给模型的工具 |
 | `NewRandomDelayMiddleware(min, max)` | 随机延迟，用于测试 |
+
+整轮响应缓存中间件已删除。缓存模型答案用 `builder.WithModelCache`，见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
 
 根包 `github.com/kart-io/goagent/middleware` 另有 `ObservabilityMiddleware`（实现上面的 `Middleware` 接口，基于 `observability.TelemetryProvider`），以及 `AdaptiveMiddleware`、`ContextEnrichmentMiddleware`、`DynamicPromptMiddleware`、`LLMToolSelectorMiddleware`、`LLMToolEmulatorMiddleware`。后五者提供 `Process(ctx, core.State) (core.State, error)`，不实现 `Middleware` 接口，不能传给 `WithMiddleware`。
 

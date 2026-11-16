@@ -209,6 +209,7 @@ type Tagged interface {
 - 缓存值是序列化后的 `[]byte`：前缀标明格式版本，后面是聚合后的 `llm.StreamChunk` 的 JSON。进程内缓存与外部缓存使用同一格式，读出后得到的是独立副本。格式版本不认识或解码失败，按未命中处理，并删除该条目。
 - 对外事件与持久回放保持一致（`modelOperation` 现有的回放分支）：先发 `step: model_cached`，`Content` 非空时再发一整段 `text`；不重放多段增量（我方决定）。`ReasoningContent` 与未命中时一样不经 `emit`。
 - 不调用模型，不预留预算，不记录用量。可观测事件标记来自缓存，例如在 `observe` 的模型事件中增加 `Cached` 字段，名称由实施者定。
+- 命中时本轮 turn 的 `Usage` 为零值（命中不消耗 token）。调用方用 `observe` 模型事件的 `Cached` 与结果元数据 `model_cache_hits` 判断是否命中。
 - 结果照常从 `modelOperation` 返回：写持久日志，进入会话日志与工具循环。同一会话里，命中的工具调用 ID 可能与之前某一轮重复（待确认：是否与 `session_log.go` 中按 ID 索引的工具元数据冲突；冲突的话，命中时为工具调用重新生成 ID，并保证回放一致）。
 
 ### 5.6 删除 CacheMiddleware，更新文档

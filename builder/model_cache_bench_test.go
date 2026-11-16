@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ type benchBackend struct {
 	open func(b *testing.B) durable.Store
 }
 
-// pgstore 实现在 goagent-contrib 中，本模块无法构造；没有 DSN 时跳过。
+// pgstore 实现在 goagent-contrib 中，本模块无法构造，该组总是跳过。
 var benchBackends = []benchBackend{
 	{"FileStore", func(b *testing.B) durable.Store {
 		fs, err := durable.NewFileStore(b.TempDir())
@@ -41,10 +40,7 @@ var benchBackends = []benchBackend{
 		return fs
 	}},
 	{"pgstore", func(b *testing.B) durable.Store {
-		if os.Getenv("GOAGENT_PGSTORE_DSN") == "" {
-			b.Skip("未设置 GOAGENT_PGSTORE_DSN；pgstore 组需在 goagent-contrib 环境中另行运行")
-		}
-		b.Skip("pgstore 实现位于 goagent-contrib，本模块无法构造")
+		b.Skip("pgstore 组需在 goagent-contrib 环境中另行运行")
 		return nil
 	}},
 }
