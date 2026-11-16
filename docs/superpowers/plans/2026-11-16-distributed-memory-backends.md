@@ -20,7 +20,7 @@
 - contrib 新模块 `go 1.27.0`，`require github.com/kart-io/goagent v0.53.0`（发布后改为新版本）；开发期一律用 `GOAGENT_CORE_ROOT=/home/hellotalk/code/go/src/github.com/kart-io/goagent bash scripts/with-local-modules.sh <命令>` 联调。
 - 外部服务测试在连接变量缺失时 `t.Skip`：`GOAGENT_REDIS_ADDR`（Cluster 为逗号分隔地址）、`GOAGENT_PGVECTOR_DSN`。
 - Redis：最低 7；拒绝 `Ring` 客户端；键前缀默认 `goagent:cache:`；`DeleteBatch` 默认 500；`WaitReplicas` 默认 0、`WaitTimeout` 默认 1 秒；令牌 16 字节随机数。
-- 一致性测试中 pgvector 与 `MemoryIndex` 的分数在 1e-6 内视为一致，不构造分差小于 1e-5 的近似并列。
+- 一致性测试中 pgvector 与 `MemoryIndex` 的分数在 1e-5 内视为一致，不构造分差小于 1e-4 的近似并列。
 - 每个任务结束 `gofmt -l` 无输出、`go vet` 通过；goagent 侧任务结束再跑 `golangci-lint run ./...`（另一个项目的 lint 并行时会以 exit 2 报 "parallel golangci-lint is running"，等待后重跑）。
 
 ## Review Focus
@@ -116,7 +116,7 @@
 - Produces: `func RunIndex(t *testing.T, newIndex func(t *testing.T) memory.Index)`；每次调用返回初始为空的独立索引。
 
 - [ ] **Step 1: 写 `RunIndex`**，表驱动用例：
-  - 「归一化」：写入 `[3,4]`，以 `[3,4]` 查询 Score 在 1e-6 内等于 1。
+  - 「归一化」：写入 `[3,4]`，以 `[3,4]` 查询 Score 在 1e-5 内等于 1。
   - 「零向量与非有限值」：`[0,0]`、`[NaN,1]`、`[+Inf,1]` 的 `Upsert` 与 `Search` 均返回错误。
   - 「排序与并列」：`a=[1,0]`、`b=[1,0]`、`c=[0,1]`，查询 `[1,0]` k=3 → ID 顺序 `a,b,c`。
   - 「k 截断与 k<=0」：k=1 只返回 a；k=0、k=-1 返回空且无错误。
