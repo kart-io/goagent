@@ -50,6 +50,10 @@
 | 自动召回块 | 不进入会话日志与持久日志；恢复时不会把它发给模型；历史中升级前遗留的召回块会被过滤 | 同左 | G0 |
 | 已经进入对话的副本：模型回答、`memory_search` 等工具的输出 | **不在承诺范围内**。彻底删除需要宿主删除对应的会话与运行 | 同左 | 宿主 |
 | 删除提交前已组装好的模型请求，以及它的原样重试 | 不撤回。删除以提交为界，之后组装的请求不再包含被删内容 | 同左 | — |
+| 模型调用缓存 | `Forget`、`Rewound`、`Purge` 之后逻辑上不可达；物理删除按 `Erase` 模式执行，`EraseRequired` 下在 `EraseWithin` 内完成；失败时以 TTL 为上限 | 同左 | builder |
+
+- `Rewound` 的删除承诺与 `Forget` 相同，表中不再单列一列。
+- `EraseRequired` 要求 TTL 不超过 `EraseWithin`，只在配置了长期记忆时检查；不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。使用方法与信任边界见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
 
 ## 1. 现状问题
 
@@ -110,7 +114,7 @@ Worker 抽取时会按 `RecallPrefix` 前缀跳过召回块（`memory/worker.go`
 
 ### 1.8 响应缓存跨用户命中
 
-`middleware.CacheMiddleware` 的键是 `fmt.Sprintf("%v", request.Input)`，命中时直接跳过 handler。共享缓存实例时，相同输入会拿到别人的回答。
+旧的整轮响应缓存中间件（已删除）的键是 `fmt.Sprintf("%v", request.Input)`，命中时直接跳过 handler。共享缓存实例时，相同输入会拿到别人的回答。现由 Builder 的模型调用缓存取代：缓存下沉到单次模型调用，键含宿主声明的隔离身份与记忆版本（见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)）。
 
 ### 1.9 存储没有事务契约
 
@@ -168,7 +172,7 @@ type TurnMemory struct {
 9. **抽取跳过记忆工具**：`renderTurn` 按 assistant 消息的 `ToolCalls` 和 `MessageData.Tool.Name`，跳过记忆工具（`memory_search`、`memory_save`、`memory_forget`）的调用和结果。同一条 assistant 消息里的普通正文照常保留。
 10. **过滤遗留的召回块**：从会话日志推导历史时（`builder/session_log.go`），去掉以 `RecallPrefix` 开头的 user 消息，止住升级前已经写进历史的召回块。
 11. **只作用于原生工具流**：与现状相同，没有注册工具时请求走 `readPlainModelTurn`，不召回。长期记忆需要召回时，宿主应注册工具（例如 `m.Tools()`）。
-12. **响应缓存互斥**：`Build` 时，如果配置了长期记忆，并且 `b.middlewares` 中有 `*middleware.CacheMiddleware`，返回配置错误。宿主自定义的缓存需要遵守文档写明的要求。
+12. **模型调用缓存**：可与长期记忆同时配置。键含各读命名空间的 `(作用域, LastForgetSeq, LastRewindSeq)`，`Forget`、`Rewound`、`Purge` 之后相同请求不命中；物理删除经 `memory.Config.OnErase`。宿主自定义的缓存需要遵守缓存指南写明的要求。
 
 ### 2.3 API
 
@@ -268,7 +272,7 @@ flowchart TB
 - **抽取与历史**：
   - 记忆工具的调用和结果不进入抽取的对话记录，同一条消息里的普通正文照常保留。
   - 历史中以 `RecallPrefix` 开头的遗留消息会被过滤。
-- **配置**：长期记忆与 `CacheMiddleware` 同时配置时，`Build` 返回配置错误。
+- **配置**：长期记忆与模型调用缓存可以同时配置；`EraseRequired` 要求记忆配置 `OnErase`，且 TTL 不超过 `EraseWithin`，否则 `Build` 返回配置错误。
 
 ## 3. G1：存储
 
@@ -620,7 +624,6 @@ flowchart TB
 | 问题 | 后续处理 |
 |---|---|
 | 已经进入对话的副本（0.1） | 宿主删除会话与运行 |
-| 不用长期记忆时，响应缓存仍可能跨用户命中 | 单独修复 `CacheMiddleware` 的键，或限定它只用于无状态 Agent |
 | 记忆投毒：写入工具由模型自主调用 | 单独设计来源区分；写入工具可由宿主关闭或要求确认 |
 | 对抗题弃答能力下降、召回预算未用满、社区摘要收益不明显 | 用 `scripts/memeval` 继续调优 |
 | 评测统计偏乐观；评测绕过 Builder | 以更大样本为准；G0 用 Builder 测试验收 |
@@ -676,7 +679,7 @@ flowchart LR
 | `WithLongTermMemory` 不再使用 PreStep；召回块不进历史，改为插在运行上下文之前 | 升级前开始的持久运行，恢复时可能以意图冲突或会话同步不一致失败 | 升级前让运行结束，或放弃后重新开始 |
 | 新增 `TurnMemory` 与 `ErrMemoryNamespaceChanged`；`TurnStart` 事件增加记忆绑定 | 宿主需要处理新错误 | 恢复时绑定与原运行相同的命名空间 |
 | Request 钩子不得改写或移动召回消息 | 改写或移动召回消息的钩子会引起意图冲突 | 调整钩子 |
-| 长期记忆与 `CacheMiddleware` 互斥 | 同时配置的 Builder 构建失败 | 去掉其中一个 |
+| 整轮响应缓存中间件删除，由 `builder.WithModelCache` 取代，可与长期记忆同时使用 | 使用旧缓存中间件的代码编译失败 | 改用 `WithModelCache`，见缓存指南 |
 | `Config.Store`、`Config.Graph`（接口）、`RecordStore`、`NewRecordStore`、`NewGraph` 删除；新增 `Config.Durable`（带 `json:"-"` 标签）；`Config.Graph` 改为 `bool`；新增 `Config.TrackAccess` | 自定义存储与图谱实现，以及 `scripts/memeval/main.go`、`builder/long_term_memory_test.go` 等调用方编译失败 | 传入实现了 `Scoped` 的 `durable.Store` |
 | 数据迁到 `durable.Store` | 旧的 `store.Store` 数据不会被读取 | 提供一次性迁移函数 `MigrateFromStore`：只迁入记录，不迁入关系、实体、社区；迁移完成后清空旧 `store.Store` 中的记忆数据，并对旧的索引空间执行 `Clear`；返回旧的待处理任务清单，由宿主决定是否重新登记 |
 | `Memory.Job(ctx, key)` 改为按命名空间查找；完成的任务只保留键、完成时间与统计（`Job.Stats`） | 调用方须绑定命名空间；任务完成后查不到其他详细信息 | 改用 `Job.Stats` |

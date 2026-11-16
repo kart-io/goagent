@@ -94,7 +94,8 @@ return builder.NewSimpleBuilder(client).
 | `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources`；`RetrievalConfig.Filter` 按请求生成元数据过滤条件，需检索器实现 `interfaces.RequestRetriever` |
 | `WithSessionLog(session.Store)` | 无 | 多轮历史来自会话日志；不配置时每次调用没有历史 |
 | `WithCompaction(*contextpolicy.Compaction)` | 无 | 对话超过阈值时压缩较早的消息；仅作用于原生工具流 |
-| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；不能与 `CacheMiddleware` 同时使用；Request 钩子不得改写或移动召回消息 |
+| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；Request 钩子不得改写或移动召回消息 |
+| `WithModelCache(builder.ModelCache)` | 无 | 模型调用缓存：以完整请求为键，`Scope` 声明可信的隔离身份（配置了长期记忆时默认取其命名空间）；`Erase` 为 `EraseOff` / `EraseAuto`（默认）/ `EraseRequired`；使用标签删除时 `TagKey` 至少 32 字节；`Build` 校验配置，见[缓存指南](CACHING_GUIDE.md#模型调用缓存) |
 | `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话日志的缺省会话 ID；请求上下文中的 `tools.WithSessionID` 优先 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
 
@@ -104,7 +105,7 @@ return builder.NewSimpleBuilder(client).
 
 | 方法 | 说明 |
 |---|---|
-| `WithMiddleware(...middleware.Middleware)` | `core/middleware` 中间件链，如 `NewLoggingMiddleware`、`NewTimingMiddleware`、`NewCacheMiddleware`、`NewRateLimiterMiddleware` |
+| `WithMiddleware(...middleware.Middleware)` | `core/middleware` 中间件链，如 `NewLoggingMiddleware`、`NewTimingMiddleware`、`NewRateLimiterMiddleware` |
 | `WithCallbacks(...core.Callback)` | 执行回调，如 `core.NewStdoutCallback`、`core.NewMetricsCallback` |
 | `WithErrorHandler(func(error) error)` | 包装或替换执行错误 |
 | `WithMetadata(key, value)` | 写入 Agent 元数据 |
@@ -121,8 +122,8 @@ return builder.NewSimpleBuilder(client).
 | `RAGAgent(client, retriever)` | `ConfigureForRAG` + 检索；`retriever` 可为 `DocumentRetriever`、带 `Retrieve` 方法的对象或 `VectorStore`（取前 4 条），nil 时只有提示词 |
 | `AnalysisAgent(client, dataSource)` | `ConfigureForAnalysis`，数据源写入状态 |
 | `WorkflowAgent(client, workflows)` | 日志、熔断与校验中间件，MaxIterations 15 |
-| `MonitoringAgent(client, checkInterval)` | 限流与缓存中间件，MaxIterations 100，Temperature 0.3 |
-| `ResearchAgent(client, sources)` | 缓存中间件，MaxTokens 4000，Temperature 0.5，MaxIterations 15 |
+| `MonitoringAgent(client, checkInterval)` | 限流与计时中间件，MaxIterations 100，Temperature 0.3 |
+| `ResearchAgent(client, sources)` | 计时中间件，MaxTokens 4000，Temperature 0.5，MaxIterations 15 |
 
 快速函数返回 `*SimpleAgent`（`ConfigurableAgent[*core.AgentState]`）。
 

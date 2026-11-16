@@ -54,11 +54,10 @@ custom := shared.Provider("offline-demo")
 
 ## 领域共享入口补齐
 
-以下 50 项原声明和兼容别名均已移除。按包和符号迁移引用，同时删除无用导入；字段名、局部变量及同名领域常量不参与改名。下表覆盖公开入口和框架内私有默认值；私有项便于维护者追踪归属。
+以下 49 项原声明和兼容别名均已移除。按包和符号迁移引用，同时删除无用导入；字段名、局部变量及同名领域常量不参与改名。下表覆盖公开入口和框架内私有默认值；私有项便于维护者追踪归属。
 
 | 原入口 | 中央入口 |
 |---|---|
-| `core/middleware.defaultNumShards` | `constants.DefaultMiddlewareCacheShards` |
 | `tools.defaultApprovalTimeout` | `constants.DefaultApprovalTimeout` |
 | `builder.modelResendAttempts` | `constants.DefaultModelResendAttempts` |
 | `builder.inboxWriteTimeout` | `constants.DefaultInboxWriteTimeout` |

@@ -61,9 +61,8 @@ func (c *MiddlewareChain) Size() int
 `MiddlewareChain.Execute` 的顺序：
 
 1. 按添加顺序调用 `OnBefore`。某个 `OnBefore` 返回错误时只调用该中间件的 `OnError`：返回非 nil 则中止，返回 nil 则继续（此时请求可能是 nil）。
-2. 若 `request.Metadata["cached_response"]` 是 `*MiddlewareResponse`，跳过处理器直接使用它。
-3. 调用处理器。处理器出错时按添加顺序调用所有中间件的 `OnError`，非 nil 返回值替换当前错误；最终错误非 nil 则返回该错误，不再执行 `OnAfter`。
-4. 按添加顺序的逆序调用 `OnAfter`。某个 `OnAfter` 出错时调用该中间件的 `OnError`，非 nil 则中止。
+2. 调用处理器。处理器出错时按添加顺序调用所有中间件的 `OnError`，非 nil 返回值替换当前错误；最终错误非 nil 则返回该错误，不再执行 `OnAfter`。
+3. 按添加顺序的逆序调用 `OnAfter`。某个 `OnAfter` 出错时调用该中间件的 `OnError`，非 nil 则中止。
 
 `NewImmutableMiddlewareChain(handler, mws...)` 是构造后不可变的链；`NewFastMiddlewareChain(handler, mws...)` 只执行 `OnBefore`。
 
@@ -73,11 +72,12 @@ func (c *MiddlewareChain) Size() int
 |---|---|
 | `NewLoggingMiddleware(logger func(string))` | 记录请求、响应与错误；logger 为 nil 时用 `fmt.Println` |
 | `NewTimingMiddleware()` | 记录耗时；`GetTimings()`、`GetAverageLatency()` |
-| `NewCacheMiddleware(ttl)`、`NewCacheMiddlewareWithShards(ttl, n)` | 以 `fmt.Sprint(request.Input)` 为键，不区分会话或用户。未命中时 `OnBefore` 把输入写入请求 `Metadata["original_input"]`，处理器把请求元数据带入响应（Builder 即如此）时 `OnAfter` 缓存成功响应；命中时通过 `cached_response` 跳过处理器，命中不会延长 TTL。`Clear()`、`Size()` |
 | `NewRateLimiterMiddleware(maxRequests, window)` | 固定窗口计数，按 `State` 或 `Metadata` 中的 `user_id` 分组，超限时 `OnBefore` 返回错误；`Reset()` |
 | `NewCircuitBreakerMiddleware(maxFailures, resetTimeout)` | 连续失败达到阈值后打开并拒绝请求（成功清零计数，自身的拒绝不计为失败）；超过 resetTimeout 后半开，半开时成功则关闭、失败则重新打开 |
 | `NewValidationMiddleware(validators...)` | `OnBefore` 中依次执行校验函数 |
 | `NewTransformMiddleware(inputFn, outputFn)` | 转换 `Input` 与 `Output` |
+
+整轮响应缓存中间件已删除。缓存模型答案用 `builder.WithModelCache`，见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
 | `NewAuthenticationMiddleware(authFunc)` | `authFunc` 返回 false 或错误时拒绝请求 |
 | `NewDynamicPromptMiddleware(modifier)` | `Input` 为字符串时，用 modifier 的结果并附加 `State` 中的 `user_name`、`conversation_history` |
 | `NewToolSelectorMiddleware(tools, maxTools)` | 按输入选出工具名写入 `Metadata["selected_tools"]`；`WithSelector` 自定义选择函数。不改变 Builder 实际提供给模型的工具 |

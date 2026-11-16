@@ -208,11 +208,25 @@ agent, err := builder.NewSimpleBuilder(client).
     WithMiddleware(
         middleware.NewLoggingMiddleware(func(msg string) { log.Println(msg) }),
         middleware.NewTimingMiddleware(),
-        middleware.NewCacheMiddleware(5*time.Minute),
         middleware.NewRateLimiterMiddleware(10, time.Second),
     ).
     Build()
 ```
+
+缓存模型答案用 `WithModelCache`（`Scope` 返回宿主可信的隔离身份）：
+
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithModelCache(builder.ModelCache{
+        Cache: cache.NewSimpleCache(5 * time.Minute),
+        TTL:   5 * time.Minute,
+        Scope: func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
+        Erase: builder.EraseOff,
+    }).
+    Build()
+```
+
+信任边界、命中场景与删除承诺见[缓存指南](CACHING_GUIDE.md#模型调用缓存)。
 
 ### 自定义中间件
 

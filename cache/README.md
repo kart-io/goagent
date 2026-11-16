@@ -8,10 +8,13 @@
 |---|---|
 | `Cache` | 接口：`Get`/`Set`/`Delete`/`Clear`/`Has`/`GetStats` |
 | `SimpleCache` | 内置实现，`sync.Map` + TTL，默认后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理；访问驱动模式见 `WithoutBackgroundCleanup` |
+| `Tagged` | 可选接口：`SetTagged` 写入条目并关联标签，`DeleteTag` 删除带该标签的全部条目；`SimpleCache` 实现，用于模型调用缓存的物理删除 |
 | `NoOpCache` | 禁用实现：不存储条目，读写均返回 `agentErrors.ErrCacheDisabled` |
 | `CacheKeyGenerator` | 基于 SHA256 的键生成器 |
 | `CacheStats` | 统计信息；`SimpleCache` 填写 `Hits`、`Misses`、`Size`、`HitRate` |
 | `CacheConfig` | 配置；`NewCacheFromConfig` 在 `Enabled` 为 false 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache` |
+
+`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
 
 缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
 

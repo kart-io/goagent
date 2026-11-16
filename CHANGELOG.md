@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 新增
+
+- `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE.md#模型调用缓存)。
+- `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。
+- `memory.Config.OnErase`（`memory.EraseFunc`）：`Forget`、`Rewound` 提交之后与 `Purge` 清理旧作用域时清除派生副本，失败由维护在 `EraseWithin` 内重做；配置时要求 `RetireGrace >= EraseWithin`。配套新增 `Memory.CacheVersion`、`Memory.EraseErrors`（累计提交后立即擦除失败的次数）、`Memory.ErasesOnDelete`、`Memory.EraseWithin`。`ModelCache.Eraser()` 返回可直接用作 `OnErase` 的回调，`ModelCache.DeleteSession` 供宿主在删除或回退会话后清除该会话的缓存条目。
+- 长期记忆状态增加 `LastRewindSeq`，`Rewound` 提交时设置；只增字段，存储格式版本不变。
+
+### 破坏性变更
+
+- 删除整轮缓存 `core/middleware.CacheMiddleware`、`NewCacheMiddleware`、`NewCacheMiddlewareWithShards`，以及 `MiddlewareChain` 对 `Metadata["cached_response"]` 的特殊处理，不保留兼容层。原缓存以输入文本为键，会跨用户命中、同会话返回旧答案，命中时还不写会话日志。迁移：把 `WithMiddleware(middleware.NewCacheMiddleware(ttl))` 改为 `WithModelCache(builder.ModelCache{Cache: ..., TTL: ttl, Scope: ...})`；`Scope` 必须返回可信的隔离身份（配置了长期记忆时可省略）。
+- 长期记忆不再与缓存互斥：旧的"与 `CacheMiddleware` 同时配置时 `Build` 返回配置错误"规则已删除。
+- 删除只被它使用的 `constants.DefaultMiddlewareCacheShards`、`constants.MaxCacheShards`；`constants.DefaultMiddlewareCacheCapacity` 保留，归工具缓存中间件使用。
+- `MonitoringAgent`、`ResearchAgent` 不再挂缓存中间件。
+- 混合版本部署：旧程序重写长期记忆的 head 会清零 `LastRewindSeq`，回退之后的缓存条目重新可达，物理删除仍然生效；升级期间避免新旧程序同时服务带回退操作的命名空间。
+
 ## [0.53.0] - 2026-11-13
 
 ### 新增
