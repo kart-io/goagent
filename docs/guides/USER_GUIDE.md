@@ -213,15 +213,21 @@ agent, err := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-缓存模型答案用 `WithModelCache`（`Scope` 返回宿主可信的隔离身份）：
+缓存模型答案用 `WithModelCache`（`Scope` 返回宿主可信的隔离身份；缺省的 `EraseAuto` 在缓存支持标签时要求 `TagKey`）：
 
 ```go
+import (
+    "context"
+
+    "github.com/kart-io/goagent/cache"
+)
+
 agent, err := builder.NewSimpleBuilder(client).
     WithModelCache(builder.ModelCache{
-        Cache: cache.NewSimpleCache(5 * time.Minute),
-        TTL:   5 * time.Minute,
-        Scope: func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
-        Erase: builder.EraseOff,
+        Cache:  cache.NewSimpleCache(5 * time.Minute),
+        TTL:    5 * time.Minute,
+        Scope:  func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
+        TagKey: tagKey, // 至少 32 字节，生产环境从密钥管理读取
     }).
     Build()
 ```
