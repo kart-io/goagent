@@ -30,7 +30,9 @@ type Event struct {
 	At                                          time.Time
 	Duration                                    time.Duration
 	Replayed                                    bool
-	Dropped                                     uint64 `json:",omitzero"`
+	// Cached 表示结果来自缓存而非真实调用，见 MarkCached。
+	Cached  bool   `json:",omitzero"`
+	Dropped uint64 `json:",omitzero"`
 }
 
 // Observer must support concurrent calls. Custom callbacks must return promptly.
@@ -39,6 +41,7 @@ type observerKey struct{}
 type tracerKey struct{}
 type scopeKey struct{}
 type pathKey struct{}
+type cachedKey struct{}
 type scope struct {
 	id         string
 	invocation string
@@ -156,6 +159,13 @@ func ErrorKind(err error) string {
 }
 func disabledEnd(error, bool) {}
 
+// MarkCached 标记 ctx 所属的、最近一次 Start 的生命周期：其结束事件带 Cached。未启用观测时什么也不做。
+func MarkCached(ctx context.Context) {
+	if cached, ok := ctx.Value(cachedKey{}).(*atomic.Bool); ok {
+		cached.Store(true)
+	}
+}
+
 // Start propagates the actual OTel child context; end must be called exactly once.
 func Start(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	if !Enabled(ctx) {
@@ -178,7 +188,8 @@ func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bo
 	if prefix, _ := ctx.Value(pathKey{}).(string); prefix != "" {
 		e.Path = prefix + "/" + e.Path
 	}
-	ctx = context.WithValue(ctx, pathKey{}, e.Path)
+	cached := new(atomic.Bool)
+	ctx = context.WithValue(context.WithValue(ctx, pathKey{}, e.Path), cachedKey{}, cached)
 	if e.OperationKey == "" {
 		e.OperationKey = durable.ExecutionKey(ctx)
 	}
@@ -206,6 +217,7 @@ func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bo
 			e.At = time.Now()
 			e.ErrorKind = ErrorKind(err)
 			e.Replayed = replayed
+			e.Cached = cached.Load()
 			e.Type = kind + "_end"
 			if replayed {
 				e.Type = kind + "_replayed"

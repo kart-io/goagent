@@ -94,3 +94,26 @@ func TestDisabledObservationDoesNotAllocate(t *testing.T) {
 		t.Fatalf("disabled observation allocated %v times", allocations)
 	}
 }
+
+func TestMarkCached(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mark bool
+		want bool
+	}{
+		"marked":   {true, true},
+		"unmarked": {false, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sink := &collector{}
+			ctx, end := Start(WithObserver(context.Background(), sink), Event{Path: "model", Type: "model"})
+			if tc.mark {
+				MarkCached(ctx)
+			}
+			end(nil, false)
+			require.Len(t, sink.events, 2)
+			require.False(t, sink.events[0].Cached)
+			require.Equal(t, tc.want, sink.events[1].Cached)
+		})
+	}
+	t.Run("disabled", func(t *testing.T) { MarkCached(context.Background()) })
+}
