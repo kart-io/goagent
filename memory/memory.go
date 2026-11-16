@@ -83,7 +83,8 @@ type Config struct {
 	// 默认关闭，此时新近性按创建时间计，召回不产生写入。
 	TrackAccess bool `json:"track_access,omitzero"`
 
-	RecallK             int           `json:"recall_k"`
+	RecallK int `json:"recall_k"`
+	// RecallRunes 是整个召回块的字符上限，含块头（约 60 个字符）与换行；小于块头时召回块总为空。
 	RecallRunes         int           `json:"recall_runes"`
 	Weights             Weights       `json:"weights"`
 	HalfLife            time.Duration `json:"half_life"`
