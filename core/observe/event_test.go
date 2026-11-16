@@ -96,14 +96,15 @@ func TestDisabledObservationDoesNotAllocate(t *testing.T) {
 }
 
 func TestMarkCached(t *testing.T) {
-	for name, tc := range map[string]struct {
+	for _, tc := range []struct {
+		name string
 		mark bool
 		want bool
 	}{
-		"marked":   {true, true},
-		"unmarked": {false, false},
+		{"marked", true, true},
+		{"unmarked", false, false},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			sink := &collector{}
 			ctx, end := Start(WithObserver(context.Background(), sink), Event{Path: "model", Type: "model"})
 			if tc.mark {
