@@ -14,7 +14,7 @@
 | `CacheStats` | 统计信息；`SimpleCache` 填写 `Hits`、`Misses`、`Size`、`HitRate` |
 | `CacheConfig` | 配置；`NewCacheFromConfig` 在 `Enabled` 为 false 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache` |
 
-`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
+`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；`SetTagged` 与 `DeleteTag` 须原子或线性一致，`DeleteTag` 返回后，之前开始的 `SetTagged` 不得留下带该标签且可读的条目（`SimpleCache` 用同一把锁保证）。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
 
 缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
 

@@ -12,6 +12,9 @@ import (
 //   - DeleteTag 必须幂等：标签不存在、重复调用、条目已被删除或过期都返回 nil。
 //   - 外部后端（如 Redis）里标签集合的过期时间不得短于其成员条目的 TTL，否则标签先过期会让条目无法按标签删除。
 //   - 标签关联的条目很多时应分批删除，避免单次操作长时间阻塞后端。
+//   - SetTagged 与 DeleteTag 之间必须原子或线性一致：DeleteTag 返回后，在它之前开始的 SetTagged 不得留下带该标签且可读的条目。
+//     分两步写值与标签集合的后端（如 Redis 先 SET 再 SADD）须用事务或脚本合成一步，否则 DeleteTag 夹在两步之间会漏删。
+//     SimpleCache 在同一把 tagMu 下写入条目并登记标签，DeleteTag 也持有 tagMu，两者互斥。
 type Tagged interface {
 	// SetTagged 写入条目并关联标签。对同一个键重复调用时，新标签集合整体替换旧的。
 	SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error
