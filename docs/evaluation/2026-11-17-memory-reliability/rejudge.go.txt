@@ -128,9 +128,14 @@ func writeResults(path string, rs []memeval.Result) error {
 }
 
 // rejudge 用 judge 重判全部基线；仍失败的题不进结果，只计数。
-func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concurrency int) (judged []memeval.Result, failed int) {
-	ctx, abort := context.WithCancel(ctx)
-	defer abort()
+func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concurrency int) (judged []memeval.Result, failed int, fatal error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var once sync.Once
+	abort := func(err error) {
+		once.Do(func() { fatal = err })
+		cancel()
+	}
 	out := make([]*memeval.Result, len(base))
 	sem := make(chan struct{}, max(concurrency, 1))
 	var wg sync.WaitGroup
@@ -152,7 +157,7 @@ func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concu
 				}
 				// 鉴权或模型不存在时每题重试也无意义，直接终止整轮，避免对每题白等退避。
 				if reason := llm.ClassifyError(err).Reason; reason == llm.ReasonAuth || reason == llm.ReasonNotFound {
-					abort()
+					abort(fmt.Errorf("%s：%w", map[llm.ErrorReason]string{llm.ReasonAuth: "鉴权失败", llm.ReasonNotFound: "模型不存在"}[reason], err))
 					return
 				}
 				if !common.IsRetryable(err) {
@@ -179,7 +184,7 @@ func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concu
 		}
 		judged = append(judged, *r)
 	}
-	return judged, failed
+	return judged, failed, fatal
 }
 
 type acc struct{ right, total int }
@@ -323,7 +328,11 @@ func run(baseline, current, judgedPath, out string, concurrency int, doCheck boo
 		}
 		ctx, stop := signalContext()
 		defer stop()
-		rejudged, failed = rejudge(ctx, judge, orig, concurrency)
+		var fatal error
+		rejudged, failed, fatal = rejudge(ctx, judge, orig, concurrency)
+		if fatal != nil {
+			return fmt.Errorf("重判已中止，未写入 %s 与 %s：%w", judgedPath, out, fatal)
+		}
 		// 中断或有失败时不落盘，否则下次会把不完整文件当作完整的重判结果。
 		if failed == 0 && ctx.Err() == nil {
 			if err := writeResultsAtomic(judgedPath, rejudged); err != nil {
