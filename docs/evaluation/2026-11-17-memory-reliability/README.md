@@ -56,7 +56,7 @@ GOAGENT_LIVE=1 CS_SCENARIO_REPEATS=10 TMPDIR=/tmp taskset -c 2,3,6-27 \
 | 合计（系统失败） | 21 | = 90 − 69 |
 | judge（另一维度） | 13 | 自动评审误判：update-01~10、recall-02、forget-06/08；不计入上面的合计 |
 
-isolate 只检查客户 Q 的命名空间没有 778899，本次运行时并未确认客户 P 真的存入了会员号，P 写入失败时也会空过。本次运行的证据是 P 确实存了：10 次 isolate 的运行记录全部含 `memory_save` 调用（`grep -l memory_save /tmp/cs-scenarios/20261117-190225/isolate-*/runs/*.json` 命中 11 个文件，覆盖 isolate-01~10）。正向检查（P 的有效或钉住记录含 778899，否则 state_ok 为假）是本次运行之后在 goagent-examples `a72abed` 补上的。
+isolate 只检查客户 Q 的命名空间没有 778899，本次运行时并未确认客户 P 真的存入了会员号，P 写入失败时也会空过。本次运行只有间接证据：10 次 isolate 的运行记录全部含 `memory_save` 调用，且每次都有一个含该调用的记录文件同时含 778899（`grep -l memory_save /tmp/cs-scenarios/20261117-190225/isolate-*/runs/*.json` 命中 11 个文件，覆盖 isolate-01~10）；这说明 P 发起了写入，不能证明写入成功。正向检查（P 的有效或钉住记录含 778899，否则 state_ok 为假）是本次运行之后在 goagent-examples `a72abed` 补上的。
 
 ## B 故障与并发
 
