@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/memory/memeval"
 )
@@ -104,6 +105,15 @@ func readBaseline(paths []string) ([]memeval.Result, error) {
 	return all, nil
 }
 
+// writeResultsAtomic 先写同目录临时文件再改名，崩溃时不会留下半截文件。
+func writeResultsAtomic(path string, rs []memeval.Result) error {
+	tmp := path + ".tmp"
+	if err := writeResults(tmp, rs); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
 func writeResults(path string, rs []memeval.Result) error {
 	var buf bytes.Buffer
 	for _, r := range rs {
@@ -119,6 +129,8 @@ func writeResults(path string, rs []memeval.Result) error {
 
 // rejudge 用 judge 重判全部基线；仍失败的题不进结果，只计数。
 func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concurrency int) (judged []memeval.Result, failed int) {
+	ctx, abort := context.WithCancel(ctx)
+	defer abort()
 	out := make([]*memeval.Result, len(base))
 	sem := make(chan struct{}, max(concurrency, 1))
 	var wg sync.WaitGroup
@@ -136,6 +148,14 @@ func rejudge(ctx context.Context, judge llm.Client, base []memeval.Result, concu
 			)
 			for attempt := 0; attempt <= judgeRetries; attempt++ {
 				if resp, err = llm.Chat(ctx, judge, []llm.Message{llm.UserMessage(memeval.JudgePrompt(q, r.Hypothesis))}); err == nil {
+					break
+				}
+				// 鉴权或模型不存在时每题重试也无意义，直接终止整轮，避免对每题白等退避。
+				if reason := llm.ClassifyError(err).Reason; reason == llm.ReasonAuth || reason == llm.ReasonNotFound {
+					abort()
+					return
+				}
+				if !common.IsRetryable(err) {
 					break
 				}
 				select {
@@ -237,13 +257,11 @@ func render(orig, judged, cur []memeval.Result, failed int) string {
 	var sb strings.Builder
 	sb.WriteString("# 跨运行对比（配对精确符号检验）\n\n")
 	sb.WriteString("| 方案 | 运行 | 本次准确率 | 基线(DeepSeek 重判)准确率 | 基线(gpt-4o 原判)准确率 | 胜 | 负 | p |\n|---|---|---|---|---|---|---|---|\n")
-	totW, totL := 0, 0
 	for _, k := range keys {
 		c := cells[k]
-		totW, totL = totW+c.w, totL+c.l
 		fmt.Fprintf(&sb, "| %s | %d | %s | %s | %s | %d | %d | %.3f |\n", k[0], k[1], curAcc[k], jAcc[k], oAcc[k], c.w, c.l, signP(c.w, c.l))
 	}
-	fmt.Fprintf(&sb, "| 合计 | - | - | - | - | %d | %d | %.3f |\n\n", totW, totL, signP(totW, totL))
+	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "配对题数 n = %d（键为 方案+题目+运行；胜/负之外为双方判定相同）。\n\n", paired)
 	if both > 0 {
 		fmt.Fprintf(&sb, "DeepSeek 与 gpt-4o 判定一致率：%.1f%%（%d/%d）。\n\n", 100*float64(agree)/float64(both), agree, both)
@@ -306,8 +324,13 @@ func run(baseline, current, judgedPath, out string, concurrency int, doCheck boo
 		ctx, stop := signalContext()
 		defer stop()
 		rejudged, failed = rejudge(ctx, judge, orig, concurrency)
-		if err := writeResults(judgedPath, rejudged); err != nil {
-			return err
+		// 中断或有失败时不落盘，否则下次会把不完整文件当作完整的重判结果。
+		if failed == 0 && ctx.Err() == nil {
+			if err := writeResultsAtomic(judgedPath, rejudged); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "重判失败 %d 题，未写入 %s，重跑会重新评审全部题目\n", failed, judgedPath)
 		}
 	}
 	return os.WriteFile(out, []byte(render(orig, rejudged, cur, max(failed, 0))), 0o644)
