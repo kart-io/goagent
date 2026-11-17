@@ -141,7 +141,11 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 	w.mu.Unlock()
 	defer close(w.done)
 	defer cancel()
-	if err := w.owner(ctx, false); err != nil {
+	// 认领不随 parent 取消：提交途中被取消时服务端可能已提交，而本端不会进入下方释放，槽位就泄漏了。
+	claim, cancelClaim := slotCtx(parent)
+	err := w.owner(claim, false)
+	cancelClaim()
+	if err != nil {
 		return err
 	}
 	defer func() {
@@ -153,7 +157,7 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 		}
 		w.mu.Unlock()
 		w.wg.Wait()
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+		cleanup, cancel := slotCtx(parent)
 		defer cancel()
 		runErr = errors.Join(runErr, w.owner(cleanup, true))
 	}()
@@ -176,6 +180,10 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 		case <-tick.C:
 		}
 	}
+}
+
+func slotCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
 }
 
 func (w *Worker) recover(ctx context.Context) error {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复
+
+- `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
+
 ## [0.54.1] - 2026-11-16
 
 ### 修复
