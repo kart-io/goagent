@@ -53,9 +53,10 @@ func unboundRejected(ctx context.Context, root string) error {
 		{"Snapshot", func(c context.Context) error { _, err := m.Snapshot(c, "内容"); return err }},
 	}
 	toolArgs := map[string]map[string]any{
-		"memory_search": {"query": "内容"},
-		"memory_save":   {"content": "未绑定时工具写入的内容"},
-		"memory_forget": {"id": "any"},
+		"memory_search":  {"query": "内容"},
+		"memory_save":    {"content": "未绑定时工具写入的内容"},
+		"memory_forget":  {"id": "any"},
+		"memory_replace": {"id": "any", "content": "未绑定时工具取代的内容"},
 	}
 	for _, t := range m.Tools() {
 		args, ok := toolArgs[t.Name()]
@@ -87,7 +88,7 @@ func unboundRejected(ctx context.Context, root string) error {
 	}
 	return verify(append(checks,
 		check{"绑定后看到的记录", contents(all), []string{"绑定后写入的内容"}},
-		check{"覆盖的操作数（8 个方法 + 3 个工具）", len(ops), 11},
+		check{"覆盖的操作数（8 个方法 + 4 个工具）", len(ops), 12},
 	)...)
 }
 
