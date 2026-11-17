@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
 - `memory`：后台整理合并或否定钉住的记录时，取代它的新记录不再钉住，核心记忆随之从 `Pinned` 与每轮召回块中消失。现在取代者继承被取代记录的 `Pinned`。
+- `llm/providers`：DeepSeek 偶尔不返回 tool_calls，而把工具调用以 `<｜DSML｜…>` 标记写进正文，工具不执行，标记文本却成为答案。现在 `CompleteToolsStream` 会暂存这段正文，正常结束时若整段是合法调用块、工具名都在本轮声明内，就还原为 `ToolCalls`，否则原样补发。本轮没有声明工具时（例如 builder 的最后一轮）不处理；这种情况应给成员留够轮数。
 - `memory`：后台整理时，同一轮中后一条候选否定了前一条候选计划的记录，而该计划记录要取代某条已有记录时，提交空指针 panic，使宿主进程退出；任务未完成，重启后重试同一任务再次崩溃。现在已有记录改由否定者取代。
 
 ## [0.54.1] - 2026-11-16
