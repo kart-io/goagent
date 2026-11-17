@@ -133,14 +133,17 @@ func TestRenderTurnSkipsMemoryTools(t *testing.T) {
 	}
 	add(constants.SessionEventAssistantMessage, session.MessageData{Message: llm.Message{Role: "assistant", Content: "我查一下", ToolCalls: []llm.ToolCall{
 		call("m1", constants.ToolMemorySearch, `{"query":"喜欢"}`), call("w1", "weather", `{"city":"杭州"}`),
+		call("m2", constants.ToolMemoryReplace, `{"id":"r1","content":"用户改喝拿铁"}`),
 	}}})
 	add(constants.SessionEventToolResult, session.MessageData{Message: llm.Message{Role: "tool", ToolCallID: "m1", Content: "用户喜欢美式咖啡"}})
+	add(constants.SessionEventToolResult, session.MessageData{Message: llm.Message{Role: "tool", ToolCallID: "m2", Content: `{"id":"r2","replaced":"r1"}`}})
 	add(constants.SessionEventToolResult, session.MessageData{Message: llm.Message{Role: "tool", ToolCallID: "w1", Content: "晴"}, Tool: &session.ToolMeta{Name: "weather", Success: true}})
 	add(constants.SessionEventUserMessage, session.MessageData{Message: llm.UserMessage(RecallPrefix + "旧召回")})
 
 	text := renderTurn(events, 1, int64(len(events)))
 	require.NotContains(t, text, "美式咖啡", "记忆工具的结果不进入抽取")
 	require.NotContains(t, text, constants.ToolMemorySearch)
+	require.NotContains(t, text, "拿铁", "memory_replace 的调用不进入抽取")
 	require.NotContains(t, text, "旧召回")
 	require.Contains(t, text, "我查一下", "同一条消息的普通正文保留")
 	require.Contains(t, text, "weather")

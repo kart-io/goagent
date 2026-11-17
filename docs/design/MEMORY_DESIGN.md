@@ -120,7 +120,7 @@ type Record struct {
 
 - 混合检索：相关性取向量相似度与字符对重合（对中英文都适用）的较大者，与新近性（半衰期 `HalfLife`）、重要性按 `Weights` 加权（Generative Agents）；命名空间与类别在排序前过滤。召回会读取命名空间内全部记录，规模由 `Retention.MaxRecords` 限制。
 - 自动召回：每轮第一次请求前以本轮输入为查询生成引用快照，召回块以 `[相关长期记忆]` 开头，组装每步请求时作为用户消息插在运行上下文之前（不作为 system），并说明只作参考、与用户当前所说冲突时以用户为准。召回块不进入会话历史与持久日志，持久日志只记引用，模型请求的意图用引用子集的摘要代替正文，见 [长期记忆的删除优先](MEMORY_GOVERNANCE.md) 第 2 节。
-- 工具：`memory_search`、`memory_save`、`memory_forget`，作用域为当前命名空间。
+- 工具：`memory_search`、`memory_save`、`memory_replace`、`memory_forget`，作用域为当前命名空间。
 - 核心记忆：`Pinned` 的记录（MemGPT Working Context）每轮都放在召回块最前，与召回结果共用 `RecallRunes`。
 
 ### 3.4 遗忘与保留

@@ -11,7 +11,7 @@
 | `reflection` | 从多次经历提炼的结论；失败轮次的教训 | 反思、中止的轮次 |
 | `skill` | 验证有效、可复用的做法 | 抽取、`memory_save` |
 
-`Record` 带有命名空间、关键词、实体、重要度（0 到 1）、来源与有效期。`Sources` 是内容依据的全部轮次（会话与事件序号区间），合并更新时继承旧记录的来源。被新事实否定或合并、被遗忘或来源轮次被退回的记录写入 `InvalidAt`（被否定或合并时 `SupersededBy` 指向新记录），不再召回，保留期后删除。`Pinned` 的记录是核心记忆，每轮都放入召回块；整理合并或否定它时，取代者继承钉住。
+`Record` 带有命名空间、关键词、实体、重要度（0 到 1）、来源与有效期。`Sources` 是内容依据的全部轮次（会话与事件序号区间），合并更新时继承旧记录的来源。被新事实否定或合并、被遗忘或来源轮次被退回的记录写入 `InvalidAt`（被否定或合并时 `SupersededBy` 指向新记录），不再召回，保留期后删除。`Pinned` 的记录是核心记忆，每轮都放入召回块；整理合并或否定它、或模型以 `memory_replace` 取代它时，取代者继承钉住。
 
 ## 命名空间
 
@@ -52,7 +52,7 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Enqueue` / `Job` / `DroppedJobs` | 登记抽取任务（Builder 在每轮结束登记）/ 查询任务状态，已完成的任务带统计 `Stats`（写入的记录与关系、丢弃的关系、复核不成立而降级的整理决定 `Conflicts`、模型给出不存在的 target 而降级为新增的整理决定 `InvalidTargets`）/ 因作用域切换、遗忘、回退或 state 超限而丢弃的任务数 |
 | `Run` / `ProcessPending` | Worker：每轮先执行 `Maintain`，再处理各命名空间的待处理任务；多个实例同时运行时由锁保证同一时刻只有一个在处理 |
 | `Maintain(ctx)` / `RunMaintenance(ctx, interval, onError)` | 不需要模型的维护：完成 Purge 遗留的旧作用域清理、Forget 崩溃后残留的向量清理，每 `ReindexEvery` 轮补写向量并清理过期的删除标记。**不运行 Worker 的部署必须运行 `RunMaintenance`** |
-| `Tools()` | `memory_search`、`memory_save`、`memory_forget` |
+| `Tools()` | `memory_search`、`memory_save`、`memory_replace`（以新内容取代旧记录）、`memory_forget` |
 | `MigrateFromStore(ctx, src, namespaces, opts)` | 从 G0 的 `store.Store` 迁入记录，见下文"从 G0 迁移" |
 
 ## 时序知识图谱
@@ -91,7 +91,7 @@ agent, err := builder.NewSimpleBuilder(client).
 ## 抽取流程
 
 1. 轮次结束（含中止）后 Builder 登记任务，Key 为 `会话 ID/轮次起始序号`（如 `s1/1`；回退切开一轮时补登的任务为 `会话 ID/起始/截止`），重复登记不产生新任务。
-2. Worker 从会话日志读该轮的消息（跳过召回块，以及 `memory_search`、`memory_save`、`memory_forget` 的调用与结果）。轮次已被退回时跳过；中止的轮次只写一条教训。
+2. Worker 从会话日志读该轮的消息（跳过召回块，以及 `memory_search`、`memory_save`、`memory_replace`、`memory_forget` 的调用与结果）。轮次已被退回时跳过；中止的轮次只写一条教训。
 3. 抽取模型输出候选；每个候选与同类最相似的 `ReconcileCandidates` 条旧记录比较，判定新增、合并更新、否定旧记录或忽略。相关性大于 0 即入选，没有更高的下限；没有入选记录时直接新增，不请求模型。
 4. 未参与反思的情景累计重要度达到 `ReflectionThreshold` 时提炼结论。
 5. 记录 ID 由任务 Key 与序号决定，崩溃后重做同一任务覆盖而不是重复；失败按 `JobAttempts` 重试后标记 failed。回复不是合法 JSON 时，同一次尝试内把原回复交回模型修正一次，所以每个请求在一次尝试内至多发两次；因截断（`finish_reason` 不是 `stop`）的回复不修正。
@@ -144,6 +144,6 @@ memory/
 ├── graph.go    # 实体判重与带有效期的关系
 ├── rank.go     # 多跳召回与 Personalized PageRank
 ├── community.go # 标签传播划分社区与社区摘要
-├── tools.go    # memory_search / memory_save / memory_forget
+├── tools.go    # memory_search / memory_save / memory_replace / memory_forget
 └── memeval/    # LongMemEval、LOCOMO 评测
 ```

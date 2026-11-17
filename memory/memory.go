@@ -269,12 +269,13 @@ func createRecord(t *tx, r Record) bool {
 // 嵌入在锁外完成，向量在提交之后写入；作用域在嵌入期间改变（Purge）时重试一次，仍改变则返回 CodeConflict。
 // 返回 ErrMemoryCommitUnknown 时可以重试：得到 CodeConflict 说明上一次其实已经提交。
 func (m *Memory) Remember(ctx context.Context, r Record) (Record, error) {
-	return m.remember(ctx, r, "")
+	return m.remember(ctx, r, "", "")
 }
 
 // remember 写入作用域 expect；expect 为空时写入当前作用域，期间发生 Purge 则在新作用域重试一次。
-// 指定的作用域已不是当前作用域时返回 errScopeChanged。
-func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record, error) {
+// 指定的作用域已不是当前作用域时返回 errScopeChanged。replaces 非空时在同一提交中取代该有效记录：
+// 旧记录以 superseded 失效、SupersededBy 指向新记录，新记录继承钉住（与整理阶段一致）；旧记录不存在返回 CodeStoreNotFound，已失效返回 CodeConflict。
+func (m *Memory) remember(ctx context.Context, r Record, expect, replaces string) (Record, error) {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
 		return Record{}, err
@@ -294,10 +295,25 @@ func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record,
 	if err != nil {
 		return Record{}, err
 	}
-	var out Record
+	var out, replaced Record
 	write := func(t *tx) error {
+		r := r
+		if replaces != "" {
+			old, ok := t.Records.Get(replaces)
+			if !ok {
+				return notFound(replaces)
+			}
+			if !old.Valid() {
+				return conflict("长期记忆记录 %q 已失效，不能被取代", replaces)
+			}
+			r.Pinned = r.Pinned || old.Pinned
+			replaced = old
+		}
 		if !createRecord(t, r) {
 			return conflict("长期记忆记录 %q 已存在：修改用 Update", r.ID)
+		}
+		if replaces != "" {
+			t.Records.Put(replaces, replaced.invalidated(r.CreatedAt, ReasonSuperseded, r.ID))
 		}
 		out, _ = t.Records.Get(r.ID)
 		return nil
@@ -316,7 +332,11 @@ func (m *Memory) remember(ctx context.Context, r Record, expect string) (Record,
 	if err != nil {
 		return Record{}, err
 	}
-	return out, m.writeIndex(ctx, ns, scope, recordSpace, []indexKey{recordKey(out)}, [][]float32{vec})
+	err = m.writeIndex(ctx, ns, scope, recordSpace, []indexKey{recordKey(out)}, [][]float32{vec})
+	if replaces != "" {
+		err = errors.Join(err, m.dropIndex(ctx, ns, scope, recordSpace, recordKey(replaced)))
+	}
+	return out, err
 }
 
 // Patch 是 Update 的修改项，nil 的字段不变。

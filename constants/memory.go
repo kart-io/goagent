@@ -57,8 +57,9 @@ const (
 	MemoryTombstoneRetention = 24 * time.Hour
 	// DefaultMemoryStateCacheBytes 是进程内 state 解码缓存的容量（按估计的堆占用计）。
 	DefaultMemoryStateCacheBytes = 64 << 20
-	// ToolMemorySearch、ToolMemorySave、ToolMemoryForget 是长期记忆工具名。
-	ToolMemorySearch = "memory_search"
-	ToolMemorySave   = "memory_save"
-	ToolMemoryForget = "memory_forget"
+	// ToolMemorySearch、ToolMemorySave、ToolMemoryReplace、ToolMemoryForget 是长期记忆工具名。
+	ToolMemorySearch  = "memory_search"
+	ToolMemorySave    = "memory_save"
+	ToolMemoryReplace = "memory_replace"
+	ToolMemoryForget  = "memory_forget"
 )

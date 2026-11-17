@@ -43,22 +43,24 @@ func (m *Memory) Tools() []interfaces.Tool {
 		&memoryTool{name: constants.ToolMemorySave, desc: "把值得跨会话记住的信息写入长期记忆，如用户明确要求记住的事实或偏好。不要保存凭证。",
 			schema: `{"type":"object","properties":{"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["content"],"additionalProperties":false}`,
 			run: func(ctx context.Context, args map[string]any) (any, error) {
-				content, _ := args["content"].(string)
-				kind, _ := args["kind"].(string)
-				pinned, _ := args["pinned"].(bool)
-				importance := 0.5
-				if v, ok := args["importance"]; ok {
-					importance = number(v)
-				}
-				scope, err := m.saveScope(ctx)
-				if err != nil {
-					return nil, err
-				}
-				r, err := m.remember(ctx, Record{Kind: Kind(kind), Content: content, Importance: importance, Pinned: pinned}, scope)
+				r, err := m.saveFromArgs(ctx, args, "")
 				if err != nil {
 					return nil, err
 				}
 				return map[string]any{"id": r.ID}, nil
+			}},
+		&memoryTool{name: constants.ToolMemoryReplace, desc: "用新内容取代一条已过时或错误的长期记忆，id 取自 memory_search 的结果或召回块。旧记录失效并指向新记录，钉住的旧记录由新记录继承钉住。",
+			schema: `{"type":"object","properties":{"id":{"type":"string","minLength":1},"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["id","content"],"additionalProperties":false}`,
+			run: func(ctx context.Context, args map[string]any) (any, error) {
+				id, _ := args["id"].(string)
+				if id == "" {
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "%s 需要 id", constants.ToolMemoryReplace).WithComponent("memory").WithOperation("tool")
+				}
+				r, err := m.saveFromArgs(ctx, args, id)
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"id": r.ID, "replaced": id}, nil
 			}},
 		&memoryTool{name: constants.ToolMemoryForget, desc: "使一条已过时或错误的长期记忆失效，id 取自 memory_search 的结果。",
 			schema: `{"type":"object","properties":{"id":{"type":"string","minLength":1}},"required":["id"],"additionalProperties":false}`,
@@ -70,6 +72,22 @@ func (m *Memory) Tools() []interfaces.Tool {
 				return map[string]any{"forgotten": id}, nil
 			}},
 	}
+}
+
+// saveFromArgs 按工具参数写入一条记录；replaces 非空时取代该记录（memory_replace）。
+func (m *Memory) saveFromArgs(ctx context.Context, args map[string]any, replaces string) (Record, error) {
+	content, _ := args["content"].(string)
+	kind, _ := args["kind"].(string)
+	pinned, _ := args["pinned"].(bool)
+	importance := 0.5
+	if v, ok := args["importance"]; ok {
+		importance = number(v)
+	}
+	scope, err := m.saveScope(ctx)
+	if err != nil {
+		return Record{}, err
+	}
+	return m.remember(ctx, Record{Kind: Kind(kind), Content: content, Importance: importance, Pinned: pinned}, scope, replaces)
 }
 
 type memoryTool struct {

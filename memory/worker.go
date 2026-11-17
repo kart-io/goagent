@@ -848,7 +848,7 @@ func turnTime(events []session.Event, from int64, fallback time.Time) time.Time 
 }
 
 // memoryTools 是长期记忆自身的工具：它们的调用与结果是记忆的副本，抽取时跳过，避免被遗忘的内容经此重新学回。
-var memoryTools = []string{constants.ToolMemorySearch, constants.ToolMemorySave, constants.ToolMemoryForget}
+var memoryTools = []string{constants.ToolMemorySearch, constants.ToolMemorySave, constants.ToolMemoryReplace, constants.ToolMemoryForget}
 
 // renderTurn 把序号区间内的消息事件写成纯文本；跳过注入的召回块与记忆工具的调用和结果。
 func renderTurn(events []session.Event, from, to int64) string {

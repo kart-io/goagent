@@ -167,7 +167,7 @@ go mem.Run(ctx, nil) // 异步处理每轮结束登记的抽取任务；不运�
 agent, err := builder.NewSimpleBuilder(client).
     WithSessionLog(sessions).
     WithLongTermMemory(mem).
-    WithTools(mem.Tools()...). // 可选：memory_search、memory_save、memory_forget
+    WithTools(mem.Tools()...). // 可选：memory_search、memory_save、memory_replace、memory_forget
     Build()
 
 ctx = memory.WithNamespace(ctx, tenantID, userID) // 必须来自可信身份
