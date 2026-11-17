@@ -568,13 +568,15 @@ func (m *Memory) applyDecisions(t *tx, j Job, p *jobPlan, now time.Time, w *jobW
 			r := record(d, d.content)
 			mergeInto(t, &r.r, d.shown)
 			r.mergedPlanned = slices.Clone(d.shownPlanned)
+			r.r.Pinned = t.Records.m[d.target].Pinned
 			taken[d.target] = true
 			supersedes = append(supersedes, supersede{d.target, d.index, true})
 		case d.op == opInvalidate && d.planned >= 0:
 			delete(built, d.planned)
 			record(d, d.c.Content)
 		default:
-			record(d, d.c.Content)
+			// 取代者继承钉住：核心记忆被合并或改写后仍是核心记忆。
+			record(d, d.c.Content).r.Pinned = t.Records.m[d.target].Pinned
 			taken[d.target] = true
 			supersedes = append(supersedes, supersede{d.target, d.index, false})
 		}

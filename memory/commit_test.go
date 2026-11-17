@@ -411,3 +411,37 @@ func TestFinishedPersistsThroughOverlayAndCompaction(t *testing.T) {
 	put(func(t *tx) { t.Finished.Delete("a") })
 	check("覆盖层删除基础快照中的统计", map[string]JobStats{"b": b})
 }
+
+// 整理以新记录取代钉住的记录时，新记录继承钉住，核心记忆不因合并或改写而消失。
+func TestSupersedeKeepsPinned(t *testing.T) {
+	cases := []struct {
+		name   string
+		op     string
+		pinned bool
+	}{
+		{"合并钉住记录", `{"op":"update","target":"x","content":"用户的日志引擎偏好是 zap，按 zap 举例"}`, true},
+		{"否定钉住记录", `{"op":"invalidate","target":"x"}`, true},
+		{"合并普通记录", `{"op":"update","target":"x","content":"用户的日志引擎偏好是 zap，按 zap 举例"}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newCommitFixture(t, Config{})
+			x, err := f.m.Remember(f.ctx, Record{ID: "x", Kind: KindFact, Content: "用户的日志引擎偏好是 zap", Importance: 0.5, Pinned: c.pinned})
+			require.NoError(t, err)
+			f.extract = `{"memories":[{"kind":"fact","content":"用户的日志引擎偏好是 zap，按 zap 举例","importance":0.8}]}`
+			f.reconcile = func(string) string { return c.op }
+			f.enqueue("k", false)
+			_, err = f.m.ProcessPending(f.ctx)
+			require.NoError(t, err)
+			require.Equal(t, JobDone, f.job("k").Status)
+
+			s := f.state()
+			by := s.Records[x.ID].SupersededBy
+			require.NotEmpty(t, by, "旧记录被取代")
+			require.Equal(t, c.pinned, s.Records[by].Pinned)
+			pinned, err := f.m.Pinned(f.ctx)
+			require.NoError(t, err)
+			require.Len(t, pinned, map[bool]int{true: 1, false: 0}[c.pinned])
+		})
+	}
+}
