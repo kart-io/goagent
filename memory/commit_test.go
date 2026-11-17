@@ -240,6 +240,18 @@ func TestCommitJobChecksAgainstStateBeforeTask(t *testing.T) {
 			superseded: map[string]string{"x": "0"},
 			contents:   []string{"用户住在上海", "用户住在上海浦东", "用户住在杭州", "用户养了一只猫"},
 		},
+		{
+			// 计划记录被否定后不再创建，它要取代的已有记录改由否定者取代。
+			name: "后一条否定前一条计划记录",
+			decisions: func(x, _ RecordRef) []decision {
+				return []decision{
+					{index: 0, op: opUpdate, target: "x", planned: -1, c: candidate{Kind: KindFact, Content: "用户住在浦东"}, content: "用户住在上海浦东", shown: []RecordRef{x}},
+					{index: 1, op: opInvalidate, planned: 0, c: candidate{Kind: KindFact, Content: "用户住在杭州"}, shown: []RecordRef{x}},
+				}
+			},
+			superseded: map[string]string{"x": "1"},
+			contents:   []string{"用户住在杭州", "用户养了一只猫"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -444,4 +456,20 @@ func TestSupersedeKeepsPinned(t *testing.T) {
 			require.Len(t, pinned, map[bool]int{true: 1, false: 0}[c.pinned])
 		})
 	}
+}
+
+// 钉住记录的取代者在同一轮又被否定时，钉住传给最终的取代者。
+func TestSupersedeChainKeepsPinned(t *testing.T) {
+	f := newCommitFixture(t, Config{})
+	x, err := f.m.Remember(f.ctx, Record{ID: "x", Kind: KindFact, Content: "用户偏好 zap", Importance: 0.5, Pinned: true})
+	require.NoError(t, err)
+	j := f.enqueue("k", false)
+	p := &jobPlan{vectors: map[string][]float32{}, decisions: []decision{
+		{index: 0, id: stableID("k", "0"), op: opUpdate, target: "x", planned: -1, c: candidate{Kind: KindFact, Content: "用户偏好 slog", Importance: 0.5}, content: "用户偏好 slog", shown: []RecordRef{refOf(x)}},
+		{index: 1, id: stableID("k", "1"), op: opInvalidate, planned: 0, c: candidate{Kind: KindFact, Content: "用户偏好 zap 的 JSON 输出", Importance: 0.5}, shown: []RecordRef{refOf(x)}},
+	}}
+	require.NoError(t, f.m.commitJob(f.ctx, j, p))
+	s := f.state()
+	require.Equal(t, stableID("k", "1"), s.Records[x.ID].SupersededBy)
+	require.True(t, s.Records[stableID("k", "1")].Pinned)
 }

@@ -572,8 +572,16 @@ func (m *Memory) applyDecisions(t *tx, j Job, p *jobPlan, now time.Time, w *jobW
 			taken[d.target] = true
 			supersedes = append(supersedes, supersede{d.target, d.index, true})
 		case d.op == opInvalidate && d.planned >= 0:
+			// 被否定的计划记录不再创建：它要取代的已有记录改由否定者取代，钉住随之转移；
+			// 来源不转移，承载这些来源的正文已被否定。
+			pinned := built[d.planned].r.Pinned
 			delete(built, d.planned)
-			record(d, d.c.Content)
+			record(d, d.c.Content).r.Pinned = pinned
+			for k, s := range supersedes {
+				if s.by == d.planned {
+					supersedes[k] = supersede{s.target, d.index, false}
+				}
+			}
 		default:
 			// 取代者继承钉住：核心记忆被合并或改写后仍是核心记忆。
 			record(d, d.c.Content).r.Pinned = t.Records.m[d.target].Pinned
