@@ -37,12 +37,26 @@ GOAGENT_LIVE=1 CS_SCENARIO_REPEATS=10 TMPDIR=/tmp taskset -c 2,3,6-27 \
 | multi | 多条事实同时召回 | 9 | 9 |
 | recall | 跨工单召回 | 7 | 8 |
 | premise | 纠正与记忆冲突的错误前提 | 7 | 7 |
-| forget | 删除后不再给出 | 6 | 6 |
+| forget | 删除后不再给出 | 6 | 4 |
 | temporal | 按时间先后作答 | 2 | 2 |
 | update | 新事实取代旧事实 | 0 | 9 |
-| 合计 | | 61/90（67.8%） | 71/90（78.9%） |
+| 合计 | | 61/90（67.8%） | 69/90（76.7%） |
 
-复核范围是全部 29 个失败项加每场景 2 个固定抽样的通过项，共 43 项。自动评审（状态检查或 LLM 评审任一层）与复核不一致 11 项，误判率 25.6%，主要来自 update 的状态检查：它用子串「朝阳」判断旧地址是否残留，而新事实本身会写「原地址北京朝阳已不再使用」，10 次中误判 9 次；复核确认没有一次是旧地址记录仍然有效。
+复核范围是全部 29 个失败项、每场景 2 个固定抽样的通过项，以及与 forget-01/02/03/10 答复同构却被自动判对的 forget-06/08，共 45 项。forget-06/08 都只说「无法查询，身份验证后自行查看」，从未说明号码已删除或不存在，复核改判为错。自动评审（状态检查或 LLM 评审任一层）与复核不一致 13 项，误判率 28.9%，主要来自 update 的状态检查：它用子串「朝阳」判断旧地址是否残留，而新事实本身会写「原地址北京朝阳已不再使用」，10 次中误判 9 次；复核确认没有一次是旧地址记录仍然有效。
+
+复核后失败归类计数（按 `a-review.md` 的「归类」列；未复核项沿用自动判定，均为通过）：
+
+| 环节 | 失败数 | 项 |
+|---|---:|---|
+| tool | 1 | premise-07 |
+| extract | 4 | temporal-03/06/09/10（不能排除 consolidate noop） |
+| consolidate | 0 | — |
+| recall | 4 | temporal-01/02/04/05 |
+| answer | 12 | forget-01/02/03/06/08/10、premise-04/09、recall-03/10、multi-04、update-04 |
+| 合计（系统失败） | 21 | = 90 − 69 |
+| judge（另一维度） | 13 | 自动评审误判：update-01~10、recall-02、forget-06/08；不计入上面的合计 |
+
+isolate 只检查客户 Q 的命名空间没有 778899，本次运行时并未确认客户 P 真的存入了会员号，P 写入失败时也会空过。本次运行的证据是 P 确实存了：10 次 isolate 的运行记录全部含 `memory_save` 调用（`grep -l memory_save /tmp/cs-scenarios/20261117-190225/isolate-*/runs/*.json` 命中 11 个文件，覆盖 isolate-01~10）。正向检查（P 的有效或钉住记录含 778899，否则 state_ok 为假）是本次运行之后在 goagent-examples `a72abed` 补上的。
 
 ## B 故障与并发
 
@@ -69,13 +83,13 @@ TMPDIR=/tmp taskset -c 2,3,6-27 orchestration/customer-service/scripts/with-stor
 命令（goagent 根目录）：
 
 ```bash
-go run ./scripts/memeval -format locomo -data /tmp/memeval-data/locomo10.json -sample 200 -repeats 2 \
+TMPDIR=/tmp taskset -c 2,3,6-27 go run ./scripts/memeval -format locomo -data /tmp/memeval-data/locomo10.json -sample 200 -repeats 2 \
   -concurrency 10 -systems memory,graph -chat deepseek -judge deepseek -embed gemini:gemini-embedding-001 \
   -out locomo-200.md -results locomo-200.jsonl
-go run ./scripts/memeval -format longmemeval -data /tmp/memeval-data/longmemeval_oracle.json -sample 100 -repeats 1 \
+TMPDIR=/tmp taskset -c 2,3,6-27 go run ./scripts/memeval -format longmemeval -data /tmp/memeval-data/longmemeval_oracle.json -sample 100 -repeats 1 \
   （其余参数同上） -out lme-100.md -results lme-100.jsonl
 mkdir -p /tmp/rejudge && cp rejudge.go.txt /tmp/rejudge/main.go
-go run /tmp/rejudge/main.go -baseline docs/evaluation/2026-11-13-memory-g2/locomo-200.jsonl,docs/evaluation/2026-11-13-memory-g2/locomo-200-r2.jsonl \
+TMPDIR=/tmp taskset -c 2,3,6-27 go run /tmp/rejudge/main.go -baseline docs/evaluation/2026-11-13-memory-g2/locomo-200.jsonl,docs/evaluation/2026-11-13-memory-g2/locomo-200-r2.jsonl \
   -current locomo-200.jsonl -judged g2-rejudged-deepseek.jsonl -out compare.md
 ```
 
@@ -101,18 +115,21 @@ go run /tmp/rejudge/main.go -baseline docs/evaluation/2026-11-13-memory-g2/locom
 
 | # | 环节 | 缺陷 | 复现场景 | 影响 |
 |---|---|---|---|---|
-| 1 | answer | 分流成员没有长期记忆，结束时复述成员答复，把成员引用记忆得出的结论（蓝色、X200、没有相关记录）删掉 | premise、recall、forget | 5/90，最大单一来源：记忆召回正确，客户却看不到 |
+| 1 | answer | 分流成员没有长期记忆，结束时复述成员答复，把成员引用记忆得出的结论（蓝色、X200、没有相关记录）删掉 | premise、recall、forget | 6/90（premise-04/09、recall-03/10、forget-01/06），与 #5 并列最大单一来源：记忆召回正确，客户却看不到 |
 | 2 | recall | 召回块与 `memory_search` 结果只带日期（`memory/recall.go` `time.DateOnly`），按得分排序，同日多条记录无法排先后 | temporal | 4/10 如实答「无法判断」；所有「最早/最近」类问题都受影响 |
 | 3 | extract（不排除 consolidate） | 同一客户第 2 张工单的「充电器发烫」没有留下有效记录 | temporal | 4/10；抽取输出未留存，需开启抽取与整理决定日志才能区分是抽取为空还是整理误判 noop |
 | 4 | tool | 成员按客户的错误前提调用 `memory_replace`，把正确的「蓝色」改成「红色…以用户最新说法为准」 | premise | 1/10，但会持久污染记忆；召回块的「与用户当前所说冲突时以用户为准」会诱导这一行为 |
-| 5 | answer | 记录已召回，模型仍不用或含糊其辞（multi-04、update-04、forget-02/03/10） | multi、update、forget | 5/90 |
+| 5 | answer | 记录已召回或已确认为空，成员答复仍不用或含糊其辞（multi-04、update-04、forget-02/03/08/10） | multi、update、forget | 6/90 |
 
 评测自身的问题（不是系统缺陷，修订评测时处理）：update 的子串状态检查误判 9/10；LLM 评审对同构答复判定不一致（update 1–3 与 5–10，forget 06/08 与 01–03/10）。
 
 ## 局限
 
-- A 的被测模型与评审模型都是 deepseek-flash，评审可能对同源答复偏宽；人工复核只覆盖 43/90 项，未复核项沿用自动判定。
+- A 的被测模型与评审模型都是 deepseek-flash，评审可能对同源答复偏宽；人工复核只覆盖 45/90 项，未复核项沿用自动判定。
 - C 的评审由 G2 的 gpt-4o 换成 DeepSeek；已用重判消除口径差，两者一致率 98.2%。
 - A 每场景 10 次，95% 区间宽（例如 7/10 为 39.7%–89.2%），只能识别明显的问题，不能比较小幅差异。
 - B 用离线脚本模型与哈希嵌入，验证的是存储、任务与索引层的不变量，不覆盖真实模型的抽取质量。
 - LongMemEval 用的是清洗版 oracle，只跑 1 轮。
+- A 交给评审的答复取发给客户 Q 的最后一条消息，而不是专门取提问工单的答复；若提问工单没有答复，会误取之前工单的答复。本次 90 次提问工单全部 delivered，不受影响。
+- A 中 `driveTicket` 的错误（追问轮数过多、工单没有到达终态）记为 infra，而不是系统失败。本次 infra 为 0，没有影响。
+- B 的取代检查只明确覆盖原钉住记录（及有效记录、取代者本身）；其他已失效记录上悬空的 `SupersededBy` 不在检查范围内。
