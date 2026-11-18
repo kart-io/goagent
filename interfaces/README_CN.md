@@ -10,6 +10,7 @@
 |---|---|---|
 | `Tool` 及可选接口 | 工具执行 | `builder.WithTools`、`tools` 包的全部工具 |
 | `DocumentRetriever` | 检索证据 | `builder.WithRetriever` |
+| `RequestRetriever` | 带 `TopK` 与元数据过滤（租户、权限）的检索 | `builder.WithRetriever`；设置 `RetrievalConfig.Filter` 时必须实现 |
 | `VectorStore` | 向量检索 | 由 goagent-contrib/retrieval 的向量库适配实现 |
 
 ## Tool
@@ -59,14 +60,20 @@ type ToolOutput struct {
 type DocumentRetriever interface {
     GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error)
 }
+
+type RequestRetriever interface {
+    Retrieve(ctx context.Context, req RetrievalRequest) ([]*Document, error)
+}
 ```
+
+- `RetrievalRequest`：`Query`、`TopK`（0 使用检索器默认值）、`Filter`（每个键须与文档元数据同名字段相等，nil 表示不过滤）。实现无法执行过滤条件时必须返回错误，不得返回未过滤的结果。
 
 - `Document`：`ID`、`PageContent`、`Metadata`、`Embedding`、`Score`，方法 `Clone`、`GetMetadata`、`SetMetadata`、`String`。
 - `RetrievalSource`：`Reference`、`ID`、`Source`、`Score`，标识实际送入模型的资料，不代表已核验引用。
 
 ## 其他类型
 
-- `TokenUsage`：`PromptTokens`、`CompletionTokens`、`TotalTokens`、`CachedTokens`，方法 `Add`、`IsEmpty`。`llm.CompletionResponse.Usage` 与 Builder 的 `AgentOutput.TokenUsage` 使用此类型。
+- `TokenUsage`：`PromptTokens`、`CompletionTokens`、`TotalTokens`、`CachedTokens`、`ReasoningTokens`、`ToolUsePromptTokens`，方法 `Add`、`IsEmpty`。`llm.CompletionResponse.Usage` 与 Builder 的 `AgentOutput.TokenUsage` 使用此类型。
 
 ## 常量
 
@@ -79,7 +86,7 @@ interfaces/
 ├── doc.go               # 包文档
 ├── tool.go              # Tool 及可选接口、ToolInput/ToolOutput/ToolCall
 ├── store.go             # VectorStore、Document
-├── retrieval.go         # DocumentRetriever
+├── retrieval.go         # DocumentRetriever、RequestRetriever、RetrievalRequest
 ├── retrieval_source.go  # RetrievalSource
 └── token.go             # TokenUsage
 ```

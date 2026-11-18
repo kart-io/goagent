@@ -44,7 +44,7 @@ output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a
 **Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
 
 - 默认缓存 `cache.NewSimpleCache(5*time.Minute, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))`（无后台协程，最多 10000 条）、TTL 5 分钟；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithCache(cache.Cache)`、`WithTTL`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
-- 默认键 `tool:<name>:<sha256(参数JSON) 的完整十六进制摘要>`，忽略 `__` 开头的参数；键中不含 CallerID 或会话，跨用户共享的缓存须自定义键函数。
+- 默认键 `tool:<name>:<sha256(参数JSON) 的完整十六进制摘要>`，忽略 `__` 开头的参数；键前自动加会话与 CallerID 的哈希前缀，二者都为空时才不隔离。
 - 只缓存 `err == nil` 且 `Success=true` 的结果（不含 `__` 开头的元数据）。命中时不调用内层，返回副本并设置 `Metadata["cache_hit"]=true`、`Metadata["cached"]=true`；未命中且写入时设置 `cache_hit=false`、`cache_stored=true`。
 
 **RateLimit**：`RateLimit(opts...)`，基于 `golang.org/x/time/rate` 令牌桶。默认 10 QPS、突发 20、全局共享、不等待；选项 `WithQPS`、`WithBurst`、`WithPerToolRateLimit()`（按工具名独立限流）、`WithWaitTimeout`（大于 0 时最多等待这么久取令牌）、`WithRateLimitLogger`。拒绝时返回错误码 `errors.CodeMiddlewareExecution`，可用 `errors.IsCode(err, errors.CodeMiddlewareExecution)` 判断。

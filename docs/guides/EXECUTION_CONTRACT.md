@@ -70,7 +70,7 @@ Orchestration and recovery by entry point:
 
 ## Optional Context Governance
 
-`WithOffload` adds large-result offloading and paged reading to the native tool stream (a PreStep component); history compaction is provided by the `compaction` component of goagent-harness `preset`. Off by default; the last request restores offloaded originals so the model is not left with references it can no longer read. See [Tool Context](CONTEXT_POLICY.md).
+`WithOffload` adds large-result offloading and paged reading to the native tool stream (a PreStep component); history compaction uses `WithCompaction(contextpolicy.NewCompaction(...))`. Off by default; the last request restores offloaded originals so the model is not left with references it can no longer read. See [Tool Context](CONTEXT_POLICY.md).
 
 Starter code is in [Quickstart and Migration](QUICKSTART.md). For complex flows in the main module use [workflow.Graph[T]](../../workflow/README.md).
 

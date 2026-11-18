@@ -48,7 +48,6 @@ func Chat(ctx context.Context, client Client, messages []Message) (*CompletionRe
 
 - `HasToolStreaming` 只检查接口实现，不看能力声明。Builder 接受任意 `llm.Client`；配置工具或 `WithReturnDirectTools` 时要求 `ToolStreamClient`，否则 Build 报错。
 - `HasEmbedding` / `AsEmbedder` 同时要求实现 `EmbeddingClient`，且（若实现了 `CapabilityChecker`）声明了 `CapabilityEmbedding`。
-- `ErrUnsupportedCapability` 表示 Provider 没有实现该操作。
 
 ### 能力常量
 
@@ -75,6 +74,7 @@ func UserMessage(content string) Message
 func AssistantMessage(content string) Message
 
 type CompletionRequest struct {
+    Reasoning   *usage.ReasoningConfig // 可选推理配置
     Messages    []Message
     Temperature float64
     TemperatureSet bool // Go 结构体显式指定零时设为 true；不生成 JSON 字段
@@ -85,6 +85,7 @@ type CompletionRequest struct {
 }
 
 type CompletionResponse struct {
+    ResponseModel string // 服务端报告的模型/版本，空表示未报告
     Content      string
     Model        string
     TokensUsed   int
@@ -104,6 +105,7 @@ type CompletionResponse struct {
 
 ```go
 type StreamChunk struct {
+    ResponseModel    string         // 服务端报告的模型/版本，空表示未报告
     ProviderState    *ProviderState
     ToolCalls        []ToolCall // 仅在成功的终止块中给出本轮完整工具调用
     ReasoningContent string
@@ -151,14 +153,15 @@ func streamAnswer(ctx context.Context, client llm.Client, prompt string) error {
 type ProviderError struct {
     StatusCode int           // HTTP 状态码；0 表示没有响应或流在开始后中断
     RetryAfter time.Duration // 服务端建议的等待时长，0 表示未给出
+    QuotaExhausted bool      // 账户额度耗尽（如 insufficient_quota），常以 429 返回但短时重试不会成功
     Err        error
 }
-func (e *ProviderError) Retryable() bool // 429、5xx 与暂时性连接错误
+func (e *ProviderError) Retryable() bool // 429、5xx 与暂时性连接错误；QuotaExhausted 时为 false
 
 func ClassifyError(err error) ClassifiedError
 
 type ClassifiedError struct {
-    Reason         ErrorReason // rate_limit、server、network、context_length、auth、not_found、bad_request、canceled、unknown
+    Reason         ErrorReason // rate_limit、quota、server、network、context_length、auth、not_found、bad_request、canceled、unknown
     Retryable      bool        // 原样重试可能成功
     ShouldCompress bool        // 超出上下文窗口，缩短消息后可能成功
     ShouldFallback bool        // 换模型或提供方可能成功
@@ -174,15 +177,17 @@ type ClassifiedError struct {
 | 选项 | 说明 |
 |---|---|
 | `WithAPIKey`、`WithBaseURL`、`WithModel` | 为空时依次回退到 Provider 的环境变量和默认值 |
-| `WithEmbeddingModel` | 独立的向量模型，目前 Gemini 使用 |
+| `WithEmbeddingModel` | 独立的向量模型，OpenAI 兼容 Provider 与 Gemini 使用 |
 | `WithMaxTokens`、`WithTemperature`、`WithTopP` | 请求未指定时使用的默认值 |
-| `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；目前只有 DeepSeek 的非流式请求读取 |
+| `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；当前没有内置 Provider 读取该选项 |
 | `WithSystemPrompt` | 前置到每次请求的系统提示 |
+| `WithReasoning` | 推理配置（`usage.ReasoningConfig`），请求的 `Reasoning` 未设置时使用 |
+| `WithStreamIdleTimeout`、`WithStreamTimeout` | 流式响应的空闲间隔上限与总时长上限 |
 | `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES.md#超时配置) |
 | `WithCustomHeaders` | 附加到所有内置 Provider 的请求，覆盖 SDK 设置的同名头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
-模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用（目前只有 `Embed`）内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。
 
 ## Provider 构造函数
 

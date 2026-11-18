@@ -108,5 +108,4 @@ v3 也收紧了旧 Harness 的解析规则：布尔值使用 `true/false`（不�
 新增元数据读取要求 `metadata.version` 等值是字符串，不再忽略它们的类型；名称、描述和兼容性说明分别限制
 为 64、1024、500 个字符。无效文档包括被覆盖的技能均会使 Build 失败，迁移前应修正对应文件。
 
-这批新公共 API 尚未发布到版本依赖。Harness 当前开发验证需用临时 `go.work` 组合两个 checkout；
-独立发布 Harness 前须把其 `go.mod` 更新到包含新 API 的可获取 GoAgent 版本，并以 `GOWORK=off` 验证。
+这批公共 API 自 GoAgent v0.52.0 起发布；Harness 依赖包含它的 GoAgent 版本，以 `GOWORK=off` 验证。

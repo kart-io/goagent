@@ -39,7 +39,7 @@ Builder 的持久化入口各管一件事，不能相互替代：
 |---|---|---|
 | 运行中途崩溃恢复 | Scope 的 Journal 与 `WithDurableScope` | 记录模型与工具调用，以同一执行键恢复时回放已完成操作 |
 | 对话历史 | `WithSessionLog` | 历史从会话日志推导；SessionLog 可同时作为 durable 日志（`session.DurableStore`） |
-| 轮次之间的业务状态 | `WithState` | 默认只在进程内保留；`WithSessionState` 让状态随会话日志跨进程恢复，否则由宿主持久化，或作为 `workflow.CompileDurable` 图的状态 |
+| 轮次之间的业务状态 | `WithState` | 默认只在进程内保留；`WithSessionState` 让状态随会话日志跨进程恢复，否则由宿主持久化，或作为经 `workflow.Graph[T].CompileDurable` 编译的图的状态 |
 
 持久日志只回放操作结果，不保存 `WithState` 的状态。
 

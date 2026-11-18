@@ -2,7 +2,7 @@
 
 [English](HUMAN_IN_THE_LOOP.md) | [中文](HUMAN_IN_THE_LOOP_CN.md)
 
-When execution must continue after human approval, additional information or an edited draft, use `workflow.CompileDurable`. The run saves a checkpoint before the designated node, returns a waiting status and releases the run lock; a person can respond later, even from a new process. There is no need to keep an HTTP request or a goroutine waiting.
+When execution must continue after human approval, additional information or an edited draft, use `workflow.Graph[T].CompileDurable`. The run saves a checkpoint before the designated node, returns a waiting status and releases the run lock; a person can respond later, even from a new process. There is no need to keep an HTTP request or a goroutine waiting.
 
 | Need | How to wire it |
 |---|---|

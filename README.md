@@ -63,7 +63,7 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 
 - **Skills loading** - standalone read-only `skills.Catalog` for metadata, instructions and resources, with an optional `load_skill` tool. See the [Skills guide](docs/guides/SKILLS.md).
 - **One execution entry** - `agent.AsRunnable()` serves `Invoke`, `Stream`, `Batch` and `Pipe` from the same stream source, so tools, retrieval, middleware and callbacks run on one path.
-- **Native tool loop** - the model picks tools or answers in a single streaming request (OpenAI, DeepSeek and Gemini providers); optional parallel tool calls and direct-return tools.
+- **Native tool loop** - the model picks tools or answers in a single streaming request (OpenAI, DeepSeek, Gemini and Anthropic providers, plus the Kimi, SiliconFlow and Ollama presets); optional parallel tool calls and direct-return tools.
 - **Loop extension points** - PreStep, Request, RequestError, TurnStopping hooks, prompt sections/contexts, and a running `Handle` that accepts Steer/Inject/Redirect/Followup.
 - **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
 - **Human in the loop** - approval gates accept validated human input via `DurableGraph.Resume`; nodes, parallel branches, interruptible tools and nested graphs pause mid-execution with `durable.AwaitInput` and resume from the checkpoint. See the [HITL guide](docs/guides/HUMAN_IN_THE_LOOP.md).

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 文档
 
 - 面向用户的 13 篇入门/编排/接入指南、`docs/README.md` 索引与稳定包 README（`builder`、`core`、`core/session`、`core/durable/migrate`、`errors`、`interfaces`、`llm`、`tools`、`workflow`）改为英文主文件，中文版移至同目录 `_CN.md`。翻译时按代码订正了失实内容：Builder 默认值（`MaxTokens`、`Temperature` 默认不设置）、已删除的 `WithMemory`、迁到 `errors` 包的哨兵错误名、错误码数量（65）、`interfaces.ToolInput` 不存在的 `Context` 字段，以及 `ToolStreamClient` 实现方漏列的 Anthropic。
+- 全量核对现行文档与代码（132 份），修正约 80 处失实：已删除 API 的残留引用（`WithMemory`、`MemoryManager`、`ToolInput.Context`、`NewCachedTool`、`core/checkpoint`、parsers 常量等）、迁到 `errors` 包后的哨兵短名、中间件错误流程与持久重跑判定、工具缓存作用域、Handle 输入持久化、Provider 列表漏 Anthropic、过时的发布状态，以及索引与文件表的遗漏。`workflow/refund` 存储缺失记录应返回 `errors.ErrRefundNotFound`。`llm.WithResponseFormat` 目前无内置 Provider 读取，文档已如实说明。
 
 ### 修复
 

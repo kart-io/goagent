@@ -16,7 +16,6 @@ llm/
 ├── provider_error.go # ProviderError, ClassifyError
 ├── options.go        # ClientOption (With*)
 ├── common/           # BaseProvider, retries, HTTP error mapping, message conversion
-├── constants/        # provider constants, environment variable names, defaults
 ├── providers/        # OpenAI, Anthropic, Gemini, DeepSeek, Ollama, Kimi, SiliconFlow
 ```
 

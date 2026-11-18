@@ -12,6 +12,7 @@ This package owns the framework error codes, fixed control signals, error messag
 |---|---|
 | `codes.go` | `ErrorCode` and the category codes |
 | `sentinel.go`, `sentinels.go` | The immutable `SentinelError` and the single definition of each sentinel |
+| `management.go` | The `ErrManagement*` sentinels of the management service |
 | `llm.go` | The `Message*` error messages actually in use, and the error context fields |
 | `errors.go`, `helpers.go` | `AgentError`, error chains, category extraction and business constructors |
 
@@ -400,6 +401,7 @@ errors/
 ├── llm.go          # model error fields and messages
 ├── sentinel.go     # immutable coded sentinel type
 ├── sentinels.go    # single object definitions of the framework's fixed signals
+├── management.go   # ErrManagement* sentinels of the management service
 │
 ├── helpers.go      # dedicated error constructors
 │

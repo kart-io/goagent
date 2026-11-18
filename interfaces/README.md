@@ -10,6 +10,7 @@
 |---|---|---|
 | `Tool` and optional interfaces | Tool execution | `builder.WithTools`, all tools in the `tools` package |
 | `DocumentRetriever` | Evidence retrieval | `builder.WithRetriever` |
+| `RequestRetriever` | Retrieval with `TopK` and a metadata filter (tenant, permissions) | `builder.WithRetriever`; required when `RetrievalConfig.Filter` is set |
 | `VectorStore` | Vector search | Implemented by the vector store adapters in goagent-contrib/retrieval |
 
 ## Tool
@@ -59,14 +60,20 @@ There is also `ToolCall` (a call record).
 type DocumentRetriever interface {
     GetRelevantDocuments(ctx context.Context, query string) ([]*Document, error)
 }
+
+type RequestRetriever interface {
+    Retrieve(ctx context.Context, req RetrievalRequest) ([]*Document, error)
+}
 ```
+
+- `RetrievalRequest`: `Query`, `TopK` (0 uses the retriever's default), `Filter` (every key must equal the document metadata field of the same name; nil means no filter). An implementation that cannot apply a filter must return an error rather than unfiltered results.
 
 - `Document`: `ID`, `PageContent`, `Metadata`, `Embedding`, `Score`; methods `Clone`, `GetMetadata`, `SetMetadata`, `String`.
 - `RetrievalSource`: `Reference`, `ID`, `Source`, `Score`; identifies the material actually sent to the model, not a verified citation.
 
 ## Other Types
 
-- `TokenUsage`: `PromptTokens`, `CompletionTokens`, `TotalTokens`, `CachedTokens`; methods `Add`, `IsEmpty`. Used by `llm.CompletionResponse.Usage` and the Builder's `AgentOutput.TokenUsage`.
+- `TokenUsage`: `PromptTokens`, `CompletionTokens`, `TotalTokens`, `CachedTokens`, `ReasoningTokens`, `ToolUsePromptTokens`; methods `Add`, `IsEmpty`. Used by `llm.CompletionResponse.Usage` and the Builder's `AgentOutput.TokenUsage`.
 
 ## Constants
 
@@ -79,7 +86,7 @@ interfaces/
 ├── doc.go               # package documentation
 ├── tool.go              # Tool and optional interfaces, ToolInput/ToolOutput/ToolCall
 ├── store.go             # VectorStore, Document
-├── retrieval.go         # DocumentRetriever
+├── retrieval.go         # DocumentRetriever, RequestRetriever, RetrievalRequest
 ├── retrieval_source.go  # RetrievalSource
 └── token.go             # TokenUsage
 ```

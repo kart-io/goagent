@@ -373,14 +373,7 @@ Validate(parsed *ReActOutput) error
 
 ### 错误变量
 
-```go
-var (
-    ErrParseFailed    = errors.New("failed to parse output")
-    ErrInvalidFormat  = errors.New("invalid output format")
-    ErrMissingField   = errors.New("missing required field")
-    ErrTypeConversion = errors.New("type conversion failed")
-)
-```
+解析错误是 `github.com/kart-io/goagent/errors` 包中的哨兵，用 `errors.Is` 判断：`ErrParseFailed`、`ErrInvalidFormat`、`ErrTypeConversion`（错误码 `CodeParserFailed`）、`ErrMissingField`（`CodeParserMissingField`）、`ErrNoParsers`（`CodeInvalidConfig`）。
 
 ## 代码结构
 
@@ -397,26 +390,14 @@ parsers/
 │   ├── RegexOutputParser
 │   └── ChainOutputParser[T]
 ├── parser_react.go        # ReAct 解析器
-├── constants.go           # 常量定义
 └── *_test.go              # 测试
 ```
 
 ## 常量定义
 
-### ReAct 字段名称
-
-```go
-const (
-    FieldThought     = "thought"
-    FieldAction      = "action"
-    FieldActionInput = "action_input"
-    FieldObservation = "observation"
-    FieldFinalAnswer = "final_answer"
-    FieldAnswer      = "answer"
-)
-```
-
 ### ReAct 标记符
+
+ReAct 标记位于 `constants` 包（`constants/parsers.go`）：
 
 ```go
 const (
@@ -425,29 +406,6 @@ const (
     MarkerActionInput = "Action Input:"
     MarkerObservation = "Observation:"
     MarkerFinalAnswer = "Final Answer:"
-)
-```
-
-另有 CoT/Plan（`MarkerQuestion`、`MarkerPlan`、`MarkerStep`、`MarkerReasoning`、`MarkerConclusion`，`FieldReasoning`、`FieldSteps`、`FieldConclusion`、`FieldConfidence`）、ToT（`FieldBranch`、`FieldScore`、`FieldPath`、`FieldEvaluation`）、自我反思（`FieldCritique`、`FieldImprovement`、`FieldRevision`、`FieldFeedback`）字段与标记，以及错误类型 `ErrTypeInvalidFormat`、`ErrTypeMissingField`、`ErrTypeInvalidJSON`、`ErrTypeUnexpectedStructure`。
-
-### 输出格式类型
-
-```go
-const (
-    FormatJSON       = "json"
-    FormatText       = "text"
-    FormatMarkdown   = "markdown"
-    FormatStructured = "structured"
-)
-```
-
-### 解析模式
-
-```go
-const (
-    ModeStrict  = "strict"
-    ModeLenient = "lenient"
-    ModeAuto    = "auto"
 )
 ```
 

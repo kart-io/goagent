@@ -28,6 +28,8 @@ type Tool interface {
 | `tools/middleware` | 单个工具的包装中间件（日志、缓存、限流），见 [工具中间件](../docs/guides/TOOL_MIDDLEWARE_CN.md) |
 | `tools/policy` | 按工具名与命令前缀裁决的权限规则，作为 `Pipeline` 的 PreHook |
 | `tools/spill` | 把超长结果写入宿主目录并以 `read_spill` 工具分段读取，作为 `Pipeline` 的 PostHook |
+| `tools/skill` | `skill.New(catalog)`：把只读的 `skills.Catalog` 适配为 `load_skill` 工具 |
+| `tools/toolargs` | 解析模型给出的工具参数，float64 表示不了的数字保留为 `json.Number`，并按 Schema 校验 |
 
 编码 Agent 的工作区工具在独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION.md)。
 

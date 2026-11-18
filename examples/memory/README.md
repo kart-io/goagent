@@ -13,7 +13,7 @@ go test -race ./examples/memory
 
 | 场景 | 文件 | 验证的边界 |
 | --- | --- | --- |
-| A 隔离与删除 | `isolation.go` | 未绑定命名空间时 8 个方法与 3 个记忆工具全部返回 `CodeInvalidInput`，绑定后同样的写入成功；同一 ID 在 4 个命名空间互不相干（含 `alice`/`alice2` 前缀）；回答期间 `Forget`，本轮任务被丢弃、抽取模型一次也不调用；回答期间 `Purge`，旧任务消失、本轮任务丢弃、删除日志有记录、其他用户不受影响；`Hydrate` 换命名空间返回 `ErrMemoryNamespaceChanged`，遗忘后只还原未遗忘的引用 |
+| A 隔离与删除 | `isolation.go` | 未绑定命名空间时 8 个方法与 4 个记忆工具全部返回 `CodeInvalidInput`，绑定后同样的写入成功；同一 ID 在 4 个命名空间互不相干（含 `alice`/`alice2` 前缀）；回答期间 `Forget`，本轮任务被丢弃、抽取模型一次也不调用；回答期间 `Purge`，旧任务消失、本轮任务丢弃、删除日志有记录、其他用户不受影响；`Hydrate` 换命名空间返回 `ErrMemoryNamespaceChanged`，遗忘后只还原未遗忘的引用 |
 | B 抽取管线 | `extraction.go` | 会话 A 抽取的事实在会话 B 以 `RecallPrefix` 召回块出现，会话 B 的日志里没有召回正文；同一任务重复登记只处理一次，失败后重试；`update` 取代旧记录并继承来源，`noop` 不写入；模型持续失败与非 JSON 回复按 `JobAttempts` 标记 failed，非法候选丢弃，整理期间目标被并发修改时降级并计入 `Stats.Conflicts`，target 不存在时计入 `Stats.InvalidTargets`；中止轮次只写一条 `reflection`，抽取请求里没有召回块与 `memory_search` 的调用和结果 |
 | C 缓存一致性 | `cache.go` | `ModelCache` 的 `EraseRequired` 构建校验（TTL、Tagged、TagKey、OnErase）；构建失败时断言 `CodeInvalidConfig` 与原因关键字；`Forget`/`Rewound`/`Purge` × 三种擦除装配的表驱动用例：删除后都不命中，只有 `EraseAuto`+`OnErase` 物理清除条目；`Rewound` 切开一轮后旧记录恢复、新记录失效、为可见部分补登任务 |
 | D 预算与保留 | `budget.go` | 核心记忆总在召回块最前；整个召回块（含块头）不超过 `RecallRunes` 且按 rune 计，块内容与 `Retrieval.Records` 一致；`Weights` 改变排序，两个半衰期后新近性为 1/4 但记录仍在；TTL、`MaxRecords` 淘汰（不动钉住的）、失效保留期后物理删除；换嵌入模型后旧向量不被采用，`Reindex` 后恢复，按 `append(ns, "#"+scope)` 的布局核对遗忘后向量键被清理 |

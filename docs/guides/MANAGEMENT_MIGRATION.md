@@ -22,9 +22,9 @@
 
 ## 未发布代码的跨仓验证
 
-GoAgent v0.50.0 不包含本次新增管理包。正式对外使用须先发布包含迁移代码的真实 GoAgent 版本，再更新 contrib 的依赖锁定；仅修改导入路径不代表旧发布版本已支持新包。
+GoAgent 自 v0.51.0 起包含管理包；v0.50.0 及更早版本不包含，仅修改导入路径不代表旧发布版本已支持新包。
 
-本地联合开发使用 contrib 已有临时 workspace 入口，不修改用户 go.work，不在核心 go.mod 写入本机 replace：
+联调核心中尚未发布的改动时，使用 contrib 已有临时 workspace 入口，不修改用户 go.work，不在核心 go.mod 写入本机 replace：
 
 ```bash
 # 在 contrib 根目录；GOAGENT_CORE_ROOT 指向包含新 management 包的 GoAgent 工作树。

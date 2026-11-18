@@ -1,5 +1,7 @@
 # API 文档与源码一致性整理
 
+> 历史记录：本页记录 2026-10-31 的整理过程，不代表当前状态。文中引用的部分文件与符号（如 `interfaces/agent.go`、`core/agent.go`、`tools/executor_tool.go`、`WithCommunicator`、`RetryMiddleware`）此后已删除，当前 API 以 [API 参考](../api/CORE_API.md) 与 `go doc` 为准。
+
 日期：2026-10-31。源码基线：`033e744`。本轮只修改当前开发入口的文档及文档验证脚本，不改变执行器、工具、Provider、依赖或业务行为。
 
 ## 结论与范围

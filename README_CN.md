@@ -63,7 +63,7 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 
 - **Skills 加载**：独立的只读 `skills.Catalog` 提供元数据、正文和附属资源读取，可选 `load_skill` 工具适配。见 [Skills 指南](docs/guides/SKILLS.md)。
 - **统一执行入口**：`agent.AsRunnable()` 的 `Invoke`、`Stream`、`Batch`、`Pipe` 共用同一执行源，工具、检索、中间件与回调走同一路径。
-- **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini Provider）；可选并发工具调用与直接返回工具。
+- **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini、Anthropic Provider 及 Kimi、SiliconFlow、Ollama 预设）；可选并发工具调用与直接返回工具。
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。
 - **持久执行**：`core/durable` 记录模型回合与工具调用；`workflow.Graph` 编译带分支、并行汇合、有界循环与审批恢复的类型化图。
 - **人工介入**：审批暂停处经 `DurableGraph.Resume` 接收校验后的人工输入；节点、并行分支、可中断工具与嵌套子图可用 `durable.AwaitInput` 在执行中途暂停，从检查点恢复。见 [HITL 指南](docs/guides/HUMAN_IN_THE_LOOP_CN.md)。

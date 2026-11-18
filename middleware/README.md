@@ -5,7 +5,7 @@
 - `ObservabilityMiddleware`：实现 `core/middleware.Middleware`（`OnBefore`/`OnAfter`/`OnError`），挂在 `coremiddleware.MiddlewareChain` 上记录 OpenTelemetry 追踪与指标。
 - 基于状态的处理器：`LLMToolSelectorMiddleware`、`DynamicPromptMiddleware`、`LLMToolEmulatorMiddleware`、`AdaptiveMiddleware`、`ContextEnrichmentMiddleware`。它们的逻辑在 `Process(ctx, state core.State) (core.State, error)` 中，读写约定的状态键；嵌入的 `BaseMiddleware` 的 `OnBefore`/`OnAfter` 原样透传，因此加入 `MiddlewareChain` 不会触发其逻辑，需由调用方显式调用 `Process`。
 
-`Middleware` 接口、`MiddlewareChain`、请求/响应对象池以及缓存、限流、熔断等通用中间件位于 [core/middleware](../core/middleware/)。
+`Middleware` 接口、`MiddlewareChain`、请求/响应对象池以及日志、计时、限流、熔断等通用中间件位于 [core/middleware](../core/middleware/)。
 
 ## ObservabilityMiddleware
 

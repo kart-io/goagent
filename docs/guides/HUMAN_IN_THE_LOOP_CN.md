@@ -2,7 +2,7 @@
 
 [English](HUMAN_IN_THE_LOOP.md) | [中文](HUMAN_IN_THE_LOOP_CN.md)
 
-需要人工审批、补充信息或修改草稿后继续执行时，使用 `workflow.CompileDurable`。运行在指定节点前保存检查点并返回等待状态，释放运行锁；人可以稍后在新进程中回应。无需保持 HTTP 请求或 goroutine 等待。
+需要人工审批、补充信息或修改草稿后继续执行时，使用 `workflow.Graph[T].CompileDurable`。运行在指定节点前保存检查点并返回等待状态，释放运行锁；人可以稍后在新进程中回应。无需保持 HTTP 请求或 goroutine 等待。
 
 | 需求 | 接入方式 |
 |---|---|

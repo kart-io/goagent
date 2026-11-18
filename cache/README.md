@@ -8,7 +8,7 @@
 |---|---|
 | `Cache` | 接口：`Get`/`Set`/`Delete`/`Clear`/`Has`/`GetStats` |
 | `Bytes` | 接口：`GetBytes`/`SetBytes`/`Delete`，只收发字节，供外部缓存（如 Redis）实现；`SimpleCache` 实现 |
-| `SimpleCache` | 内置实现，`sync.Map` + TTL，默认后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理；访问驱动模式见 `WithoutBackgroundCleanup` |
+| `SimpleCache` | 内置实现，`sync.Map` + TTL，默认后台每 `ttl/2` 清理一次过期条目，`Close()` 停止清理；访问驱动模式见 `WithoutBackgroundCleanup`；`WithMaxEntries(n)` 限制条目数，超出时先回收过期条目再淘汰其他条目 |
 | `Tagged` | 可选接口：`SetTagged` 写入条目并关联标签，`DeleteTag` 删除带该标签的全部条目；`SimpleCache` 实现，用于模型调用缓存的物理删除 |
 | `NoOpCache` | 禁用实现：不存储条目，读写均返回 `agentErrors.ErrCacheDisabled` |
 | `CacheKeyGenerator` | 基于 SHA256 的键生成器 |
@@ -17,7 +17,7 @@
 
 `Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；一致性契约（"已完成"指 `SetTagged` 在 `DeleteTag` 开始前已返回）：S1（必须）`DeleteTag` 返回后，已完成的 `SetTagged` 写入的、带该标签的条目不可读，可用原子操作，也可用令牌或版本校验使旧写入在读取时失效，不要求事务或脚本；S2（实现须写明）这些条目何时物理删除，不能在 `DeleteTag` 返回时删除的情形须写明回收上限。`SimpleCache` 用同一把锁使 S2 在 `DeleteTag` 返回时成立。外部实现用 `cachetest.RunTagged` 验证契约。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
 
-缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheInvalid`、`ErrCacheDisabled`。
+缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheDisabled`。
 
 ## 使用方法
 
@@ -110,14 +110,17 @@ if enabled, ok := c.(*cache.SimpleCache); ok {
 
 `CacheConfig` 仅接受实际执行的 `Enabled` 和 `DefaultTTL`。旧 `Type`、`MaxSize`、`CleanupInterval` 已删除；配置文件须移除这些字段，使用统一 codec 的 Strict 解码时会拒绝旧字段。
 
-`NewInMemoryCache`、`NewLRUCache`、`NewMultiTierCache` 及其类型已删除，不提供旧名转发。`SimpleCache` 按 TTL 过期，不承诺容量上限、LRU 或多级回源；需要这些能力的宿主应提供实现 `Cache` 的缓存，并自行管理其资源生命周期。
+`NewInMemoryCache`、`NewLRUCache`、`NewMultiTierCache` 及其类型已删除，不提供旧名转发。`SimpleCache` 按 TTL 过期，可用 `WithMaxEntries` 限制条目数，不提供 LRU 或多级回源；需要这些能力的宿主应提供实现 `Cache` 的缓存，并自行管理其资源生命周期。
 
 ## 代码结构
 
 ```text
 cache/
 ├── base.go          # 接口、配置、键生成器、NoOpCache
-└── simple_cache.go  # SimpleCache
+├── bytes.go         # Bytes 接口
+├── simple_cache.go  # SimpleCache
+├── tagged.go        # Tagged 接口与 SimpleCache 的标签实现
+└── cachetest/       # 契约测试（RunTagged）
 ```
 
 ## 扩展阅读

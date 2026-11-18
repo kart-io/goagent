@@ -43,7 +43,7 @@ if err != nil { return err }
 for event := range stream {
     switch event.Type {
     case "sources": // event.Sources，编号与模型参考资料一致
-    case "step":    // event.Step：model_start、model_replayed、tool_start、tool_end（旧工具循环为 select_tools）
+    case "step":    // event.Step：model_start、model_replayed、tool_start、tool_end
     case "text":    // event.Delta，原生模型增量
     case "usage":   // event.Usage，全部模型请求的累计用量快照
     case "error":   // event.Error（Go）；JSON 对应 event.Message
@@ -52,7 +52,7 @@ for event := range stream {
 }
 ```
 
-任意 `llm.Client` 均可；配置了工具还需支持工具调用。实现 `llm.ToolStreamClient` 的 Provider（OpenAI、DeepSeek、Gemini）使用原生工具对话循环：模型每轮选择工具或直接回答，省去 READY 确认与独立答案请求；其他 Provider 取决于实际接口能力。工具参数不做逐 Token 展示。原生路径的 `MaxIterations` 计入全部模型请求，达到上限报错；元数据记录 `model_calls` 和 `usage_complete`。详见[执行契约与请求优化](EXECUTION_CONTRACT.md)。
+任意 `llm.Client` 均可；配置了工具时客户端必须实现 `llm.ToolStreamClient`（OpenAI、DeepSeek、Gemini、Anthropic 及 Kimi、SiliconFlow、Ollama 等 OpenAI 兼容预设），否则 Build 报错。原生工具对话循环中模型每轮选择工具或直接回答，省去 READY 确认与独立答案请求。工具参数不做逐 Token 展示。原生路径的 `MaxIterations` 计入全部模型请求，达到上限报错；元数据记录 `model_calls` 和 `usage_complete`。详见[执行契约与请求优化](EXECUTION_CONTRACT.md)。
 
 中间件包裹整次执行，包括 OnBefore、OnAfter、OnError；中间事件是暂态内容，以 done 为最终成功依据。OnAfter 修改的最终文本也可能与已发出的增量不同。错误终止不会再发送 done。取消时 error 事件是尽力发送，调用方同时检查 context。消费者必须继续读取或取消，避免背压挂起上游。最终请求遵守 Builder 的 MaxTokens/Temperature；成功生成后更新状态，启用自动保存时写检查点（保存失败终止，不发送 done）。未知用量不会估算为真实值，`answer_usage_reported` 表示最终回答回合的用量是否已报告：模型报告了用量，或该回合完全来自模型调用缓存（命中没有用量可报告）时为 true。
 
@@ -68,7 +68,7 @@ tools, err := remote.Tools(ctx, session)
 // builder.NewSimpleBuilder(client).WithTools(tools...)
 ```
 
-`remote` 为 `github.com/kart-io/goagent/mcp/remote`；`mcp` 为 `github.com/modelcontextprotocol/go-sdk/mcp`。官方 SDK v1.8.0 负责协议协商、传输、分页与取消；也可传入 `CommandTransport` 使用 stdio。HTTP 与真实子进程 stdio 均有互操作测试。工具保留完整 CallToolResult（含结构化内容与其他内容块），IsError 转为 Go error（`remote.WithToolErrorsAsRejected()` 改为交还模型的拒绝结果）。`remote.WithToolName` 重命名或过滤工具，`remote.WithDurablePolicy` 设置经 Dispatcher 持久调用时的操作策略。认证、请求大小限制与 HTTPClient 由 SDK transport 配置。需交互输入的结果明确报错，应用可通过 SDK session 继续交互，适配层不自动批准输入请求。工具列表是本次发现的快照，变化后重新读取。
+`remote` 为 `github.com/kart-io/goagent/mcp/remote`；`mcp` 为 `github.com/modelcontextprotocol/go-sdk/mcp`。官方 SDK v1.8.0 负责协议协商、传输、分页与取消；也可传入 `CommandTransport` 使用 stdio。HTTP 与真实子进程 stdio 均有互操作测试。工具保留完整 CallToolResult（含结构化内容与其他内容块），IsError 转为 Go error（`remote.WithToolErrorsAsRejected()` 改为交还模型的拒绝结果）。`remote.WithToolName` 重命名或过滤工具，`remote.WithDurablePolicy` 设置经 Dispatcher 持久调用时的操作策略。认证、请求大小限制与 HTTPClient 由 SDK transport 配置。需交互输入时，默认返回 `*remote.InputRequiredError`，可用其 `Continue` 在 SDK session 上续接；`remote.WithInputHandler` 由宿主收集输入，`remote.WithDurableInput` 在持久运行中以 `durable.AwaitInput` 暂停（见 [MCP README](../../mcp/README.md)）。适配层不自动批准输入请求。工具列表是本次发现的快照，变化后重新读取。
 
 参考：[官方 SDK](https://github.com/modelcontextprotocol/go-sdk/tree/v1.8.0)、[传输说明](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/docs/protocol.md)。
 

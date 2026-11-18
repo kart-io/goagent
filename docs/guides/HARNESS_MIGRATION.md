@@ -26,7 +26,7 @@ GoAgent 自 v0.27.0 起不再包含上表的包。迁移只改 import，原有�
 
 ## 本地验证
 
-Skills 公共包迁移尚未发布到 Harness 的版本依赖；当前应直接使用临时 workspace 验证两个 checkout。
+Skills 公共包自 GoAgent v0.52.0 发布；联调尚未发布的核心改动时，使用临时 workspace 验证两个 checkout。
 从 GoAgent 根目录运行：
 
 ```bash

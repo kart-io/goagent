@@ -48,7 +48,6 @@ graph TD
     tools --> budget
     tools --> durable
     tools --> observe
-    tools --> cache
 
     memory --> durable
     memory --> session
@@ -88,6 +87,7 @@ graph TD
     replay[testing/replay] --> session
     spill[tools/spill] --> tools
     spill --> env[harness/env]
+    toolmw[tools/middleware] --> cache
 ```
 
 `scripts/apicheck` 强制执行的导入边界见 [导入层级说明](IMPORT_LAYERING.md)。
@@ -119,6 +119,8 @@ graph TD
 | `multiagent` | 多 Agent 预置模式：`Sequential`、`Loop`、`RouterSupervisor` 构造器，`ParallelStep`、`AddStep`、`GuardRoute`，`SupervisorTools` 与文本接力层（`Conversation`、`TextStep`、`TextNext`） |
 | `workflow/refund` | 绑定事务的退款防护示范实现 |
 | `execution` | 宿主装配：`Scope` 组合 RunID、会话、日志、预算、期限与观察者 |
+| `management`（含 `httpapi`、`mcpserver`、`a2a`、`protocol`） | 可嵌入宿主的管理服务：Agent 注册与配置发布、Session/Fork、Task、审批与运行观测，及 HTTP/MCP/A2A 接入 |
+| `a2a/remote` | 远程 A2A Agent 客户端适配 |
 | `memory`、`store`、`cache` | 长期记忆、时序图谱与派生级联；键值存储（`store/memory`）、通用缓存 |
 | `mcp/remote` | 基于官方 SDK 的 MCP 客户端适配 |
 | `revision`、`management/adapters` | 宿主层不可变配置与工件归档、精确程序加载；management 的 Version、Session、Task 固定归档身份，不向执行内核引入版本发布逻辑 |
@@ -190,7 +192,7 @@ func run(ctx context.Context, client llm.Client, store session.Store, sessionID,
 }
 ```
 
-`client` 须实现 `llm.ToolStreamClient`；`llm/providers` 中 `OpenAIProvider`、`DeepSeekProvider`、`GeminiProvider` 实现了它。
+`client` 须实现 `llm.ToolStreamClient`；`llm/providers` 中 `OpenAIProvider`、`DeepSeekProvider`、`GeminiProvider`、`AnthropicProvider` 实现了它。
 
 ## 相关文档
 

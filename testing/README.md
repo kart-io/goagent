@@ -385,6 +385,13 @@ NewMockToolExecutor() *MockToolExecutor
 NewMockLLMClient() *MockLLMClient
 NewMockStreamingLLMClient() *MockStreamingLLMClient
 
+// 脚本化 LLM：按顺序消费规则，规则用完或断言不成立时返回错误
+NewScriptedClient(rules ...ScriptedRule) *ScriptedClient
+TextReply(name, text string) ScriptedRule
+ToolCallReply(name string, calls ...llm.ToolCall) ScriptedRule
+ToolCall(id, tool, arguments string) llm.ToolCall
+RequestContains(parts ...string) func(*llm.CompletionRequest) bool
+
 // 状态 Mock
 NewMockState() *MockState
 
@@ -404,6 +411,8 @@ testing/
 │   ├── mock_llm.go        # LLM Mock
 │   │   ├── MockLLMClient
 │   │   └── MockStreamingLLMClient
+│   ├── scripted_client.go # 按规则逐条回复的模型 Mock，可发起工具调用
+│   │   └── ScriptedClient
 │   └── mock_state.go      # 状态和存储 Mock
 │       ├── MockState
 │       └── MockStore

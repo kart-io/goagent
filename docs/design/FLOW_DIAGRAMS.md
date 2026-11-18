@@ -23,7 +23,7 @@ flowchart TB
     SRC --> PATH{ToolStreamClient 且有工具?}
     PATH -->|是| LOOP[原生工具循环 runToolEvents]
     PATH -->|否，无工具| PLAIN[readPlainModelTurn model/answer/0]
-    LOOP --> FIN[finishEvents：usage 事件、写记忆、<br/>自动保存检查点]
+    LOOP --> FIN[finishEvents：usage 事件<br/>（长期记忆任务在会话日志轮次结束时登记）]
     PLAIN --> FIN
     FIN --> DONE([done 事件])
     CHAIN -->|错误| ERRE([error 事件，带出错工具名])
@@ -115,10 +115,10 @@ flowchart TB
     SAME -->|否| CHG([错误：intent or attempt policy changed])
     SAME -->|是| ST{状态}
     ST -->|completed| REPLAY([返回记录 Replayed=true])
-    ST -->|pending 且有 Reconcile| REC{Reconcile 找到效果?}
+    ST -->|中断（pending 或取消/超时失败）且有 Reconcile| REC{Reconcile 找到效果?}
     REC -->|是| FILL([补记 completed 并返回])
     REC -->|否| RETRY
-    ST -->|pending / failed / waiting| RETRY{waiting：须 Resumable；<br/>pending：Resumable 或 RetryFailed，且尝试未满；<br/>failed：RetryFailed 且尝试未满}
+    ST -->|pending / failed / waiting| RETRY{waiting：须 Resumable；<br/>中断：Resumable（仅 pending）、RetryInterrupted，<br/>或 Reconcile 确认未生效后 RetryFailed，且尝试未满；<br/>普通 failed：RetryFailed 且尝试未满}
     RETRY -->|否| OPERR([OperationError])
     RETRY -->|是| PEND
     NEW --> PEND[记为 pending，保存]

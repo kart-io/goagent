@@ -41,7 +41,7 @@ wrapped := middleware.Wrap(tool, logging.Wrap)
 
 删除 `execution.RuntimeConfig`、`DefaultRuntimeConfig`、`RuntimeMetrics`、`NewRuntimeMetrics` 及 `RuntimeManager.Metrics()`。此前的自动保存、保存间隔、大小限制和指标开关没有执行路径，不能迁为同名隐藏默认行为。保存须由宿主明确执行；观测使用实际的 `execution.Scope`、Observer/Tracer 和模型 UsageHook。`core/execution` 包随后整体删除，见[持久化、人工介入与 Runtime](#持久化人工介入与-runtime)。
 
-`core.RunnableConfig.RetryPolicy`、`core.RetryPolicy`、`core.BackoffPolicy` 已删除。模型暂时错误使用 `AgentBuilder.WithRequestError` 与 `builder.RetryTransient`，每次请求独立预留预算，已输出的响应不自动重发；参见[Builder 参考](BUILDER_API_REFERENCE.md)。`tools.RetryPolicy` 是真实工具执行策略，继续保留。
+`core.RunnableConfig.RetryPolicy`、`core.RetryPolicy`、`core.BackoffPolicy` 已删除。模型暂时错误使用 `AgentBuilder.WithRequestError` 与 `builder.RetryTransient`，每次请求独立预留预算，已输出的响应不自动重发；参见[Builder 参考](BUILDER_API_REFERENCE.md)。工具调用不做隐式重试，恢复次数由 `tools.DispatchConfig.MaxAttempts` 与持久操作策略控制。
 
 ## 对话记忆
 
@@ -56,7 +56,7 @@ compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{Ma
 b.WithSessionLog(sessions).WithSessionID(id).WithCompaction(compaction)
 ```
 
-不再按轮数截断：历史长度由 Compaction 按估算 token 控制，旧内容压缩成摘要，原文可经 `contextpolicy.NewRecallTool(sessions)` 取回。会话日志写入失败即本轮失败，没有"尽力而为"模式。旧 `MemoryManager` 中已保存的对话不会自动迁入会话日志；需要保留时由宿主读出后以 `session.Recorder.Sync` 写入。goagent-harness 的 `compaction` 组件改用 `contextpolicy.Compaction`，配置不变。
+不再按轮数截断：历史长度由 Compaction 按估算 token 控制，旧内容压缩成摘要，原文可经 `contextpolicy.NewRecallTool(sessions)` 取回。会话日志写入失败即本轮失败，没有"尽力而为"模式。旧 `MemoryManager` 中已保存的对话不会自动迁入会话日志；需要保留时由宿主读出后以 `session.Recorder.Sync` 写入。goagent-harness 的 `compaction` 组件是其自带实现，配置不变。
 
 `interfaces.MemoryManager`、`Conversation`、`Case` 与 `memory` 包原有实现（`InMemoryManager`、`HierarchicalMemory` 及其短期/长期层、`InMemoryVectorStore`、`ChromaVectorStore` 等）已删除，由长期记忆替代：
 
@@ -104,14 +104,14 @@ found, err := mem.Recall(ctx, memory.Query{Text: query, K: 5})
 | `core/checkpoint` 整包（`Checkpointer`、`NewInMemorySaver`、`DistributedCheckpointer` 等）；Builder 的 `WithCheckpointer`、`WithAutoSaveEnabled`、`AgentConfig.EnableAutoSave`；`errors.NewStateCheckpointError` | `Shutdown` 不再保存状态。状态跨进程恢复用 `WithSessionLog(store).WithSessionState()`，状态类型须实现 `MarshalJSON`/`UnmarshalJSON`；会话历史用 `WithSessionLog(session.Store)`，崩溃恢复用 `core/durable` 与 `WithDurableScope`，图级暂停与恢复用 `workflow.CompileDurable` |
 | `core/execution` 整包（`Runtime`、`NewRuntime`、`RuntimeManager`、`ToolWithRuntime` 等）；`core/middleware.MiddlewareRequest.Runtime` | 中间件读取 `State` 与 `Metadata`；宿主装配用顶层 `execution.Scope`，见[宿主接入](HOST_INTEGRATION.md) |
 | `core.InterruptManager`、`InterruptableExecutor`、`InterruptConfig` 等 | 持久图的 `ApprovalNodes` 或 `durable.AwaitInput`，见[人工介入](HUMAN_IN_THE_LOOP.md)及 `examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt` |
-| Builder 的 `WithStore` | 对话记忆用 `WithMemory`；其他键值数据由宿主直接持有 `store.Store` |
+| Builder 的 `WithStore` | 对话历史用 `WithSessionLog`，长期记忆用 `WithLongTermMemory`；其他键值数据由宿主直接持有 `store.Store` |
 | 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
 | `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
 | `tools.WithMiddleware`、`tools.MiddlewareTool` | `tools/middleware.Wrap(tool, middlewares...)`、`*middleware.WrappedTool` |
 | `tools.ToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ToolGraph` | `tools.NewDispatcher` 与 `DispatchConfig`（并发、超时、持久回放、重试策略） |
 | `tools.ToolCache`、`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache`、`NewCachedTool`、`NewHighPerformanceCache`、`NewLowMemoryCache` | `tools/middleware.Caching`，底层任意 `cache.Cache`（可用 `cache.WithMaxEntries` 限制条目） |
 | `core.Agent`、`BaseAgent`、`AgentExecutor`、`AgentInput`/`AgentOutput`、`FastInvoker`；`observability.InstrumentedAgent`/`WrapAgent` | 用 `builder` 构建 Agent，经 `AsRunnable()` 接入 `core.Runnable` |
-| `interfaces.Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory.ConversationStore` | 键值存储 `store.Store`；对话历史 `interfaces.MemoryManager` |
+| `interfaces.Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory.ConversationStore` | 键值存储 `store.Store`；对话历史 `WithSessionLog(session.Store)` |
 | `llm/cache`（语义缓存） | 无替代；需要时由宿主按租户/会话作用域实现 |
 | `interfaces.ToolInput.Context` | 删除赋值，工具使用 `Invoke(ctx, input)` 的 ctx |
 | `builder.Handle` 的 `Steer(msg)`、`SteerOnce(key, msg)`、`Inject(msg)`、`Followup(msg)`、`Redirect(msg)` | 首参加 `ctx`：`Steer(ctx, msg)` 等 |

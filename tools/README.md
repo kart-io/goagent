@@ -28,6 +28,8 @@ The main fields of `interfaces.ToolInput` are `Args map[string]interface{}`, `Ca
 | `tools/middleware` | Wrapping middleware for a single tool (logging, caching, rate limiting); see [Tool Middleware](../docs/guides/TOOL_MIDDLEWARE.md) |
 | `tools/policy` | Permission rules decided by tool name and command prefix, used as a `Pipeline` PreHook |
 | `tools/spill` | Writes oversized results to a host directory and reads them in segments with the `read_spill` tool, used as a `Pipeline` PostHook |
+| `tools/skill` | `skill.New(catalog)`: adapts a read-only `skills.Catalog` to the `load_skill` tool |
+| `tools/toolargs` | Parses model tool arguments, keeping numbers that float64 cannot represent as `json.Number`, and validates them against a Schema |
 
 Workspace tools for coding Agents live in the separate module `github.com/kart-io/goagent-harness/tools/coding`; see the [migration guide](../docs/guides/HARNESS_MIGRATION.md).
 

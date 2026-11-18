@@ -70,7 +70,7 @@ if err := ctx.Err(); err != nil { return err }
 
 ## 可选上下文治理
 
-`WithOffload` 为原生工具流增加大结果卸载与分页读取（PreStep 组件），历史压缩由 goagent-harness `preset` 的 `compaction` 组件提供。默认关闭；最后一次请求还原已卸载的原文，避免只剩无法读取的引用。详见[工具上下文](CONTEXT_POLICY_CN.md)。
+`WithOffload` 为原生工具流增加大结果卸载与分页读取（PreStep 组件），历史压缩用 `WithCompaction(contextpolicy.NewCompaction(...))`。默认关闭；最后一次请求还原已卸载的原文，避免只剩无法读取的引用。详见[工具上下文](CONTEXT_POLICY_CN.md)。
 
 入门代码统一见[快速入门与迁移](QUICKSTART_CN.md)。主模块复杂流程使用 [workflow.Graph[T]](../../workflow/README_CN.md)。
 

@@ -29,7 +29,7 @@ sequenceDiagram
     A-->>R: AgentEvent step/tool_end
     A->>M: CompleteToolsStream(ctx, req+tool 消息, tools)  [model/turn/1]
     M-->>A: StreamChunk（最终文本，无工具调用）
-    A->>A: TurnStopping？ → finishEvents（usage、写记忆、保存检查点）
+    A->>A: TurnStopping？ → 会话日志 turn/end（登记长期记忆任务）→ finishEvents（usage 事件）
     A-->>R: AgentEvent done(AgentOutput)
     R-->>Host: *AgentOutput
 ```

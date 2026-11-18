@@ -39,7 +39,7 @@ The Builder's persistence entry points each handle one concern and cannot substi
 |---|---|---|
 | Recovery from a mid-run crash | Scope's Journal and `WithDurableScope` | Records model and tool calls; when resuming with the same execution key, completed operations are replayed |
 | Conversation history | `WithSessionLog` | History is derived from the session log; a SessionLog can also serve as the durable journal (`session.DurableStore`) |
-| Business state between turns | `WithState` | Kept in-process by default; `WithSessionState` restores state across processes through the session log; otherwise the host persists it, or it becomes the state of a `workflow.CompileDurable` graph |
+| Business state between turns | `WithState` | Kept in-process by default; `WithSessionState` restores state across processes through the session log; otherwise the host persists it, or it becomes the state of a graph compiled with `workflow.Graph[T].CompileDurable` |
 
 The durable journal only replays operation results; it does not save `WithState` state.
 

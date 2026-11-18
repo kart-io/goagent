@@ -10,7 +10,7 @@
 4. **模型可见即已记录**：配置 `WithSessionLog` 后，每次模型请求都能由 `system + session.DeriveMessages + 运行上下文` 重建；对历史的任何改写记为 `history/rewrite`。
 5. **观察与拦截分离**：`core/observe.Observer` 只读，事件不是检查点或账本；中间件、循环钩子与 Pipeline 可改变行为，错误按各自契约中止或交还模型。
 6. **宿主拥有资源**：`execution.Scope`、`budget.Controller`、`durable.Store`、`session.Store` 都由宿主创建；框架不创建默认存储，也不关闭宿主资源。
-7. **处处有界**：`WithMaxIterations` 限制模型请求次数；根预算限制请求数、预留 Token、工具次数与期限；`DispatchConfig` 限制执行/准入并发、排队数与单次超时；`workflow` 图有最大步数（`ErrMaxSteps`）。
+7. **处处有界**：`WithMaxIterations` 限制模型请求次数；根预算限制请求数、预留 Token、工具次数与期限；`DispatchConfig` 限制执行/准入并发、排队数与单次超时；`workflow` 图有最大步数（`errors.ErrWorkflowMaxSteps`）。
 
 Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与[代码能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
 

@@ -12,6 +12,7 @@
 |---|---|
 | `codes.go` | `ErrorCode` 及分类码 |
 | `sentinel.go`、`sentinels.go` | 不可变的 `SentinelError` 及唯一哨兵定义 |
+| `management.go` | 管理服务的 `ErrManagement*` 哨兵 |
 | `llm.go` | 实际使用的 `Message*` 错误文案及错误上下文字段 |
 | `errors.go`、`helpers.go` | `AgentError`、错误链、分类提取及业务构造器 |
 
@@ -400,6 +401,7 @@ errors/
 ├── llm.go          # 模型错误字段与提示
 ├── sentinel.go     # 不可变编码哨兵类型
 ├── sentinels.go    # 框架固定信号的唯一对象定义
+├── management.go   # 管理服务的 ErrManagement* 哨兵
 │
 ├── helpers.go      # 专用错误创建函数
 │

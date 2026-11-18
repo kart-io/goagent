@@ -6,7 +6,7 @@
 
 ```mermaid
 classDiagram
-    class AgentBuilder~C,S~ {
+    class AgentBuilder~S~ {
         <<builder>>
         +WithSystemPrompt(string)
         +WithTools(...interfaces.Tool)
@@ -24,7 +24,7 @@ classDiagram
         +Build() (*ConfigurableAgent, error)
         +BuildContext(ctx) (*ConfigurableAgent, error)
     }
-    class ConfigurableAgent~C,S~ {
+    class ConfigurableAgent~S~ {
         <<builder>>
         +AsRunnable() *core.StreamRunnable[any, *AgentOutput]
         +ExecuteStream(ctx, input) (<-chan AgentEvent, error)
@@ -61,7 +61,7 @@ classDiagram
     Scope ..> AgentBuilder : ConfigureBuilder(b, scope, agentID)
 ```
 
-`SimpleAgentBuilder` 与 `SimpleAgent` 是 `C=any, S=*core.AgentState` 的别名，`NewSimpleBuilder` 创建前者。
+`SimpleAgentBuilder` 与 `SimpleAgent` 是 `S=*core.AgentState` 的别名，`NewSimpleBuilder` 创建前者。
 
 ## Runnable 组合
 
@@ -186,10 +186,12 @@ classDiagram
     class OpenAIProvider
     class DeepSeekProvider
     class GeminiProvider
+    class AnthropicProvider
     Client <|-- ToolStreamClient
     ToolStreamClient <|.. OpenAIProvider
     ToolStreamClient <|.. DeepSeekProvider
     ToolStreamClient <|.. GeminiProvider
+    ToolStreamClient <|.. AnthropicProvider
 ```
 
 完整响应用 `llm.Complete` / `llm.Chat` 收集流；能力探测用 `llm.HasToolStreaming` 等函数。Builder 接受任意 `llm.Client`，配置工具时要求 `ToolStreamClient`。
