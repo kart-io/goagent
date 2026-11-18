@@ -1,19 +1,11 @@
 # GoAgent - Go 语言 AI Agent 框架
 
-[![Go Version](https://img.shields.io/badge/go-1.27.0-blue?style=flat-square&logo=go)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kart-io/goagent.svg)](https://pkg.go.dev/github.com/kart-io/goagent)
 [![Latest Release](https://img.shields.io/github/v/release/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
-[![Provider Contracts](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/provider-contracts.yml?branch=master&style=flat-square&logo=github&label=provider%20contracts)](https://github.com/kart-io/goagent/actions/workflows/provider-contracts.yml)
-[![Nightly](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/nightly.yml?branch=master&style=flat-square&logo=github&label=nightly)](https://github.com/kart-io/goagent/actions/workflows/nightly.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/kart-io/goagent?style=flat-square&logo=go)](go.mod)
 [![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
-
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)
-[![Downloads](https://img.shields.io/endpoint?url=https://api.pinstudios.net/api/badges/downloads/kart-io/goagent/total)](https://github.com/kart-io/goagent/releases/latest)
-[![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
-[![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
-[![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/kart-io/goagent/master?style=flat-square&logo=github)](https://github.com/kart-io/goagent/commits/master/)
-[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/costa92/badge.svg)](https://hub.xerj.org/contributors/costa92)
+[![DeepWiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 
 [English](README.md) | [中文](README_CN.md)
 
@@ -28,6 +20,29 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib)：检索器（BM25、混合、重排序、Qdrant）、文档加载、实用工具与多实例 Postgres `durable.Store`。
 - [goagent-examples](https://github.com/kart-io/goagent-examples)：业务案例（DevOps、文章审核、自动回复、退款恢复、真实模型编排）。
 - [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能装配、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
+
+## 为什么选 GoAgent
+
+多数 Agent 库止步于"调用模型、执行工具"。在生产服务里跑 Agent，还需要执行过程**能扛住重启、能等人审批、不超预算**。GoAgent 把这些放进执行内核，而不是外挂：
+
+- **可恢复**：`core/durable` 记录模型回合与工具调用，持久图逐步保存检查点；进程重启后从最近检查点继续，不从头重跑。
+- **人工审批是一等暂停**：图节点、并行分支或工具可以暂停等待校验后的人工输入，再由另一个进程恢复。
+- **执行治理**：根请求预算、工具准入限制、审批与守卫（`core/budget`、`tools.Dispatcher`/`Pipeline`）。
+- **可观测**：只读执行事件（`core/observe`）与可选的 OpenTelemetry 追踪和指标。
+
+三条命令离线体验（不需要 API Key；第一个进程在等待审批时就退出）：
+
+```bash
+DIR=$(mktemp -d)
+go run ./examples/human-in-the-loop -dir "$DIR" -text '待审查的草稿'
+# -> "Node": "review", "Waiting": true, "Key": "189efb28..."   （进程退出）
+
+go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
+  -reviewer demo-reviewer -decision approve -text '人工修订后的草稿'
+# -> "Node": "__end__", "Done": true, "status": "accepted", "text": "人工修订后的草稿"
+```
+
+> **项目状态**：GoAgent 尚未发布 1.0，次版本之间 API 仍会变化。破坏性变更与迁移说明见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 特性
 
@@ -219,6 +234,10 @@ golangci-lint run
 bash scripts/verify_imports.sh   # 导入分层检查
 bash scripts/check_coverage.sh   # 覆盖率门槛
 ```
+
+## 参与贡献
+
+欢迎提交问题、提问与 PR。开发流程、提交规范与提 PR 前需要跑的检查见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 
