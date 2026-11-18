@@ -43,7 +43,7 @@ type Store interface {
 }
 
 // Transaction is valid only within the Store callback. Receipt returns
-// ErrNotFound if no effect exists; TotalRefunded includes all committed requests.
+// errors.ErrRefundNotFound if no effect exists; TotalRefunded includes all committed requests.
 type Transaction interface {
 	Order(context.Context, string) (Order, error)
 	Request(context.Context, string) (Request, string, error)
