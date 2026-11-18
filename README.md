@@ -30,6 +30,21 @@ Most agent libraries stop at "call the model, run a tool". Services that run age
 - **Governed** - root request budgets, tool admission limits, approvals and guards (`core/budget`, `tools.Dispatcher`/`Pipeline`).
 - **Observable** - read-only execution events (`core/observe`) and optional OpenTelemetry tracing and metrics.
 
+```mermaid
+flowchart LR
+    host["Your Go service"] --> scope["execution.Scope<br/>run/session ID, budget, deadline"]
+    scope --> agent["builder agent<br/>native tool loop"]
+    scope --> wf["workflow.DurableGraph<br/>branches, parallel, approvals"]
+    agent --> llm["llm/providers<br/>OpenAI, DeepSeek, Gemini, Anthropic, ..."]
+    agent --> disp["tools.Dispatcher<br/>schema, authorize, admission"]
+    wf --> disp
+    disp --> tools["function tools, MCP, A2A"]
+    agent -. journal .-> durable[("core/durable<br/>file or Postgres store")]
+    wf -. checkpoint .-> durable
+    disp -. tool calls .-> durable
+    agent -. events .-> observe["core/observe -> OpenTelemetry"]
+```
+
 See it offline in three commands (no API key; the first process exits while waiting for approval):
 
 ```bash

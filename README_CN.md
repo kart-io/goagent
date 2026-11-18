@@ -30,6 +30,21 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 - **执行治理**：根请求预算、工具准入限制、审批与守卫（`core/budget`、`tools.Dispatcher`/`Pipeline`）。
 - **可观测**：只读执行事件（`core/observe`）与可选的 OpenTelemetry 追踪和指标。
 
+```mermaid
+flowchart LR
+    host["你的 Go 服务"] --> scope["execution.Scope<br/>运行/会话 ID、预算、期限"]
+    scope --> agent["builder agent<br/>原生工具循环"]
+    scope --> wf["workflow.DurableGraph<br/>分支、并行、审批"]
+    agent --> llm["llm/providers<br/>OpenAI, DeepSeek, Gemini, Anthropic, ..."]
+    agent --> disp["tools.Dispatcher<br/>校验、授权、准入"]
+    wf --> disp
+    disp --> tools["函数工具、MCP、A2A"]
+    agent -. journal .-> durable[("core/durable<br/>文件或 Postgres 存储")]
+    wf -. checkpoint .-> durable
+    disp -. tool calls .-> durable
+    agent -. events .-> observe["core/observe -> OpenTelemetry"]
+```
+
 三条命令离线体验（不需要 API Key；第一个进程在等待审批时就退出）：
 
 ```bash
