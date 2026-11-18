@@ -9,7 +9,7 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 [`scripts/stable-packages.txt`](../scripts/stable-packages.txt) 所列的包为**稳定包**，以该文件为唯一来源。概括来说覆盖执行主路径：
 
 - `builder`、`builder/contextpolicy`
-- `core` 及其执行子包（`durable`、`budget`、`session`、`observe`、`middleware`、`state`、`flow`、`usage`）
+- `core` 及其执行子包（`durable`、`budget`、`session`、`observe`、`middleware`、`state`、`usage`）
 - `workflow`
 - `llm`、`llm/common`、`llm/providers`
 - `tools` 及其治理子包（`policy`、`spill`、`toolargs`、`middleware`）
@@ -19,7 +19,7 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 
 ## 实验性包
 
-其余公开包均为**实验性**，包括 `memory`、`management`、`multiagent`、`a2a`、`harness`、`cache`、`codec`、`parsers`、`store`、`skills`、`plugin`、`revision`、`observability`、`middleware`、`utils`、`testing`、`tools/` 下的内置工具实现（`compute`、`http`、`search`、`shell`、`skill`）以及 `workflow/refund`。
+其余公开包均为**实验性**，包括 `memory`、`management`、`multiagent`、`a2a`、`harness`、`cache`、`codec`、`parsers`、`store`、`skills`、`plugin`、`revision`、`observability`、`middleware`、`utils`、`testing`、`core/flow`、`tools/` 下的内置工具实现（`compute`、`http`、`search`、`shell`、`skill`）以及 `workflow/refund`。
 
 实验性包可在任意次版本中变化，破坏性变更仍须在 [CHANGELOG.md](../CHANGELOG.md) 中写明迁移步骤。
 

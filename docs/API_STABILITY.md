@@ -9,7 +9,7 @@ GoAgent is heading to v1.0. This page states which packages carry a compatibilit
 The packages listed in [`scripts/stable-packages.txt`](../scripts/stable-packages.txt) are **stable**. That file is the single source of truth; in short it covers the execution path:
 
 - `builder`, `builder/contextpolicy`
-- `core` and its execution subpackages (`durable`, `budget`, `session`, `observe`, `middleware`, `state`, `flow`, `usage`)
+- `core` and its execution subpackages (`durable`, `budget`, `session`, `observe`, `middleware`, `state`, `usage`)
 - `workflow`
 - `llm`, `llm/common`, `llm/providers`
 - `tools` and its governance subpackages (`policy`, `spill`, `toolargs`, `middleware`)
@@ -19,7 +19,7 @@ The list matches import paths exactly; a subpackage is stable only if it is list
 
 ## Experimental packages
 
-Every other public package is **experimental**, including `memory`, `management`, `multiagent`, `a2a`, `harness`, `cache`, `codec`, `parsers`, `store`, `skills`, `plugin`, `revision`, `observability`, `middleware`, `utils`, `testing`, the built-in tool implementations under `tools/` (`compute`, `http`, `search`, `shell`, `skill`) and `workflow/refund`.
+Every other public package is **experimental**, including `memory`, `management`, `multiagent`, `a2a`, `harness`, `cache`, `codec`, `parsers`, `store`, `skills`, `plugin`, `revision`, `observability`, `middleware`, `utils`, `testing`, `core/flow`, the built-in tool implementations under `tools/` (`compute`, `http`, `search`, `shell`, `skill`) and `workflow/refund`.
 
 Experimental packages may change in any minor release. Breaking changes are still listed with migration steps in [CHANGELOG.md](../CHANGELOG.md).
 
