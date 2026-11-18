@@ -81,7 +81,8 @@ func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interf
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg := &genai.GenerateContentConfig{ThinkingConfig: thinking, MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...), ResponseMIMEType: mimeType}
+	cfg := &genai.GenerateContentConfig{ThinkingConfig: thinking, MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
+	cfg.ResponseMIMEType = mimeType
 	if len(system) > 0 {
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: strings.Join(system, "\n\n")}}}
 	}
