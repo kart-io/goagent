@@ -33,4 +33,4 @@
 - `golangci-lint run ./...`：0 issues，见 lint.log。
 - `bash scripts/verify_imports.sh`：0 findings，见 imports.log。
 
-本轮未重新验证真实 Provider 网络协议；2026-10-27 的三模型报告保留历史结论，不作为本次新增测试。FileStore 仍是单机持久化，外部业务效果仍需目标端原子幂等。完整接入约束见 [原生编排指南](../../guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+本轮未重新验证真实 Provider 网络协议；2026-10-27 的三模型报告保留历史结论，不作为本次新增测试。FileStore 仍是单机持久化，外部业务效果仍需目标端原子幂等。完整接入约束见 [原生编排指南](../../guides/NATIVE_ORCHESTRATION_CN.md#多-agent-作用域与入口约束)。

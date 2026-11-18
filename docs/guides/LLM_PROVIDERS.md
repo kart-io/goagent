@@ -1,13 +1,15 @@
 <!-- generated-by: gsd-doc-writer -->
-# LLM 提供商指南
+# LLM Provider Guide
 
-`llm/providers` 为每个提供商提供一个 `NewXxxWithOptions(opts ...llm.ClientOption)` 构造函数，返回实现 `llm.Client` 的客户端。接口与选项见 [LLM API 参考](../api/LLM_API.md)；流式、工具和 Embedding 的实际支持见 [Provider 能力边界](PROVIDER_CAPABILITIES.md)。
+[English](LLM_PROVIDERS.md) | [中文](LLM_PROVIDERS_CN.md)
 
-## 配置来源
+`llm/providers` offers one `NewXxxWithOptions(opts ...llm.ClientOption)` constructor per provider, returning a client that implements `llm.Client`. See the [LLM API reference](../api/LLM_API.md) for interfaces and options; see [Provider Capability Boundaries](PROVIDER_CAPABILITIES.md) for actual support of streaming, tools, and embeddings.
 
-`APIKey`、`BaseURL`、`Model` 按以下顺序取第一个非空值：显式选项（`llm.WithAPIKey` / `WithBaseURL` / `WithModel`）→ 环境变量 → 内置默认值。API Key 没有默认值，除 Ollama 外缺失时构造函数返回错误。构造函数不发请求，构造成功不代表服务或模型可用。
+## Configuration Sources
 
-| 提供商 | 构造函数 | API Key 环境变量 | BaseURL / Model 环境变量 | 默认 BaseURL | 默认模型 |
+`APIKey`, `BaseURL`, and `Model` each take the first non-empty value in this order: explicit option (`llm.WithAPIKey` / `WithBaseURL` / `WithModel`) → environment variable → built-in default. The API key has no default; except for Ollama, the constructor returns an error when it is missing. Constructors send no requests, so a successful construction does not mean the service or model is available.
+
+| Provider | Constructor | API key env var | BaseURL / Model env vars | Default BaseURL | Default model |
 |---|---|---|---|---|---|
 | OpenAI | `NewOpenAIWithOptions` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` / `OPENAI_MODEL` | `https://api.openai.com/v1` | `gpt-4-turbo-preview` |
 | Anthropic | `NewAnthropicWithOptions` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` | `https://api.anthropic.com` | `claude-opus-5-5` |
@@ -15,20 +17,20 @@
 | DeepSeek | `NewDeepSeekWithOptions` | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Kimi | `NewKimiWithOptions` | `KIMI_API_KEY` | `KIMI_BASE_URL` / `KIMI_MODEL` | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | SiliconFlow | `NewSiliconFlowWithOptions` | `SILICONFLOW_API_KEY` | `SILICONFLOW_BASE_URL` / `SILICONFLOW_MODEL` | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2-7B-Instruct` |
-| Ollama | `NewOllamaWithOptions` | 不需要 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434/v1` | `llama2` |
+| Ollama | `NewOllamaWithOptions` | Not required | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434/v1` | `llama2` |
 
-环境变量名与 Provider 类型统一定义在 `github.com/kart-io/goagent/constants`（如 `constants.EnvOpenAIAPIKey`）。默认模型只是兜底值，生产环境应显式指定当前可用的模型。
+Environment variable names and Provider types are defined centrally in `github.com/kart-io/goagent/constants` (e.g. `constants.EnvOpenAIAPIKey`). Default models are only fallbacks; production deployments should explicitly specify a model that is currently available.
 
-### 提供商说明
+### Provider Notes
 
-- **Gemini**：基于 Google GenAI SDK 调用原生 API，使用 API Key 认证。`GEMINI_BASE_URL` 填原生根地址，不要填 OpenAI 兼容的 `/v1beta/openai` 路径。向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODEL` 指定，默认 `gemini-embedding-001`。原生工具循环在 `Message.ProviderState` 中保留签名，自管消息历史时须原样回传。验证案例见 [gemini-verify](../../examples/llm/gemini-verify/README.md)。
-- **DeepSeek**：`NewDeepSeekWithOptions` 直接实现结构化流与原生工具流；`NewDeepSeekStreamingWithOptions` 只是嵌入它的包装。旧 `Embed` 方法发送兼容请求，但不声明 Embedding 能力。
-- **OpenAI**：`WithBaseURL` 可指向 OpenAI 兼容端点，兼容程度需自行验证。
-- **Anthropic**：基于官方 `anthropic-sdk-go/v2`，支持结构化流与原生工具流，SDK 不做隐式重试。SDK 发送的 API 版本 `2026-10-21` 拒绝采样参数，因此 `WithTemperature`、`TopP` 对 Anthropic 不生效。思考块随原生工具循环保存在 `Message.ProviderState` 中，自管消息历史时须原样回传。SDK 以 `Authorization: Bearer` 发送 API Key，经只认 `x-api-key` 的代理或网关接入时，用 `WithCustomHeaders(map[string]string{"X-Api-Key": key})` 同时发送该头。
-- **Kimi、SiliconFlow、Ollama**：返回 `*OpenAIProvider`，经 OpenAI 兼容协议支持结构化流与原生工具流；`ListModels(ctx)` 读取 `/models`。
-- **Ollama**：使用 `/v1` 兼容端点，自定义 `OLLAMA_BASE_URL` 须带 `/v1`。`NewOllamaClientSimple(model)` 等价于只设置模型的 `NewOllamaWithOptions`；未设置超时时使用 120 秒。
+- **Gemini**: Calls the native API through the Google GenAI SDK with API key authentication. Set `GEMINI_BASE_URL` to the native root URL, not the OpenAI-compatible `/v1beta/openai` path. Specify the embedding model with `llm.WithEmbeddingModel` or `GEMINI_EMBEDDING_MODEL`; the default is `gemini-embedding-001`. The native tool loop keeps signatures in `Message.ProviderState`; if you manage message history yourself, send them back unchanged. See [gemini-verify](../../examples/llm/gemini-verify/README.md) for the verification case.
+- **DeepSeek**: `NewDeepSeekWithOptions` implements structured streaming and native tool streaming directly; `NewDeepSeekStreamingWithOptions` is only a wrapper that embeds it. The old `Embed` method sends a compatible request but does not declare the Embedding capability.
+- **OpenAI**: `WithBaseURL` can point to an OpenAI-compatible endpoint; verify the degree of compatibility yourself.
+- **Anthropic**: Based on the official `anthropic-sdk-go/v2`; supports structured streaming and native tool streaming, and the SDK does no implicit retries. The API version `2026-10-21` sent by the SDK rejects sampling parameters, so `WithTemperature` and `TopP` have no effect on Anthropic. Thinking blocks are kept in `Message.ProviderState` along with the native tool loop; if you manage message history yourself, send them back unchanged. The SDK sends the API key as `Authorization: Bearer`; when going through a proxy or gateway that only accepts `x-api-key`, also send that header with `WithCustomHeaders(map[string]string{"X-Api-Key": key})`.
+- **Kimi, SiliconFlow, Ollama**: Return `*OpenAIProvider` and support structured streaming and native tool streaming over the OpenAI-compatible protocol; `ListModels(ctx)` reads `/models`.
+- **Ollama**: Uses the `/v1` compatible endpoint; a custom `OLLAMA_BASE_URL` must include `/v1`. `NewOllamaClientSimple(model)` is equivalent to `NewOllamaWithOptions` with only the model set; when no timeout is set, 120 seconds is used.
 
-## 基本对话
+## Basic Chat
 
 ```go
 client, err := providers.NewDeepSeekWithOptions(
@@ -40,37 +42,37 @@ if err != nil {
 }
 
 resp, err := llm.Chat(ctx, client, []llm.Message{
-    llm.SystemMessage("你是一个有帮助的助手。"),
-    llm.UserMessage("你好！"),
+    llm.SystemMessage("You are a helpful assistant."),
+    llm.UserMessage("Hello!"),
 })
 if err != nil {
     return err
 }
 fmt.Println(resp.Content)
 if resp.Usage != nil {
-    fmt.Printf("输入 %d / 输出 %d / 合计 %d Token\n",
+    fmt.Printf("input %d / output %d / total %d tokens\n",
         resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens)
 }
 ```
 
-`llm.Chat` / `llm.Complete` 收集 `CompleteStream` 的流，只有成功终止块才返回响应。`CompletionRequest` 的 `Temperature`、`MaxTokens`、`TopP`、`Model` 为零值时使用客户端配置。
+`llm.Chat` / `llm.Complete` collect the `CompleteStream` stream and return a response only on a successful terminal chunk. When `Temperature`, `MaxTokens`, `TopP`, or `Model` in `CompletionRequest` is zero, the client configuration is used.
 
-## 流式对话
+## Streaming Chat
 
-所有 `llm.Client` 都通过 `CompleteStream` 提供结构化流：
+Every `llm.Client` provides structured streaming through `CompleteStream`:
 
 ```go
 ctx, cancel := context.WithCancel(ctx)
-defer cancel() // 提前退出时释放连接
+defer cancel() // release the connection on early exit
 stream, err := client.CompleteStream(ctx, &llm.CompletionRequest{
-    Messages: []llm.Message{llm.UserMessage("请写一首诗。")},
+    Messages: []llm.Message{llm.UserMessage("Write a poem.")},
 })
 if err != nil {
     return err
 }
 for chunk := range stream {
     if chunk == nil {
-        return fmt.Errorf("收到空响应块")
+        return fmt.Errorf("received nil chunk")
     }
     if chunk.Error != nil {
         return chunk.Error
@@ -79,9 +81,9 @@ for chunk := range stream {
 }
 ```
 
-## 切换提供商
+## Switching Providers
 
-按配置选择构造函数，返回统一的 `llm.Client`，再交给 Builder：
+Choose the constructor from configuration, return a uniform `llm.Client`, and hand it to the Builder:
 
 ```go
 func createClient(name string) (llm.Client, error) {
@@ -93,7 +95,7 @@ func createClient(name string) (llm.Client, error) {
     case "deepseek":
         return providers.NewDeepSeekWithOptions(llm.WithModel("deepseek-chat"))
     default:
-        return nil, fmt.Errorf("不支持的 provider：%s", name)
+        return nil, fmt.Errorf("unsupported provider: %s", name)
     }
 }
 
@@ -104,31 +106,31 @@ if err != nil {
 agent, err := builder.NewSimpleBuilder(client).BuildContext(ctx)
 ```
 
-上例中 API Key 从各自的环境变量读取。原生工具循环要求客户端实现 `ToolStreamClient`，选择提供商时先查 [能力矩阵](PROVIDER_CAPABILITIES.md)。
+In the example above, API keys are read from each provider's environment variable. The native tool loop requires the client to implement `ToolStreamClient`; check the [capability matrix](PROVIDER_CAPABILITIES.md) before choosing a provider.
 
-## 错误处理与重试
+## Error Handling and Retries
 
-用 `llm.ClassifyError` 判断失败类型，不要匹配错误文本：
+Use `llm.ClassifyError` to determine the failure type; do not match on error text:
 
 ```go
 resp, err := llm.Chat(ctx, client, messages)
 if err != nil {
     switch c := llm.ClassifyError(err); {
     case c.ShouldCompress:
-        // 超出上下文窗口：缩短消息后再试
+        // context window exceeded: shorten messages and retry
     case c.Retryable:
-        // 限流、5xx 或暂时性连接错误
+        // rate limit, 5xx, or transient connection error
     default:
         return err
     }
 }
 ```
 
-分类依赖 `*llm.ProviderError`，各 Provider 的流式与非流式请求失败都会构造它。在 Builder 中重试模型请求用 `WithRequestError(n, builder.RetryTransient(n, nil))`，见 [核心 API](../api/CORE_API.md#模型请求恢复)。
+Classification relies on `*llm.ProviderError`, which every Provider constructs for both streaming and non-streaming request failures. To retry model requests in the Builder, use `WithRequestError(n, builder.RetryTransient(n, nil))`; see [Core API](../api/CORE_API.md#模型请求恢复).
 
-## 超时
+## Timeouts
 
-`llm.WithTimeout` 与请求 ctx 的关系见 [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md#超时配置)。调用级期限用 ctx 控制：
+For the relationship between `llm.WithTimeout` and the request ctx, see [Provider Best Practices](PROVIDER_BEST_PRACTICES.md#超时配置). Control per-call deadlines with ctx:
 
 ```go
 ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -136,8 +138,8 @@ defer cancel()
 resp, err := llm.Chat(ctx, client, messages)
 ```
 
-## 相关文档
+## Related Documents
 
-- [快速入门](QUICKSTART.md)
-- [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md)
-- [Provider 能力边界](PROVIDER_CAPABILITIES.md)
+- [Quickstart](QUICKSTART.md)
+- [Provider Best Practices](PROVIDER_BEST_PRACTICES.md)
+- [Provider Capability Boundaries](PROVIDER_CAPABILITIES.md)

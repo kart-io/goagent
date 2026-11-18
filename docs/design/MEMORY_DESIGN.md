@@ -104,12 +104,12 @@ type Record struct {
 }
 ```
 
-- 正文存于 `memory.RecordStore`（默认基于 `store.Store`），向量索引 `memory.Index` 是投影，可由正文重建；索引记录嵌入模型名，换模型时重建。
+- 正文存于 `memory.RecordStore`（默认基于 `store.Store`；G1 起改为 `Config.Durable` 上的命名空间 state 快照，见 [G1 存储](MEMORY_G1_STORAGE.md)），向量索引 `memory.Index` 是投影，可由正文重建；索引记录嵌入模型名，换模型时重建。
 - 命名空间来自上下文中的可信身份（`memory.WithNamespace(ctx, ...)`），检索在取 topK 之前按命名空间过滤。没有命名空间时拒绝读写。
 
 ### 3.2 异步形成与演化
 
-1. 轮次结束（`turn/end` 写入成功后，重放已完成的持久轮次时也登记）登记一条任务，Key 为"会话/turn/start 序号"，重复登记不产生新任务，存于 `store.Store` 的 `{"memory","jobs"}`。上一轮未结束、在下一轮开始时以中止结束的，登记 `Aborted` 任务。
+1. 轮次结束（`turn/end` 写入成功后，重放已完成的持久轮次时也登记）登记一条任务，Key 为"会话/turn/start 序号"，重复登记不产生新任务，存于 `store.Store` 的 `{"memory","jobs"}`（G1 起改为 `Config.Durable` 上的 `memory/queue/<n>` 分片，见 [G1 存储](MEMORY_G1_STORAGE.md) 4.3）。上一轮未结束、在下一轮开始时以中止结束的，登记 `Aborted` 任务。
 2. 宿主运行 `go mem.Run(ctx, onError)`；Worker 从会话日志读该轮的消息事件（跳过注入的召回块，已被退回的轮次跳过），请求抽取模型得到候选。同一任务存储只运行一个 Worker。
 3. 每个候选检索同命名空间、同类别最相似的 `ReconcileCandidates` 条（不更新访问时间），由模型判定 add / update / invalidate / noop（Mem0）。update 与 invalidate 写入新记录，旧记录写 `InvalidAt` 与 `SupersededBy`（Zep），不物理删除。
 4. 中止的轮次只写一条 `reflection` 教训（Reflexion）；未参与反思的有效情景累计重要度达到 `ReflectionThreshold` 时提炼结论并标记这些情景（Generative Agents）。
@@ -131,10 +131,10 @@ type Record struct {
 
 ## 4. 第三阶段：时序知识图谱
 
-- `Config.Graph` 非空时，抽取提示词要求在同一个 JSON 中输出关系 `{subject, predicate, object, fact, exclusive}`，实体带名称、类型与别名；用户本人统一记为 `用户`。
+- `Config.Graph` 非空时（现为 bool 开关），抽取提示词要求在同一个 JSON 中输出关系 `{subject, predicate, object, fact, exclusive}`，实体带名称、类型与别名；用户本人统一记为 `用户`。
 - 实体判重（Graphiti）：先按命名空间、类型与规范化名称（含别名）精确匹配，新出现的别名并入已有实体；匹配不到的，取同类型中名称向量余弦或字符对重合不低于 0.5 的至多 5 个实体作为候选，一轮中所有有候选的实体合成一次模型请求判定是否为同一对象，只接受该实体自己的候选 ID，判为重复时名称并入别名。没有候选时不请求模型。翻译名与别称（如"Acme"与"爱克米"）只能靠名称向量找到，没有配置 Embedder 时会成为两个节点。
 - 关系边带 `ValidFrom`/`InvalidAt`（Zep 时序图），`Edge.ValidAt(t)` 判断某一时刻是否成立。生效时间取轮次开始事件的时间，即对话发生的时间，而不是 Worker 处理的时间。相同的有效关系不重复写入；`exclusive` 的谓词（主体同时只能有一个客体，如"住在"）出现新客体时，旧边失效并以 `SupersededBy` 指向新边；已有关系比新关系生效更晚时（迟到的旧事实），新边写入即失效并指向已有关系。非排他的关系并存。
-- 存储：`memory.Graph` 接口，`NewGraph(store.Store)` 把实体、边与社区存于 `{"memory","entities"|"edges"|"communities",…}`；遍历时读取整个命名空间，规模随有效关系数线性增长。
+- 存储：`memory.Graph` 接口，`NewGraph(store.Store)` 把实体、边与社区存于 `{"memory","entities"|"edges"|"communities",…}`（G1 起接口删除，图并入命名空间 state，见 [G1 存储](MEMORY_G1_STORAGE.md)）；遍历时读取整个命名空间，规模随有效关系数线性增长。
 - 召回（HippoRAG）：名称或别名出现在查询中的实体、以及召回记录 `Entities` 中的实体作为种子，取距种子 `GraphHops`（默认 2）跳内的有效边构成子图，在无向图上运行 Personalized PageRank（续走概率 0.5，种子权重为其有效关系数的倒数，即节点特异性，避免"用户"这类枢纽主导），按两端实体得分之和取 `GraphRelations`（默认 8）条，以"[关系 自日期] 陈述"放在召回块中；`memory_search` 同时返回关系。HippoRAG 用包含实体的段落数计算特异性，这里以关系数代替。
 - 社区（Zep 社区子图）：`Config.Communities` 为真时，Worker 每个任务后在有效边上做标签传播（Graphiti；异步更新、并列时保留当前标签或取最小者，保证确定），成员不少于 3 个的成为社区。有效关系数超过 12 的枢纽实体不参与划分，否则个人记忆中所有实体都会经"用户"连成一个社区；枢纽与成员间的关系仍计入社区的事实。社区指纹由成员与涉及成员的有效边决定，指纹不变时不重写摘要，变化时以最近 40 条关系请求模型写摘要（Graphiti 用成员摘要两两归并，这里实体没有摘要，直接用关系）。召回时按成员 PageRank 得分之和附上至多 `GraphCommunities`（默认 2）个社区摘要，以"[主题 名称] 摘要"放在召回块中。
 - `Rewound` 使来自被退回轮次的边失效、恢复只被它们取代的旧边，并删除指纹因此变化的社区（不调用模型，下一次任务重建）；`Purge` 清空图；`Prune` 删除失效超过保留期的边。

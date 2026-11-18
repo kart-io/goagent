@@ -1,6 +1,6 @@
-# pgstore：快照列的 TOAST 存储方式（迁移提案）
+# pgstore：快照列的 TOAST 存储方式
 
-日期：2026-11-11。状态：**已实施为可选调优（未提交）**：goagent-contrib 新增 `SnapshotCompressionLZ4`、`SnapshotCompressionPGLZ` 两个常量、`TestSnapshotCompressionTuning` 与 README 一节；没有修改 `Schema`、`SchemaVersion` 与适配器代码。增量提交之后的测量见 [G1 7.8](MEMORY_G1_STORAGE.md)。对象：`goagent-contrib/durable/pgstore` 的 `goagent_durable_snapshot.data` 列（`bytea`）。
+日期：2026-11-11。状态：**已实施为可选调优（durable/pgstore v0.6.0 起）**：goagent-contrib 新增 `SnapshotCompressionLZ4`、`SnapshotCompressionPGLZ` 两个常量、`TestSnapshotCompressionTuning` 与 README 一节；没有修改 `Schema`、`SchemaVersion` 与适配器代码。增量提交之后的测量见 [G1 7.8](MEMORY_G1_STORAGE.md)。对象：`goagent-contrib/durable/pgstore` 的 `goagent_durable_snapshot.data` 列（`bytea`）。
 
 ## 1. 问题与实测
 

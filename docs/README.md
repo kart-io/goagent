@@ -1,92 +1,91 @@
-# GoAgent 文档
+# GoAgent Documentation
 
-GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型化工作流图、持久执行与审批恢复、请求预算、会话日志、只读观察与 MCP。Preset、编码工具等装配能力位于独立项目 goagent-harness（见[迁移指南](guides/HARNESS_MIGRATION.md)），检索器与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)，业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。
+[English](README.md) | [中文](README_CN.md)
 
-## 入门
+GoAgent is an agent execution kernel embedded in Go services: a native tool loop, typed workflow graphs, durable execution with approval and resume, request budgets, session logs, read-only observation and MCP. Assembly features such as presets and coding tools live in the separate goagent-harness project (see the [migration guide](guides/HARNESS_MIGRATION.md), Chinese), retrievers and multi-instance durable stores live in [goagent-contrib](https://github.com/kart-io/goagent-contrib), and business examples live in [goagent-examples](https://github.com/kart-io/goagent-examples).
 
-- [快速入门](guides/QUICKSTART.md)：`AsRunnable` 入口、工具、RAG、流式调用与旧接口迁移
-- [使用指南](guides/USER_GUIDE.md)：工具、记忆、中间件、错误处理
-- [Builder API 参考](guides/BUILDER_API_REFERENCE.md)：Builder 方法、默认值与循环扩展点
-- [执行契约](guides/EXECUTION_CONTRACT.md)：各执行入口的能力与边界
+Pages marked *(Chinese)* are not translated yet.
 
-- [统一运行管理](../management/README.md)：Agent、Session、Task、Approval、Worker 与只读运行观测；[迁移指南](guides/MANAGEMENT_MIGRATION.md)
+## Getting started
 
-## 编排与持久执行
+- [Quick start](guides/QUICKSTART.md): the `AsRunnable` entry point, tools, RAG, streaming and migrating from older interfaces
+- [User guide](guides/USER_GUIDE.md): tools, memory, middleware, error handling
+- [Builder API reference](guides/BUILDER_API_REFERENCE.md): Builder methods, defaults and loop extension points
+- [Execution contract](guides/EXECUTION_CONTRACT.md): what each execution entry point can and cannot do
 
-- [人工介入：暂停、恢复与检查点](guides/HUMAN_IN_THE_LOOP.md)：人工输入、状态修改、审批分支与跨进程恢复
+- [Unified run management](../management/README.md) *(Chinese)*: Agent, Session, Task, Approval, Worker and read-only run observation; [migration guide](guides/MANAGEMENT_MIGRATION.md) *(Chinese)*
 
-- [原生编排与工具体系](guides/NATIVE_ORCHESTRATION.md)：`workflow.Graph`、持久图、Dispatcher 与审批恢复
-- [通用流程编排](../workflow/README.md)：图编译、分支、并行汇合、有界循环与 Agent 适配
-- [可组合编排](guides/COMPOSABLE_ORCHESTRATION.md)：根预算、子 Agent 工具、持久上下文引用与只读观察
-- [会话日志](../core/session/README.md)：事件日志、分叉、轨迹导出
-- [上下文治理](guides/CONTEXT_POLICY.md)：工具结果卸载与自定义 PreStep
-- [基于证据的 RAG 与流式](guides/GROUNDED_RAG_AND_STREAMING.md)
+## Orchestration and durable execution
 
-## 宿主接入与治理
+- [Human in the loop: pause, resume and checkpoints](guides/HUMAN_IN_THE_LOOP.md): human input, state edits, approval branches and cross-process resume
 
-- [AgentRevision 与会话绑定](guides/AGENT_REVISIONS.md)：不可变配置与工件归档、旧程序加载、新旧会话版本隔离
+- [Native orchestration and tools](guides/NATIVE_ORCHESTRATION.md): `workflow.Graph`, durable graphs, Dispatcher and approval resume
+- [Workflow orchestration](../workflow/README.md): graph compilation, branches, parallel joins, bounded loops and agent adapters
+- [Composable orchestration](guides/COMPOSABLE_ORCHESTRATION.md): root budgets, sub-agent tools, durable context references and read-only observation
+- [Session log](../core/session/README.md): event log, forks, trajectory export
+- [Context policy](guides/CONTEXT_POLICY.md): tool result offloading and custom PreStep
+- [Grounded RAG and streaming](guides/GROUNDED_RAG_AND_STREAMING.md) *(Chinese)*
 
-- [Skills 加载](guides/SKILLS.md)：可复用 Catalog、按需正文与资源读取、可选工具适配及宿主边界
-- [宿主标准接入](guides/HOST_INTEGRATION.md)：Scope、BuildContext、恢复身份与资源生命周期
-- [HTTP/SSE/WebSocket、Webhook与Hooks](guides/HTTP_AGENT.md)：安装、页面/客户端案例、宿主装配、可替换连接接口与正式文档入口
-- [扩展契约](guides/EXTENSION_CONTRACT.md)
-- [执行治理](guides/EXECUTION_GOVERNANCE.md)：预算、诊断与资源治理
-- [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES.md)
-- [工具中间件](guides/TOOL_MIDDLEWARE.md)、[缓存](guides/CACHING_GUIDE.md)、[插件：Agent 能力包与 Runnable 注册表](guides/PLUGIN_SYSTEM_GUIDE.md)
-- [Option 模式](guides/OPTION_PATTERN_BEST_PRACTICES.md)
+## Host integration and governance
 
-## LLM 提供商
+- [AgentRevision and session binding](guides/AGENT_REVISIONS.md) *(Chinese)*: immutable configuration and artifact archives, loading old programs, version isolation between old and new sessions
 
-- [LLM 提供商指南](guides/LLM_PROVIDERS.md)、[能力对照](guides/PROVIDER_CAPABILITIES.md)、[最佳实践](guides/PROVIDER_BEST_PRACTICES.md)、[持续回归](guides/PROVIDER_REGRESSION.md)
-- [MiniMax Anthropic 协议接入](guides/MINIMAX_ANTHROPIC.md)：国内端点、显式凭据配置、原生工具续接与真实验证边界
-- [Embedder 提供商](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md)（goagent-contrib）
+- [Skills loading](guides/SKILLS.md) *(Chinese)*: reusable Catalog, on-demand bodies and resources, optional tool adapter and host boundaries
+- [Host integration](guides/HOST_INTEGRATION.md): Scope, BuildContext, resume identity and resource lifecycle
+- [HTTP/SSE/WebSocket, webhooks and hooks](guides/HTTP_AGENT.md) *(Chinese)*: installation, page and client examples, host assembly, replaceable connection interfaces
+- [Extension contract](guides/EXTENSION_CONTRACT.md) *(Chinese)*
+- [Execution governance](guides/EXECUTION_GOVERNANCE.md): budgets, diagnostics and resource governance
+- [MCP and resumable steps](guides/PRIORITY_CAPABILITIES.md) *(Chinese)*
+- [Tool middleware](guides/TOOL_MIDDLEWARE.md), [caching](guides/CACHING_GUIDE.md) *(Chinese)*, [plugins: agent capability packs and the Runnable registry](guides/PLUGIN_SYSTEM_GUIDE.md) *(Chinese)*
+- [Option pattern](guides/OPTION_PATTERN_BEST_PRACTICES.md) *(Chinese)*
 
-| 提供商 | 构造函数（`llm/providers`） | `AsRunnable` 与原生工具流 |
+## LLM providers
+
+- [LLM provider guide](guides/LLM_PROVIDERS.md), [capability matrix](guides/PROVIDER_CAPABILITIES.md), [best practices](guides/PROVIDER_BEST_PRACTICES.md) *(Chinese)*, [continuous regression](guides/PROVIDER_REGRESSION.md) *(Chinese)*
+- [MiniMax via the Anthropic protocol](guides/MINIMAX_ANTHROPIC.md) *(Chinese)*: China endpoints, explicit credentials, native tool continuation and verification limits
+- [Embedder providers](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md) (goagent-contrib)
+
+| Provider | Constructor (`llm/providers`) | `AsRunnable` and native tool streaming |
 |---|---|---|
-| OpenAI 及兼容端点 | `NewOpenAIWithOptions` | 支持 |
-| DeepSeek | `NewDeepSeekWithOptions` | 支持 |
-| Gemini | `NewGeminiWithOptions` | 支持 |
-| Anthropic | `NewAnthropicWithOptions` | 支持（官方 SDK） |
-| Kimi | `NewKimiWithOptions` | 支持（OpenAI 兼容预设） |
-| SiliconFlow | `NewSiliconFlowWithOptions` | 支持（OpenAI 兼容预设） |
-| Ollama | `NewOllamaWithOptions` | 支持（OpenAI 兼容预设） |
+| OpenAI and compatible endpoints | `NewOpenAIWithOptions` | Supported |
+| DeepSeek | `NewDeepSeekWithOptions` | Supported |
+| Gemini | `NewGeminiWithOptions` | Supported |
+| Anthropic | `NewAnthropicWithOptions` | Supported (official SDK) |
+| Kimi | `NewKimiWithOptions` | Supported (OpenAI-compatible preset) |
+| SiliconFlow | `NewSiliconFlowWithOptions` | Supported (OpenAI-compatible preset) |
+| Ollama | `NewOllamaWithOptions` | Supported (OpenAI-compatible preset) |
 
-`AsRunnable`、`ExecuteStream` 接受任意 `llm.Client`；原生工具循环、`Start` 句柄与循环扩展点需要 `llm.ToolStreamClient`。表中“支持”的 Provider 同时实现两者。
+`AsRunnable` and `ExecuteStream` accept any `llm.Client`; the native tool loop, `Start` handles and loop extension points need `llm.ToolStreamClient`. Every provider marked "Supported" implements both.
 
-## 架构与设计
+## Architecture and design *(Chinese)*
 
-- [架构概述](architecture/ARCHITECTURE.md)、[组件关系图](architecture/COMPONENT_DIAGRAM.md)、[导入层级](architecture/IMPORT_LAYERING.md)
-- [设计概述](design/DESIGN_OVERVIEW.md)、[时序图](design/SEQUENCE_DIAGRAMS.md)、[流程图](design/FLOW_DIAGRAMS.md)
-- [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
-- [运行能力与后续验收](guides/RUNTIME_READINESS.md)：已实现能力、部署限制、记忆迁移与后续评测清单
-- [记忆系统设计](design/MEMORY_DESIGN.md)、[长期记忆的删除优先](design/MEMORY_GOVERNANCE.md)：G0/G1/G2 已合并，包含召回块不进日志、durable.Store 存储与派生数据级联失效；[管理功能](design/MEMORY_ADMIN.md)中的分页列表与共享命名空间仍待实施
-- [Hermes 全文对照](research/2026-11-10-hermes-design-review.md)与[跨仓采纳设计](superpowers/specs/2026-11-10-hermes-runtime-design.md)：17 张图阅读、固定官方源码核对，以及技能加载、上下文来源、路由、检索和宿主调度的增量提案（未实施）
-- [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任
-- [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
-- [Eino 对照：组件、编排、ADK 与扩展生态](research/2026-11-04-eino-comparison.md)
-- [可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)与[实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)
-- [统一管理需求](superpowers/specs/2026-11-08-unified-management-requirements.md)、[可行性调研](research/2026-11-08-unified-management-feasibility.md)、[技术设计](superpowers/specs/2026-11-08-unified-management-design.md)与[实施计划](superpowers/plans/2026-11-08-unified-management.md)：通用管理模块位于 GoAgent 核心（v0.51.0 起），PostgreSQL 后端和数据库案例位于 contrib，见[实施验收](evaluation/2026-11-08-unified-management/REPORT.md)
+- [Architecture overview](architecture/ARCHITECTURE.md), [component diagram](architecture/COMPONENT_DIAGRAM.md), [import layering](architecture/IMPORT_LAYERING.md)
+- [Design overview](design/DESIGN_OVERVIEW.md), [sequence diagrams](design/SEQUENCE_DIAGRAMS.md), [flow diagrams](design/FLOW_DIAGRAMS.md)
+- [Harness core design](design/HARNESS_CORE_DESIGN.md)
+- [Runtime readiness](guides/RUNTIME_READINESS.md): implemented capabilities, deployment limits, memory migration and pending evaluations
+- [Memory design](design/MEMORY_DESIGN.md), [deletion first for long-term memory](design/MEMORY_GOVERNANCE.md), [memory administration](design/MEMORY_ADMIN.md)
+- [HTTP agent design](design/HTTP_AGENT_DESIGN.md): boundary between the kernel and the network module
+- [Multi-framework survey](research/2026-10-27-framework-orchestration-review.md), [Eino comparison](research/2026-11-04-eino-comparison.md)
 
-## API 参考
+## API reference
 
-- [核心 API](api/CORE_API.md)、[Tool API](api/TOOL_API.md)、[LLM API](api/LLM_API.md)、[Middleware API](api/MIDDLEWARE_API.md)
-- 完整签名以 [pkg.go.dev](https://pkg.go.dev/github.com/kart-io/goagent) 或 `go doc` 为准
-- [API 稳定性政策](API_STABILITY_CN.md)（[English](API_STABILITY.md)）：哪些包承诺兼容、弃用流程与 v1.0 路线
+- [Core API](api/CORE_API.md), [Tool API](api/TOOL_API.md), [LLM API](api/LLM_API.md), [Middleware API](api/MIDDLEWARE_API.md) *(Chinese)*
+- Signatures on [pkg.go.dev](https://pkg.go.dev/github.com/kart-io/goagent) or `go doc` are authoritative
+- [API stability policy](API_STABILITY.md): which packages are covered, the deprecation process and the road to v1.0
 
-## 评测
+## Evaluation *(Chinese)*
 
-- [执行开销实测](evaluation/2026-10-31-execution-overhead/REPORT.md)：三种预算模式与可复现原始结果
-- [框架性能对测](evaluation/2026-10-27-framework-performance-v2/REPORT.md)：GoAgent/Eino 基线与复跑代码
-- [GoAgent 评测](../evaluation/agentbench/README.md)
+- [Execution overhead](evaluation/2026-10-31-execution-overhead/REPORT.md): three budget modes with reproducible raw results
+- [Framework performance](evaluation/2026-10-27-framework-performance-v2/REPORT.md): GoAgent/Eino baseline and rerun code
+- [GoAgent evaluation](../evaluation/agentbench/README.md)
 
-## 开发
+## Development *(Chinese)*
 
-- [开发指南](development/DEVELOPMENT_GUIDE.md)、[测试最佳实践](development/TESTING_BEST_PRACTICES.md)、[Panic 处理](development/PANIC_HANDLING.md)
-- [业务接入与故障恢复验收](development/BUSINESS_ACCEPTANCE.md)：授权、业务幂等、崩溃恢复、数据库接管与验收证据
-- [优化验收清单](development/PRIORITY_IMPROVEMENTS.md)
+- [Development guide](development/DEVELOPMENT_GUIDE.md), [testing best practices](development/TESTING_BEST_PRACTICES.md), [panic handling](development/PANIC_HANDLING.md)
+- [Business integration and failure recovery acceptance](development/BUSINESS_ACCEPTANCE.md)
 
-## 相关链接
+## Related links
 
-- [项目 README](../README.md)
-- [更新日志](../CHANGELOG.md)
-- [示例代码](../examples/README.md)
+- [Project README](../README.md)
+- [Changelog](../CHANGELOG.md)
+- [Examples](../examples/README.md)

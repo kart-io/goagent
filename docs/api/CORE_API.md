@@ -69,7 +69,7 @@ agent, err := builder.NewSimpleBuilder(client).
 | `Start(ctx, input string) *Handle` | 后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`，只支持原生工具流 |
 | `Initialize`、`Shutdown`、`GetState`、`GetMetrics` | 生命周期与诊断 |
 
-`AgentOutput` 字段：`Result`、`State`、`Metadata`、`Duration`、`Timestamp`、`TokenUsage`。`AgentEvent.Type` 为 `sources`、`step`、`text`、`usage`、`error` 或 `done`；持久运行暂停时返回 `*WaitingError`（`errors.Is(err, ErrWaiting)`）。
+`AgentOutput` 字段：`Result`、`State`、`Metadata`、`Duration`、`Timestamp`、`TokenUsage`。`AgentEvent.Type` 为 `sources`、`step`、`text`、`usage`、`error` 或 `done`；持久运行暂停时返回 `*WaitingError`（`errors.Is(err, agentErrors.ErrAgentWaiting)`，`agentErrors` 即 `github.com/kart-io/goagent/errors`）。
 
 ### 示例
 

@@ -9,9 +9,9 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-[快速开始](docs/guides/QUICKSTART.md) · [API 文档](https://pkg.go.dev/github.com/kart-io/goagent) · [示例](examples/README.md) · [更新日志](CHANGELOG.md)
+[快速开始](docs/guides/QUICKSTART_CN.md) · [API 文档](https://pkg.go.dev/github.com/kart-io/goagent) · [示例](examples/README.md) · [更新日志](CHANGELOG.md)
 
-[架构概述](docs/architecture/ARCHITECTURE.md) · [开发指南](docs/development/DEVELOPMENT_GUIDE.md) · [测试指南](docs/development/TESTING_BEST_PRACTICES.md) · [提供商能力](docs/guides/PROVIDER_CAPABILITIES.md)
+[架构概述](docs/architecture/ARCHITECTURE.md) · [开发指南](docs/development/DEVELOPMENT_GUIDE.md) · [测试指南](docs/development/TESTING_BEST_PRACTICES.md) · [提供商能力](docs/guides/PROVIDER_CAPABILITIES_CN.md)
 
 GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执行内核：原生工具循环、带持久检查点与审批的类型化工作流图、请求预算、会话日志、OpenTelemetry 事件与 MCP。
 
@@ -63,12 +63,12 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 
 - **Skills 加载**：独立的只读 `skills.Catalog` 提供元数据、正文和附属资源读取，可选 `load_skill` 工具适配。见 [Skills 指南](docs/guides/SKILLS.md)。
 - **统一执行入口**：`agent.AsRunnable()` 的 `Invoke`、`Stream`、`Batch`、`Pipe` 共用同一执行源，工具、检索、中间件与回调走同一路径。
-- **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini Provider）；可选并发工具调用与直接返回工具。
+- **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini、Anthropic Provider 及 Kimi、SiliconFlow、Ollama 预设）；可选并发工具调用与直接返回工具。
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。
 - **持久执行**：`core/durable` 记录模型回合与工具调用；`workflow.Graph` 编译带分支、并行汇合、有界循环与审批恢复的类型化图。
-- **人工介入**：审批暂停处经 `DurableGraph.Resume` 接收校验后的人工输入；节点、并行分支、可中断工具与嵌套子图可用 `durable.AwaitInput` 在执行中途暂停，从检查点恢复。见 [HITL 指南](docs/guides/HUMAN_IN_THE_LOOP.md)。
+- **人工介入**：审批暂停处经 `DurableGraph.Resume` 接收校验后的人工输入；节点、并行分支、可中断工具与嵌套子图可用 `durable.AwaitInput` 在执行中途暂停，从检查点恢复。见 [HITL 指南](docs/guides/HUMAN_IN_THE_LOOP_CN.md)。
 - **执行治理**：根预算（`core/budget`）、带审批、守卫与准入限制的 `tools.Dispatcher`/`Pipeline`、工具结果卸载、会话日志（`core/session`）。
-- **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，Anthropic 基于官方 SDK，支持相同。见[提供商对照](docs/README.md#llm-提供商)。
+- **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，Anthropic 基于官方 SDK，支持相同。见[提供商对照](docs/README_CN.md#llm-提供商)。
 - **可观测性**：只读执行事件（`core/observe`）与 OpenTelemetry 集成（`observability`）。
 - **A2A / MCP**：连接外部 Agent 与 MCP 工具，并通过 A2A/MCP 发布 GoAgent；与 HTTP 共用任务服务，支持输入、审批、状态查询和取消。见[协议接入](docs/guides/PROTOCOL_ADAPTERS.md)。
 
@@ -170,7 +170,7 @@ for chunk := range chunks {
 return ctx.Err()
 ```
 
-其他事件类型有 `sources`、`step`（如 `tool_start`/`tool_end`）与 `usage`；`usage` 是累计快照。参见[快速入门](docs/guides/QUICKSTART.md)与[执行契约](docs/guides/EXECUTION_CONTRACT.md)。
+其他事件类型有 `sources`、`step`（如 `tool_start`/`tool_end`）与 `usage`；`usage` 是累计快照。参见[快速入门](docs/guides/QUICKSTART_CN.md)与[执行契约](docs/guides/EXECUTION_CONTRACT_CN.md)。
 
 ### 预配置 Agent
 
@@ -188,17 +188,17 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 
 ### 运行句柄与循环钩子
 
-客户端实现 `llm.ToolStreamClient` 且配置了工具时，`agent.Start(ctx, input)` 在后台运行并返回 `*builder.Handle`（`Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`）。钩子（`WithPreStep`、`WithIdentifiedPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`、`WithPromptSections`、`WithPromptContexts`）、工具结果卸载（`WithOffload`）与会话日志（`WithSessionLog`）见 [builder README](builder/README.md)、[上下文治理指南](docs/guides/CONTEXT_POLICY.md) 与 [core/session](core/session/README.md)。
+客户端实现 `llm.ToolStreamClient` 且配置了工具时，`agent.Start(ctx, input)` 在后台运行并返回 `*builder.Handle`（`Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`）。钩子（`WithPreStep`、`WithIdentifiedPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`、`WithPromptSections`、`WithPromptContexts`）、工具结果卸载（`WithOffload`）与会话日志（`WithSessionLog`）见 [builder README](builder/README_CN.md)、[上下文治理指南](docs/guides/CONTEXT_POLICY_CN.md) 与 [core/session](core/session/README_CN.md)。
 
 ### 持久执行与编排
 
-- [人工介入](docs/guides/HUMAN_IN_THE_LOOP.md)：审批时接收人工输入、执行中途中断、检查点与故障语义；离线示例：`examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt`。
-- [原生编排](docs/guides/NATIVE_ORCHESTRATION.md)：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复与 `tools.Dispatcher`。
-- [工作流](workflow/README.md)：类型化图、分支、并行汇合与有界循环。
+- [人工介入](docs/guides/HUMAN_IN_THE_LOOP_CN.md)：审批时接收人工输入、执行中途中断、检查点与故障语义；离线示例：`examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt`。
+- [原生编排](docs/guides/NATIVE_ORCHESTRATION_CN.md)：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复与 `tools.Dispatcher`。
+- [工作流](workflow/README_CN.md)：类型化图、分支、并行汇合与有界循环。
 - [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
-- [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)：用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装为工具；子流程等待审批时，父流程以 `builder.ErrWaiting` 挂起。
-- [宿主接入](docs/guides/HOST_INTEGRATION.md)：`execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`；离线示例：`go run ./examples/execution-scope`。
-- [扩展契约](docs/guides/EXTENSION_CONTRACT.md)与[执行治理](docs/guides/EXECUTION_GOVERNANCE.md)：预算、诊断与资源限制。
+- [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION_CN.md)：用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装为工具；子流程等待审批时，父流程以 `builder.ErrWaiting` 挂起。
+- [宿主接入](docs/guides/HOST_INTEGRATION_CN.md)：`execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`；离线示例：`go run ./examples/execution-scope`。
+- [扩展契约](docs/guides/EXTENSION_CONTRACT.md)与[执行治理](docs/guides/EXECUTION_GOVERNANCE_CN.md)：预算、诊断与资源限制。
 
 ## 包一览
 
@@ -222,14 +222,14 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 
 ## 文档
 
-- [快速入门](docs/guides/QUICKSTART.md)
-- [使用指南](docs/guides/USER_GUIDE.md)
-- [Builder API 参考](docs/guides/BUILDER_API_REFERENCE.md)
+- [快速入门](docs/guides/QUICKSTART_CN.md)
+- [使用指南](docs/guides/USER_GUIDE_CN.md)
+- [Builder API 参考](docs/guides/BUILDER_API_REFERENCE_CN.md)
 - [HTTP/SSE/WebSocket、双向Webhook与Hooks](docs/guides/HTTP_AGENT.md) · [设计](docs/design/HTTP_AGENT_DESIGN.md)
-- [LLM 提供商](docs/guides/LLM_PROVIDERS.md)
+- [LLM 提供商](docs/guides/LLM_PROVIDERS_CN.md)
 - [执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 
-完整索引见 [docs/README.md](docs/README.md)，破坏性变更见 [CHANGELOG.md](CHANGELOG.md)。
+完整索引见 [docs/README.md](docs/README_CN.md)，破坏性变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 示例
 

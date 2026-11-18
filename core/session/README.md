@@ -1,77 +1,79 @@
-# core/session — 会话事件日志
+# core/session: Session Event Log
 
-追加写的会话日志：模型看到的对话、轮次边界与持久操作的快照都记在同一份日志中。设计与取舍见 [设计文档第 6、16 节](../../docs/design/HARNESS_CORE_DESIGN.md)。
+[English](README.md) | [中文](README_CN.md)
+
+An append-only session log: the conversation the model sees, turn boundaries, and snapshots of durable operations are all recorded in the same log. For the design and trade-offs see [design document sections 6 and 16](../../docs/design/HARNESS_CORE_DESIGN.md).
 
 ```go
-store, _ := session.NewFileStore(dir) // 或 session.NewMemoryStore()
+store, _ := session.NewFileStore(dir) // or session.NewMemoryStore()
 
 agent, _ := builder.NewSimpleBuilder(client).
     WithSessionID(sessionID).
-    WithSessionLog(store). // 历史从日志推导，不再读取记忆
+    WithSessionLog(store). // history is derived from the log; memory is no longer read
     WithTools(tools...).
     Build()
 
-// 持久运行：durable 的操作快照写入同一份日志
+// Durable run: durable operation snapshots are written to the same log
 ctx = durable.WithJournal(durable.WithExecutionKey(ctx, runKey), session.DurableStore(store, sessionID))
 ```
 
-## 事件
+## Events
 
-事件标识统一使用 `github.com/kart-io/goagent/constants` 中的 `SessionEvent*`，例如 `constants.SessionEventUserMessage`、`constants.SessionEventBoundarySnapshot`；原 `session.Type*` 入口已删除。`session.Event`、`MessageData` 等事件结构及日志行为保持在本包。
+Event identifiers all use `SessionEvent*` from `github.com/kart-io/goagent/constants`, for example `constants.SessionEventUserMessage` and `constants.SessionEventBoundarySnapshot`; the former `session.Type*` entry points have been removed. Event structures such as `session.Event` and `MessageData`, and the log behavior, remain in this package.
 
-| 类型 | 内容 |
+| Type | Content |
 |---|---|
-| `turn/start`、`turn/end` | 一轮的输入、答复与用量，开启 Builder 的 `WithSessionState` 时 `turn/end` 另带状态（`session.LastState` 取未撤销的最后一条）；中断的轮次在下一轮开始时记为 `aborted` |
-| `system/message`、`tool/definitions` | 与上次不同的 system 提示词与工具定义，不进入对话，供导出 |
-| `user/message`、`assistant/message`、`tool/result` | 一条对话消息；`tool/result` 带工具名与是否成功 |
-| `history/rewrite` | 对已有历史的改写（压缩、钩子补充的上下文等），`Surface` 指出被替换的区间 |
-| `session/rewind` | 退回：撤销区间内的全部事件 |
-| `boundary/snapshot` | `core/durable` 的一次快照写入，按执行键寻址 |
+| `turn/start`, `turn/end` | A turn's input, answer, and usage; when the Builder's `WithSessionState` is enabled, `turn/end` also carries the state (`session.LastState` takes the last one not undone); an interrupted turn is recorded as `aborted` when the next turn starts |
+| `system/message`, `tool/definitions` | System prompts and tool definitions that differ from the previous ones; not part of the conversation, used for export |
+| `user/message`, `assistant/message`, `tool/result` | One conversation message; `tool/result` carries the tool name and whether it succeeded |
+| `history/rewrite` | A rewrite of existing history (compression, context added by hooks, etc.); `Surface` identifies the replaced range |
+| `session/rewind` | Rewind: undoes all events within the range |
+| `boundary/snapshot` | One snapshot write from `core/durable`, addressed by execution key |
 
-`DeriveMessages(events)` 是模型历史的唯一来源：按顺序取消息，`session/rewind` 与中止的轮次撤销其区间内的事件，`history/rewrite` 在其余事件上替换消息。
+`DeriveMessages(events)` is the single source of model history: it takes messages in order, `session/rewind` and aborted turns undo the events within their ranges, and `history/rewrite` replaces messages over the remaining events.
 
-## 记录方式
+## How Recording Works
 
-Builder 在每次模型请求前把实际发送的对话（不含 system 与运行上下文）与日志推导的结果比较：新增的消息逐条记录，被 PreStep、压缩等改写的历史记为一条 `history/rewrite`。因此每次请求都能由 `system + DeriveMessages + 运行上下文` 重建，记录与具体的改写方式无关。
+Before each model request, the Builder compares the conversation actually sent (excluding the system prompt and run context) with the result derived from the log: new messages are recorded one by one, and history rewritten by PreStep, compression, and so on is recorded as a single `history/rewrite`. Therefore every request can be rebuilt from `system + DeriveMessages + run context`, and recording is independent of the specific rewrite method.
 
-- 上一轮未结束时：持久运行以同一执行键恢复则续写该轮（回放的消息与已记录的一致，不会重复），否则该轮记为中止，其消息不进入历史。
-- 同一会话同时只应有一个 Agent 写入消息；其他写入者追加的对话使写入返回 `ErrConflict`。持久操作的快照可与之交错写入。
-- 支持普通流式聊天（`llm.Client`）与原生工具循环；无工具聊天同样支持历史、持久回放与 Fork。
+- When the previous turn has not ended: if a durable run resumes with the same execution key, it continues that turn (replayed messages match those already recorded and are not duplicated); otherwise that turn is recorded as aborted and its messages do not enter history.
+- Only one Agent should write messages to a session at a time; conversation appended by other writers makes the write return `errors.ErrSessionConflict`. Durable operation snapshots may be written interleaved with it.
+- Both plain streaming chat (`llm.Client`) and the native tool loop are supported; tool-less chat also supports history, durable replay, and Fork.
 
-持久运行以相同执行键、原始输入重放最后一个已完成轮次时，Builder 使用该轮之前的历史，不追加新轮次或重复消息，并重新执行最终输出验收。完成重放启用 `durable.WithReplayOnly`：`Do` 只接受已完成且意图、策略匹配的记录，不创建新操作，也不执行 `run` 或 `Reconcile`；更换 Agent scope、丢失记录或遇到未完成记录时拒绝重放。授权及其他宿主回调仍须自行保证只读和幂等。
+When a durable run replays the last completed turn with the same execution key and the original input, the Builder uses the history before that turn, appends no new turn or duplicate messages, and re-runs final output validation. Completed replay enables `durable.WithReplayOnly`: `Do` accepts only completed records whose intent and policy match, creates no new operations, and does not execute `run` or `Reconcile`; replay is rejected when the Agent scope changes, records are missing, or an incomplete record is encountered. Authorization and other host callbacks must still ensure on their own that they are read-only and idempotent.
 
-新输入、后续轮次、已中止或退回后的会话使用新的执行键。旧执行键不能重新激活被退回的效果。
+New input, later turns, and sessions that were aborted or rewound use a new execution key. An old execution key cannot reactivate effects that were rewound.
 
-## 存储
+## Storage
 
-`Store` 提供 `Append`（按期望序号做比较并交换）、`Read`、`List`、`Fork`、`Lock`：
+`Store` provides `Append` (compare-and-swap on the expected sequence number), `Read`, `List`, `Fork`, and `Lock`:
 
-- `FileStore`：每个会话一个 JSONL 文件，每行是一次 `Append` 的全部事件，写入中崩溃留下的不完整行在读取时忽略、下次追加前截掉；追加在会话级 flock 内完成并 fsync。
-- `MemoryStore`：进程内实现，用于测试。
-- PostgreSQL：[goagent-contrib 的 `durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) 提供 `SessionStore`，锁为租约，追加快照时校验持有者。
+- `FileStore`: one JSONL file per session, each line holding all events of one `Append`; an incomplete line left by a crash during writing is ignored on read and truncated before the next append; appends are done inside a session-level flock and fsynced.
+- `MemoryStore`: in-process implementation, for tests.
+- PostgreSQL: [`durable/pgstore` in goagent-contrib](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) provides a `SessionStore` whose lock is a lease, and the holder is verified when appending snapshots.
 
-自行实现 `Store` 时用 `sessiontest.Run` 验证契约，传入同一后端上的两个实例模拟两个进程；以租约实现 `Lock` 的后端经 `Options.Leases` 另跑接管与写入隔离用例。
+When implementing your own `Store`, verify the contract with `sessiontest.Run`, passing two instances on the same backend to simulate two processes; backends that implement `Lock` with leases additionally run the takeover and write-isolation cases via `Options.Leases`.
 
-事件使用独立所有权：`Append/AppendAll` 返回后调用方可以复用输入的 `Data` 与 `Surface`；修改 `Read` 的返回值不会改变日志或 `Fork` 的源与分支。`Recorder.Append`、`OpenRecorder` 和 `Recorder.Events` 返回的事件也与记录器内部状态隔离；修改已有返回值不会形成一次日志更新。自定义 Store 应保持相同约定，不能让内存与文件后端产生不同恢复结果。
+Events have independent ownership: after `Append/AppendAll` returns, the caller may reuse the input `Data` and `Surface`; modifying the values returned by `Read` does not change the log or the source and branch of a `Fork`. Events returned by `Recorder.Append`, `OpenRecorder`, and `Recorder.Events` are likewise isolated from the recorder's internal state; modifying an existing return value does not constitute a log update. Custom Stores should keep the same conventions so that in-memory and file backends cannot produce different recovery results.
 
-首次创建文件时，在完整文件头换行写完之前退出会留下空文件或半截首行；下次非空追加会重建完整文件头、同步文件及目录，再返回成功。完整但非法的文件头仍拒绝读取与追加，不会把损坏数据当空会话覆盖。
+When a file is first created, exiting before the full header line and newline are written leaves an empty file or a partial first line; the next non-empty append rebuilds the full header, syncs the file and directory, and only then returns success. A complete but invalid header is still refused for both reads and appends, so corrupted data is never overwritten as an empty session.
 
-`Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `ErrConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
+`Rewind(ctx, store, id, to, expected)` does a compare-and-swap on the last sequence number the caller saw, and returns `errors.ErrSessionConflict` if there were new writes in between. Undone events remain in the log; durable operation snapshots are not affected. `Fork` copies a prefix of a session into a new session.
 
-从持久运行的某一点分叉并继续：`store.Fork(ctx, src, dst, seq)` 之后，对 `dst` 以同一执行键恢复（`WithSessionID(dst)`、`session.DurableStore(store, dst)`）。分叉点之前完成的操作回放，之后的实跑，原会话不变。分叉点应选在消息事件上（如某条 `tool/result` 的序号）；落在某个操作的开始与完成之间时，恢复该操作返回需宿主处理的错误，与进程在该处崩溃相同。
+To fork from a point in a durable run and continue: after `store.Fork(ctx, src, dst, seq)`, resume on `dst` with the same execution key (`WithSessionID(dst)`, `session.DurableStore(store, dst)`). Operations completed before the fork point are replayed and those after it run for real; the original session is unchanged. The fork point should be on a message event (such as the sequence number of a `tool/result`); if it falls between the start and completion of an operation, resuming that operation returns an error the host must handle, just as if the process had crashed there.
 
-## 轨迹导出
+## Trajectory Export
 
 ```go
 traj, _ := session.BuildTrajectory(events)
-traj.WriteOpenAI(w)   // {"messages": [...], "tools": [...]}，OpenAI 微调格式
-traj.WriteShareGPT(w) // {"conversations": [...], "system": "...", "tools": "..."}，LLaMA-Factory 的 sharegpt 格式
-traj.Stats            // 每个工具的调用次数与失败次数
+traj.WriteOpenAI(w)   // {"messages": [...], "tools": [...]}, OpenAI fine-tuning format
+traj.WriteShareGPT(w) // {"conversations": [...], "system": "...", "tools": "..."}, LLaMA-Factory sharegpt format
+traj.Stats            // call count and failure count per tool
 ```
 
-导出的是模型最终看到的对话（压缩与退回之后）。ShareGPT 要求用户侧与模型侧交替：同一回合的多个工具调用或结果合并为 JSON 数组，工具结果之后紧接的用户消息（运行中追加的输入）附在 observation 之后。
+What is exported is the conversation the model finally saw (after compression and rewinds). ShareGPT requires the user side and model side to alternate: multiple tool calls or results in the same turn are merged into a JSON array, and a user message immediately following tool results (input appended during the run) is attached after the observation.
 
-## 测试
+## Testing
 
 ```bash
 go test ./core/session/... ./builder/ -run 'Session|Store|Derive|Export|Recorder|Conformance'

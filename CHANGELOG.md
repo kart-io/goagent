@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
 - `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
 
+### 文档
+
+- 面向用户的 13 篇入门/编排/接入指南、`docs/README.md` 索引与稳定包 README（`builder`、`core`、`core/session`、`core/durable/migrate`、`errors`、`interfaces`、`llm`、`tools`、`workflow`）改为英文主文件，中文版移至同目录 `_CN.md`。翻译时按代码订正了失实内容：Builder 默认值（`MaxTokens`、`Temperature` 默认不设置）、已删除的 `WithMemory`、迁到 `errors` 包的哨兵错误名、错误码数量（65）、`interfaces.ToolInput` 不存在的 `Context` 字段，以及 `ToolStreamClient` 实现方漏列的 Anthropic。
+- 全量核对现行文档与代码（132 份），修正约 80 处失实：已删除 API 的残留引用（`WithMemory`、`MemoryManager`、`ToolInput.Context`、`NewCachedTool`、`core/checkpoint`、parsers 常量等）、迁到 `errors` 包后的哨兵短名、中间件错误流程与持久重跑判定、工具缓存作用域、Handle 输入持久化、Provider 列表漏 Anthropic、过时的发布状态，以及索引与文件表的遗漏。`workflow/refund` 存储缺失记录应返回 `errors.ErrRefundNotFound`。`llm.WithResponseFormat` 目前无内置 Provider 读取，文档已如实说明。
+
 ### 修复
 
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。

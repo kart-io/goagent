@@ -1,0 +1,433 @@
+# errors 错误处理系统
+
+[English](README.md) | [中文](README_CN.md)
+
+本模块是 goagent 框架的统一错误处理系统，提供结构化、可追踪的错误管理机制。
+
+## 目录归属
+
+本包统一维护框架错误码、固定控制信号、错误文案与错误构造函数；协议字段和默认配置仍在 `constants/`。
+
+| 文件 | 管理内容 |
+|---|---|
+| `codes.go` | `ErrorCode` 及分类码 |
+| `sentinel.go`、`sentinels.go` | 不可变的 `SentinelError` 及唯一哨兵定义 |
+| `management.go` | 管理服务的 `ErrManagement*` 哨兵 |
+| `llm.go` | 实际使用的 `Message*` 错误文案及错误上下文字段 |
+| `errors.go`、`helpers.go` | `AgentError`、错误链、分类提取及业务构造器 |
+
+业务错误使用 `New`/`Newf`、`Wrap`/`Wrapf` 或已有专用构造器，添加组件、操作与上下文。等待、预算、锁、会话冲突等固定控制信号使用本包的 `Err*`；通过标准库 `errors.Is` 判断身份，通过本包 `GetCode` 判断分类。不同哨兵可以共用分类码，但不会因此相等；它们没有可变 Context，禁止把共享信号当作可修改的业务错误。
+
+领域错误通过 `CodedError.ErrorCode()` 提供分类；`AgentError.Code` 字段保留。无 `%w` 的格式化业务错误使用 `Newf`，携带原错误时可使用 `Wrapf`；已有合法 `%w` 包装保留标准 `fmt.Errorf` 的错误树语义。标准库 `Is`、`As`、`Join` 保留原用法，自定义 `As` 对 `AgentError` 的投影继续有效。`GetCode` 按错误链遍历顺序取首个框架分类，外层业务包装优先，未知错误返回 `CodeInternal`。codec、harness/env、命令行、测试工具等独立边界保留标准库错误，详细范围由导入检查器约束。
+
+旧领域哨兵和错误常量转发已经删除，主仓及已知关联仓库已同步迁移。迁移路径见 [错误处理迁移指南](../docs/guides/ERROR_HANDLING_MIGRATION.md)。
+
+## 目录
+
+- [架构设计](#架构设计)
+- [错误代码](#错误代码)
+- [核心类型](#核心类型)
+- [使用方法](#使用方法)
+- [API 参考](#api-参考)
+- [代码结构](#代码结构)
+
+## 架构设计
+
+### 系统架构图
+
+```mermaid
+graph TB
+    subgraph "错误创建层"
+        New[New/Newf<br/>创建新错误]
+        Wrap[Wrap/Wrapf<br/>包装现有错误]
+        Helpers[专用辅助函数<br/>40+ 个]
+    end
+
+    subgraph "错误结构"
+        AE[AgentError]
+        Code[ErrorCode<br/>错误代码]
+        Stack[StackFrame<br/>堆栈跟踪]
+        Context[Context<br/>上下文信息]
+    end
+
+    subgraph "错误处理层"
+        Check[IsCode/IsAgentError<br/>错误检查]
+        Extract[GetCode/GetContext<br/>信息提取]
+        Chain[ErrorChain/RootCause<br/>错误链分析]
+    end
+
+    New --> AE
+    Wrap --> AE
+    Helpers --> AE
+    AE --> Code
+    AE --> Stack
+    AE --> Context
+    AE --> Check
+    AE --> Extract
+    AE --> Chain
+
+    style AE fill:#e1f5ff
+    style Helpers fill:#e8f5e9
+```
+
+### 错误链模型
+
+```mermaid
+graph LR
+    E1[AgentError<br/>工具执行错误] --> E2[AgentError<br/>LLM 请求错误]
+    E2 --> E3[标准 error<br/>网络超时]
+
+    style E1 fill:#ffcdd2
+    style E2 fill:#fff9c4
+    style E3 fill:#c8e6c9
+```
+
+## 错误代码
+
+`ErrorCode` 常量共 65 个，按分类列出（常量名为 `Code` + 驼峰形式，如 `CodeLLMRateLimit`）：
+
+| 分类 | 错误代码 |
+|------|---------|
+| Agent | `AGENT_EXECUTION`、`AGENT_VALIDATION`、`AGENT_NOT_FOUND`、`AGENT_INITIALIZATION` |
+| Tool | `TOOL_EXECUTION`、`TOOL_NOT_FOUND`、`TOOL_VALIDATION`、`TOOL_TIMEOUT`、`TOOL_RETRY_EXHAUSTED` |
+| Middleware | `MIDDLEWARE_EXECUTION`、`MIDDLEWARE_CHAIN`、`MIDDLEWARE_VALIDATION` |
+| State | `STATE_LOAD`、`STATE_SAVE`、`STATE_VALIDATION` |
+| Stream | `STREAM_READ`、`STREAM_WRITE`、`STREAM_TIMEOUT`、`STREAM_CLOSED` |
+| LLM | `LLM_REQUEST`、`LLM_RESPONSE`、`LLM_TIMEOUT`、`LLM_RATE_LIMIT` |
+| Context | `CONTEXT_CANCELED`、`CONTEXT_TIMEOUT` |
+| 通用 | `INVALID_INPUT`、`INVALID_CONFIG`、`NOT_IMPLEMENTED`、`INTERNAL_ERROR` |
+| 分布式 | `DISTRIBUTED_CONNECTION`、`DISTRIBUTED_SERIALIZATION`、`DISTRIBUTED_COORDINATION`、`DISTRIBUTED_SCHEDULING`、`DISTRIBUTED_HEARTBEAT`、`DISTRIBUTED_REGISTRY` |
+| RAG | `RETRIEVAL_SEARCH`、`RETRIEVAL_EMBEDDING`、`DOCUMENT_NOT_FOUND`、`VECTOR_DIM_MISMATCH` |
+| Parser | `PARSER_FAILED`、`PARSER_INVALID_JSON`、`PARSER_MISSING_FIELD` |
+| Store | `STORE_CONNECTION`、`STORE_SERIALIZATION`、`STORE_NOT_FOUND` |
+| Router | `ROUTER_NO_MATCH`、`ROUTER_FAILED`、`ROUTER_OVERLOAD` |
+| 插件/类型 | `TYPE_MISMATCH`、`ALREADY_EXISTS`、`NOT_FOUND`、`INVALID_OUTPUT` |
+| 控制信号 | `WAITING`、`BUDGET_EXCEEDED`、`REPLAY_ONLY`、`ATTENTION_REQUIRED`、`APPROVAL_REQUIRED`、`LOCK_UNAVAILABLE`、`LEASE_LOST`、`SCOPE_REMOVED`、`CIRCUIT_OPEN`、`CONFLICT`、`EXECUTION_LIMIT`、`OVERLOADED`、`ACCESS_DENIED` |
+
+## 核心类型
+
+### AgentError 结构
+
+```go
+type AgentError struct {
+    Code      ErrorCode              // 错误代码
+    Message   string                 // 错误信息
+    Operation string                 // 操作名称
+    Component string                 // 组件名称
+    Context   map[string]interface{} // 上下文信息
+    Cause     error                  // 底层错误
+    // 创建处的调用栈只记录程序计数器，通过 StackFrames()/FormatStack() 按需解析
+}
+
+type StackFrame struct {
+    File     string // 源文件路径
+    Line     int    // 行号
+    Function string // 函数名
+}
+```
+
+### 方法链构造
+
+```go
+err := errors.New(errors.CodeLLMRateLimit, "rate limit exceeded").
+    WithComponent("llm_client").
+    WithOperation("request").
+    WithContext("provider", "openai").
+    WithContext("model", "gpt-4").
+    WithContext("retry_after_seconds", 60)
+```
+
+## 使用方法
+
+### 基础使用
+
+```go
+// 方式 1: 直接创建错误
+err := errors.New(errors.CodeLLMTimeout, "request timed out after 30 seconds").
+    WithComponent("llm").
+    WithContext("timeout_seconds", 30)
+
+// 方式 2: 使用专用辅助函数（推荐）
+err := errors.NewLLMTimeoutError("openai", "gpt-4", 30)
+
+// 方式 3: 包装现有错误
+underlyingErr := fmt.Errorf("network error")
+err := errors.Wrap(underlyingErr, errors.CodeLLMRequest, "LLM request failed").
+    WithComponent("llm_client").
+    WithContext("provider", "openai")
+```
+
+### 错误检查
+
+```go
+// 检查错误代码
+if errors.IsCode(err, errors.CodeDocumentNotFound) {
+    return 404, "Not Found"
+}
+
+if errors.IsCode(err, errors.CodeLLMRateLimit) {
+    ctx := errors.GetContext(err)
+    retryAfter := ctx["retry_after_seconds"].(int)
+    time.Sleep(time.Duration(retryAfter) * time.Second)
+}
+
+// 检查是否为 AgentError
+if errors.IsAgentError(err) {
+    agentErr := err.(*errors.AgentError)
+    fmt.Println(agentErr.FormatStack())
+}
+```
+
+### 错误链处理
+
+```go
+// 查看完整错误链
+chain := errors.ErrorChain(wrappedErr)
+for i, e := range chain {
+    fmt.Printf("[%d] %v\n", i, e)
+}
+
+// 获取根本原因
+root := errors.RootCause(wrappedErr)
+fmt.Printf("Root cause: %v\n", root)
+```
+
+### 重试逻辑
+
+```go
+for attempt := 1; attempt <= maxAttempts; attempt++ {
+    err := doOperation()
+    if err == nil {
+        return nil
+    }
+
+    if errors.IsCode(err, errors.CodeLLMRateLimit) {
+        ctx := errors.GetContext(err)
+        retryAfter := ctx["retry_after_seconds"].(int)
+        time.Sleep(time.Duration(retryAfter) * time.Second)
+        continue
+    }
+
+    // 不可重试的错误
+    return errors.NewToolRetryExhaustedError("operation", attempt, err)
+}
+```
+
+### HTTP 状态码映射
+
+```go
+func errorToHTTPStatus(err error) (int, string) {
+    switch errors.GetCode(err) {
+    case errors.CodeDocumentNotFound:
+        return 404, "Not Found"
+    case errors.CodeInvalidInput:
+        return 400, "Bad Request"
+    case errors.CodeLLMRateLimit:
+        return 429, "Too Many Requests"
+    case errors.CodeLLMTimeout:
+        return 504, "Gateway Timeout"
+    default:
+        return 500, "Internal Server Error"
+    }
+}
+```
+
+### Error() 文本与结构化日志
+
+`Error()` 只输出 `[CODE] [component] operation=xxx: message: cause`，不包含 `Context`。错误文本会流入日志、事件 Message 与模型输入，`Context` 中的 URL、模型参数、用户输入等不应随之传播；需要时用 `GetContext` 读取，或交给结构化日志。
+
+`*AgentError` 实现了 `slog.LogValuer`，作为 slog 属性值时以 group 输出 `code`、`component`、`operation`、`message`、`context`、`cause`（为空的字段省略）；同时实现 `zapcore.ObjectMarshaler`，zap（含 kart-io/logger 的 zap 引擎）以对象输出相同字段。`fmt` 格式化时 `%v`/`%s` 与 `Error()` 相同，`%+v` 追加按键排序的 `context: k=v, ...`，仅用于本地调试与日志，不应交给模型。
+
+### URL 脱敏
+
+- `RedactURL(raw)`：把地址写入 `Context` 或日志前去掉 userinfo、query 与 fragment。逗号分隔的多地址（如 NATS 集群）逐段处理；密码含未转义 `/`、`?`、`#` 时丢弃 scheme 之后到最后一个 `@` 为止的内容（`host:port/path` 且路径含 `@` 的地址会被过度裁剪）；key=value 形式 DSN 只保留 `host`、`port`、`dbname`。**不处理**把凭据放在路径中的 URL（如 Slack webhook、Telegram bot token），这类地址不应写入错误与日志。
+- `RedactURLError(err)`：resty、net/http 返回的 `*url.Error` 文本含完整请求 URL（query 中可能有 api key/token）。返回调用方、写入 `ToolOutput.Error` 或日志前调用它，得到 URL 已脱敏的新错误；原错误不被修改，`Unwrap` 仍得到原底层错误，`errors.Is(context.DeadlineExceeded)`、`Timeout()` 与外层 `*AgentError` 的 Code 不受影响，链上没有 `*url.Error` 时原样返回。
+
+```go
+// slog 直接记录 *AgentError，Context 以 err.context 分组输出
+slog.Error("operation failed", "err", agentErr)
+
+// zap / kart-io/logger 的 zap 引擎：以对象输出，含 context
+logger.Errorw("operation failed", "error", agentErr)
+
+// 底层 HTTP 错误先脱敏再包装
+resp, err := client.R().Get(rawURL)
+if err != nil {
+    return errors.Wrap(errors.RedactURLError(err), errors.CodeToolExecution, "request failed")
+}
+
+// 其他日志库可逐项提取
+logger.Error("operation failed",
+    "error_code", errors.GetCode(err),
+    "component", errors.GetComponent(err),
+    "operation", errors.GetOperation(err),
+    "context", errors.GetContext(err),
+)
+
+// 打印堆栈跟踪
+if agentErr, ok := err.(*errors.AgentError); ok {
+    fmt.Println(agentErr.FormatStack())
+}
+```
+
+### 模型参数错误与 panic
+
+- `MarkModelArgument()` 标记错误由模型生成的参数不合法引起，`ModelArgumentMessage()` 返回可原样交还模型改正的 `Message`（未标记时第二个返回值为 false）。被标记错误的 `Message` 不得含内部细节；标记不改变 `Error()`、错误码与类型。
+- `PanicError`（`NewPanicError(op, value)`）是从 panic 恢复得到的错误，保留 `Op`、`Value` 与 `Stack`。`Error()` 只含位置，排查时用 `errors.As` 取值与调用栈。
+
+## API 参考
+
+### 构造函数
+
+```go
+// 创建新错误
+New(code ErrorCode, message string) *AgentError
+Newf(code ErrorCode, format string, args ...interface{}) *AgentError
+
+// 包装现有错误
+Wrap(err error, code ErrorCode, message string) *AgentError
+Wrapf(err error, code ErrorCode, format string, args ...interface{}) *AgentError
+```
+
+`err` 为 nil 时 `Wrap`/`Wrapf` 及以 cause 为参数的辅助函数返回 nil 的 `*AgentError`，后续 `With*` 链式调用对 nil 安全。但 nil 的 `*AgentError` 装进 `error` 接口后不等于 nil，cause 可能为 nil 时先判断再包装：
+
+```go
+if err != nil {
+    return errors.Wrap(err, errors.CodeToolExecution, "tool failed")
+}
+return nil
+```
+
+### 流式方法
+
+```go
+func (e *AgentError) WithOperation(operation string) *AgentError
+func (e *AgentError) WithComponent(component string) *AgentError
+func (e *AgentError) WithContext(key string, value interface{}) *AgentError
+func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError
+func (e *AgentError) LogValue() slog.Value
+func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error
+func (e *AgentError) Format(s fmt.State, verb rune)
+func (e *AgentError) StackFrames() []StackFrame // 创建处的调用栈，调用时解析
+func (e *AgentError) FormatStack() string
+func (e *AgentError) MarkModelArgument() *AgentError
+func (e *AgentError) ModelArgumentMessage() (string, bool)
+
+// 写入 Context 前脱敏 URL
+RedactURL(raw string) string
+// 脱敏错误链上 *url.Error 的 URL
+RedactURLError(err error) error
+```
+
+### 检查函数
+
+```go
+// 错误代码检查：nil 返回空字符串，链上无框架分类时返回 CodeInternal
+GetCode(err error) ErrorCode
+IsCode(err error, code ErrorCode) bool
+
+// 类型检查
+IsAgentError(err error) bool
+
+// 信息提取
+GetOperation(err error) string
+GetComponent(err error) string
+GetContext(err error) map[string]interface{}
+
+// 错误链
+ErrorChain(err error) []error
+RootCause(err error) error
+```
+
+### 专用辅助函数
+
+```go
+// Agent 相关
+NewAgentExecutionError(agentName, operation string, cause error) *AgentError
+NewAgentValidationError(agentName, reason string) *AgentError
+NewAgentNotFoundError(agentName string) *AgentError
+NewAgentInitializationError(agentName string, cause error) *AgentError
+
+// Tool 相关
+NewToolExecutionError(toolName, operation string, cause error) *AgentError
+NewToolNotFoundError(toolName string) *AgentError
+NewToolValidationError(toolName, reason string) *AgentError
+NewToolTimeoutError(toolName string, timeoutSeconds int) *AgentError
+NewToolRetryExhaustedError(toolName string, attempts int, lastError error) *AgentError
+
+// LLM 相关
+NewLLMRequestError(provider, model string, cause error) *AgentError
+NewLLMResponseError(provider, model, reason string) *AgentError
+NewLLMTimeoutError(provider, model string, timeoutSeconds int) *AgentError
+NewLLMRateLimitError(provider, model string, retryAfterSeconds int) *AgentError
+
+// Stream 相关
+NewStreamReadError(cause error) *AgentError
+NewStreamWriteError(cause error) *AgentError
+NewStreamTimeoutError(operation string, timeoutSeconds int) *AgentError
+NewStreamClosedError(operation string) *AgentError
+
+// RAG 相关
+NewRetrievalSearchError(query string, cause error) *AgentError
+NewRetrievalEmbeddingError(text string, cause error) *AgentError
+NewDocumentNotFoundError(docID string) *AgentError
+NewVectorDimMismatchError(expected, actual int) *AgentError
+
+// 其余分类同样各有辅助函数：
+// Middleware: NewMiddlewareExecutionError / NewMiddlewareChainError / NewMiddlewareValidationError
+// State:      NewStateLoadError / NewStateSaveError / NewStateValidationError
+// Context:    NewContextCanceledError / NewContextTimeoutError
+// 通用:       NewInvalidInputError / NewInvalidConfigError / NewNotImplementedError / NewInternalError
+// 分布式:     NewDistributedConnectionError / NewDistributedSerializationError / NewDistributedCoordinationError
+// Parser:     NewParserError / NewParserInvalidJSONError / NewParserMissingFieldError
+// Store:      NewStoreConnectionError / NewStoreSerializationError / NewStoreNotFoundError
+// Router:     NewRouterNoMatchError / NewRouterFailedError / NewRouterOverloadError
+
+// 通用工具：返回附带信息的新错误，不修改 err；err 链上已有 AgentError 时沿用其错误码
+ErrorWithRetry(err error, attempt, maxAttempts int) *AgentError
+ErrorWithDuration(err error, durationMs int64) *AgentError
+```
+
+## 代码结构
+
+```text
+errors/
+├── errors.go       # 核心类型和基础方法
+│                   # - AgentError 结构体
+│                   # - 构造函数和流式方法
+│                   # - 错误检查和提取函数、URL 脱敏
+│
+├── codes.go        # ErrorCode 类型和 Code* 错误码
+├── llm.go          # 模型错误字段与提示
+├── sentinel.go     # 不可变编码哨兵类型
+├── sentinels.go    # 框架固定信号的唯一对象定义
+├── management.go   # 管理服务的 ErrManagement* 哨兵
+│
+├── helpers.go      # 专用错误创建函数
+│
+└── panic.go        # PanicError
+```
+
+## 设计特点
+
+### 结构化错误
+
+- **错误代码分类**：错误代码按组件分类
+- **上下文信息**：灵活的 key-value 存储
+- **堆栈跟踪**：自动捕获调用栈
+
+### 错误链支持
+
+- 实现 `Unwrap()` 支持 `errors.Is()` 和 `errors.As()`
+- 提供 `ErrorChain()` 和 `RootCause()` 便捷函数
+
+### 易于集成
+
+- 与 Go 标准库 `errors` 包完全兼容
+- 便于集成到日志、监控、告警系统
+
+## 扩展阅读
+
+- [core](../core/README_CN.md) - 核心执行引擎
+- [observability](../observability/) - 可观测性
+- [middleware](../middleware/) - 中间件

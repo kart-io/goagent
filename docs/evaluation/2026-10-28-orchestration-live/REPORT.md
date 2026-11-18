@@ -95,7 +95,7 @@ Gemini 第 1 轮长日志排障失败 1 次（[日志](live-gemini.log)），报
 
 ### 工具参数错误会中止整个 Agent（已增加可选处理）
 
-原先任何工具错误都会中止 Agent，模型传错参数也没有改正的机会。现在 `DispatchConfig.ReturnArgumentErrors` 开启后，参数校验错误和工具返回的 `tools.ArgumentError` 会作为结果交还模型；授权、深度、重入、超时等宿主侧错误仍然中止。默认关闭，现有行为与执行日志不变。契约见 [原生编排指南](../../guides/NATIVE_ORCHESTRATION.md#参数错误交还模型)。
+原先任何工具错误都会中止 Agent，模型传错参数也没有改正的机会。现在 `DispatchConfig.ReturnArgumentErrors` 开启后，参数校验错误和工具返回的 `tools.ArgumentError` 会作为结果交还模型；授权、深度、重入、超时等宿主侧错误仍然中止。默认关闭，现有行为与执行日志不变。契约见 [原生编排指南](../../guides/NATIVE_ORCHESTRATION_CN.md#参数错误交还模型)。
 
 - 回归测试：`tools/argument_error_test.go`、`builder/argument_error_test.go`，覆盖错误分类、同轮混合调用、日志回放与开关切换、组合工具不创建子会话、直接返回工具。
 - 本轮 8 个案例都没有开启该选项，所以没有真实模型数据。

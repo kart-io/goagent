@@ -1,8 +1,8 @@
 > 历史设计记录：Preset 装配、行为组件和编码工具已迁至独立 `goagent-harness` 项目，以下旧路径描述迁出前的实现。执行循环与扩展点、`harness/env` 留在 GoAgent。当前边界与导入路径见 [迁移指南](../guides/HARNESS_MIGRATION.md)。
 
-# Harness 核心化设计（草案）
+# Harness 核心化设计
 
-状态：待评审　日期：2026-10-30　参考：DeepSeek Harness（dsh）、Hermes Agent（NousResearch）、第 12 节文献
+状态：历史记录（已实施，部分迁至 goagent-harness）　日期：2026-10-30　参考：DeepSeek Harness（dsh）、Hermes Agent（NousResearch）、第 12 节文献
 
 ## 0. 背景与结论
 
@@ -624,7 +624,7 @@ A0（`2fc040b`）：Pipeline 裁决聚合与按钩子记录授权；`tools/polic
 
 | 设计 | 实施 | 原因 |
 |---|---|---|
-| `Handle` 为接口，方法无返回值 | 具体类型，`Steer`/`Inject`/`Followup`/`Redirect` 返回 error | 轮次结束后的输入须能告知宿主（`ErrHandleDone`），否则被静默丢弃 |
+| `Handle` 为接口，方法无返回值 | 具体类型，`Steer`/`Inject`/`Followup`/`Redirect` 返回 error | 轮次结束后的输入须能告知宿主（`ErrHandleDone`，现为 `errors.ErrAgentHandleDone`），否则被静默丢弃 |
 | 持久运行与收件箱无约定 | 收件箱输入、PreStep、TurnStopping、段落与上下文按步骤记入日志（`loop/...`），恢复时回放 | 模型回合的日志意图包含完整消息，运行中注入的内容不记录就无法恢复 |
 | RequestError 统一处理重试、压缩、回退 | 只在非持久运行中生效；持久运行的模型失败仍交给宿主 | 持久日志中失败的回合不可在同一记录上重试，钩子的回退客户端也无法记录 |
 | Redirect 取消进行中的请求 | 持久运行中降级为 Steer | 取消的回合在日志中记为失败，无法在恢复时重现 |

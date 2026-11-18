@@ -16,9 +16,9 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [builder/](builder/) | `builder` API layers (simple, core, advanced) and configuration serialization |
 | [tools/](tools/) | Built-in tools (calculator, HTTP API, shell, search), function tools, tools with an agent |
 | [skills/](skills/) | Skill registration, routing, a layered weather skill and [standalone SKILL.md loading](skills/03-catalog/) |
-| [advanced/](advanced/) | Multi-agent collaboration, observability, tool selector |
-| [integration/](integration/) | Human-in-the-loop, LangChain-style runnables/middleware/checkpoints, preconfigured agents |
-| [llm/](llm/) | Provider examples: Anthropic, Kimi, and the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) |
+| [advanced/](advanced/) | Multi-agent collaboration (four variants), observability, tool selector |
+| [integration/](integration/) | LangChain-style runnables, callbacks, cache and parsers; middleware chains; preconfigured agents |
+| [llm/](llm/) | Provider examples: Anthropic, Kimi, the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) and the MiniMax Anthropic-compatible verifier (`minimax-verify`) |
 | [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage) | 已迁至 goagent-examples：任务、单 Agent／子 Agent、多平台及错误边界 |
 | [workflow/](workflow/) | `workflow` graph with branching and streaming events, offline (`go run ./examples/workflow [-stream]`) |
 | [human-in-the-loop/](human-in-the-loop/) | Persisted review gates: inspect checkpoints, approve/reject, edit state and resume in another process, offline |
@@ -26,6 +26,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [memory/](memory/) | 长期记忆的边界：命名空间隔离与删除、抽取管线、模型调用缓存一致性、召回预算与保留，用 `mocks.ScriptedClient` 与假 Embedder 离线断言 |
 | [human-in-the-loop-interrupt/](human-in-the-loop-interrupt/) | Node pauses mid-execution for human input and resumes across processes, offline |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
+| [execution-governed/](execution-governed/) | `execution.NewGovernedBuilder` standard governance assembly, final acceptance and zero-request replay after rebuild, offline |
 | [error_handling/](error_handling/) | `errors` package: codes, context, wrapping, retry and fallback patterns |
 | [translate/](translate/) | DeepSeek translation agent, batch and interactive |
 | `testhelpers/` | Assertions and environment helpers shared by example tests |

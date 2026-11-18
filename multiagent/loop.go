@@ -14,12 +14,12 @@ import (
 type LoopConfig[T any] struct {
 	Steps         []Step[T]
 	Until         func(context.Context, T) (bool, error) // 必填；每轮结束后判断是否结束，必须是纯函数
-	MaxIterations int                                    // 必填，> 0；防失控的硬上限，达到后返回 workflow.ErrMaxSteps
+	MaxIterations int                                    // 必填，> 0；防失控的硬上限，达到后返回 agentErrors.ErrWorkflowMaxSteps
 	Fallback      *Step[T]                               // 可选；Until 返回包装 ErrInvalidRoute 的错误时执行，之后结束
 }
 
 // Loop 构造 START → s1 → … → sn，sn 的分支目标为 s1 与 END（有 Fallback 时再加 fb，fb → END），
-// MaxSteps 为 MaxIterations × n。Fallback 不增加步数：最后一轮判断无效时返回 workflow.ErrMaxSteps。
+// MaxSteps 为 MaxIterations × n。Fallback 不增加步数：最后一轮判断无效时返回 agentErrors.ErrWorkflowMaxSteps。
 func Loop[T any](cfg workflow.Config, l LoopConfig[T]) (*workflow.Graph[T], error) {
 	n := len(l.Steps)
 	switch {

@@ -21,7 +21,7 @@ Makefile 从 `go.mod` 的 `toolchain` 声明选择开发工具链，并清除传
 | `make build-all` | 关闭 CGO，检查 Linux amd64/arm64、Windows amd64、macOS amd64/arm64 的编译；不代表目标平台运行验证 |
 | `make run` | 运行无需密钥的 `examples/execution-scope` 离线宿主示例 |
 | `make run EXAMPLE=./examples/workflow` | 运行指定示例；需要模型的示例须另行配置密钥 |
-| `make test` | `GO_TEST_MODE=true go test -v -race -timeout 120s ./...` |
+| `make test` | `GO_TEST_MODE=true go test -p 1 -timeout 10m -count=1 -v -race ./...` |
 | `make test-short` | 带 `-short` 的测试 |
 | `make test-frameworkbench` | 使用只读依赖运行独立性能评测模块的竞态契约测试；不执行计时基准 |
 | `make test-contracts` | 执行、模型流、持久恢复、审批、预算与工具的完整竞态契约测试 |
@@ -71,7 +71,7 @@ func isInput(err error) bool { return agentErrors.IsCode(err, agentErrors.CodeIn
 ```
 
 - 会调用宿主代码的同步入口用 `core.CallSafely` / `core.RecoverPanic` 把 panic 转为错误，见 [Panic 处理](PANIC_HANDLING.md)。
-- 所有阻塞操作接受并遵守 `context.Context`；工具须遵守 `ToolInput.Context` 的期限。
+- 所有阻塞操作接受并遵守 `context.Context`；工具须遵守 `Invoke` 传入 ctx 的期限。
 - 不做向后兼容层：删除的 API 直接删除，迁移写进 CHANGELOG。
 
 ## 扩展开发
@@ -132,7 +132,7 @@ func NewMyWithOptions(opts ...llm.ClientOption) (*MyClient, error) {
 }
 
 func (c *MyClient) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
-	// 用 c.NewHTTPClient(...) 发请求，模型、温度等取 c.GetModel(req.Model)、c.GetTemperature(req.Temperature)
+	// 用 c.NewHTTPClient(...) 发请求，模型、温度等取 c.GetModel(req.Model)、c.ResolveTemperature(req)
 	// 只有同步接口时，把完整结果作为一个终止块返回。
 	content := "..."
 	out := make(chan *llm.StreamChunk, 1)

@@ -38,7 +38,6 @@ type ToolInput struct {
     CallID       string // 宿主分配的稳定子操作 ID，不从模型参数读取
     ExecutionKey string // 宿主执行键，副作用服务据此实现幂等；为空表示没有持久身份
     Args         map[string]interface{}
-    Context      context.Context // 不序列化
     CallerID     string
     TraceID      string
 }
@@ -120,7 +119,7 @@ searchTool := tools.NewFunctionToolBuilder("search").
     MustBuild()
 ```
 
-其他构造方式：`NewRunnableTool` / `NewRunnableToolFactory` 把 `core.Runnable[I, O]` 包装成工具；`NewCachedTool(tool, ttl)` 为工具结果加缓存。
+其他构造方式：`NewRunnableTool` / `NewRunnableToolFactory` 把 `core.Runnable[I, O]` 包装成工具；工具结果缓存用 `tools/middleware` 的 `Caching(...)` 经 `Wrap` 装配（见[工具中间件](#工具中间件)）。
 
 ## Registry
 
@@ -177,7 +176,7 @@ func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.To
 对象通过显式的 `.Wrap` 方法装配；函数按列表顺序从外向内调用，返回时反向经过各层。调用方自定义函数应保留结果与错误的组合。日志计时不写入输入参数。空函数或返回空调用器在装配时失败，其他类型不能通过编译。
 
 ```go
-wrapped := middleware.Wrap(searchTool,
+wrapped := toolmw.Wrap(searchTool,
     toolmw.Logging(),
     toolmw.RateLimit(toolmw.WithQPS(5)),
 )

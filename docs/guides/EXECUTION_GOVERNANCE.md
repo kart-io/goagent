@@ -1,15 +1,17 @@
-# 根预算、资源治理与运行诊断
+# Root Budget, Resource Governance, and Run Diagnostics
 
-## 根预算
+[English](EXECUTION_GOVERNANCE.md) | [中文](EXECUTION_GOVERNANCE_CN.md)
 
-`core/budget.Config` 在原请求次数上增加以下可选字段，零值禁用：
+## Root Budget
 
-| 字段 | 语义 |
+`core/budget.Config` adds the following optional fields on top of the original request count; a zero value disables each one:
+
+| Field | Semantics |
 |---|---|
-| `MaxReservedTokens` | 宿主估计值的累计准入上限，不是实际账单硬上限 |
-| `TokenPolicyVersion` | 开启Token限额时必填，标识宿主估计规则 |
-| `MaxToolCalls` | Dispatcher实际调用工具体的总次数；回放和准入拒绝不消耗，重试是新执行 |
-| `DeadlineUnixMilli` | 根任务的绝对截止时间（Unix毫秒） |
+| `MaxReservedTokens` | Cumulative admission limit on host estimates; not a hard cap on the actual bill |
+| `TokenPolicyVersion` | Required when the token limit is enabled; identifies the host's estimation rules |
+| `MaxToolCalls` | Total number of times the Dispatcher actually invokes a tool body; replays and admission rejections do not count, and a retry is a new execution |
+| `DeadlineUnixMilli` | Absolute deadline of the root task (Unix milliseconds) |
 
 ```go
 controller, err := budget.NewDurable(budget.Config{
@@ -24,50 +26,50 @@ agent, err := builder.NewSimpleBuilder(client).
     WithTokenEstimator(hostEstimate).WithTools(dispatcher.Tools()...).Build()
 ```
 
-`hostEstimate` 的类型为 `builder.TokenEstimator`，参数是只读模型请求及工具列表；必须包含输入、工具定义和最大输出的保守估计。没有默认近似算法；开启Token限额却缺少估计函数、返回零/负数或估计失败时，网络调用前拒绝。每次重试独立预留；已完成操作回放不重新估计。
+`hostEstimate` has type `builder.TokenEstimator`; its arguments are the read-only model request and the tool list. It must return a conservative estimate covering input, tool definitions, and maximum output. There is no default approximation: if the token limit is enabled but no estimator is set, or the estimator returns zero/negative or fails, the call is rejected before any network request. Each retry reserves independently; replays of completed operations are not re-estimated.
 
-直接准入可调用 `ReserveEstimated(ctx,key,tokens)`；旧 `Reserve` 在Token限额关闭时保持原行为。无论实际用量较少、取消或崩溃，都不退还预留。`Snapshot.ReservedTokens` 是估计总量，`KnownTokenDelta` 是已知实际Token减去对应预估，仅统计有usage证据的条目；未知用量继续计入UnknownUsageEntries，不能当作零。实际用量超过估计时仍记录真实值，不篡改证据。
+For direct admission, call `ReserveEstimated(ctx,key,tokens)`; the old `Reserve` keeps its original behavior when the token limit is off. Reservations are never refunded, whether actual usage is lower, the call is canceled, or the process crashes. `Snapshot.ReservedTokens` is the total estimate; `KnownTokenDelta` is the known actual tokens minus the corresponding estimates, counting only entries with usage evidence. Unknown usage continues to be counted in UnknownUsageEntries and must not be treated as zero. When actual usage exceeds the estimate, the real value is still recorded; evidence is not altered.
 
-根预算在子调用间共享；独立子任务配额和金额定价由宿主基于业务分配，本版不引入价格表或假定模型费率。工具计数以实际经过Dispatcher调用边界为准，嵌套工具边界各自计数，绕过Dispatcher的函数不自动计数。
+The root budget is shared across child calls. Independent per-subtask quotas and monetary pricing are allocated by the host based on business needs; this version introduces no price table and assumes no model rates. Tool counting is based on calls that actually cross the Dispatcher invocation boundary; nested tool boundaries each count separately, and functions that bypass the Dispatcher are not counted automatically.
 
-`Bind` 把根期限传播给整个图、回调和子任务。只用 `WithController` 时Builder和Dispatcher仍会为自身执行绑定期限，但任意宿主图节点与外部回调要获得同一期限，应使用Bind。第三方仍须响应context。
+`Bind` propagates the root deadline to the entire graph, callbacks, and subtasks. With only `WithController`, the Builder and Dispatcher still bind the deadline for their own execution, but for arbitrary host graph nodes and external callbacks to get the same deadline, use Bind. Third parties must still honor the context.
 
-持久运行必须配持久Controller，包括纯工具任务；内存预算不能在重启后保留额度。新增Config字段的零值JSON被省略，旧ledger与completed模型intent保持可恢复；启用或改变新限制、估计版本时拒绝旧运行，需新RootKey/版本，不能偷偷修改原账本。
+Durable runs must use a durable Controller, including tool-only tasks; an in-memory budget cannot retain its quota across restarts. Zero values of the new Config fields are omitted from JSON, so old ledgers and completed model intents remain recoverable. Enabling or changing a new limit or the estimator version rejects old runs; a new RootKey/version is required, and the original ledger cannot be silently modified.
 
-## Dispatcher 的两阶段准入
+## Two-Phase Admission in the Dispatcher
 
-- `MaxConcurrency`（默认4）只约束实际执行，不再被审批等待占用。
-- `MaxAdmissionConcurrency`（默认0，不限）独立约束校验及Pipeline准入；需控制大量待审批请求的宿主应显式配置。
-- `MaxQueued`（默认0，不限）限制两阶段共用的阻塞等待人数；立即取得空槽不占排队名额。超限返回可errors.Is匹配的 `agentErrors.ErrDispatcherBusy`。
-- 两段排队仅受宿主/根预算ctx约束。校验、Authorize、日志和执行累计消耗单次Timeout；Pipeline准入与等待执行槽暂停计时。取得槽位后再次检查取消，避免迟到执行。
-- 回放、准入拒绝不需要执行槽；取消或排队失败不新建pending操作。第三方不响应context不能靠超时强行停止。
+- `MaxConcurrency` (default 4) only constrains actual execution and is no longer occupied by approval waits.
+- `MaxAdmissionConcurrency` (default 0, unlimited) independently constrains validation and Pipeline admission; hosts that need to control large numbers of pending-approval requests should configure it explicitly.
+- `MaxQueued` (default 0, unlimited) limits the number of blocked waiters shared by both phases; immediately acquiring a free slot does not take a queue position. Exceeding it returns `agentErrors.ErrDispatcherBusy`, which can be matched with errors.Is.
+- Both queues are bounded only by the host/root-budget ctx. Validation, Authorize, journaling, and execution cumulatively consume the single-call Timeout; Pipeline admission and waiting for an execution slot pause the clock. Cancellation is checked again after a slot is acquired, to avoid late execution.
+- Replays and admission rejections need no execution slot; cancellation or queuing failure does not create a new pending operation. A third party that does not honor the context cannot be forcibly stopped by a timeout.
 
-审批不再占执行槽是有意的语义修复。若宿主依赖旧MaxConcurrency同时限制待审批人数，应新增MaxAdmissionConcurrency；它们不保证公平调度。
+Approvals no longer occupying execution slots is an intentional semantic fix. If a host relied on the old MaxConcurrency to also limit the number of pending approvals, it should add MaxAdmissionConcurrency; neither guarantees fair scheduling.
 
-## 异步观测与授权回收
+## Asynchronous Observation and Grant Reclamation
 
-`observe.NewAsyncObserver(sink,capacity,workers)` 返回实现Observer的适配器。队列有界、入队不等待sink、worker数固定；workers>1时sink须支持并发。`Dropped()`统计队列溢出、关闭后提交及取消关闭时丢弃的排队事件；sink panic被隔离。
+`observe.NewAsyncObserver(sink,capacity,workers)` returns an adapter that implements Observer. The queue is bounded, enqueueing does not wait on the sink, and the number of workers is fixed; with workers>1 the sink must support concurrency. `Dropped()` counts events dropped due to queue overflow, submission after close, and queued events discarded on a canceled close; sink panics are isolated.
 
-宿主须调用 `Close(ctx)`：正常关闭先停止接收再排空；ctx取消时取消sink context并返回，之后可再次Close等待。忽略context的sink仍占原worker，框架不额外创建替代goroutine，也不能强杀它。异步事件保留上下文值并脱离原调用取消，不作为持久审计或计量证据。
+The host must call `Close(ctx)`: a normal close first stops accepting events, then drains. If ctx is canceled, the sink context is canceled and Close returns; Close can be called again afterwards to wait. A sink that ignores the context still occupies its worker; the framework does not create a replacement goroutine and cannot kill it. Asynchronous events keep context values and are detached from the original call's cancellation; they are not durable audit or metering evidence.
 
-`Pipeline.GrantTTL` 设置新会话授权自批准起的有效期，<=0保持不过期。过期授权即使尚未清理也不再生效；`Grants`过滤过期项；宿主定期调用 `PruneGrants()` 回收过期授权和空会话，返回删除的授权条数。`RevokeGrants(sessionID)`显式撤销；清理不修改在途审批。
+`Pipeline.GrantTTL` sets how long a new session grant remains valid from approval; <=0 keeps it non-expiring. An expired grant no longer takes effect even before it is cleaned up; `Grants` filters out expired entries; the host periodically calls `PruneGrants()` to reclaim expired grants and empty sessions, which returns the number of grants removed. `RevokeGrants(sessionID)` revokes explicitly; cleanup does not modify in-flight approvals.
 
-## 持久运行的只读报告
+## Read-Only Reports for Durable Runs
 
-`Runner.Diagnose(ctx,runID,refs...)` 与 `DurableGraph.Diagnose` 返回 `durable.DiagnosticReport`，可直接JSON编码。报告包含位置、状态、障碍与建议动作，不包含业务状态、工具结果、审批键或原始存储错误。显式 `OperationRef{ParentKey,ID}` 可加入已知操作；不自动遍历未知子任务。
+`Runner.Diagnose(ctx,runID,refs...)` and `DurableGraph.Diagnose` return a `durable.DiagnosticReport` that can be JSON-encoded directly. The report contains the position, status, obstacles, and suggested actions; it does not contain business state, tool results, approval keys, or raw store errors. Known operations can be added with explicit `OperationRef{ParentKey,ID}`; unknown subtasks are not traversed automatically.
 
-| 报告状态 | 可以得出的结论 |
+| Report status | Conclusion you can draw |
 |---|---|
-| `not_found` | 未找到该运行或引用，应核对标识 |
-| `completed` | 已保存的续跑位置为完成 |
-| `approval_waiting` | 检查点等待宿主审核与批准 |
-| `outcome_unknown` | 未完成；可能运行中、崩溃或执行失败，不能直接安全重跑 |
-| `blocked` | 版本、拓扑或检查点结构不匹配 |
+| `not_found` | The run or reference was not found; check the identifier |
+| `completed` | The saved resume position is complete |
+| `approval_waiting` | The checkpoint is waiting for host review and approval |
+| `outcome_unknown` | Not complete; it may be running, have crashed, or have failed, and cannot be safely re-run directly |
+| `blocked` | Version, topology, or checkpoint structure mismatch |
 
-仅显式操作记录提供pending/failed证据：pending表示结果未知，failed也须核对外部效果与重试策略。建议动作不是执行授权，诊断不修改状态、不批准、不调用节点/路由/协调器、不取执行锁。跨多条Load不是一致性事务，实际恢复前须协调在途执行。图报告不调用宿主状态反序列化函数，也不验证业务状态类型兼容性。
+Only explicit operation records provide pending/failed evidence: pending means the result is unknown, and failed also requires checking external effects and the retry policy. Suggested actions are not execution authorization; diagnosis does not modify state, approve, invoke nodes/routers/coordinators, or take execution locks. Multiple Loads are not a consistent transaction; coordinate in-flight executions before actual recovery. Graph reports do not call the host state deserialization function and do not verify business state type compatibility.
 
-版本迁移必须由宿主明确执行；诊断本身不迁移或修复存储数据。
+Version migration must be performed explicitly by the host; diagnosis itself does not migrate or repair stored data.
 
-## 升级兼容核对
+## Upgrade Compatibility Check
 
-持久图可声明StateVersion/Components，导出Manifest并对指定运行调用CheckCompatibility。该检查复用只读Diagnose，不执行、加锁、写入或迁移任务；Compatible不证明效果可安全重跑。见[版本清单与排空流程](EXECUTION_ACCEPTANCE.md#恢复清单和升级前检查)。
+A durable graph can declare StateVersion/Components, export a Manifest, and call CheckCompatibility for specific runs. This check reuses the read-only Diagnose and does not execute, lock, write, or migrate tasks; Compatible does not prove that effects can be safely re-run. See [version manifest and drain procedure](EXECUTION_ACCEPTANCE.md#恢复清单和升级前检查).

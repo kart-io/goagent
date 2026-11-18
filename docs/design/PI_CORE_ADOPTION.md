@@ -16,9 +16,9 @@ GoAgent 是嵌入 Go 服务的可恢复、可计量、可观测 Agent 编排内�
 
 Steer 到达过晚、Inject 不唤醒、MaxIterations 耗尽、调用失败或取消时，可能留下待处理输入。宿主在 Wait 返回后决定展示、丢弃或创建新执行；核心不为清空队列绕过预算或自动开始新 Run。Wait 自身等待超时不表示 Handle 已结束，稳定终态须等待实际运行收敛。
 
-Handle 是进程内控制对象，入队成功不表示输入已经持久保存。持久操作只保护已提交的执行决定；要求跨进程可靠接收的服务必须先写宿主收件箱，再提交执行，并维护自己的接收 ID/投递确认。PendingInputs 不是消息账本或 exactly-once 承诺。
+Handle 是进程内控制对象：非持久运行中入队成功不表示输入已经持久保存；持久运行中输入写入持久收件箱后才算接受，用同一执行键再次 Start 时恢复未领取的输入。PendingInputs 不是消息账本或 exactly-once 承诺。
 
-审核补充：Interrupt 后 Handle 等待本轮 ExecuteStream 退出，不因消费端取消而提前声明工具清理完成。等待本身可独立超时；错误链保留取消原因和已收到的执行失败。Followup 的调度不持久化，恢复须由宿主重建原轮次与合并批次；派生执行键和 WithResume 不替代调度恢复。行为与反例见[生命周期回归](../../builder/handle_lifecycle_test.go)。
+审核补充：Interrupt 后 Handle 等待本轮 ExecuteStream 退出，不因消费端取消而提前声明工具清理完成。等待本身可独立超时；错误链保留取消原因和已收到的执行失败。持久运行中 Followup 同样落盘，用同一执行键再次 Start 时按记录的批次继续 Followup 轮次，宿主不需要重建也不应重复提交。行为与反例见[生命周期回归](../../builder/handle_lifecycle_test.go)。
 
 实现上公开流与 Handle 共用私有 executeStream 执行源；生产者在关闭事件通道前写入私有终态，Handle 读到通道关闭后才读取该结果。通道关闭提供同步，取消导致公开 error 事件未发送时也不会丢失执行源已返回的清理错误。一般 AsRunnable 和公开流的取消消费行为保持原契约。
 

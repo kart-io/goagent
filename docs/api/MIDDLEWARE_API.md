@@ -60,8 +60,8 @@ func (c *MiddlewareChain) Size() int
 
 `MiddlewareChain.Execute` 的顺序：
 
-1. 按添加顺序调用 `OnBefore`。某个 `OnBefore` 返回错误时只调用该中间件的 `OnError`：返回非 nil 则中止，返回 nil 则继续（此时请求可能是 nil）。
-2. 调用处理器。处理器出错时按添加顺序调用所有中间件的 `OnError`，非 nil 返回值替换当前错误；最终错误非 nil 则返回该错误，不再执行 `OnAfter`。
+1. 按添加顺序调用 `OnBefore`。某个 `OnBefore` 返回错误时调用该中间件的 `OnError`：返回非 nil 时再对之前的中间件尽力调用 `OnError`，然后中止；返回 nil 则继续，`OnBefore` 未返回请求时沿用进入该中间件前的请求。
+2. 调用处理器。处理器出错时按添加顺序调用 `OnError`，非 nil 返回值替换当前错误，遇到返回 nil 的中间件即停止并吞掉错误；最终错误非 nil 则返回该错误，不再执行 `OnAfter`，错误被吞掉时继续执行 `OnAfter`（处理器未返回响应时补一个空响应）。
 3. 按添加顺序的逆序调用 `OnAfter`。某个 `OnAfter` 出错时调用该中间件的 `OnError`，非 nil 则中止。
 
 `NewImmutableMiddlewareChain(handler, mws...)` 是构造后不可变的链；`NewFastMiddlewareChain(handler, mws...)` 只执行 `OnBefore`。
@@ -85,7 +85,7 @@ func (c *MiddlewareChain) Size() int
 
 根包 `github.com/kart-io/goagent/middleware` 另有 `ObservabilityMiddleware`（实现上面的 `Middleware` 接口，基于 `observability.TelemetryProvider`），以及 `AdaptiveMiddleware`、`ContextEnrichmentMiddleware`、`DynamicPromptMiddleware`、`LLMToolSelectorMiddleware`、`LLMToolEmulatorMiddleware`。后五者提供 `Process(ctx, core.State) (core.State, error)`，不实现 `Middleware` 接口，不能传给 `WithMiddleware`。
 
-### RetryMiddleware 不会自动重试
+### 自定义中间件示例
 
 ```go
 type auditMiddleware struct {

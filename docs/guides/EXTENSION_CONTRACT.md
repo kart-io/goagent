@@ -45,12 +45,10 @@
 
 ## 初始化与记忆
 
-宿主推荐使用 `BuildContext(ctx)` 构建，初始化检查点与 OnStart 回调共享该上下文，操作与回调返回后检查取消；旧 `Build()` 使用 Background。取消不回滚外部效果，也无法强制终止忽略 ctx 的实现。标准身份、预算和观察装配见 [宿主接入指南](HOST_INTEGRATION.md)。
-
-初始化的Exists/Load失败明确返回错误，不再当成无历史；不存在才使用新状态。状态类型不匹配（含typed-nil）返回普通错误，失败不替换原状态也不触发初始化回调。
+宿主推荐使用 `BuildContext(ctx)` 构建，OnStart 回调共享该上下文，回调返回后检查取消；旧 `Build()` 使用 Background。取消不回滚外部效果，也无法强制终止忽略 ctx 的实现。标准身份、预算和观察装配见 [宿主接入指南](HOST_INTEGRATION.md)。
 
 多轮历史只来自会话日志（`WithSessionLog`）。日志写入失败时本轮失败，错误保留 errors.Is 链；流式文本可能已经输出，失败不回滚模型调用或业务副作用。
 
 治理与诊断接入见 [执行治理指南](EXECUTION_GOVERNANCE.md)。
 
-纯文本执行不支持的循环钩子、提示词扩展和SessionLog现在在BuildContext期报错；RequestError原样重试与OutputValidator仍可使用。详见[能力迁移说明](EXECUTION_ACCEPTANCE.md#构建期能力检查与迁移)。
+纯文本执行不支持的循环钩子与提示词扩展现在在BuildContext期报错；RequestError原样重试与OutputValidator仍可使用。详见[能力迁移说明](EXECUTION_ACCEPTANCE.md#构建期能力检查与迁移)。

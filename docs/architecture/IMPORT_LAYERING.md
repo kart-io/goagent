@@ -54,7 +54,9 @@
 
 | 源目录 | 禁止导入 |
 |--------|----------|
-| 任意（含 `examples/`） | `github.com/kart-io/goagent-harness` 及其子包 |
+| 任意（含 `examples/`） | `github.com/kart-io/goagent-harness`、`github.com/kart-io/goagent-contrib`、`github.com/jackc/pgx` 及其子包 |
+| 除 `management/`、`examples/`、`cmd/`、`testing/`、`evaluation/`、`scripts/` 外 | 顶层 `management` |
+| `skills/`（非测试） | 第三方包，以及除 `skills/...`、`codec/...`、`errors` 与 `constants` 以外的内部包 |
 | `constants/` | 任何 GoAgent 内部包及第三方包（只依赖标准库） |
 | `interfaces/`、`errors/` | 除 `constants` 以外的 GoAgent 内部包 |
 | `utils/` | 除 `utils/...`、`errors`、`codec/...` 与 `constants` 以外的内部包 |

@@ -1,36 +1,37 @@
-# llm LLM 集成层
+# llm: LLM Integration Layer
 
-`llm` 定义模型客户端接口、消息与流式类型、配置选项和错误分类；`llm/providers` 提供各提供商的实现。接口与选项的完整说明见 [LLM API 参考](../docs/api/LLM_API.md)，每个 Provider 的配置与默认值见 [LLM 提供商指南](../docs/guides/LLM_PROVIDERS.md)，实际支持的原生工具流与 Embedding 以 [能力矩阵](../docs/guides/PROVIDER_CAPABILITIES.md) 为准。
+[English](README.md) | [中文](README_CN.md)
 
-## 包结构
+`llm` defines the model client interfaces, message and streaming types, configuration options, and error classification; `llm/providers` provides the implementation for each provider. For full documentation of interfaces and options see the [LLM API Reference](../docs/api/LLM_API.md); for each provider's configuration and defaults see the [LLM Providers Guide](../docs/guides/LLM_PROVIDERS.md); the [capability matrix](../docs/guides/PROVIDER_CAPABILITIES.md) is authoritative for which providers actually support native tool streaming and Embedding.
+
+## Package Layout
 
 ```text
 llm/
-├── client.go         # Client、Message、CompletionRequest/Response、LLMOptions
-├── complete.go       # Complete、Chat：把流收集为完整响应
-├── stream_client.go  # ToolStreamClient、StreamChunk、StreamReader/Writer
-├── capabilities.go   # Capability、CapabilityChecker、可选接口与 Has*/As* 检测函数
-├── tools.go          # ToolCall 与默认参数
-├── provider_error.go # ProviderError、ClassifyError
-├── options.go        # ClientOption（With*）
-├── common/           # BaseProvider、重试、HTTP 错误映射、消息转换
-├── constants/        # Provider 常量、环境变量名、默认值
-├── providers/        # OpenAI、Anthropic、Gemini、DeepSeek、Ollama、Kimi、SiliconFlow
+├── client.go         # Client, Message, CompletionRequest/Response, LLMOptions
+├── complete.go       # Complete, Chat: collect a stream into a full response
+├── stream_client.go  # ToolStreamClient, StreamChunk, StreamReader/Writer
+├── capabilities.go   # Capability, CapabilityChecker, optional interfaces and Has*/As* detection functions
+├── tools.go          # ToolCall and default parameters
+├── provider_error.go # ProviderError, ClassifyError
+├── options.go        # ClientOption (With*)
+├── common/           # BaseProvider, retries, HTTP error mapping, message conversion
+├── providers/        # OpenAI, Anthropic, Gemini, DeepSeek, Ollama, Kimi, SiliconFlow
 ```
 
-## 能力概览
+## Capability Overview
 
-| Provider | 原生工具流 `ToolStreamClient` | 声明 Embedding |
+| Provider | Native tool streaming `ToolStreamClient` | Declares Embedding |
 |---|:---:|:---:|
 | OpenAI | ✓ | ✓ |
 | DeepSeek | ✓ | - |
 | Gemini | ✓ | ✓ |
-| Anthropic（官方 SDK） | ✓ | - |
-| Kimi、SiliconFlow、Ollama（OpenAI 兼容预设） | ✓ | - |
+| Anthropic (official SDK) | ✓ | - |
+| Kimi, SiliconFlow, Ollama (OpenAI-compatible presets) | ✓ | - |
 
-`llm.Client` 只有 `CompleteStream` 与 `Provider`，所有 Provider 都实现它与 `CapabilityChecker`；需要完整响应时用 `llm.Complete` / `llm.Chat` 收集流。原生工具循环需要 `ToolStreamClient`，用 `llm.HasToolStreaming` 检查接口。
+`llm.Client` has only `CompleteStream` and `Provider`; every provider implements it and `CapabilityChecker`. When you need a full response, use `llm.Complete` / `llm.Chat` to collect the stream. The native tool loop requires `ToolStreamClient`; check for the interface with `llm.HasToolStreaming`.
 
-## 创建客户端与对话
+## Creating a Client and Chatting
 
 ```go
 client, err := providers.NewOpenAIWithOptions(
@@ -43,8 +44,8 @@ if err != nil {
 }
 
 resp, err := llm.Chat(ctx, client, []llm.Message{
-    llm.SystemMessage("你是一个有帮助的助手"),
-    llm.UserMessage("你好！"),
+    llm.SystemMessage("You are a helpful assistant"),
+    llm.UserMessage("Hello!"),
 })
 if err != nil {
     return err
@@ -52,13 +53,13 @@ if err != nil {
 fmt.Println(resp.Content)
 ```
 
-`WithAPIKey`、`WithBaseURL`、`WithModel` 留空时读取 `<PROVIDER>_API_KEY`、`<PROVIDER>_BASE_URL`、`<PROVIDER>_MODEL` 环境变量（如 `OPENAI_API_KEY`），再回退到默认值。`WithBaseURL` 可指向兼容端点。
+When `WithAPIKey`, `WithBaseURL`, or `WithModel` are left empty, the `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL`, and `<PROVIDER>_MODEL` environment variables are read (for example `OPENAI_API_KEY`), then defaults are used. `WithBaseURL` can point to a compatible endpoint.
 
-## 流式响应
+## Streaming Responses
 
 ```go
 ctx, cancel := context.WithCancel(ctx)
-defer cancel() // 提前退出时释放连接
+defer cancel() // releases the connection on early exit
 chunks, err := client.CompleteStream(ctx, &llm.CompletionRequest{Messages: messages})
 if err != nil {
     return err
@@ -66,16 +67,16 @@ if err != nil {
 text, err := llm.NewStreamReader(chunks).ReadAll(ctx)
 ```
 
-逐块处理时检查 `chunk.Error`，打印 `chunk.Delta`；`Done` 块携带结束原因与用量。
+When processing chunk by chunk, check `chunk.Error` and print `chunk.Delta`; the `Done` chunk carries the finish reason and usage.
 
-## 原生工具流
+## Native Tool Streaming
 
-一般通过 Builder 使用工具（它处理工具执行、结果续接和 `ProviderState`），见 [builder](../builder/)。直接调用 `CompleteToolsStream` 时，只在无错误的 `Done` 块中读取完整的 `ToolCalls`：
+Tools are usually used through the Builder (it handles tool execution, result continuation, and `ProviderState`); see [builder](../builder/). When calling `CompleteToolsStream` directly, read the complete `ToolCalls` only from an error-free `Done` chunk:
 
 ```go
 tc := llm.AsToolStreamClient(client)
 if tc == nil {
-    return errors.New("该 Provider 不支持原生工具流")
+    return errors.New("this provider does not support native tool streaming")
 }
 chunks, err := tc.CompleteToolsStream(ctx, &llm.CompletionRequest{Messages: messages}, []interfaces.Tool{weatherTool})
 if err != nil {
@@ -89,8 +90,8 @@ for chunk := range chunks {
         continue
     }
     if chunk.FinishReason == "tool_calls" {
-        // 下一轮请求追加：Role 为 assistant、带 ToolCalls/ReasoningContent/ProviderState 的消息，
-        // 以及每个调用一条 Role 为 tool、ToolCallID 对应的结果消息。
+        // Append to the next request: a message with Role assistant carrying ToolCalls/ReasoningContent/ProviderState,
+        // plus one result message per call with Role tool and the matching ToolCallID.
         for _, call := range chunk.ToolCalls {
             fmt.Println(call.Function.Name, call.Function.Arguments)
         }
@@ -98,32 +99,32 @@ for chunk := range chunks {
 }
 ```
 
-`interfaces.Tool` 是接口（`Name`、`Description`、`ArgsSchema`、`Invoke`），可用 `tools.NewFunctionTool` 等构造，见 [tools](../tools/)。
+`interfaces.Tool` is an interface (`Name`, `Description`, `ArgsSchema`, `Invoke`) and can be constructed with `tools.NewFunctionTool` and others; see [tools](../tools/).
 
-## 文本嵌入
+## Text Embedding
 
 ```go
-embedder := llm.AsEmbedder(client) // 未实现或未声明 Embedding 时返回 nil
+embedder := llm.AsEmbedder(client) // returns nil if Embedding is not implemented or not declared
 if embedder == nil {
-    return errors.New("该 Provider 不支持 Embedding")
+    return errors.New("this provider does not support Embedding")
 }
-vector, err := embedder.Embed(ctx, "这是一段需要向量化的文本")
+vector, err := embedder.Embed(ctx, "This is some text to be vectorized")
 ```
 
-Gemini 的向量模型通过 `llm.WithEmbeddingModel` 或 `GEMINI_EMBEDDING_MODEL` 指定，默认 `gemini-embedding-001`。
+The Gemini embedding model is set with `llm.WithEmbeddingModel` or `GEMINI_EMBEDDING_MODEL`, defaulting to `gemini-embedding-001`.
 
-## 错误分类
+## Error Classification
 
-`llm.ClassifyError(err)` 返回 `Reason`、`Retryable`、`ShouldCompress`、`ShouldFallback`，依据错误链中的 `*llm.ProviderError`（状态码与 `RetryAfter`）和上下文超长的错误文本。各 Provider 的流式与非流式请求失败都会构造 `ProviderError`。Builder 中的模型重试用 `WithRequestError` 与 `builder.RetryTransient`。
+`llm.ClassifyError(err)` returns `Reason`, `Retryable`, `ShouldCompress`, and `ShouldFallback`, based on the `*llm.ProviderError` in the error chain (status code and `RetryAfter`) and on context-overflow error text. Every provider constructs a `ProviderError` when streaming and non-streaming requests fail. For model retries in the Builder use `WithRequestError` and `builder.RetryTransient`.
 
-## 相关包
+## Related Packages
 
-- [builder](../builder/) - Agent 构建器
-- [tools](../tools/) - 工具系统
-- [interfaces](../interfaces/) - 接口定义
+- [builder](../builder/) - Agent builder
+- [tools](../tools/) - tool system
+- [interfaces](../interfaces/) - interface definitions
 
-## 显式零温
+## Explicit Zero Temperature
 
-`llm.WithTemperature(0)` 设置客户端零温；Builder 未调用 `builder.WithTemperature` 时不下发温度，由客户端配置决定，显式设置时优先于客户端。直接构造请求使用 `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`。JSON 的 `"temperature":0` 会自动保留显式设置，未设置的旧请求仍沿用默认回落。自定义 Provider 应使用 `BaseProvider.ResolveTemperature(req)`，详见 [LLM API](../docs/api/LLM_API.md)。
+`llm.WithTemperature(0)` sets a zero temperature on the client; when the Builder has not called `builder.WithTemperature`, no temperature is sent and the client configuration decides, and when set explicitly it takes precedence over the client. When constructing a request directly, use `llm.CompletionRequest{Temperature: 0, TemperatureSet: true}`. A JSON `"temperature":0` automatically preserves the explicit setting, while legacy requests that do not set it still use the default fallback. Custom providers should use `BaseProvider.ResolveTemperature(req)`; see [LLM API](../docs/api/LLM_API.md).
 
-`llm.WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置支持客户端的显式推理默认值；Gemini 可设置 `BudgetSet: true, BudgetTokens: 128`。单次 `CompletionRequest.Reasoning` 可覆盖默认值。结构化流的 `ResponseModel` 保留供应商实际模型名，`Usage` 提供有字段证据的推理和工具输入分项；不要把它们再次计入总量。实现及未知语义见[设计契约](../docs/design/TOKEN_USAGE_EXPLAINABILITY.md)。
+`llm.WithReasoning(usage.ReasoningConfig{Effort: "low"})` sets an explicit reasoning default for clients that support it; Gemini can set `BudgetSet: true, BudgetTokens: 128`. A per-request `CompletionRequest.Reasoning` can override the default. The `ResponseModel` of a structured stream preserves the model name the provider actually used, and `Usage` provides reasoning and tool-input breakdowns backed by field evidence; do not count them into the total again. For implementation details and unknown semantics see the [design contract](../docs/design/TOKEN_USAGE_EXPLAINABILITY.md).

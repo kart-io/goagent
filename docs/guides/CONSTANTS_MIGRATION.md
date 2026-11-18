@@ -50,7 +50,7 @@ custom := shared.Provider("offline-demo")
 
 ## 错误与协议字段
 
-错误码、分类、错误提示、错误上下文字段和哨兵使用 `errors` 包，详见[错误处理迁移指南](ERROR_HANDLING_MIGRATION.md)。`FieldError`、`StreamEventError`、`StatusError` 和 HTTP 状态码是协议值，继续在 `constants` 中。
+错误码、分类、错误提示、错误上下文字段和哨兵使用 `errors` 包，详见[错误处理迁移指南](ERROR_HANDLING_MIGRATION.md)。`FieldStatus`、`StatusFailed`、`MethodGet` 等字段名、状态值和 HTTP 协议值，继续在 `constants` 中。
 
 ## 领域共享入口补齐
 
@@ -110,6 +110,6 @@ custom := shared.Provider("offline-demo")
 
 续跑原因属于正常的等待协议，使用 `InterruptReason*`、`WorkflowReject*` 和 `ContinuationKindInterrupt`，不作为业务错误码迁入 `errors`。会话事件数据结构、图构造器、预算控制器及具名领域枚举保持在原包。
 
-同一消费路径的内联默认也集中管理：Kimi/SiliconFlow/Ollama 模型、Ollama 首块超时、记忆嵌入模型、RetryTransient 的 500ms/8s 退避、工具缓存默认及独立预设、检查点健康检查和切换次数。工具缓存性能配置与负载配置的 CPU 倍数分别命名，不与中间件缓存或其他当前同值策略合并。
+同一消费路径的内联默认也集中管理：Kimi/SiliconFlow/Ollama 模型、Ollama 超时、RetryTransient 的 500ms/8s 退避与工具缓存中间件的默认容量，不与其他当前同值策略合并。
 
-`VectorStoreTypeChroma`、`VectorStoreTypePinecone`、`VectorStoreTypeWeaviate`、`EmbedderProviderLocal`、`EmbedderProviderMock` 只是保留的配置词汇；常量存在不表示后端已实现。持久格式版本、算法约束、领域状态机枚举及独立 codec/env 边界仍由原包维护。
+持久格式版本、算法约束、领域状态机枚举及独立 codec/env 边界仍由原包维护。

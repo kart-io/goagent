@@ -1,0 +1,80 @@
+# core/session — 会话事件日志
+
+[English](README.md) | [中文](README_CN.md)
+
+追加写的会话日志：模型看到的对话、轮次边界与持久操作的快照都记在同一份日志中。设计与取舍见 [设计文档第 6、16 节](../../docs/design/HARNESS_CORE_DESIGN.md)。
+
+```go
+store, _ := session.NewFileStore(dir) // 或 session.NewMemoryStore()
+
+agent, _ := builder.NewSimpleBuilder(client).
+    WithSessionID(sessionID).
+    WithSessionLog(store). // 历史从日志推导，不再读取记忆
+    WithTools(tools...).
+    Build()
+
+// 持久运行：durable 的操作快照写入同一份日志
+ctx = durable.WithJournal(durable.WithExecutionKey(ctx, runKey), session.DurableStore(store, sessionID))
+```
+
+## 事件
+
+事件标识统一使用 `github.com/kart-io/goagent/constants` 中的 `SessionEvent*`，例如 `constants.SessionEventUserMessage`、`constants.SessionEventBoundarySnapshot`；原 `session.Type*` 入口已删除。`session.Event`、`MessageData` 等事件结构及日志行为保持在本包。
+
+| 类型 | 内容 |
+|---|---|
+| `turn/start`、`turn/end` | 一轮的输入、答复与用量，开启 Builder 的 `WithSessionState` 时 `turn/end` 另带状态（`session.LastState` 取未撤销的最后一条）；中断的轮次在下一轮开始时记为 `aborted` |
+| `system/message`、`tool/definitions` | 与上次不同的 system 提示词与工具定义，不进入对话，供导出 |
+| `user/message`、`assistant/message`、`tool/result` | 一条对话消息；`tool/result` 带工具名与是否成功 |
+| `history/rewrite` | 对已有历史的改写（压缩、钩子补充的上下文等），`Surface` 指出被替换的区间 |
+| `session/rewind` | 退回：撤销区间内的全部事件 |
+| `boundary/snapshot` | `core/durable` 的一次快照写入，按执行键寻址 |
+
+`DeriveMessages(events)` 是模型历史的唯一来源：按顺序取消息，`session/rewind` 与中止的轮次撤销其区间内的事件，`history/rewrite` 在其余事件上替换消息。
+
+## 记录方式
+
+Builder 在每次模型请求前把实际发送的对话（不含 system 与运行上下文）与日志推导的结果比较：新增的消息逐条记录，被 PreStep、压缩等改写的历史记为一条 `history/rewrite`。因此每次请求都能由 `system + DeriveMessages + 运行上下文` 重建，记录与具体的改写方式无关。
+
+- 上一轮未结束时：持久运行以同一执行键恢复则续写该轮（回放的消息与已记录的一致，不会重复），否则该轮记为中止，其消息不进入历史。
+- 同一会话同时只应有一个 Agent 写入消息；其他写入者追加的对话使写入返回 `errors.ErrSessionConflict`。持久操作的快照可与之交错写入。
+- 支持普通流式聊天（`llm.Client`）与原生工具循环；无工具聊天同样支持历史、持久回放与 Fork。
+
+持久运行以相同执行键、原始输入重放最后一个已完成轮次时，Builder 使用该轮之前的历史，不追加新轮次或重复消息，并重新执行最终输出验收。完成重放启用 `durable.WithReplayOnly`：`Do` 只接受已完成且意图、策略匹配的记录，不创建新操作，也不执行 `run` 或 `Reconcile`；更换 Agent scope、丢失记录或遇到未完成记录时拒绝重放。授权及其他宿主回调仍须自行保证只读和幂等。
+
+新输入、后续轮次、已中止或退回后的会话使用新的执行键。旧执行键不能重新激活被退回的效果。
+
+## 存储
+
+`Store` 提供 `Append`（按期望序号做比较并交换）、`Read`、`List`、`Fork`、`Lock`：
+
+- `FileStore`：每个会话一个 JSONL 文件，每行是一次 `Append` 的全部事件，写入中崩溃留下的不完整行在读取时忽略、下次追加前截掉；追加在会话级 flock 内完成并 fsync。
+- `MemoryStore`：进程内实现，用于测试。
+- PostgreSQL：[goagent-contrib 的 `durable/pgstore`](https://github.com/kart-io/goagent-contrib/tree/master/durable/pgstore) 提供 `SessionStore`，锁为租约，追加快照时校验持有者。
+
+自行实现 `Store` 时用 `sessiontest.Run` 验证契约，传入同一后端上的两个实例模拟两个进程；以租约实现 `Lock` 的后端经 `Options.Leases` 另跑接管与写入隔离用例。
+
+事件使用独立所有权：`Append/AppendAll` 返回后调用方可以复用输入的 `Data` 与 `Surface`；修改 `Read` 的返回值不会改变日志或 `Fork` 的源与分支。`Recorder.Append`、`OpenRecorder` 和 `Recorder.Events` 返回的事件也与记录器内部状态隔离；修改已有返回值不会形成一次日志更新。自定义 Store 应保持相同约定，不能让内存与文件后端产生不同恢复结果。
+
+首次创建文件时，在完整文件头换行写完之前退出会留下空文件或半截首行；下次非空追加会重建完整文件头、同步文件及目录，再返回成功。完整但非法的文件头仍拒绝读取与追加，不会把损坏数据当空会话覆盖。
+
+`Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `errors.ErrSessionConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
+
+从持久运行的某一点分叉并继续：`store.Fork(ctx, src, dst, seq)` 之后，对 `dst` 以同一执行键恢复（`WithSessionID(dst)`、`session.DurableStore(store, dst)`）。分叉点之前完成的操作回放，之后的实跑，原会话不变。分叉点应选在消息事件上（如某条 `tool/result` 的序号）；落在某个操作的开始与完成之间时，恢复该操作返回需宿主处理的错误，与进程在该处崩溃相同。
+
+## 轨迹导出
+
+```go
+traj, _ := session.BuildTrajectory(events)
+traj.WriteOpenAI(w)   // {"messages": [...], "tools": [...]}，OpenAI 微调格式
+traj.WriteShareGPT(w) // {"conversations": [...], "system": "...", "tools": "..."}，LLaMA-Factory 的 sharegpt 格式
+traj.Stats            // 每个工具的调用次数与失败次数
+```
+
+导出的是模型最终看到的对话（压缩与退回之后）。ShareGPT 要求用户侧与模型侧交替：同一回合的多个工具调用或结果合并为 JSON 数组，工具结果之后紧接的用户消息（运行中追加的输入）附在 observation 之后。
+
+## 测试
+
+```bash
+go test ./core/session/... ./builder/ -run 'Session|Store|Derive|Export|Recorder|Conformance'
+```

@@ -29,10 +29,11 @@ Most tests and examples run offline with mock models; examples that call a real 
 These match what the PR workflow runs:
 
 ```bash
-make fmt                          # gofmt
+make fmt                          # gofumpt + gci (CI checks gofmt -l)
 bash scripts/verify_imports.sh    # import layering rules
 go vet ./...
-go test -race ./...
+go test -race -coverprofile=coverage.out ./...
+bash scripts/check_coverage.sh coverage.out   # coverage gates
 golangci-lint run
 ```
 

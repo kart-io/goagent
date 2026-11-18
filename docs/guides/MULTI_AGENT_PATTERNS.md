@@ -41,11 +41,11 @@
 执行器只为节点计步，路由不计步，最后一个允许的节点执行后仍会路由，路由到 `END` 即成功：
 
 - Loop 第 `MaxIterations` 轮结束时 `Until` 为真，正常结束；为假时返回 `agentErrors.ErrWorkflowMaxSteps`。
-- Router 第 `MaxRounds` 次成员执行后 Supervisor 还会再执行一次（再发一次模型请求）：返回 `FINISH` 正常结束，选择成员返回 `ErrMaxSteps`。
-- Fallback 不增加步数：Router 的 Fallback 占用一次成员轮数，Loop 的 Fallback 占用下一轮第一步的位置。最后一次判断无效时，配置了 Fallback 返回 `ErrMaxSteps`（与超限同样转人工），没有配置返回 `ErrInvalidRoute`。
+- Router 第 `MaxRounds` 次成员执行后 Supervisor 还会再执行一次（再发一次模型请求）：返回 `FINISH` 正常结束，选择成员返回 `agentErrors.ErrWorkflowMaxSteps`。
+- Fallback 不增加步数：Router 的 Fallback 占用一次成员轮数，Loop 的 Fallback 占用下一轮第一步的位置。最后一次判断无效时，配置了 Fallback 返回 `agentErrors.ErrWorkflowMaxSteps`（与超限同样转人工），没有配置返回 `ErrInvalidRoute`。
 - 需要“固定跑 N 轮后正常结束”时，在 T 中记录轮数，由 `Until` 判断。
 
-超限转人工（S8）：持久运行返回 `ErrMaxSteps` 后，检查点停在 `Next == MaxSteps`，同一运行 ID 再 `Run` 仍报错。转人工或重新处理时使用新运行 ID，并为它创建新的根预算：Builder 要求根预算的 `RootKey` 与持久图的运行 ID 一致（否则报 `agent budget root conflict`），而且原根预算的用量不会因换运行 ID 而重置。
+超限转人工（S8）：持久运行返回 `agentErrors.ErrWorkflowMaxSteps` 后，检查点停在 `Next == MaxSteps`，同一运行 ID 再 `Run` 仍报错。转人工或重新处理时使用新运行 ID，并为它创建新的根预算：Builder 要求根预算的 `RootKey` 与持久图的运行 ID 一致（否则报 `agent budget root conflict`），而且原根预算的用量不会因换运行 ID 而重置。
 
 ```go
 runID := ticketID + "/human-1"
@@ -81,7 +81,7 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 
 **Agent 侧**：
 
-- 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope，日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”。每个 Step 是独立节点，循环中每次访问的执行键包含步数，互不冲突。同一节点内第二次调用 Agent 必须换 scope。作用域规则见[原生编排：多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+- 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope，日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”。每个 Step 是独立节点，循环中每次访问的执行键包含步数，互不冲突。同一节点内第二次调用 Agent 必须换 scope。作用域规则见[原生编排：多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION_CN.md#多-agent-作用域与入口约束)。
 - 带工具时，模型客户端必须实现 `llm.ToolStreamClient`，工具必须经 `Dispatcher.Tools()` 包装；否则在模型调用前失败。
 - 会话由 `AgentFactory` 每次新建。记忆、检索结果、当前时间、随机示例、render 等任何非确定性内容在恢复时变化，都会使已完成请求的意图不一致而报错，不会静默回放。
 
@@ -212,7 +212,7 @@ if err != nil {
 err = g.AddBranch("review", route, targets...)
 ```
 
-`ErrInvalidRoute` 转兜底，`ErrMaxSteps` 原样返回；持久运行停在评审节点的路由位置（`Routing` 为真），同一运行 ID 再 `Run` 仍报错。因为合规节点留有一步，第 N 轮判断无效时兜底能执行，这与 Loop 构造器“末轮无效返回 `ErrMaxSteps`”不同。路由闭包里的 N 不进计划摘要，只有由 N 算出的 `MaxSteps` 进入，所以用同一个常量计算两者。
+`ErrInvalidRoute` 转兜底，`agentErrors.ErrWorkflowMaxSteps` 原样返回；持久运行停在评审节点的路由位置（`Routing` 为真），同一运行 ID 再 `Run` 仍报错。因为合规节点留有一步，第 N 轮判断无效时兜底能执行，这与 Loop 构造器“末轮无效返回 `agentErrors.ErrWorkflowMaxSteps`”不同。路由闭包里的 N 不进计划摘要，只有由 N 算出的 `MaxSteps` 进入，所以用同一个常量计算两者。
 
 ## 版本与迁移
 

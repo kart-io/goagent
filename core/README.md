@@ -1,43 +1,45 @@
-# core 核心执行引擎
+# core: Core Execution Engine
 
-提供统一的可执行接口 `Runnable[I, O]`、Agent 基础类型、回调、Generator 流处理和 panic 隔离等基础设施。
+[English](README.md) | [中文](README_CN.md)
 
-通用图编排位于 [workflow](../workflow/README.md)：条件分支、并行 Clone/Merge、有界循环和 Runnable/Agent 适配，编译结果复用 `core.StreamRunnable`。图编排与 `core/durable` 的顺序步骤恢复是独立能力；入口、流式和持久化边界以[执行契约](../docs/guides/EXECUTION_CONTRACT.md)为准。
+Provides the unified executable interface `Runnable[I, O]`, Agent base types, callbacks, Generator stream processing, panic isolation, and other infrastructure.
 
-## 核心组件
+General graph orchestration lives in [workflow](../workflow/README.md): conditional branches, parallel Clone/Merge, bounded loops, and Runnable/Agent adapters; compiled results reuse `core.StreamRunnable`. Graph orchestration and the sequential-step recovery of `core/durable` are independent capabilities; entry points, streaming, and persistence boundaries are defined by the [Execution Contract](../docs/guides/EXECUTION_CONTRACT.md).
+
+## Core Components
 
 ### Runnable
 
-所有可执行组件都实现 `Runnable[I, O]`：
+All executable components implement `Runnable[I, O]`:
 
-| 方法 | 说明 |
+| Method | Description |
 |------|------|
-| `Invoke(ctx, input)` | 单次执行 |
-| `Stream(ctx, input)` | 流式执行，返回 `<-chan StreamChunk[O]` |
-| `Batch(ctx, inputs)` | 批量执行 |
-| `Pipe(next)` | 管道连接，返回 `Runnable[I, any]` |
-| `WithCallbacks(...)` | 返回带回调的新 `Runnable[I, O]` |
-| `WithConfig(config)` | 返回带配置的新 `Runnable[I, O]` |
+| `Invoke(ctx, input)` | Single execution |
+| `Stream(ctx, input)` | Streaming execution, returns `<-chan StreamChunk[O]` |
+| `Batch(ctx, inputs)` | Batch execution |
+| `Pipe(next)` | Pipe connection, returns `Runnable[I, any]` |
+| `WithCallbacks(...)` | Returns a new `Runnable[I, O]` with callbacks |
+| `WithConfig(config)` | Returns a new `Runnable[I, O]` with configuration |
 
-实现：`RunnableFunc`（包装函数）、`RunnablePipe`、`RunnableSequence`、`StreamRunnable`（以 `StreamSource` 为唯一执行源，`Invoke` 消费同一数据流；builder 的 `Agent.AsRunnable()` 与 workflow 编译结果均返回它）。`BaseRunnable` 提供回调、配置与 `Batch` 辅助，供具体类型嵌入。
+Implementations: `RunnableFunc` (wraps a function), `RunnablePipe`, `RunnableSequence`, `StreamRunnable` (uses a `StreamSource` as its single execution source, and `Invoke` consumes the same data stream; the builder's `Agent.AsRunnable()` and workflow compiled results both return it). `BaseRunnable` provides callback, configuration, and `Batch` helpers for concrete types to embed.
 
 ### Callback
 
-`Callback` 接口包含 `OnStart/OnEnd/OnError`、`OnLLMStart/OnLLMEnd/OnLLMError`、`OnChainStart/OnChainEnd/OnChainError`、`OnToolStart/OnToolEnd/OnToolError`、`OnAgentAction/OnAgentFinish`。返回非 nil 错误会中止执行。嵌入 `BaseCallback` 只需实现关心的方法。
+The `Callback` interface includes `OnStart/OnEnd/OnError`, `OnLLMStart/OnLLMEnd/OnLLMError`, `OnChainStart/OnChainEnd/OnChainError`, `OnToolStart/OnToolEnd/OnToolError`, and `OnAgentAction/OnAgentFinish`. Returning a non-nil error aborts execution. Embed `BaseCallback` to implement only the methods you care about.
 
-内置：`NewLoggingCallback(logger Logger, verbose bool)`、`NewMetricsCallback(MetricsCollector)`、`NewTracingCallback(Tracer)`、`NewCostTrackingCallback(pricing)`、`NewStdoutCallback(color)`，以及组合多个回调的 `NewCallbackManager(...)`。
+Built-in: `NewLoggingCallback(logger Logger, verbose bool)`, `NewMetricsCallback(MetricsCollector)`, `NewTracingCallback(Tracer)`, `NewCostTrackingCallback(pricing)`, `NewStdoutCallback(color)`, and `NewCallbackManager(...)` to combine multiple callbacks.
 
 ### State
 
-`core/state.State`（`core.State` 为别名）：`Get`、`Set`、`Update`、`Snapshot`、`Clone`、`Delete`、`Clear`、`Keys`、`Size`。`NewAgentState()` 返回线程安全实现，另有 `GetString`/`GetInt`/`GetBool`/`GetFloat64`/`GetMap`/`GetSlice`。`state` 包另提供带 schema 校验的 `TypedState`。
+`core/state.State` (`core.State` is an alias): `Get`, `Set`, `Update`, `Snapshot`, `Clone`, `Delete`, `Clear`, `Keys`, `Size`. `NewAgentState()` returns a thread-safe implementation, which also offers `GetString`/`GetInt`/`GetBool`/`GetFloat64`/`GetMap`/`GetSlice`. The `state` package additionally provides `TypedState` with schema validation.
 
-会话持久化与恢复使用 [core/session](session/README.md) 的会话日志与 `core/durable`（builder 的 `WithSessionLog`、`WithDurableScope`）。
+Session persistence and recovery use the session log of [core/session](session/README.md) and `core/durable` (the builder's `WithSessionLog` and `WithDurableScope`).
 
-## 使用方法
+## Usage
 
-人工介入的跨进程暂停和恢复使用 `workflow.CompileDurable` 的检查点与 `Resume`，见 [HITL 指南](../docs/guides/HUMAN_IN_THE_LOOP.md)。
+Cross-process pause and resume for human-in-the-loop uses the checkpoints and `Resume` of `workflow.CompileDurable`; see the [HITL guide](../docs/guides/HUMAN_IN_THE_LOOP.md).
 
-### 函数式 Runnable 与管道
+### Function Runnables and Pipes
 
 ```go
 upper := core.NewRunnableFunc(func(ctx context.Context, s string) (string, error) {
@@ -53,7 +55,7 @@ n, err := pipe.Invoke(ctx, "hello") // 5
 
 ### Generator
 
-`Generator[T]` 即 `iter.Seq2[T, error]`，可直接 `range`，提前 `break` 即停止：
+`Generator[T]` is `iter.Seq2[T, error]`; you can `range` over it directly, and an early `break` stops it:
 
 ```go
 gen := core.GeneratorFunc(func(yield func(int, error) bool) {
@@ -75,9 +77,9 @@ even := core.Filter(gen, func(n int) bool { return n%2 == 0 })
 results, err := core.Collect(core.Take(even, 10))
 ```
 
-另有 `Map`、`GeneratorFunc`、`FromChannel`、`ToChannel`。
+There are also `Map`, `GeneratorFunc`, `FromChannel`, and `ToChannel`.
 
-### 状态
+### State
 
 ```go
 st := core.NewAgentState()
@@ -85,33 +87,33 @@ st.Set("user_id", "12345")
 snapshot := st.Snapshot()
 ```
 
-## 中间件与辅助执行契约
+## Middleware and Auxiliary Execution Contract
 
-- 三种中间件链共用错误恢复规则；`FastMiddlewareChain` 保持不调用 `OnAfter`。`OnBefore` / `OnAfter` 返回 `(nil, err)` 且自己的 `OnError` 抑制错误时，保留进入该阶段的有效对象；处理器错误被抑制时保留处理器提供的部分响应，没有响应则构造空响应并保留请求状态。`OnError` 可通过 `RequestFromContext` 读取当前请求；错误清除后停止错误传播。
-- 默认工具选择器按不区分大小写的完整单词或工具名匹配，`maxTools == 0` 表示不选择，负数表示不限数量。自定义选择器不能引入候选集之外的工具。Builder 消费每次请求的 `selected_tools`，进一步与最后一轮直接返回工具取交集；选择仅控制模型可见工具，宿主授权仍由 Dispatcher 执行。
-- `RunnableFunc` 完成回调的错误会作为执行错误返回。
-- `CostTrackingCallback` 需要宿主显式发送成对的模型开始/结束事件。每个并发模型调用须使用独立 context，同一 context 的重叠调用会被拒绝；失败调用须发送 `OnLLMError` 清理关联。缺少起始事件或模型单价时只累计 token。Builder 模型用量应使用其 UsageHook；旧回调不会自动接收 Builder 的模型事件。
-- `TypedState` 的整数范围为 `int64`，JSON 浮点整数必须有限、无小数且不溢出；数组逐项验证，嵌套对象只接受字符串键，字节与时间分别要求字节切片和 `time.Time`。未知字段类型与必需字段空值会被拒绝。
+- The three middleware chains share the same error recovery rules; `FastMiddlewareChain` still does not call `OnAfter`. When `OnBefore` / `OnAfter` returns `(nil, err)` and its own `OnError` suppresses the error, the valid object that entered that stage is kept; when a handler error is suppressed, the partial response provided by the handler is kept, and if there is no response an empty response is constructed and the request state is kept. `OnError` can read the current request through `RequestFromContext`; once the error is cleared, error propagation stops.
+- The default tool selector matches case-insensitively on whole words or tool names; `maxTools == 0` means select none, and a negative value means no limit. Custom selectors must not introduce tools outside the candidate set. The Builder consumes the per-request `selected_tools` and further intersects it with the direct-return tools of the last turn; selection only controls which tools the model can see, and host authorization is still enforced by the Dispatcher.
+- Errors from a `RunnableFunc` completion callback are returned as execution errors.
+- `CostTrackingCallback` requires the host to explicitly send paired model start/end events. Each concurrent model call must use its own context, and overlapping calls on the same context are rejected; failed calls must send `OnLLMError` to clear the association. When the start event or the model unit price is missing, only tokens are accumulated. Builder model usage should use its UsageHook; legacy callbacks do not automatically receive the Builder's model events.
+- `TypedState` integers range over `int64`; JSON float integers must be finite, have no fractional part, and not overflow; arrays are validated element by element, nested objects accept only string keys, and bytes and times require byte slices and `time.Time` respectively. Unknown field types and empty values for required fields are rejected.
 
-## 代码结构
+## Code Layout
 
 ```text
 core/
-├── runnable.go / stream_runnable.go  # Runnable 接口与实现
-├── callback.go                       # 回调
+├── runnable.go / stream_runnable.go  # Runnable interface and implementations
+├── callback.go                       # callbacks
 ├── generator.go                      # Generator[T]
 ├── panic_handler.go
-├── budget/       # 宿主级模型请求预算
-├── durable/      # 显式版本化步骤的持久运行与恢复
-├── flow/         # 实验性同步只读增量管道
-├── middleware/   # 请求/响应中间件（OnBefore/OnAfter/OnError）
-├── observe/      # 可选执行事件
-├── session/      # 会话事件日志，见 session/README.md
-└── state/        # 状态管理
+├── budget/       # host-level model request budget
+├── durable/      # durable runs and recovery for explicitly versioned steps
+├── flow/         # experimental synchronous read-only incremental pipeline
+├── middleware/   # request/response middleware (OnBefore/OnAfter/OnError)
+├── observe/      # optional execution events
+├── session/      # session event log, see session/README.md
+└── state/        # state management
 ```
 
-## 扩展阅读
+## Further Reading
 
-- [builder](../builder/) - Agent 构建器
-- [workflow](../workflow/README.md) - 图编排
-- [core/session](session/README.md) - 会话事件日志
+- [builder](../builder/) - Agent builder
+- [workflow](../workflow/README.md) - graph orchestration
+- [core/session](session/README.md) - session event log
