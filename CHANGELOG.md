@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 
+- API 稳定性政策：`scripts/stable-packages.txt` 列出承诺兼容的稳定包（builder、core 执行子包、workflow、llm、tools 治理子包、interfaces、errors、execution、mcp/remote），其余为实验性。稳定包的破坏性变更须先弃用并至少保留一个次版本；`scripts/check_api_compat.sh` 用 apidiff 与最近 tag 比较，PR 流水线中稳定包出现不兼容变更即失败，`breaking-change` 标签可放行。见 [API 稳定性政策](docs/API_STABILITY_CN.md)。
 - `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
 
 ### 修复

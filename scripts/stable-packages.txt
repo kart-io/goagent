@@ -1,0 +1,28 @@
+# v1 兼容承诺覆盖的包（相对模块根的导入路径，精确匹配，不含子包）。
+# 这些包的导出 API 破坏性变更须先经弃用期，见 docs/API_STABILITY.md。
+# 增删条目即改变兼容承诺，需在 CHANGELOG 中说明。
+builder
+builder/contextpolicy
+core
+core/budget
+core/durable
+core/durable/migrate
+core/flow
+core/middleware
+core/observe
+core/session
+core/state
+core/usage
+errors
+execution
+interfaces
+llm
+llm/common
+llm/providers
+mcp/remote
+tools
+tools/middleware
+tools/policy
+tools/spill
+tools/toolargs
+workflow

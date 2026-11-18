@@ -2,7 +2,7 @@ name: Pull Request
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   validate:
@@ -67,6 +67,11 @@ jobs:
         with:
           version: v2.15.0
           args: --timeout=5m --new-from-rev=origin/${{ github.base_ref }}
+
+      - name: API compatibility (stable packages)
+        env:
+          ALLOW_BREAKING: ${{ contains(github.event.pull_request.labels.*.name, 'breaking-change') && '1' || '0' }}
+        run: bash scripts/check_api_compat.sh
 
       - name: Comment PR with coverage
         uses: actions/github-script@v7

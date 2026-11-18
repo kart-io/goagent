@@ -71,6 +71,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 
 - [核心 API](api/CORE_API.md)、[Tool API](api/TOOL_API.md)、[LLM API](api/LLM_API.md)、[Middleware API](api/MIDDLEWARE_API.md)
 - 完整签名以 [pkg.go.dev](https://pkg.go.dev/github.com/kart-io/goagent) 或 `go doc` 为准
+- [API 稳定性政策](API_STABILITY_CN.md)（[English](API_STABILITY.md)）：哪些包承诺兼容、弃用流程与 v1.0 路线
 
 ## 评测
 
