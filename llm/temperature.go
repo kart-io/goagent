@@ -30,7 +30,8 @@ func decodeTemperature(raw json.RawMessage, value *float64, set *bool) error {
 	return nil
 }
 
-// MarshalJSON 让显式零与未设置在持久化和请求副本中保持不同语义。
+// MarshalJSON keeps an explicit zero and an unset value semantically distinct
+// in persistence and request copies.
 func (r CompletionRequest) MarshalJSON() ([]byte, error) {
 	type plain CompletionRequest
 	// 保持正数及未设置请求的原有 JSON 字段顺序，避免改变其持久意图指纹。
@@ -59,7 +60,8 @@ func (r *CompletionRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON 不丢失由选项或 JSON 配置指定的零温。
+// MarshalJSON does not lose a zero temperature specified by options or JSON
+// configuration.
 func (c LLMOptions) MarshalJSON() ([]byte, error) {
 	type plain LLMOptions
 	if c.Temperature != 0 || c.TemperatureSet {
@@ -74,8 +76,9 @@ func (c *LLMOptions) UnmarshalJSON(data []byte) error {
 	return c.UnmarshalJSONFrom(json.NewDecoder(bytes.NewReader(data)))
 }
 
-// UnmarshalJSONFrom 沿用调用方的解码选项（如 config 包的未知字段报错与时长字符串）；
-// v1 风格的 UnmarshalJSON 拿不到这些选项。
+// UnmarshalJSONFrom follows the caller's decoding options (such as the config
+// package's unknown-field errors and duration strings); a v1-style
+// UnmarshalJSON cannot access these options.
 func (c *LLMOptions) UnmarshalJSONFrom(dec *json.Decoder) error {
 	type plain LLMOptions
 	next := plain(*c)

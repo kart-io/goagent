@@ -2,18 +2,18 @@ package interfaces
 
 import "context"
 
-// Tool 表示智能体可以调用的可执行工具
+// Tool represents an executable tool that an agent can call.
 //
-// 所有工具实现都应实现此接口
+// All tool implementations should implement this interface.
 //
-// 实现位置：
-//   - tools.BaseTool - 基础实现，包含通用功能
-//   - tools/compute/* - 计算工具
-//   - tools/http/* - HTTP 请求工具
-//   - tools/search/* - 搜索工具
-//   - tools/shell/* - Shell 执行工具
+// Implementations:
+//   - tools.BaseTool - base implementation with common functionality
+//   - tools/compute/* - compute tools
+//   - tools/http/* - HTTP request tools
+//   - tools/search/* - search tools
+//   - tools/shell/* - shell execution tools
 //
-// 参见：tools/tool.go 的基础实现
+// See tools/tool.go for the base implementation.
 type Tool interface {
 	// Name 返回工具标识符
 	//
@@ -57,31 +57,39 @@ type DurableCallTool interface {
 	SupportsDurableCalls() bool
 }
 
-// ArgumentErrorTool 声明 Invoke 会把模型传错的参数作为结果交还模型改正，宿主无需预先拒绝。
-// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则宿主仍会在调用前校验参数。
+// ArgumentErrorTool declares that Invoke returns invalid model-supplied
+// arguments to the model as a result for correction, so the host need not
+// reject them beforehand. Dispatcher.Tools implements this contract; wrappers
+// must forward it explicitly, otherwise the host still validates arguments
+// before the call.
 type ArgumentErrorTool interface {
 	Tool
 	ReturnsArgumentErrors() bool
 }
 
-// ConcurrentCallTool 声明 Invoke 可被同一轮的多个调用并发执行，且实现自行限制并发度。
-// Dispatcher.Tools 实现此契约；包装器必须显式转发，否则 Builder 按顺序执行该轮调用。
-// 声明只表示允许并发，Builder 还需 WithParallelToolCalls(n>=2) 才会并发执行。
+// ConcurrentCallTool declares that Invoke may be executed concurrently by
+// multiple calls in the same turn and that the implementation limits its own
+// concurrency. Dispatcher.Tools implements this contract; wrappers must forward
+// it explicitly, otherwise Builder executes the turn's calls sequentially. The
+// declaration only permits concurrency; Builder also needs
+// WithParallelToolCalls(n>=2) to execute concurrently.
 type ConcurrentCallTool interface {
 	Tool
 	SupportsConcurrentCalls() bool
 }
 
-// ValidatableTool 是工具可以实现的可选接口
-// 用于提供自定义输入验证逻辑
+// ValidatableTool is an optional interface a tool can implement to provide
+// custom input validation logic.
 //
-// 如果工具实现了此接口，验证器将在执行工具之前调用 Validate
-// 允许进行比单独使用 JSON schema 更复杂的验证
+// If a tool implements this interface, the validator calls Validate before
+// executing the tool, allowing more complex validation than a JSON schema
+// alone.
 //
-// 示例实现中 agentErrors 为 github.com/kart-io/goagent/errors 的导入别名：
+// In the example implementation, agentErrors is the import alias for
+// github.com/kart-io/goagent/errors:
 //
 //	func (t *MyTool) Validate(ctx context.Context, input *ToolInput) error {
-//	    // 自定义验证逻辑
+//	    // Custom validation logic
 //	    if val, ok := input.Args["amount"].(float64); ok && val < 0 {
 //	        return agentErrors.NewToolValidationError(t.Name(), "amount must be non-negative")
 //	    }
@@ -96,10 +104,10 @@ type ValidatableTool interface {
 	Validate(ctx context.Context, input *ToolInput) error
 }
 
-// ToolInput 表示工具执行输入
+// ToolInput represents tool execution input.
 //
-// 此结构包含执行工具所需的所有信息
-// 包括参数和用于追踪和调试的元数据
+// It contains all the information needed to execute a tool, including the
+// arguments and metadata for tracing and debugging.
 type ToolInput struct {
 	// CallID is a host-owned stable child operation ID. Multiple effects in one
 	// durable node require distinct IDs; never read this from model arguments.
@@ -109,97 +117,100 @@ type ToolInput struct {
 	// or a stronger business ID. Empty means execution is not durably identified.
 	ExecutionKey string `json:"execution_key,omitempty"`
 
-	// Args 包含工具的输入参数
+	// Args contains the tool's input arguments.
 	//
-	// Args 的结构应与工具的 ArgsSchema 匹配。来自模型的数字一般是 float64，
-	// float64 表示不了的大整数与高精度小数是 json.Number（见 tools/toolargs）。
+	// The structure of Args should match the tool's ArgsSchema. Numbers from the
+	// model are generally float64; large integers and high-precision decimals that
+	// float64 cannot represent are json.Number (see tools/toolargs).
 	Args map[string]interface{} `json:"args"`
 
-	// CallerID 标识调用工具的身份
+	// CallerID identifies the caller of the tool.
 	//
-	// 可选，用于授权和审计
+	// Optional; used for authorization and auditing.
 	CallerID string `json:"caller_id,omitempty"`
 
-	// TraceID 用于分布式追踪
+	// TraceID is used for distributed tracing.
 	//
-	// 可选，帮助跨系统跟踪工具执行
+	// Optional; helps track tool execution across systems.
 	TraceID string `json:"trace_id,omitempty"`
 }
 
-// ToolOutput 表示工具执行输出
+// ToolOutput represents tool execution output.
 //
-// 此结构包含工具执行的结果
-// 以及状态信息和元数据
+// It contains the tool's execution result along with status information and
+// metadata.
 type ToolOutput struct {
-	// Result 包含工具的输出数据
+	// Result contains the tool's output data.
 	//
-	// 类型取决于具体工具，常见类型：
-	//   - string: 文本输出
-	//   - map[string]interface{}: 结构化数据
-	//   - []byte: 二进制数据
+	// The type depends on the tool; common types:
+	//   - string: text output
+	//   - map[string]interface{}: structured data
+	//   - []byte: binary data
 	Result interface{} `json:"result"`
 
-	// Success 指示工具是否成功执行
+	// Success reports whether the tool executed successfully.
 	//
-	// 如果工具无错误完成则为 true，否则为 false
+	// It is true if the tool completed without error, false otherwise.
 	Success bool `json:"success"`
 
-	// Error 包含错误消息（当 Success 为 false 时）
+	// Error contains the error message (when Success is false).
 	//
-	// 当 Success 为 true 时为空字符串
+	// It is an empty string when Success is true.
 	Error string `json:"error,omitempty"`
 
-	// Metadata 包含关于执行的额外信息
+	// Metadata contains additional information about the execution.
 	//
-	// 可选，可能包括：
-	//   - execution_time: 工具运行时长
-	//   - retries: 重试次数
-	//   - cost: API 调用成本（对于外部服务）
+	// Optional; it may include:
+	//   - execution_time: tool run duration
+	//   - retries: number of retries
+	//   - cost: API call cost (for external services)
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 
-	// AdditionalContext 由调用后钩子追加，Builder 在本批工具结果之后作为 user 消息注入模型上下文。
+	// AdditionalContext is appended by post-call hooks; Builder injects it into the
+	// model context as a user message after this batch of tool results.
 	AdditionalContext []string `json:"additional_context,omitempty"`
 
-	// Labels 预留给数据来源与可信度标签（如 source=web、trust=untrusted），策略可据此判定；目前不传播。
+	// Labels is reserved for data source and trust labels (such as source=web,
+	// trust=untrusted) that policies can act on; it is not propagated yet.
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// ToolCall 表示工具调用的记录
+// ToolCall represents a record of a tool call.
 //
-// 用于日志记录、审计和调试
-// 它捕获工具调用的完整上下文
+// It is used for logging, auditing, and debugging, and captures the full
+// context of a tool call.
 type ToolCall struct {
-	// ID 是此工具调用的唯一标识符
+	// ID is the unique identifier of this tool call.
 	//
-	// 用于在日志和追踪中关联调用
+	// It is used to correlate calls in logs and traces.
 	ID string `json:"id"`
 
-	// ToolName 是被调用工具的名称
+	// ToolName is the name of the called tool.
 	ToolName string `json:"tool_name"`
 
-	// Args 是传递给工具的参数
+	// Args are the arguments passed to the tool.
 	Args map[string]interface{} `json:"args"`
 
-	// Result 是工具的输出
+	// Result is the tool's output.
 	//
-	// 如果调用仍在进行中可能为 nil
+	// It may be nil if the call is still in progress.
 	Result *ToolOutput `json:"result,omitzero"`
 
-	// Error 包含调用失败时的错误信息
+	// Error contains the error information when the call fails.
 	//
-	// 调用成功时为空字符串
+	// It is an empty string when the call succeeds.
 	Error string `json:"error,omitempty"`
 
-	// StartTime 是工具调用开始的时间（Unix 时间戳）
+	// StartTime is when the tool call started (Unix timestamp).
 	StartTime int64 `json:"start_time"`
 
-	// EndTime 是工具调用完成的时间（Unix 时间戳）
+	// EndTime is when the tool call completed (Unix timestamp).
 	//
-	// 如果调用仍在进行中则为零
+	// It is zero if the call is still in progress.
 	EndTime int64 `json:"end_time,omitzero"`
 
-	// Metadata 包含关于调用的额外上下文
+	// Metadata contains additional context about the call.
 	//
-	// 可能包括调用者信息、追踪 ID 等
+	// It may include caller information, trace IDs, and so on.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// CachingConfig 缓存中间件配置
+// CachingConfig is the caching middleware configuration.
 type CachingConfig struct {
 	Cache   cache.Cache                                 `json:"-"`
 	TTL     time.Duration                               `json:"ttl"`
@@ -29,31 +29,31 @@ type CachingConfig struct {
 	Logger  loggercore.Logger                           `json:"-"`
 }
 
-// CachingOption 缓存中间件选项
+// CachingOption is a caching middleware option.
 type CachingOption func(*CachingConfig)
 
-// WithCache 设置缓存实现
+// WithCache sets the cache implementation.
 func WithCache(c cache.Cache) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Cache = c
 	}
 }
 
-// WithTTL 设置缓存过期时间
+// WithTTL sets the cache expiration time.
 func WithTTL(ttl time.Duration) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.TTL = ttl
 	}
 }
 
-// WithCacheKeyFunc 设置缓存键生成函数
+// WithCacheKeyFunc sets the cache key generation function.
 func WithCacheKeyFunc(f func(string, map[string]interface{}) string) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.KeyFunc = f
 	}
 }
 
-// WithCacheLogger 设置日志记录器
+// WithCacheLogger sets the logger.
 func WithCacheLogger(logger loggercore.Logger) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Logger = logger
@@ -66,12 +66,13 @@ type cachingStats struct {
 	Misses atomic.Int64
 }
 
-// CachingMiddleware 提供工具调用结果的缓存功能（使用函数式实现）。
+// CachingMiddleware caches tool call results (functional implementation).
 //
-// 它通过缓存成功的工具执行结果来提高性能，避免重复计算。
-// 使用可配置的 TTL（生存时间）和缓存键生成函数。
+// It improves performance and avoids repeated computation by caching
+// successful tool execution results, using a configurable TTL (time to live)
+// and cache key generation function.
 //
-// 使用示例:
+// Example:
 //
 //	cachingMW := Caching(
 //	    WithCache(myCache),
@@ -83,13 +84,13 @@ type CachingMiddleware struct {
 	stats  *cachingStats
 }
 
-// NewCachingMiddleware 创建一个新的缓存中间件
+// NewCachingMiddleware creates a new caching middleware.
 //
-// 参数:
-//   - opts: 配置选项
+// Parameters:
+//   - opts: configuration options
 //
-// 返回:
-//   - *CachingMiddleware: 缓存中间件实例
+// Returns:
+//   - *CachingMiddleware: the caching middleware instance
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
 		TTL:     5 * time.Minute,
@@ -113,10 +114,10 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	}
 }
 
-// Wrap 实现函数式中间件包装
+// Wrap implements functional middleware wrapping.
 //
-// 这个方法返回一个新的 ToolInvoker，在缓存命中时直接返回结果，
-// 不调用实际工具，从而避免不必要的计算。
+// It returns a new ToolInvoker that returns the cached result directly on a
+// cache hit without calling the actual tool, avoiding unnecessary computation.
 func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInvoker {
 	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		cacheKey := scopedKey(ctx, input, m.config.KeyFunc(tool.Name(), input.Args))
@@ -198,18 +199,18 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 	}
 }
 
-// GetStats 获取缓存统计信息（用于测试和监控）
+// GetStats returns cache statistics (for testing and monitoring).
 func (m *CachingMiddleware) GetStats() (hits, misses int64) {
 	return m.stats.Hits.Load(), m.stats.Misses.Load()
 }
 
-// Caching 返回缓存中间件函数（简化接口）
+// Caching returns the caching middleware function (simplified interface).
 //
-// 参数:
-//   - opts: 配置选项
+// Parameters:
+//   - opts: configuration options
 //
-// 返回:
-//   - ToolMiddlewareFunc: 中间件函数
+// Returns:
+//   - ToolMiddlewareFunc: the middleware function
 func Caching(opts ...CachingOption) ToolMiddlewareFunc {
 	middleware := NewCachingMiddleware(opts...)
 	return middleware.Wrap

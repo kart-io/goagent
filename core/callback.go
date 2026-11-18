@@ -10,49 +10,50 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Callback 定义回调处理器接口
+// Callback defines the callback handler interface.
 //
-// 借鉴 LangChain 的回调系统，提供灵活的监控和调试能力
-// 所有回调方法都返回 error，如果返回非 nil 错误，执行将中止
+// Modeled on LangChain's callback system, it provides flexible monitoring and
+// debugging. Every callback method returns an error; a non-nil error aborts
+// execution.
 type Callback interface {
-	// 通用回调
+	// General callbacks
 	OnStart(ctx context.Context, input interface{}) error
 	OnEnd(ctx context.Context, output interface{}) error
 	OnError(ctx context.Context, err error) error
 
-	// LLM 回调
+	// LLM callbacks
 	OnLLMStart(ctx context.Context, prompts []string, model string) error
 	OnLLMEnd(ctx context.Context, output string, tokenUsage int) error
 	OnLLMError(ctx context.Context, err error) error
 
-	// Chain 回调
+	// Chain callbacks
 	OnChainStart(ctx context.Context, chainName string, input interface{}) error
 	OnChainEnd(ctx context.Context, chainName string, output interface{}) error
 	OnChainError(ctx context.Context, chainName string, err error) error
 
-	// Tool 回调
+	// Tool callbacks
 	OnToolStart(ctx context.Context, toolName string, input interface{}) error
 	OnToolEnd(ctx context.Context, toolName string, output interface{}) error
 	OnToolError(ctx context.Context, toolName string, err error) error
 
-	// Agent 回调
+	// Agent callbacks
 	OnAgentAction(ctx context.Context, action *AgentAction) error
 	OnAgentFinish(ctx context.Context, output interface{}) error
 }
 
-// AgentAction Agent 执行的操作
+// AgentAction is an action performed by an agent.
 type AgentAction struct {
-	Tool      string                 // 工具名称
-	ToolInput map[string]interface{} // 工具输入
-	Log       string                 // 日志信息
+	Tool      string                 // tool name
+	ToolInput map[string]interface{} // tool input
+	Log       string                 // log message
 }
 
-// BaseCallback 提供回调的默认实现（什么都不做）
+// BaseCallback provides a default no-op implementation of the callbacks.
 //
-// 用户可以嵌入 BaseCallback 并只重写需要的方法
+// Users can embed BaseCallback and override only the methods they need.
 type BaseCallback struct{}
 
-// NewBaseCallback 创建基础回调
+// NewBaseCallback creates a base callback.
 func NewBaseCallback() *BaseCallback {
 	return &BaseCallback{}
 }
@@ -100,27 +101,27 @@ func (b *BaseCallback) OnAgentFinish(ctx context.Context, output interface{}) er
 	return nil
 }
 
-// CallbackManager 管理多个回调处理器
+// CallbackManager manages multiple callback handlers.
 type CallbackManager struct {
 	callbacks []Callback
 	mu        sync.RWMutex
 }
 
-// NewCallbackManager 创建回调管理器
+// NewCallbackManager creates a callback manager.
 func NewCallbackManager(callbacks ...Callback) *CallbackManager {
 	return &CallbackManager{
 		callbacks: callbacks,
 	}
 }
 
-// AddCallback 添加回调
+// AddCallback adds a callback.
 func (m *CallbackManager) AddCallback(cb Callback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.callbacks = append(m.callbacks, cb)
 }
 
-// RemoveCallback 移除回调
+// RemoveCallback removes a callback.
 func (m *CallbackManager) RemoveCallback(cb Callback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -133,7 +134,9 @@ func (m *CallbackManager) RemoveCallback(cb Callback) {
 	}
 }
 
-// TriggerCallbacks 触发所有回调的指定方法；回调 panic 时返回 *agentErrors.PanicError，语义见 NotifyCallbacks
+// TriggerCallbacks invokes the given method on every callback. If a callback
+// panics, it returns *agentErrors.PanicError; see NotifyCallbacks for the
+// semantics.
 func (m *CallbackManager) TriggerCallbacks(fn func(Callback) error) error {
 	_, err := m.notify(context.Background(), "trigger_callbacks", fn)
 	return err
@@ -147,7 +150,7 @@ func (m *CallbackManager) notify(ctx context.Context, operation string, fn func(
 	return NotifyCallbacks(ctx, "callback_manager", operation, callbacks, fn)
 }
 
-// OnStart 触发 OnStart 回调
+// OnStart triggers the OnStart callbacks.
 func (m *CallbackManager) OnStart(ctx context.Context, input interface{}) error {
 	_, err := m.notify(ctx, "on_start", func(cb Callback) error {
 		return cb.OnStart(ctx, input)
@@ -155,7 +158,7 @@ func (m *CallbackManager) OnStart(ctx context.Context, input interface{}) error 
 	return err
 }
 
-// OnEnd 触发 OnEnd 回调
+// OnEnd triggers the OnEnd callbacks.
 func (m *CallbackManager) OnEnd(ctx context.Context, output interface{}) error {
 	_, err := m.notify(ctx, "on_end", func(cb Callback) error {
 		return cb.OnEnd(ctx, output)
@@ -163,7 +166,7 @@ func (m *CallbackManager) OnEnd(ctx context.Context, output interface{}) error {
 	return err
 }
 
-// OnError 触发 OnError 回调
+// OnError triggers the OnError callbacks.
 func (m *CallbackManager) OnError(ctx context.Context, err error) error {
 	_, cbErr := m.notify(ctx, "on_error", func(cb Callback) error {
 		return cb.OnError(ctx, err)
@@ -171,8 +174,10 @@ func (m *CallbackManager) OnError(ctx context.Context, err error) error {
 	return cbErr
 }
 
-// NotifyError 为已失败的操作触发 OnError：回调返回的错误被忽略，仅当回调自身 panic 时返回 *agentErrors.PanicError，
-// 调用方应以它替代原错误返回。m 为 nil 时返回 nil。
+// NotifyError triggers OnError for an operation that has already failed. Errors
+// returned by callbacks are ignored; it returns *agentErrors.PanicError only
+// when a callback itself panics, and the caller should return that in place of
+// the original error. It returns nil when m is nil.
 func (m *CallbackManager) NotifyError(ctx context.Context, err error) error {
 	if m == nil {
 		return nil
@@ -185,23 +190,23 @@ func (m *CallbackManager) NotifyError(ctx context.Context, err error) error {
 	return nil
 }
 
-// LoggingCallback 日志记录回调
+// LoggingCallback is a callback that logs events.
 //
-// 将所有事件记录到日志
+// It writes every event to the log.
 type LoggingCallback struct {
 	*BaseCallback
 	logger  Logger // 日志接口
 	verbose bool
 }
 
-// Logger 日志接口
+// Logger is the logging interface.
 type Logger interface {
 	Info(msg string, fields ...interface{})
 	Error(msg string, fields ...interface{})
 	Debug(msg string, fields ...interface{})
 }
 
-// NewLoggingCallback 创建日志回调
+// NewLoggingCallback creates a logging callback.
 func NewLoggingCallback(logger Logger, verbose bool) *LoggingCallback {
 	return &LoggingCallback{
 		BaseCallback: NewBaseCallback(),
@@ -255,23 +260,23 @@ func (l *LoggingCallback) OnToolEnd(ctx context.Context, toolName string, output
 	return nil
 }
 
-// MetricsCallback 指标收集回调
+// MetricsCallback is a callback that collects metrics.
 //
-// 收集执行指标（延迟、调用次数等）
+// It collects execution metrics such as latency and call counts.
 type MetricsCallback struct {
 	*BaseCallback
 	metrics MetricsCollector
 	timers  sync.Map // map[string]time.Time
 }
 
-// MetricsCollector 指标收集器接口
+// MetricsCollector is the metrics collector interface.
 type MetricsCollector interface {
 	IncrementCounter(name string, value int64, tags map[string]string)
 	RecordHistogram(name string, value float64, tags map[string]string)
 	RecordGauge(name string, value float64, tags map[string]string)
 }
 
-// NewMetricsCallback 创建指标回调
+// NewMetricsCallback creates a metrics callback.
 func NewMetricsCallback(metrics MetricsCollector) *MetricsCallback {
 	return &MetricsCallback{
 		BaseCallback: NewBaseCallback(),
@@ -331,21 +336,21 @@ func (m *MetricsCallback) OnToolEnd(ctx context.Context, toolName string, output
 	return nil
 }
 
-// TracingCallback 分布式追踪回调
+// TracingCallback is a distributed tracing callback.
 //
-// 集成 OpenTelemetry 或其他追踪系统
+// It integrates with OpenTelemetry or other tracing systems.
 type TracingCallback struct {
 	*BaseCallback
 	tracer Tracer
 	spans  sync.Map // map[context.Context]Span
 }
 
-// Tracer 追踪器接口
+// Tracer is the tracer interface.
 type Tracer interface {
 	StartSpan(ctx context.Context, name string, attrs map[string]interface{}) (context.Context, Span)
 }
 
-// Span 追踪 span 接口
+// Span is the tracing span interface.
 type Span interface {
 	End()
 	SetAttribute(key string, value interface{})
@@ -353,7 +358,7 @@ type Span interface {
 	RecordError(err error)
 }
 
-// StatusCode 状态码
+// StatusCode is a span status code.
 type StatusCode int
 
 const (
@@ -361,7 +366,7 @@ const (
 	StatusCodeError
 )
 
-// NewTracingCallback 创建追踪回调
+// NewTracingCallback creates a tracing callback.
 func NewTracingCallback(tracer Tracer) *TracingCallback {
 	return &TracingCallback{
 		BaseCallback: NewBaseCallback(),
@@ -400,10 +405,11 @@ func (t *TracingCallback) OnLLMError(ctx context.Context, err error) error {
 	return nil
 }
 
-// CostTrackingCallback 成本追踪回调
+// CostTrackingCallback is a cost tracking callback.
 //
-// 按成对 OnLLMStart/OnLLMEnd 的模型与单价估算成本。
-// 无起始事件或无模型单价时只累计 token；该回调不会自行接入 Builder 模型事件。
+// It estimates cost from the model and unit price of paired OnLLMStart/OnLLMEnd
+// events. Without a start event or a price for the model it only accumulates
+// tokens; this callback does not hook into Builder model events by itself.
 type CostTrackingCallback struct {
 	*BaseCallback
 	totalCost   float64
@@ -413,7 +419,7 @@ type CostTrackingCallback struct {
 	models      map[context.Context]string
 }
 
-// NewCostTrackingCallback 创建成本追踪回调
+// NewCostTrackingCallback creates a cost tracking callback.
 func NewCostTrackingCallback(pricing map[string]float64) *CostTrackingCallback {
 	prices := make(map[string]float64, len(pricing))
 	for model, price := range pricing {
@@ -426,7 +432,8 @@ func NewCostTrackingCallback(pricing map[string]float64) *CostTrackingCallback {
 	}
 }
 
-// OnLLMStart 要求每个并发调用使用独立 context；同一 context 重叠时拒绝模糊关联。
+// OnLLMStart requires each concurrent call to use its own context; overlapping
+// calls on the same context are rejected as an ambiguous correlation.
 func (c *CostTrackingCallback) OnLLMStart(ctx context.Context, prompts []string, model string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -460,21 +467,21 @@ func (c *CostTrackingCallback) OnLLMEnd(ctx context.Context, output string, toke
 	return nil
 }
 
-// GetTotalCost 获取总成本
+// GetTotalCost returns the total cost.
 func (c *CostTrackingCallback) GetTotalCost() float64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.totalCost
 }
 
-// GetTotalTokens 获取总 token 数
+// GetTotalTokens returns the total number of tokens.
 func (c *CostTrackingCallback) GetTotalTokens() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.totalTokens
 }
 
-// Reset 重置统计
+// Reset resets the statistics.
 func (c *CostTrackingCallback) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -483,15 +490,15 @@ func (c *CostTrackingCallback) Reset() {
 	clear(c.models)
 }
 
-// StdoutCallback 标准输出回调
+// StdoutCallback is a callback that writes to standard output.
 //
-// 将事件输出到标准输出，用于调试
+// It prints events to stdout for debugging.
 type StdoutCallback struct {
 	*BaseCallback
 	color bool // 是否使用颜色
 }
 
-// NewStdoutCallback 创建标准输出回调
+// NewStdoutCallback creates a stdout callback.
 func NewStdoutCallback(color bool) *StdoutCallback {
 	return &StdoutCallback{
 		BaseCallback: NewBaseCallback(),

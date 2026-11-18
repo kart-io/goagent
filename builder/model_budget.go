@@ -10,11 +10,14 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// TokenEstimator 由宿主估计一次请求的总 Token，须包含输入、工具定义和输出预算，参数只读。
-// 估计策略版本由根预算 TokenPolicyVersion 标识，不把函数写入持久配置。
+// TokenEstimator is the host's estimate of a request's total tokens, which must
+// include input, tool definitions, and the output budget; its arguments are
+// read-only. The estimation policy version is identified by the root budget's
+// TokenPolicyVersion; the function is not written to the durable configuration.
 type TokenEstimator func(context.Context, *llm.CompletionRequest, []interfaces.Tool) (int, error)
 
-// WithTokenEstimator 配置原生流请求的宿主预估；仅在根预算开启 Token 上限时调用。
+// WithTokenEstimator configures the host's estimate for native stream requests;
+// it is called only when the root budget enables a token limit.
 func (b *AgentBuilder[S]) WithTokenEstimator(estimate TokenEstimator) *AgentBuilder[S] {
 	b.config.TokenEstimator = estimate
 	return b

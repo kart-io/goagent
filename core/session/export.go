@@ -10,8 +10,9 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// Trajectory 是从会话日志导出的一条训练轨迹：模型最终看到的对话（压缩与退回之后）、最近的 system 提示词与工具定义，
-// 以及工具调用统计。
+// Trajectory is a training trajectory exported from a session journal: the
+// conversation the model finally saw (after compaction and rewinds), the latest
+// system prompt and tool definitions, and tool call statistics.
 type Trajectory struct {
 	System   string
 	Tools    []ToolDefinition
@@ -20,14 +21,15 @@ type Trajectory struct {
 	Stats    []ToolStat
 }
 
-// ToolStat 是一个工具的调用统计。Failures 是结果不成功（拒绝、参数错误、执行失败）的次数。
+// ToolStat is the call statistics of one tool. Failures is the number of
+// unsuccessful results (rejections, argument errors, execution failures).
 type ToolStat struct {
 	Name     string `json:"name"`
 	Calls    int    `json:"calls"`
 	Failures int    `json:"failures"`
 }
 
-// BuildTrajectory 从事件构造轨迹。
+// BuildTrajectory builds a trajectory from events.
 func BuildTrajectory(events []Event) (*Trajectory, error) {
 	entries, err := Derive(events)
 	if err != nil {
@@ -91,7 +93,8 @@ type openAITool struct {
 	Function ToolDefinition `json:"function"`
 }
 
-// WriteOpenAI 以 OpenAI 微调格式写出一行 JSON：{"messages": [...], "tools": [...]}。
+// WriteOpenAI writes one line of JSON in the OpenAI fine-tuning format:
+// {"messages": [...], "tools": [...]}.
 func (t *Trajectory) WriteOpenAI(w io.Writer) error {
 	var line struct {
 		Messages []openAIMessage `json:"messages"`
@@ -118,10 +121,13 @@ type shareGPTTurn struct {
 // 用户侧的角色；ShareGPT 要求用户侧与模型侧交替出现。
 func userSide(from string) bool { return from == "human" || from == "observation" }
 
-// WriteShareGPT 以 ShareGPT 格式（LLaMA-Factory 的 sharegpt 数据格式）写出一行 JSON：
-// conversations 中 from 为 human、gpt、function_call、observation，tools 为工具定义的 JSON 字符串。
-// 同一回合的多个工具调用或结果合并为 JSON 数组。为满足交替要求，连续的用户侧消息合并为一条：
-// 工具结果之后紧接的用户消息（运行中追加的输入）附在 observation 之后。
+// WriteShareGPT writes one line of JSON in the ShareGPT format (LLaMA-Factory's
+// sharegpt dataset format): from in conversations is human, gpt, function_call,
+// or observation, and tools is the tool definitions as a JSON string. Multiple
+// tool calls or results in the same round are merged into a JSON array. To
+// satisfy the alternation requirement, consecutive user-side messages are
+// merged into one: a user message immediately following tool results (input
+// appended during the run) is attached after the observation.
 func (t *Trajectory) WriteShareGPT(w io.Writer) error {
 	var turns []shareGPTTurn
 	add := func(from, value string) {

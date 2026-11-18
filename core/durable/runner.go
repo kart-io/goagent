@@ -39,19 +39,36 @@ type Snapshot struct {
 	Key      string          `json:"key,omitempty"`
 }
 
-// Store 在整个执行期间为一个运行加锁，并原子保存快照。实现须满足以下契约：
-//   - Lock 等待到获得锁为止，ctx 结束前未获得时返回同时包装 ErrLockUnavailable 与 ctx 错误的错误。
-//     同一 ID 不可重入，同一进程内的第二次 Lock 同样等待；锁之间不做死锁检测，嵌套成环时只能等到 ctx 结束。
-//   - 锁可能持有很久（整张图、整个持久操作），同一进程会同时持有多个 ID；持有者进程退出后，锁须在有界时间内释放。
-//   - Save 只在调用方持有该 ID 的锁时调用，也可能在 Lock 的 ctx 取消后以 WithoutCancel 的 ctx 调用。
-//     Save 原子且持久，Snapshot 的全部字段原样保存。持有者已失去锁时，实现可以拒绝写入并返回 ErrLeaseLost。
-//   - Load 不需要持锁，读到的是最近一次成功 Save 的完整快照（不能来自滞后的副本），成功时快照非 nil；
-//     记录不存在时返回可用 errors.Is(err, os.ErrNotExist) 识别的错误。
-//   - SaveAll 把多个 ID 的快照作为一次原子写入：要么全部可见，要么都不可见，崩溃后同样如此。调用方须持有每个 ID 的锁，
-//     多把锁的获取顺序由调用方保证一致。ID 重复或快照为空时拒绝且不写入；writes 为空时不做任何事。
-//     提交结果未知的错误（如连接中断）下调用方须重新 Load 判断。作用域视图的 SaveAll 只覆盖该作用域内的 ID。
+// Store locks a run for the whole execution and saves snapshots atomically.
+// Implementations must satisfy the following contract:
+//   - Lock waits until it acquires the lock; if it has not acquired it when ctx
+//     ends, it returns an error that wraps both ErrLockUnavailable and the ctx
+//     error. The same ID is not reentrant, and a second Lock in the same
+//     process also waits; locks have no deadlock detection, so a nested cycle
+//     waits until ctx ends.
+//   - Locks may be held for a long time (an entire graph or durable operation),
+//     and one process holds several IDs at once; after the holder process
+//     exits, the lock must be released within bounded time.
+//   - Save is called only while the caller holds the lock for that ID, and may
+//     also be called with a WithoutCancel ctx after the Lock ctx is canceled.
+//     Save is atomic and durable and stores every Snapshot field verbatim. When
+//     the holder has lost the lock, the implementation may refuse the write and
+//     return ErrLeaseLost.
+//   - Load needs no lock and reads the complete snapshot of the most recent
+//     successful Save (not from a lagging replica); on success the snapshot is
+//     non-nil. When the record does not exist it returns an error recognized by
+//     errors.Is(err, os.ErrNotExist).
+//   - SaveAll writes snapshots for several IDs as one atomic write: either all
+//     are visible or none are, including after a crash. The caller must hold
+//     the lock for every ID and is responsible for acquiring multiple locks in
+//     a consistent order. Duplicate IDs or nil snapshots are rejected without
+//     writing; empty writes do nothing. On errors with an unknown commit
+//     outcome (such as a dropped connection), the caller must Load again to
+//     find out. SaveAll on a scoped view covers only IDs in that scope.
 //
-// core/durable/storetest 验证其中可在通用环境检验的部分，不覆盖长时间持锁、进程退出后释放与 ErrLeaseLost。
+// core/durable/storetest verifies the parts of this contract that can be
+// checked in a generic environment; it does not cover long-held locks, release
+// after process exit, or ErrLeaseLost.
 type Store interface {
 	Lock(context.Context, string) (func() error, error)
 	Load(context.Context, string) (*Snapshot, error)
@@ -59,13 +76,14 @@ type Store interface {
 	SaveAll(context.Context, ...Write) error
 }
 
-// Write 是 Store.SaveAll 的一项写入。
+// Write is a single write in Store.SaveAll.
 type Write struct {
 	ID       string
 	Snapshot *Snapshot
 }
 
-// ValidateWrites 检查 SaveAll 的参数，供 Store 实现在写入前调用。
+// ValidateWrites checks the arguments to SaveAll; Store implementations call it
+// before writing.
 func ValidateWrites(writes []Write) error {
 	seen := make(map[string]bool, len(writes))
 	for _, write := range writes {
@@ -80,13 +98,23 @@ func ValidateWrites(writes []Write) error {
 	return nil
 }
 
-// Scoped 是 Store 可选的分区能力：Scope 返回独立命名空间（按需创建，只读不产生文件），
-// RemoveScope 整体删除该命名空间并留下墓碑，使其拒绝读写（Lock/Save/Load 返回 ErrScopeRemoved），作用域不存在时同样生效；
-// 删除中途崩溃时墓碑已生效，残留数据在再次 RemoveScope 之前同样不可读。名称删除后不可复用。
-// RemoveScope 返回时不保证进行中的持锁者已经结束（FileStore 会等待其释放），只保证之后的写入被拒绝；重复调用不刷新墓碑时间。
+// Scoped is an optional partitioning capability of a Store: Scope returns an
+// independent namespace (created on demand; reads create no files), and
+// RemoveScope deletes the whole namespace and leaves a tombstone so that it
+// rejects reads and writes (Lock/Save/Load return ErrScopeRemoved), which also
+// takes effect when the scope does not exist. If removal crashes midway the
+// tombstone is already in effect, and leftover data stays unreadable until
+// RemoveScope is called again. A name cannot be reused after removal. When
+// RemoveScope returns, in-progress lock holders are not guaranteed to have
+// finished (FileStore waits for them to release); it only guarantees that later
+// writes are rejected. Repeated calls do not refresh the tombstone time.
 //
-// PruneRemoved 删除早于 olderThan 写下的墓碑（连同崩溃残留的数据），与写入互斥。墓碑删除后该名称的 Load 返回 os.ErrNotExist，
-// 迟到的写入不再被拒绝、可能留下残留且可被读到，因此 olderThan 须大于最长的重试或恢复窗口；未过期的墓碑照常拒绝读写。
+// PruneRemoved deletes tombstones written before olderThan (along with data
+// left by crashes) and is mutually exclusive with writes. After a tombstone is
+// deleted, Load for that name returns os.ErrNotExist, and late writes are no
+// longer rejected and may leave residue that can be read, so olderThan must
+// exceed the longest retry or recovery window; unexpired tombstones reject
+// reads and writes as usual.
 type Scoped interface {
 	Scope(name string) Store
 	RemoveScope(ctx context.Context, name string) error
@@ -96,8 +124,10 @@ type Runner struct {
 	Store   Store
 	Version string
 	Steps   []Step
-	// BeforeApprove 在运行锁内、批准生效前调用，用于核对暂停期间外部数据是否被改动。
-	// 返回错误或 panic 时拒绝本次批准且不改动检查点；snap 是独立副本。
+	// BeforeApprove is called inside the run lock before an approval takes
+	// effect, to check whether external data changed during the pause.
+	// Returning an error or panicking rejects this approval without modifying
+	// the checkpoint; snap is an independent copy.
 	BeforeApprove func(ctx context.Context, id string, snap *Snapshot) error
 }
 

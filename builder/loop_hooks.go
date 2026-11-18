@@ -23,26 +23,33 @@ import (
 // RequestError 钩子在同一条回合记录内原样重试，替换消息或客户端只在非持久运行中生效。
 // 例外：RequestError 的原样重试也作用于没有工具的流式回答。
 
-// Step 是一次模型请求前的状态。
+// Step is the state before one model request.
 type Step struct {
-	// Index 是本轮的第几次模型请求，从 0 开始。
+	// Index is the index of the model request within the turn, starting at 0.
 	Index int
-	// Messages 是将要发送的消息，PreStep 可以改写（如压缩）。改写后的消息成为之后各步的历史。
+	// Messages are the messages to be sent; PreStep may rewrite them (for
+	// example, to compact). The rewritten messages become the history for
+	// subsequent steps.
 	Messages []llm.Message
-	// Inputs 是 Messages 末尾本步新收到的用户输入条数：轮次输入、Steer、Inject 与 Redirect 的纠正，
-	// 不含 TurnStopping 的续跑消息。
+	// Inputs is the number of user inputs newly received this step at the end
+	// of Messages: turn input, Steer, Inject, and Redirect corrections,
+	// excluding TurnStopping continuation messages.
 	Inputs int
-	// Final 表示这是本轮最后一次模型请求：不再提供工具（ReturnDirectTools 除外），模型须直接作答。
+	// Final reports whether this is the last model request of the turn: tools
+	// are no longer offered (except ReturnDirectTools) and the model must
+	// answer directly.
 	Final bool
 }
 
-// PreStepResult 是 PreStep 的结果。Halt 为真时不再请求模型，以 Answer 作为本轮最终答复结束。
+// PreStepResult is the result of a PreStep. When Halt is true, the model is not
+// requested and the turn ends with Answer as its final reply.
 type PreStepResult struct {
 	Halt   bool   `json:"halt,omitzero"`
 	Answer string `json:"answer,omitempty"`
 }
 
-// PreStepHook 在领取收件箱输入之后、组装请求之前执行；返回 error 中止运行。
+// PreStepHook runs after inbox input is claimed and before the request is
+// assembled; returning an error aborts the run.
 type PreStepHook func(ctx context.Context, step *Step) (PreStepResult, error)
 
 // preStep 是注册的 PreStep 钩子与其身份。
@@ -51,32 +58,38 @@ type preStep struct {
 	hook     PreStepHook
 }
 
-// ModelRequest 是即将发送的模型请求。Request 钩子可替换 Client（路由、换模型）或修改 Request 的参数；
-// Tools 只读。
+// ModelRequest is the model request about to be sent. Request hooks may replace
+// Client (routing, switching models) or modify the parameters of Request; Tools
+// is read-only.
 type ModelRequest struct {
 	Step int
-	// Final 同 Step.Final：本轮最后一次请求，Tools 只剩 ReturnDirectTools。
+	// Final is the same as Step.Final: this is the last request of the turn,
+	// and Tools contains only ReturnDirectTools.
 	Final   bool
 	Client  llm.ToolStreamClient
 	Request *llm.CompletionRequest
 	Tools   []interfaces.Tool
 }
 
-// RequestHook 在发送模型请求前执行；返回 error 中止运行。
+// RequestHook runs before a model request is sent; returning an error aborts
+// the run.
 type RequestHook func(ctx context.Context, req *ModelRequest) error
 
-// RequestErrorAction 是模型请求失败后的处置。零值为 RequestFail。
+// RequestErrorAction is the action taken after a model request fails. The zero
+// value is RequestFail.
 type RequestErrorAction int
 
 const (
-	// RequestFail 交给下一个钩子；全部钩子都放弃时运行以原错误失败。
+	// RequestFail defers to the next hook; when all hooks give up, the run
+	// fails with the original error.
 	RequestFail RequestErrorAction = iota
-	// RequestRetry 按 RequestErrorDecision 调整后重试本步。
+	// RequestRetry retries this step after applying the RequestErrorDecision.
 	RequestRetry
 )
 
-// RequestErrorDecision 是 RequestError 钩子的决定。Messages 非 nil 时重试前替换消息（压缩），
-// Client 非 nil 时改用该客户端（回退），Delay 为重试前的等待。
+// RequestErrorDecision is a RequestError hook's decision. A non-nil Messages
+// replaces the messages before retrying (compaction), a non-nil Client switches
+// to that client (fallback), and Delay is the wait before retrying.
 type RequestErrorDecision struct {
 	Action   RequestErrorAction
 	Messages []llm.Message
@@ -84,27 +97,36 @@ type RequestErrorDecision struct {
 	Delay    time.Duration
 }
 
-// RequestFailure 是一次失败的模型请求。Attempt 是本步已按钩子决定恢复的次数。
+// RequestFailure is one failed model request. Attempt is the number of times
+// this step has already recovered based on hook decisions.
 type RequestFailure struct {
 	Step, Attempt int
 	Err           error
 	Class         llm.ClassifiedError
 	Messages      []llm.Message
-	// Emitted 表示失败的这次请求已向消费者输出内容，原样重试会重复输出；WithReplayablePartialOutput 开启时恒为 false。
+	// Emitted reports whether the failed request has already emitted content to
+	// the consumer, so retrying as-is would duplicate output; it is always
+	// false when WithReplayablePartialOutput is enabled.
 	Emitted bool
 }
 
-// RequestErrorHook 在模型请求失败时执行，第一个返回 RequestRetry 的决定生效。
+// RequestErrorHook runs when a model request fails; the first decision
+// returning RequestRetry takes effect.
 type RequestErrorHook func(ctx context.Context, failure *RequestFailure) (RequestErrorDecision, error)
 
 func defaultRetryBackoff(retry int) time.Duration {
 	return min(constants.DefaultTransientRetryBaseDelay<<min(retry-1, 5), constants.DefaultTransientRetryMaxDelay)
 }
 
-// RetryTransient 返回原样重试暂时性失败的 RequestError 钩子：只重试 llm.ClassifyError 判定为可重试的失败
-// （429、5xx 与连接错误），失败的请求已输出内容后不重试，避免内容重复。服务端给出 Retry-After 时按它等待，
-// 否则用 backoff（nil 时 500ms 起指数增长、上限 8s）；等待会越过 ctx 截止时间，或 Retry-After 超过 1 分钟时放弃。
-// retries 是本步已恢复次数的上限，与其他钩子的恢复共用 WithRequestError 的 maxRecoveries。
+// RetryTransient returns a RequestError hook that retries transient failures
+// as-is: it retries only failures llm.ClassifyError deems retryable (429, 5xx,
+// and connection errors), and does not retry once the failed request has
+// emitted content, to avoid duplicate output. When the server sends Retry-After
+// it waits accordingly; otherwise it uses backoff (when nil, exponential growth
+// starting at 500ms, capped at 8s). It gives up when the wait would pass the
+// ctx deadline or Retry-After exceeds 1 minute. retries caps the number of
+// recoveries already made in this step and shares WithRequestError's
+// maxRecoveries with recoveries by other hooks.
 func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestErrorHook {
 	if backoff == nil {
 		backoff = defaultRetryBackoff
@@ -129,48 +151,65 @@ func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestE
 	}
 }
 
-// Stopping 是即将结束本轮时的状态。
+// Stopping is the state when the turn is about to end.
 type Stopping struct {
 	Step   int
 	Answer string
-	// Continued 是本轮已经续跑的次数（Steer 唤醒与 TurnStopping）。
+	// Continued is the number of times the turn has already continued (Steer
+	// wake-ups and TurnStopping).
 	Continued int
-	// Blocked 是本轮由 TurnStopping 发起的续跑次数，不含 Steer 唤醒；钩子据此限制重试，避免无限续跑。
+	// Blocked is the number of continuations initiated by TurnStopping in this
+	// turn, excluding Steer wake-ups; hooks use it to limit retries and avoid
+	// continuing forever.
 	Blocked int
 }
 
-// TurnStoppingHook 在模型给出最终答复、收件箱没有待处理的 Steer 时执行；返回非空字符串时把它作为 user 消息追加并续跑
-// （目标驱动、Claude Code Stop 钩子）。续跑后须至少还有一步带工具的请求，否则不执行，按原答复结束，
-// 并在结果元数据中记 turn_stopping_skipped。
+// TurnStoppingHook runs when the model gives its final reply and the inbox has
+// no pending Steer; returning a non-empty string appends it as a user message
+// and continues the turn (goal-driven, like the Claude Code Stop hook). At
+// least one more step with tools must remain after continuing; otherwise it
+// does not run, the turn ends with the original reply, and
+// turn_stopping_skipped is recorded in the result metadata.
 type TurnStoppingHook func(ctx context.Context, stopping *Stopping) (continueWith string, err error)
 
-// PromptScope 是计算提示词段落与上下文时可用的信息。
+// PromptScope is the information available when computing prompt sections and
+// contexts.
 type PromptScope struct {
-	// SessionID 与工具调用看到的会话 ID 相同：宿主在 ctx 中声明的会话优先，否则为 WithSessionID 的值。
+	// SessionID is the same session ID that tool calls see: a session declared
+	// by the host in ctx takes precedence; otherwise it is the value from
+	// WithSessionID.
 	SessionID string
 	Step      int
-	// Final 同 Step.Final。Final 与 Deadline 只提供给 PromptContext；段落须在一轮内不变，计算时二者为零值。
+	// Final is the same as Step.Final. Final and Deadline are provided only to
+	// PromptContext; sections must not change within a turn, so both are zero
+	// values when computing them.
 	Final bool
-	// Deadline 是运行的截止时间（WithTimeout 或调用方 ctx），没有截止时间时为零值。持久运行中随上下文记入日志。
+	// Deadline is the run's deadline (WithTimeout or the caller's ctx), or the
+	// zero value when there is none. In a durable run it is recorded in the
+	// journal with the context.
 	Deadline time.Time
 }
 
-// PromptSection 进入 system 消息，每轮运行开始时计算一次，同一轮内字节不变，保持提示词缓存前缀稳定。
-// 适合身份、规则、项目说明。按 Order、Name 排序。
+// PromptSection goes into the system message. It is computed once at the start
+// of each run turn and stays byte-identical within a turn, keeping the prompt
+// cache prefix stable. It suits identity, rules, and project notes. Sections
+// are sorted by Order, then Name.
 type PromptSection struct {
 	Name  string
 	Order int
 	Text  func(PromptScope) string
 }
 
-// PromptContext 每步重算，作为一条 user 消息附在本次请求末尾，不进入之后的历史。适合工作目录、审批模式、待办摘要等易变状态。
+// PromptContext is recomputed every step and attached as one user message at
+// the end of that request; it does not enter later history. It suits volatile
+// state such as the working directory, approval mode, or a to-do summary.
 type PromptContext struct {
 	Name  string
 	Order int
 	Text  func(PromptScope) string
 }
 
-// WithPreStep 追加 PreStep 钩子。
+// WithPreStep appends PreStep hooks.
 func (b *AgentBuilder[S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[S] {
 	for _, hook := range hooks {
 		b.config.PreStep = append(b.config.PreStep, preStep{hook: hook})
@@ -178,20 +217,25 @@ func (b *AgentBuilder[S]) WithPreStep(hooks ...PreStepHook) *AgentBuilder[S] {
 	return b
 }
 
-// WithIdentifiedPreStep 追加带身份的 PreStep 钩子。identity 标识钩子的配置（如版本与配置摘要），进入持久日志中 PreStep
-// 记录的意图：配置改变后恢复旧运行时以 intent changed 失败，而不是回放按旧配置算出的结果。
+// WithIdentifiedPreStep appends a PreStep hook with an identity. identity
+// identifies the hook's configuration (such as a version and configuration
+// digest) and becomes part of the intent of the PreStep record in the durable
+// journal: after the configuration changes, resuming an old run fails with
+// intent changed instead of replaying results computed under the old
+// configuration.
 func (b *AgentBuilder[S]) WithIdentifiedPreStep(identity string, hook PreStepHook) *AgentBuilder[S] {
 	b.config.PreStep = append(b.config.PreStep, preStep{identity: identity, hook: hook})
 	return b
 }
 
-// WithRequestHook 追加 Request 钩子。
+// WithRequestHook appends Request hooks.
 func (b *AgentBuilder[S]) WithRequestHook(hooks ...RequestHook) *AgentBuilder[S] {
 	b.config.RequestHooks = append(b.config.RequestHooks, hooks...)
 	return b
 }
 
-// WithRequestError 追加 RequestError 钩子；maxRecoveries 是单步内按钩子决定重试的上限（默认 3）。
+// WithRequestError appends RequestError hooks; maxRecoveries is the per-step
+// limit on retries decided by hooks (default 3).
 func (b *AgentBuilder[S]) WithRequestError(maxRecoveries int, hooks ...RequestErrorHook) *AgentBuilder[S] {
 	b.config.RequestErrorHooks = append(b.config.RequestErrorHooks, hooks...)
 	if maxRecoveries <= 0 {
@@ -201,19 +245,19 @@ func (b *AgentBuilder[S]) WithRequestError(maxRecoveries int, hooks ...RequestEr
 	return b
 }
 
-// WithTurnStopping 追加 TurnStopping 钩子。
+// WithTurnStopping appends TurnStopping hooks.
 func (b *AgentBuilder[S]) WithTurnStopping(hooks ...TurnStoppingHook) *AgentBuilder[S] {
 	b.config.TurnStopping = append(b.config.TurnStopping, hooks...)
 	return b
 }
 
-// WithPromptSections 追加 system 中的提示词段落。
+// WithPromptSections appends prompt sections to the system message.
 func (b *AgentBuilder[S]) WithPromptSections(sections ...PromptSection) *AgentBuilder[S] {
 	b.config.PromptSections = append(b.config.PromptSections, sections...)
 	return b
 }
 
-// WithPromptContexts 追加每步重算的提示词上下文。
+// WithPromptContexts appends prompt contexts recomputed every step.
 func (b *AgentBuilder[S]) WithPromptContexts(contexts ...PromptContext) *AgentBuilder[S] {
 	b.config.PromptContexts = append(b.config.PromptContexts, contexts...)
 	return b

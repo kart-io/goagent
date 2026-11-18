@@ -11,18 +11,35 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Store 保存会话日志。实现须满足：
-//   - Append/AppendAll 返回后调用方可复用事件；Read 返回值以及 Fork 的源与分支相互隔离，包括 Data 与 Surface。
-//   - Append 原子地追加全部事件或都不追加，按 expected 做比较并交换（CAS）：expected 为 0 时会话须不存在或为空，
-//     会话不存在时创建；成功时为事件分配从 expected+1 起的连续序号并持久化后返回最后序号。
-//   - AppendAll 把多个会话的追加作为一次原子提交：全部 Expected 都匹配才写入，要么全部可见，要么都不可见，崩溃后同样如此。
-//     返回值与 batches 一一对应，是各会话追加后的最后序号。任一 Expected 不匹配时返回 ErrConflict 且不写入。
-//     ID 重复时拒绝且不写入；batches 为空时不做任何事；Events 为空的批次只参与比较。
-//     提交结果未知的错误（如连接中断）下调用方须重新 Read 判断。
-//   - Read 返回序号大于 after 的事件，读到的是已成功 Append 的完整事件；会话不存在时返回 ErrNotFound。
-//   - Fork 把 src 中序号不大于 upTo 的事件原样复制为新会话 dst（upTo 为 0 时复制全部）；dst 已存在时返回 ErrExists。
-//   - Lock 为会话中的一个名称加锁，语义同 durable.Store.Lock（等待到获得为止、不可重入、持有者退出后有界时间内释放，
-//     ctx 结束时返回包装 durable.ErrLockUnavailable 的错误）；DurableStore 用它实现 durable.Store 的锁。
+// Store persists session journals. Implementations must satisfy:
+//   - After Append/AppendAll returns the caller may reuse the events; values
+//     returned by Read, and the source and branch of Fork, are isolated from
+//     each other, including Data and Surface.
+//   - Append atomically appends all events or none, using expected for
+//     compare-and-swap (CAS): when expected is 0 the session must not exist or
+//     must be empty, and a missing session is created; on success it assigns
+//     consecutive sequence numbers starting at expected+1, persists the events,
+//     and returns the last sequence number.
+//   - AppendAll commits appends to several sessions atomically: it writes only
+//     if every Expected matches, and either all are visible or none are,
+//     including after a crash. The return values correspond one-to-one with
+//     batches and are each session's last sequence number after the append. If
+//     any Expected does not match it returns ErrConflict without writing.
+//     Duplicate IDs are rejected without writing; empty batches do nothing; a
+//     batch with empty Events only takes part in the comparison. On errors with
+//     an unknown commit outcome (such as a dropped connection), the caller must
+//     Read again to find out.
+//   - Read returns events with sequence numbers greater than after, reading
+//     complete events of successful Appends; when the session does not exist it
+//     returns ErrNotFound.
+//   - Fork copies the events in src with sequence numbers not greater than upTo
+//     verbatim into a new session dst (all events when upTo is 0); if dst
+//     already exists it returns ErrExists.
+//   - Lock locks a name within a session with the same semantics as
+//     durable.Store.Lock (waits until acquired, is not reentrant, is released
+//     within bounded time after the holder exits, and returns an error wrapping
+//     durable.ErrLockUnavailable when ctx ends); DurableStore uses it to
+//     implement the durable.Store lock.
 type Store interface {
 	Append(ctx context.Context, id string, expected int64, events ...Event) (last int64, err error)
 	AppendAll(ctx context.Context, batches ...AppendBatch) (lasts []int64, err error)
@@ -32,14 +49,15 @@ type Store interface {
 	Lock(ctx context.Context, id, name string) (unlock func() error, err error)
 }
 
-// AppendBatch 是 Store.AppendAll 对一个会话的追加。
+// AppendBatch is one session's append in Store.AppendAll.
 type AppendBatch struct {
 	ID       string
 	Expected int64
 	Events   []Event
 }
 
-// ValidateBatches 检查 AppendAll 的参数，供 Store 实现在写入前调用。
+// ValidateBatches checks the arguments to AppendAll; Store implementations call
+// it before writing.
 func ValidateBatches(batches []AppendBatch) error {
 	seen := make(map[string]bool, len(batches))
 	for _, batch := range batches {
@@ -95,14 +113,15 @@ func forkRange(events []Event, upTo int64) []Event {
 	return events[:n]
 }
 
-// MemoryStore 是进程内的 Store，用于测试与不需要持久化的宿主。
+// MemoryStore is an in-process Store for tests and for hosts that do not need
+// persistence.
 type MemoryStore struct {
 	mu       sync.Mutex
 	sessions map[string][]Event
 	locks    map[string]chan struct{}
 }
 
-// NewMemoryStore 创建空的 MemoryStore。
+// NewMemoryStore creates an empty MemoryStore.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{sessions: map[string][]Event{}, locks: map[string]chan struct{}{}}
 }
@@ -124,7 +143,7 @@ func (s *MemoryStore) Append(ctx context.Context, id string, expected int64, eve
 	return expected + int64(len(events)), nil
 }
 
-// AppendAll 实现 Store。
+// AppendAll implements Store.
 func (s *MemoryStore) AppendAll(ctx context.Context, batches ...AppendBatch) ([]int64, error) {
 	if err := ValidateBatches(batches); err != nil {
 		return nil, err

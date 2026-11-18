@@ -11,8 +11,9 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// ArgumentError 表示模型生成的参数不合法。Message 会原样交给模型，不得包含内部细节；
-// Err 只用于 errors.Is/As，不展示给模型。
+// ArgumentError reports that model-generated arguments are invalid. Message is
+// passed to the model verbatim and must not contain internal details; Err is
+// only used by errors.Is/As and is never shown to the model.
 type ArgumentError struct {
 	Message string
 	Err     error
@@ -21,7 +22,8 @@ type ArgumentError struct {
 func (e *ArgumentError) Error() string { return e.Message }
 func (e *ArgumentError) Unwrap() error { return e.Err }
 
-// ErrorCode 使无底层原因的参数错误也能在宿主调用边界保留校验分类。
+// ErrorCode lets argument errors without an underlying cause keep their
+// validation classification at the host call boundary.
 func (e *ArgumentError) ErrorCode() agentErrors.ErrorCode {
 	if e == nil {
 		return agentErrors.CodeInternal
@@ -43,8 +45,11 @@ func withSettledSet(ctx context.Context) (context.Context, *settledSet) {
 	return context.WithValue(ctx, settledKey{}, s), s
 }
 
-// Settle 把 err 链上的参数错误节点登记到 ctx 中最近的 settledSet，并原样返回 err。
-// 自己调用子 Agent 或内层工具的包装器应以传入的 ctx 登记其返回的错误，外层模型就不会把内层参数错误当作自己的。
+// Settle registers the argument error nodes in err's chain with the nearest
+// settledSet in ctx and returns err unchanged. Wrappers that call a sub-agent
+// or an inner tool themselves should register the returned errors with the
+// ctx they received, so the outer model does not treat the inner argument
+// errors as its own.
 func Settle(ctx context.Context, err error) error {
 	if ctx == nil || err == nil {
 		return err
@@ -133,7 +138,8 @@ func argumentErrorMessage(err error, settled *settledSet) (string, bool) {
 	return "", false
 }
 
-// ArgumentErrorResult 判断 out 是否为 Dispatcher 交还模型的参数错误结果，并返回其中的 message。
+// ArgumentErrorResult reports whether out is an argument error result that the
+// Dispatcher returned to the model, and returns its message.
 func ArgumentErrorResult(out *interfaces.ToolOutput) (string, bool) {
 	if out == nil {
 		return "", false

@@ -15,7 +15,7 @@ import (
 // 快速构建函数
 // 本文件包含快速创建预配置 Agent 的便捷函数
 
-// QuickAgent 创建一个简单的 Agent,使用最小配置
+// QuickAgent creates a simple agent with minimal configuration.
 func QuickAgent(llmClient llm.Client, systemPrompt string) (*SimpleAgent, error) {
 	return NewSimpleBuilder(llmClient).
 		WithSystemPrompt(systemPrompt).
@@ -55,7 +55,7 @@ func RAGAgent(llmClient llm.Client, retriever interface{}) (*SimpleAgent, error)
 	return b.Build()
 }
 
-// ChatAgent 创建一个预配置的聊天机器人 Agent
+// ChatAgent creates a preconfigured chatbot agent.
 func ChatAgent(llmClient llm.Client, userName string) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	state.Set("user_name", userName)
@@ -68,18 +68,18 @@ func ChatAgent(llmClient llm.Client, userName string) (*SimpleAgent, error) {
 		Build()
 }
 
-// AnalysisAgent 创建一个预配置的数据分析 Agent
+// AnalysisAgent creates a preconfigured data analysis agent.
 //
-// 此 Agent 优化用于:
-//   - 数据分析和报告生成
-//   - 一致的、事实性的输出
-//   - 结构化数据转换
-//   - 扩展的推理迭代
+// This agent is optimized for:
+//   - Data analysis and report generation
+//   - Consistent, factual output
+//   - Structured data transformation
+//   - Extended reasoning iterations
 //
-// 配置:
-//   - Temperature: 0.1 (非常低用于一致性)
-//   - MaxIterations: 20 (更多迭代用于复杂分析)
-//   - Middleware: Timing, Transform (用于结构化输出)
+// Configuration:
+//   - Temperature: 0.1 (very low for consistency)
+//   - MaxIterations: 20 (more iterations for complex analysis)
+//   - Middleware: Timing, Transform (for structured output)
 func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	if dataSource != nil {
@@ -95,15 +95,15 @@ func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*SimpleAgent, 
 		Build()
 }
 
-// WorkflowAgent 创建一个预配置的工作流编排 Agent
+// WorkflowAgent creates a preconfigured workflow orchestration agent.
 //
-// 此 Agent 优化用于:
-//   - 多步骤工作流执行
-//   - 任务编排和协调
-//   - 错误处理和验证
+// This agent is optimized for:
+//   - Multi-step workflow execution
+//   - Task orchestration and coordination
+//   - Error handling and validation
 //
-// 配置:
-//   - MaxIterations: 15 (平衡的工作流步骤)
+// Configuration:
+//   - MaxIterations: 15 (balanced workflow steps)
 //   - Middleware: Logging, CircuitBreaker, Validation
 func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*SimpleAgent, error) {
 	state := core.NewAgentState()
@@ -131,18 +131,18 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Sim
 		Build()
 }
 
-// MonitoringAgent 创建一个预配置的监控 Agent
+// MonitoringAgent creates a preconfigured monitoring agent.
 //
-// 此 Agent 优化用于:
-//   - 持续系统监控
-//   - 异常检测
-//   - 警报生成
-//   - 定期健康检查
+// This agent is optimized for:
+//   - Continuous system monitoring
+//   - Anomaly detection
+//   - Alert generation
+//   - Periodic health checks
 //
-// 配置:
-//   - 持续操作模式
-//   - 速率限制以防止过载
-//   - 警报中间件用于通知
+// Configuration:
+//   - MaxIterations: 100 (long-running monitoring)
+//   - Temperature: 0.3
+//   - Middleware: RateLimiter (60 checks per minute, prevents overload), Timing
 func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	state.Set("check_interval", checkInterval)
@@ -163,18 +163,20 @@ func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*Simple
 		Build()
 }
 
-// ResearchAgent 创建一个预配置的研究和信息收集 Agent
+// ResearchAgent creates a preconfigured research and information-gathering
+// agent.
 //
-// 此 Agent 优化用于:
-//   - 从多个来源收集信息
-//   - 研究报告生成
-//   - 来源综合和引用
-//   - 事实核查和验证
+// This agent is optimized for:
+//   - Gathering information from multiple sources
+//   - Research report generation
+//   - Source synthesis and citation
+//   - Fact checking and verification
 //
-// 配置:
-//   - MaxTokens: 4000 (更大上下文用于综合报告)
-//   - Temperature: 0.5 (平衡创造性和准确性)
-//   - Middleware: ToolSelector (用于搜索/抓取)
+// Configuration:
+//   - MaxTokens: 4000 (larger context for comprehensive reports)
+//   - Temperature: 0.5 (balances creativity and accuracy)
+//   - MaxIterations: 15
+//   - Middleware: Timing
 func ResearchAgent(llmClient llm.Client, sources []string) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	if len(sources) > 0 {

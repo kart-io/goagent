@@ -23,7 +23,8 @@ import (
 // Bump Version when functions, state schemas, policies or nested runnables change;
 // topology is fingerprinted automatically, Go closures cannot be fingerprinted.
 type DurableConfig struct {
-	// StateVersion和Components声明宿主状态与组件版本，变化会阻止旧运行恢复。
+	// StateVersion and Components declare the host state and component versions;
+	// a change prevents old runs from resuming.
 	StateVersion  string            `json:"state_version,omitempty"`
 	Components    map[string]string `json:"components,omitempty"`
 	Store         durable.Store     `json:"-"`
@@ -45,19 +46,27 @@ type DurableGraph[T any] struct {
 	resumeHandler func(context.Context, string, *GraphSnapshot[T], json.RawMessage) (T, error)
 }
 
-// DurableOption 配置与状态类型 T 相关的持久图行为。
+// DurableOption configures durable graph behavior that depends on the state
+// type T.
 type DurableOption[T any] func(*DurableGraph[T])
 
-// WithBeforeApprove 在运行锁内、批准生效前调用 fn，用于核对暂停期间外部数据是否被改动
-// （先 Snapshot 再 Run 的两次加锁之间存在窗口）。fn 返回错误或 panic 时拒绝本次批准且不改动状态，
-// 之后仍可再次以正确条件批准。fn 拿到的是锁内最新检查点的独立副本，修改它不影响运行。
-// 配置 WithResumeHandler 时，先处理人工输入，再用包含拟保存状态的副本执行此校验。
+// WithBeforeApprove calls fn inside the run lock before an approval takes
+// effect, to verify whether external data changed during the pause (there is
+// a window between the two lock acquisitions of Snapshot followed by Run). If
+// fn returns an error or panics, the approval is rejected without changing the
+// state, and approval can be retried later with the correct conditions. fn
+// receives an independent copy of the latest checkpoint inside the lock;
+// modifying it does not affect the run. When WithResumeHandler is configured,
+// the human input is processed first, and this check then runs on a copy that
+// includes the state to be saved.
 func WithBeforeApprove[T any](fn func(ctx context.Context, id string, snap *GraphSnapshot[T]) error) DurableOption[T] {
 	return func(d *DurableGraph[T]) { d.beforeApprove = fn }
 }
 
-// ApprovalRejectedError 是 WithBeforeApprove 的钩子返回错误时的拒绝；检查点不变，仍在等待。
-// 钩子 panic 时返回 *errors.PanicError，不属于拒绝。
+// ApprovalRejectedError is the rejection when the WithBeforeApprove hook
+// returns an error; the checkpoint is unchanged and still waiting. When the
+// hook panics, *errors.PanicError is returned instead, which is not a
+// rejection.
 type ApprovalRejectedError struct{ Err error }
 
 func (e *ApprovalRejectedError) Error() string { return "批准前置校验拒绝: " + e.Err.Error() }
@@ -72,11 +81,14 @@ type GraphSnapshot[T any] struct {
 	Node    string
 	Steps   int
 	Routing bool
-	// Key 是审批等待时 Resume 要用的键；Interrupts 非空时它只是节点意图键，不能用来回应，须用 Interrupts[i].Key。
+	// Key is the key Resume uses while waiting for approval; when Interrupts is
+	// non-empty it is only the node intent key and cannot be used to respond; use
+	// Interrupts[i].Key instead.
 	Key     string
 	Waiting bool
 	Done    bool
-	// Interrupts 是节点执行中途等待人工输入的中断，按 Key 排序；审批等待时为空。
+	// Interrupts are the interrupts waiting for human input in the middle of node
+	// execution, sorted by Key; empty while waiting for approval.
 	Interrupts []InterruptPoint
 }
 

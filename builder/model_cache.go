@@ -16,29 +16,41 @@ import (
 	"github.com/kart-io/goagent/memory"
 )
 
-// EraseMode 决定被删内容在缓存中的物理删除方式。
+// EraseMode determines how erased content is physically deleted from the cache.
 type EraseMode int
 
 const (
-	// EraseAuto 在缓存支持按标签删除时物理删除，否则退回 TTL 过期。
+	// EraseAuto physically deletes when the cache supports deletion by tag, and
+	// otherwise falls back to TTL expiry.
 	EraseAuto EraseMode = iota
-	// EraseOff 不做物理删除，被删内容在缓存中保留到 TTL。
+	// EraseOff does not physically delete; erased content stays in the cache
+	// until the TTL.
 	EraseOff
-	// EraseRequired 要求物理删除可用，缓存不支持或记忆未配置 OnErase 时构建失败。
+	// EraseRequired requires physical deletion to be available; building fails when
+	// the cache does not support it or the memory has no OnErase configured.
 	EraseRequired
 )
 
-// ModelCache 是模型调用缓存的配置。Worker 进程不经过 Builder，须用同一个 ModelCache（同一后端、同一 TagKey）装配 OnErase。
-// 客户端既没有声明 CacheIdentity、也解析不出模型名（请求的 Model 或客户端的 ModelName）时，该次调用静默不缓存。
+// ModelCache is the model call cache configuration. Worker processes do not go
+// through the Builder and must wire OnErase with the same ModelCache (same
+// backend, same TagKey). When the client neither declares a CacheIdentity nor
+// yields a resolvable model name (the request's Model or the client's
+// ModelName), that call is silently not cached.
 type ModelCache struct {
-	// Cache 是缓存后端，只收发字节；EraseRequired 时还须实现 cache.Tagged。
+	// Cache is the cache backend and only exchanges bytes; with EraseRequired
+	// it must also implement cache.Tagged.
 	Cache cache.Bytes
-	// TTL 必须大于 0；EraseRequired 时不得超过 memory.Config.EraseWithin（仅在配置长期记忆时约束）。
+	// TTL must be greater than 0; with EraseRequired it must not exceed
+	// memory.Config.EraseWithin (enforced only when long-term memory is
+	// configured).
 	TTL time.Duration
-	// Scope 返回可信的隔离身份，返回 false 时本次不缓存；配置了长期记忆时可省略，默认取绑定的命名空间。
+	// Scope returns a trusted isolation identity; returning false skips caching
+	// for this call. It may be omitted when long-term memory is configured, in
+	// which case it defaults to the bound namespace.
 	Scope func(ctx context.Context) (string, bool)
 	Erase EraseMode
-	// TagKey 是标签摘要的 HMAC 密钥，使用标签时至少 32 字节。
+	// TagKey is the HMAC key for tag digests; when tags are used it must be at
+	// least 32 bytes.
 	TagKey []byte
 }
 
@@ -47,7 +59,7 @@ const minTagKeyLen = 32
 // writeErrorDeleteTimeout 是写入失败后清理条目的删除超时。
 const writeErrorDeleteTimeout = time.Second
 
-// WithModelCache 为模型调用启用缓存。
+// WithModelCache enables caching for model calls.
 func (b *AgentBuilder[S]) WithModelCache(mc ModelCache) *AgentBuilder[S] {
 	b.config.ModelCache = &mc
 	return b
@@ -58,7 +70,8 @@ func (mc ModelCache) tagged() (cache.Tagged, bool) {
 	return t, ok
 }
 
-// Eraser 返回供 memory.Config.OnErase 使用的回调；Erase 为 EraseOff 或缓存不支持按标签删除时为 nil。
+// Eraser returns the callback for memory.Config.OnErase; it is nil when Erase
+// is EraseOff or the cache does not support deletion by tag.
 func (mc ModelCache) Eraser() memory.EraseFunc {
 	t, ok := mc.tagged()
 	if !ok || mc.Erase == EraseOff {
@@ -72,7 +85,9 @@ func (mc ModelCache) Eraser() memory.EraseFunc {
 	}
 }
 
-// DeleteSession 删除一个会话的全部缓存条目，供宿主在删除或回退会话后调用；物理删除不可用时什么也不做。
+// DeleteSession deletes all cache entries of a session, for the host to call
+// after deleting or rewinding a session; it does nothing when physical deletion
+// is unavailable.
 func (mc ModelCache) DeleteSession(ctx context.Context, sessionID string) error {
 	t, ok := mc.tagged()
 	if !ok || mc.Erase == EraseOff {
@@ -112,8 +127,12 @@ func (mc ModelCache) rules() []configRule {
 	}
 }
 
-// Validate 检查与长期记忆无关的配置：Cache 非空、TTL 大于 0、EraseRequired 时缓存实现 cache.Tagged，以及会做标签删除时的 TagKey 长度。
-// Worker 不经过 Builder，应在启动时调用，避免配错后每轮维护反复收到 OnErase 失败。
+// Validate checks the configuration unrelated to long-term memory: Cache is
+// non-nil, TTL is greater than 0, the cache implements cache.Tagged under
+// EraseRequired, and TagKey has sufficient length when tag deletion will be
+// used. Workers do not go through the Builder and should call it at startup, so
+// a misconfiguration does not cause repeated OnErase failures in every
+// maintenance round.
 func (mc ModelCache) Validate() error {
 	return firstConfigError(mc.rules())
 }

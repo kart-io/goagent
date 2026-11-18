@@ -208,7 +208,9 @@ func NewDeepSeekStreaming(config *agentllm.LLMOptions) (*DeepSeekStreamingProvid
 
 // StreamWithMetadata streams tokens with additional metadata over the native SSE path.
 // "finish" is sent only after a complete stream; a truncated stream ends with "error".
-// 超时只约束拿到响应头，流开始后不再计时；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。
+// The timeout only bounds receiving the response headers and stops once the
+// stream starts; consumers must cancel ctx when they stop reading, otherwise
+// the goroutine and connection are not released.
 func (p *DeepSeekStreamingProvider) StreamWithMetadata(ctx context.Context, prompt string) (<-chan TokenWithMetadata, error) {
 	model := p.GetModel("")
 	chunks, err := p.nativeStreamProvider().CompleteStream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}})

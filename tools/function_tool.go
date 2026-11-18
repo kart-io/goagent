@@ -11,10 +11,8 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// FunctionTool 函数包装工具
-//
-// 将普通 Go 函数包装成工具
-// 支持自动参数转换和结果包装
+// FunctionTool wraps a plain Go function as a tool, with automatic argument
+// conversion and result wrapping.
 type FunctionTool struct {
 	*BaseTool
 	fn func(context.Context, map[string]interface{}) (interface{}, error)
@@ -23,16 +21,18 @@ type FunctionTool struct {
 	version       string
 }
 
-// InterruptibleVersion 报告工具是否声明可以在执行中途调用 durable.AwaitInput，以及对应的持久 intent 版本。
+// InterruptibleVersion reports whether the tool declares that it may call
+// durable.AwaitInput mid-execution, and the corresponding durable intent
+// version.
 func (f *FunctionTool) InterruptibleVersion() (string, bool) { return f.version, f.interruptible }
 
-// NewFunctionTool 创建函数工具
+// NewFunctionTool creates a function tool.
 //
 // Parameters:
-//   - name: 工具名称
-//   - description: 工具描述
-//   - argsSchema: 参数 JSON Schema
-//   - fn: 执行函数
+//   - name: tool name
+//   - description: tool description
+//   - argsSchema: argument JSON Schema
+//   - fn: function to execute
 func NewFunctionTool(
 	name string,
 	description string,
@@ -59,9 +59,7 @@ func (f *FunctionTool) run(ctx context.Context, input *interfaces.ToolInput) (*i
 	return resp.Success(result, nil)
 }
 
-// FunctionToolBuilder 函数工具构建器
-//
-// 提供更灵活的函数工具创建方式
+// FunctionToolBuilder builds function tools with a more flexible API.
 type FunctionToolBuilder struct {
 	name        string
 	description string
@@ -72,26 +70,26 @@ type FunctionToolBuilder struct {
 	version       string
 }
 
-// NewFunctionToolBuilder 创建函数工具构建器
+// NewFunctionToolBuilder creates a function tool builder.
 func NewFunctionToolBuilder(name string) *FunctionToolBuilder {
 	return &FunctionToolBuilder{
 		name: name,
 	}
 }
 
-// WithDescription 设置描述
+// WithDescription sets the description.
 func (b *FunctionToolBuilder) WithDescription(description string) *FunctionToolBuilder {
 	b.description = description
 	return b
 }
 
-// WithArgsSchema 设置参数 Schema
+// WithArgsSchema sets the argument schema.
 func (b *FunctionToolBuilder) WithArgsSchema(schema string) *FunctionToolBuilder {
 	b.argsSchema = schema
 	return b
 }
 
-// WithArgsSchemaFromStruct 从结构体生成参数 Schema
+// WithArgsSchemaFromStruct generates the argument schema from a struct.
 func (b *FunctionToolBuilder) WithArgsSchemaFromStruct(v interface{}) *FunctionToolBuilder {
 	// 简化实现：将结构体序列化为 JSON Schema
 	// 实际项目中可以使用更专业的库如 jsonschema
@@ -100,7 +98,7 @@ func (b *FunctionToolBuilder) WithArgsSchemaFromStruct(v interface{}) *FunctionT
 	return b
 }
 
-// WithFunction 设置执行函数
+// WithFunction sets the function to execute.
 func (b *FunctionToolBuilder) WithFunction(
 	fn func(context.Context, map[string]interface{}) (interface{}, error),
 ) *FunctionToolBuilder {
@@ -108,15 +106,17 @@ func (b *FunctionToolBuilder) WithFunction(
 	return b
 }
 
-// WithInterruptible 声明工具可以在执行中途调用 durable.AwaitInput 暂停。续跑会重新执行整个工具，
-// AwaitInput 之前未经 durable.Do 记录的副作用会重复，开启前须确认可以接受。
-// version 是持久 intent 版本，改变工具语义时须提升。
+// WithInterruptible declares that the tool may pause mid-execution by calling
+// durable.AwaitInput. Resuming reruns the whole tool, so side effects before
+// AwaitInput that were not recorded via durable.Do are repeated; confirm this
+// is acceptable before enabling it. version is the durable intent version and
+// must be bumped when the tool's semantics change.
 func (b *FunctionToolBuilder) WithInterruptible(version string) *FunctionToolBuilder {
 	b.interruptible, b.version = true, version
 	return b
 }
 
-// Build 构建工具
+// Build builds the tool.
 //
 // Returns an error if the function is not set.
 // This replaces the previous panic behavior with proper error handling.
@@ -134,10 +134,10 @@ func (b *FunctionToolBuilder) Build() (*FunctionTool, error) {
 	return tool, nil
 }
 
-// MustBuild 构建工具，如果失败则 panic
+// MustBuild builds the tool and panics on failure.
 //
-// 用于初始化时确定配置正确的场景。
-// 对于运行时构建，应使用 Build() 方法并处理错误。
+// Use it during initialization when the configuration is known to be correct.
+// For runtime construction, use Build and handle the error.
 func (b *FunctionToolBuilder) MustBuild() *FunctionTool {
 	tool, err := b.Build()
 	if err != nil {
@@ -278,13 +278,13 @@ func getTypeString(t reflect.Type) string {
 	}
 }
 
-// SimpleFunction 简单函数类型
-// 用于快速创建不需要复杂参数的工具
+// SimpleFunction is a function type for quickly creating tools that need no
+// complex arguments.
 type SimpleFunction func(context.Context) (interface{}, error)
 
-// NewSimpleFunctionTool 创建简单函数工具
+// NewSimpleFunctionTool creates a simple function tool.
 //
-// 用于快速包装无参数或简单参数的函数
+// Use it to quickly wrap functions with no or simple arguments.
 func NewSimpleFunctionTool(
 	name string,
 	description string,
@@ -300,13 +300,12 @@ func NewSimpleFunctionTool(
 	)
 }
 
-// TypedFunction 类型安全的函数类型
-// 使用泛型提供类型安全
+// TypedFunction is a type-safe function type using generics.
 type TypedFunction[I, O any] func(context.Context, I) (O, error)
 
-// NewTypedFunctionTool 创建类型安全的函数工具
+// NewTypedFunctionTool creates a type-safe function tool.
 //
-// 使用泛型提供编译时类型检查
+// Generics provide compile-time type checking.
 func NewTypedFunctionTool[I, O any](
 	name string,
 	description string,

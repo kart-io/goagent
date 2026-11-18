@@ -150,7 +150,8 @@ func (b *BaseProvider) GetTemperature(reqTemperature float64) float64 {
 	return shared2.DefaultTemperature
 }
 
-// ResolveTemperature 在请求显式设置（包括零）时优先使用请求，否则沿用客户端与默认值回落。
+// ResolveTemperature prefers the request's temperature when explicitly set
+// (including zero), and otherwise falls back to the client and default values.
 func (b *BaseProvider) ResolveTemperature(req *agentllm.CompletionRequest) float64 {
 	if req == nil {
 		return b.GetTemperature(0)
@@ -210,8 +211,9 @@ type HTTPClientConfig struct {
 // NewHTTPClient creates a configured HTTP client using the provider's settings.
 // It merges the provided headers with any custom headers from the config.
 //
-// 性能优化：使用全局客户端缓存，减少连接建立开销（10-20ms/次）
-// 相同配置（BaseURL、Headers、超时等）的客户端实例将被复用
+// For performance, it uses a global client cache to reduce connection setup
+// overhead (10-20ms each); clients with the same configuration (BaseURL,
+// headers, timeouts, etc.) are reused.
 func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 	timeout := cfg.Timeout
 	if timeout == 0 {
@@ -449,8 +451,10 @@ func mapHTTPError(err HTTPError, providerName, model string, parseError func(bod
 	}
 }
 
-// WithHTTPStatus 把非 2xx 响应的状态码与 Retry-After 作为 *llm.ProviderError 挂到 e 的原因上，
-// 使 llm.ClassifyError 能判定；错误码不变。e 须是刚构造、尚未共享的错误。
+// WithHTTPStatus attaches the status code and Retry-After of a non-2xx response
+// to e's cause as a *llm.ProviderError so that llm.ClassifyError can classify
+// it; the error code is unchanged. e must be a freshly constructed error that
+// has not been shared.
 func WithHTTPStatus(e *agentErrors.AgentError, resp HTTPError) *agentErrors.AgentError {
 	cause := e.Cause
 	if cause == nil {

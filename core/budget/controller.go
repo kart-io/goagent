@@ -207,9 +207,12 @@ func (c *Controller) Reserve(ctx context.Context, key string) error {
 	return c.ReserveEstimated(ctx, key, 0)
 }
 
-// Remaining 返回尚可预留的模型请求次数；持久预算在 Store 锁内读取，计入其他进程的预留。
-// 结果只是时点快照，并发预留可能随即消耗余量，准入仍以 Reserve 为准。
-// nil 接收者表示未绑定预算，返回 constants.BudgetUnlimited，可与 FromContext 直接配合使用。
+// Remaining returns the number of model requests that can still be reserved;
+// a durable budget is read under the Store lock and counts reservations from
+// other processes. The result is only a point-in-time snapshot and concurrent
+// reservations may consume the remainder immediately; admission is still
+// decided by Reserve. A nil receiver means no budget is bound and returns
+// constants.BudgetUnlimited, so it can be used directly with FromContext.
 func (c *Controller) Remaining(ctx context.Context) (remaining int, err error) {
 	if c == nil {
 		return constants.BudgetUnlimited, nil
@@ -253,7 +256,8 @@ func (c *Controller) ReserveEstimated(ctx context.Context, key string, tokens in
 	return c.ReserveAttributed(ctx, key, tokens, usage.Lineage(ctx))
 }
 
-// ReserveTool 预留一次实际工具执行；日志回放不应调用它。重试属于新的实际执行，应使用新键。
+// ReserveTool reserves one actual tool execution; journal replay should not
+// call it. A retry is a new actual execution and should use a new key.
 func (c *Controller) ReserveTool(ctx context.Context, key string) error {
 	if durable.HasJournal(ctx) && !c.IsDurable() {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "持久工具执行必须绑定持久根预算").WithComponent("budget").WithOperation("reserve_tool")
@@ -279,7 +283,8 @@ func (c *Controller) ReserveTool(ctx context.Context, key string) error {
 	})
 }
 
-// Bind 绑定根预算和绝对截止时间；用于把期限传播到图节点及所有子任务。
+// Bind binds the root budget and absolute deadline, propagating the deadline to
+// graph nodes and all subtasks.
 func Bind(ctx context.Context, c *Controller) (context.Context, context.CancelFunc) {
 	ctx = WithController(ctx, c)
 	if c != nil && c.config.DeadlineUnixMilli > 0 {

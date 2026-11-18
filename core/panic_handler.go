@@ -1,10 +1,9 @@
-// Package core provides panic handling infrastructure with hot-pluggable implementations.
-//
 // This file defines interfaces and registry for panic recovery customization:
 //   - PanicHandler - Custom panic recovery strategies
 //   - PanicMetricsCollector - Statistics and monitoring
 //   - PanicLogger - Specialized logging
 //   - PanicHandlerRegistry - Thread-safe hot-swapping
+
 package core
 
 import (
@@ -40,8 +39,9 @@ type PanicHandler interface {
 	// Returns:
 	//   - An error representing the panic, suitable for returning to callers
 	//
-	// 返回错误的文本不应包含 panicValue 与 stackTrace：registry 不改写 handler 的文本，
-	// 二者应留给 PanicLogger、指标或 errors.As 取到的 *agentErrors.PanicError。
+	// The returned error's text should not include panicValue or stackTrace: the
+	// registry does not rewrite the handler's text, so both should be left to the
+	// PanicLogger, metrics, or the *agentErrors.PanicError obtained via errors.As.
 	HandlePanic(ctx context.Context, component, operation string, panicValue interface{}, stackTrace string) error
 }
 
@@ -91,11 +91,13 @@ type PanicLogger interface {
 //
 // Behavior:
 //   - Converts all panics to AgentError with CodeInternal
-//   - Cause 为 *agentErrors.PanicError，可用 errors.As 识别并读取 panic 值与调用栈
+//   - Cause is a *agentErrors.PanicError; use errors.As to detect it and read
+//     the panic value and stack trace
 //   - Compatible with existing error handling infrastructure
 //
-// 错误文本会进入流错误、日志甚至交给模型，Message 与 Context 因此不含 panic 值与调用栈，
-// 文本以 PanicError 的“<位置> 发生 panic”结尾。
+// Error text flows into stream errors, logs, and even the model, so Message and
+// Context omit the panic value and stack trace; the text ends with the
+// PanicError message, which names where the panic occurred.
 type DefaultPanicHandler struct{}
 
 // HandlePanic implements PanicHandler interface.
@@ -210,8 +212,10 @@ func (r *PanicHandlerRegistry) GetLogger() PanicLogger {
 // 3. Log the event
 //
 // This is the recommended way to handle panics with all customizations applied.
-// 返回的错误链中总能用 errors.As 取到 *agentErrors.PanicError：handler 返回的错误不含它时
-// 由 registry 补上，handler 返回 nil 时直接返回它。必须在 defer 的 recover 处调用，调用栈才指向 panic 发生处。
+// errors.As can always obtain *agentErrors.PanicError from the returned error
+// chain: the registry adds it when the handler's error lacks it, and returns it
+// directly when the handler returns nil. It must be called at the deferred
+// recover so that the stack trace points to where the panic occurred.
 func (r *PanicHandlerRegistry) HandlePanic(ctx context.Context, component, operation string, panicValue interface{}) error {
 	cause := newPanicCause(component, operation, panicValue, nil)
 	stackTrace := string(cause.Stack)
@@ -266,8 +270,11 @@ type recoveredPanicError struct {
 func (e *recoveredPanicError) Error() string   { return e.err.Error() }
 func (e *recoveredPanicError) Unwrap() []error { return []error{e.err, e.cause} }
 
-// CallSafely 调用一次宿主代码，供不经 Callback 接口的调用点（流消费者、链步骤等）复用，语义同 NotifyCallbacks：
-// call panic 时 panicked 为 true，err 经全局 PanicHandler 转换，可用 errors.As 识别出 *agentErrors.PanicError。
+// CallSafely invokes host code once, for call sites that do not go through the
+// Callback interface (stream consumers, chain steps, and so on), with the same
+// semantics as NotifyCallbacks: if call panics, panicked is true and err is
+// converted by the global PanicHandler, and errors.As can detect
+// *agentErrors.PanicError in it.
 func CallSafely(ctx context.Context, component, operation string, call func() error) (panicked bool, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -277,16 +284,20 @@ func CallSafely(ctx context.Context, component, operation string, call func() er
 	return false, call()
 }
 
-// RecoverPanic 把 panic 经全局 PanicHandler 转换后写入 *err，用于框架启动的 goroutine 中有错误出口的位置。
-// 必须直接 defer core.RecoverPanic(...)，recover 才能生效。
+// RecoverPanic converts a panic through the global PanicHandler and stores it
+// in *err, for goroutines started by the framework that have an error outlet.
+// It must be deferred directly as defer core.RecoverPanic(...) for recover to
+// take effect.
 func RecoverPanic(ctx context.Context, component, operation string, err *error) {
 	if recovered := recover(); recovered != nil {
 		*err = panicToError(ctx, component, operation, recovered)
 	}
 }
 
-// ReportPanic 用于没有调用方接收错误的 goroutine：panic 只交给全局 PanicHandler 记录指标与日志，goroutine 随之结束。
-// 必须直接 defer core.ReportPanic(...)，recover 才能生效。
+// ReportPanic is for goroutines with no caller to receive an error: the panic
+// only goes to the global PanicHandler for metrics and logging, and the
+// goroutine then ends. It must be deferred directly as defer
+// core.ReportPanic(...) for recover to take effect.
 func ReportPanic(ctx context.Context, component, operation string) {
 	if recovered := recover(); recovered != nil {
 		_ = panicToError(ctx, component, operation, recovered)

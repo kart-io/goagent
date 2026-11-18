@@ -16,7 +16,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// ConfigurableAgent 是具有完整配置的已构建 Agent
+// ConfigurableAgent is a built agent with its full configuration.
 type ConfigurableAgent[S core.State] struct {
 	llmClient       llm.Client
 	tools           []interfaces.Tool
@@ -42,7 +42,7 @@ type ConfigurableAgent[S core.State] struct {
 	stateBaseSeq int64
 }
 
-// Initialize 准备 Agent 执行
+// Initialize prepares the agent for execution.
 func (a *ConfigurableAgent[S]) Initialize(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 初始化", &err)
 	if ctx == nil {
@@ -208,14 +208,14 @@ func (a *ConfigurableAgent[S]) invokeToolCall(ctx context.Context, call ToolCall
 	return nil, agentErrors.NewToolNotFoundError(call.Name)
 }
 
-// GetState 返回当前状态
+// GetState returns the current state.
 func (a *ConfigurableAgent[S]) GetState() S {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.state
 }
 
-// GetMetrics 返回 Agent 指标
+// GetMetrics returns agent metrics.
 func (a *ConfigurableAgent[S]) GetMetrics() map[string]interface{} {
 	metrics := make(map[string]interface{})
 
@@ -231,7 +231,7 @@ func (a *ConfigurableAgent[S]) GetMetrics() map[string]interface{} {
 	return metrics
 }
 
-// Shutdown 优雅地关闭 Agent
+// Shutdown gracefully shuts down the agent.
 func (a *ConfigurableAgent[S]) Shutdown(ctx context.Context) (err error) {
 	defer recoverPanic("Agent 关闭", &err)
 	// 通知回调
@@ -246,14 +246,14 @@ func (a *ConfigurableAgent[S]) Shutdown(ctx context.Context) (err error) {
 	return nil
 }
 
-// ToolCall 表示工具调用请求
+// ToolCall represents a tool call request.
 type ToolCall struct {
 	ID    string
 	Name  string
 	Input map[string]interface{}
 }
 
-// AgentOutput 表示 Agent 执行结果
+// AgentOutput represents the result of an agent execution.
 type AgentOutput struct {
 	Result     interface{}
 	State      core.State

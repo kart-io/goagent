@@ -10,16 +10,20 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// OperationRef 定位宿主已知的操作日志，不要求 Store 支持列举。
-// ParentKey 是传入 Do 的父执行键，不是操作派生的子键；诊断不会自动发现嵌套操作。
+// OperationRef locates an operation journal known to the host and does not
+// require the Store to support listing. ParentKey is the parent execution key
+// passed to Do, not the child key derived by the operation; diagnostics do not
+// discover nested operations automatically.
 type OperationRef struct {
 	ParentKey string `json:"parent_key"`
 	ID        string `json:"id"`
 }
 
-// DiagnosticReport 仅包含元数据，不含业务状态、输出、审批键、续跑载荷或原始错误。
-// Actions 是宿主可参考的建议，不代表执行授权。未完成检查点不能区分运行中、崩溃或失败；
-// 分别加载检查点和操作记录也不构成事务一致的视图。
+// DiagnosticReport contains metadata only: no business state, outputs, approval
+// keys, resume payloads, or raw errors. Actions are suggestions the host may
+// consult, not authorization to act. An incomplete checkpoint cannot
+// distinguish running, crashed, or failed, and loading the checkpoint and
+// operation records separately does not form a transactionally consistent view.
 type DiagnosticReport struct {
 	RunID      string                `json:"run_id"`
 	Status     string                `json:"status"`
@@ -38,8 +42,9 @@ type OperationDiagnostic struct {
 	Actions     []string `json:"actions,omitempty"`
 }
 
-// DiagnosticError 保留 errors.Is/As，同时避免打印可能包含凭据或原始载荷的 Store 错误。
-// 宿主不应把解包后的错误序列化给不可信受众。
+// DiagnosticError preserves errors.Is/As while avoiding printing Store errors
+// that may contain credentials or raw payloads. Hosts should not serialize the
+// unwrapped error for untrusted audiences.
 type DiagnosticError struct {
 	Cause error `json:"-"`
 }
@@ -47,8 +52,10 @@ type DiagnosticError struct {
 func (e *DiagnosticError) Error() string { return "诊断读取失败" }
 func (e *DiagnosticError) Unwrap() error { return e.Cause }
 
-// DiagnoseOperations 只读显式指定的操作记录。使用 Load 而非 InspectOperation，
-// 不取得执行锁、不写入，也不调用核对函数。pending 仅表示结果未知，不证明正在执行。
+// DiagnoseOperations only reads the explicitly specified operation records. It
+// uses Load rather than InspectOperation: it takes no execution lock, writes
+// nothing, and calls no reconcile function. pending only means the result is
+// unknown; it does not prove the operation is running.
 func DiagnoseOperations(ctx context.Context, store Store, refs ...OperationRef) ([]OperationDiagnostic, error) {
 	if store == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "诊断需要 Store").WithComponent("durable_diagnostics").WithOperation("diagnose_operations")
@@ -95,8 +102,9 @@ func DiagnoseOperations(ctx context.Context, store Store, refs ...OperationRef) 
 	return result, nil
 }
 
-// Diagnose 不取得执行锁，只读取最近保存的检查点。宿主采取动作前须与活跃执行者协调；
-// 单凭检查点无法证明重试外部效果是安全的。
+// Diagnose takes no execution lock and only reads the most recently saved
+// checkpoint. Hosts must coordinate with any active executor before acting; the
+// checkpoint alone cannot prove that retrying external effects is safe.
 func (r *Runner) Diagnose(ctx context.Context, id string, refs ...OperationRef) (*DiagnosticReport, error) {
 	if r == nil || r.Store == nil || r.Version == "" || id == "" {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "运行 ID、版本和 Store 不能为空").WithComponent("durable_diagnostics").WithOperation("diagnose")

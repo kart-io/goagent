@@ -7,10 +7,13 @@ import (
 	"strings"
 )
 
-// Complete 发起流式请求并收集为完整响应。
-// 只有成功终止块才算完成：块上的错误原样返回，流在终止块前关闭视为 io.ErrUnexpectedEOF。
-// 请求已取消或超时时不调用提供方；读流与取消同时就绪时返回 ctx 的错误。
-// 返回前取消内部 ctx，提供方的读取 goroutine 与连接随之释放。
+// Complete issues a streaming request and collects it into a full response.
+// Only a successful terminal chunk counts as completion: an error on a chunk is
+// returned as is, and a stream that closes before the terminal chunk is treated
+// as io.ErrUnexpectedEOF. The provider is not called if the request is already
+// canceled or timed out; when reading the stream and cancellation are ready at
+// the same time, the ctx error is returned. The internal ctx is canceled before
+// returning, which releases the provider's reader goroutine and connection.
 func Complete(ctx context.Context, client Client, req *CompletionRequest) (*CompletionResponse, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -75,7 +78,7 @@ func Complete(ctx context.Context, client Client, req *CompletionRequest) (*Comp
 	}
 }
 
-// Chat 以消息列表调用 Complete。
+// Chat calls Complete with a list of messages.
 func Chat(ctx context.Context, client Client, messages []Message) (*CompletionResponse, error) {
 	return Complete(ctx, client, &CompletionRequest{Messages: messages})
 }

@@ -9,16 +9,23 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Rejected 构造业务拒绝结果：目标系统明确给出的结论，如不存在、无权限、余额不足、状态不允许。
-// 它作为工具结果交给模型，经 Dispatcher 时日志记为已完成，恢复时只回放、不重试。
-// error 只用于调用没有完成（网络中断、服务不可用、超时）。message 原样交给模型，不得包含内部细节；
-// data 可为 nil，须能 JSON 编码。Result 编码为 {"error":"rejected","message":...,"data":...}，
-// 但只有本函数构造的结果才被识别为业务拒绝，同形状的 map 按普通失败处理。
+// Rejected builds a business rejection result: an explicit conclusion from the
+// target system, such as not found, permission denied, insufficient balance or
+// state not allowed. It is passed to the model as the tool result; through the
+// Dispatcher it is journaled as completed and is only replayed, never retried,
+// on resume. Use an error only when the call did not complete (network
+// interruption, service unavailable, timeout). message is passed to the model
+// verbatim and must not contain internal details; data may be nil and must be
+// JSON-encodable. Result is encoded as
+// {"error":"rejected","message":...,"data":...}, but only results built by
+// this function are recognized as business rejections; maps of the same shape
+// are treated as ordinary failures.
 func Rejected(message string, data any) *interfaces.ToolOutput {
 	return &interfaces.ToolOutput{Success: false, Result: rejection{message: message, data: data}}
 }
 
-// RejectedResult 判断 out 是否为 Rejected 构造的结果（含经 Dispatcher 日志回放的结果），并返回其中的 message。
+// RejectedResult reports whether out was built by Rejected (including results
+// replayed from the Dispatcher journal), and returns its message.
 func RejectedResult(out *interfaces.ToolOutput) (string, bool) {
 	if out == nil || out.Success || out.Error != "" {
 		return "", false
@@ -78,10 +85,14 @@ func decodeJournaledOutput(data json.RawMessage) (*interfaces.ToolOutput, error)
 	return j.ToolOutput, nil
 }
 
-// ReconcilableTool 由做不到幂等、但能按执行键查询效果是否已生效的工具实现。
-// 经 Dispatcher 持久执行时，上次执行中断、结果未知的调用在重跑前先核对：found 为真时用 out 补记为已完成，
-// 不再执行工具；返回错误时日志不变，本次调用失败。input 与原调用的 ExecutionKey、CallID、Args 相同。
-// out 必须成功或为 Rejected 结果。
+// ReconcilableTool is implemented by tools that cannot be idempotent but can
+// query by execution key whether an effect has already taken place. During
+// durable execution through the Dispatcher, a call whose previous execution
+// was interrupted with an unknown result is reconciled before rerunning: if
+// found is true, out is recorded as completed and the tool is not executed;
+// if it returns an error, the journal is unchanged and this call fails. input
+// has the same ExecutionKey, CallID and Args as the original call. out must be
+// successful or a Rejected result.
 type ReconcilableTool interface {
 	interfaces.Tool
 	Reconcile(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, found bool, err error)

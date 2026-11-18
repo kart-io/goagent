@@ -7,14 +7,20 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// WaitingError 列出暂停处的全部等待。已提交的模型回合与已完成的工具调用都保留在日志中；
-// 宿主按等待类型提供续跑输入后，用同一执行键再次调用即可继续：叶子中断使用 durable.WithResume，子图审批使用 workflow.WithResume 的结构化请求；操作键取等待路径最后一项的 Key。
-// 它展开为各个 *durable.WaitError，嵌套在上层持久操作中时会被记录为等待。
+// WaitingError lists all waits at the pause point. Committed model turns and
+// completed tool calls are all kept in the journal. After the host provides
+// resume input for each wait type, calling again with the same execution key
+// continues: leaf interrupts use durable.WithResume, and subgraph approvals use
+// workflow.WithResume with a structured request; the operation key is the Key
+// of the last item in the wait path. It unwraps into the individual
+// *durable.WaitError values and is recorded as a wait when nested within an
+// outer durable operation.
 type WaitingError struct {
 	Waits []*durable.WaitError
 }
 
-// ErrorCode 标识等待分类，不改变等待叶子或诊断原因的展开规则。
+// ErrorCode identifies the wait category; it does not change the unwrapping
+// rules for wait leaves or diagnostic causes.
 func (e *WaitingError) ErrorCode() agentErrors.ErrorCode {
 	if e == nil {
 		return agentErrors.CodeInternal

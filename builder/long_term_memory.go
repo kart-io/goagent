@@ -14,15 +14,28 @@ import (
 	"github.com/kart-io/goagent/memory"
 )
 
-// WithLongTermMemory 接入跨会话的长期记忆，需要 WithSessionLog，命名空间由宿主经 memory.WithNamespace 绑定在请求上下文中。
-//   - 绑定：每轮开始时确定记忆绑定（memory.TurnMemory），记入 turn/start；恢复本轮时沿用它，宿主改绑了命名空间时
-//     返回 ErrMemoryNamespaceChanged。
-//   - 召回：每轮第一次模型请求前以本轮输入召回，持久日志只记引用（memory/recall、memory/use/<步骤>）。召回块在组装
-//     每步请求时作为一条低信任的用户消息插在运行上下文之前，不进入会话历史与持久日志。仅作用于原生工具流。
-//     Request 钩子不得改写或移动召回消息，否则持久运行恢复时意图不一致。
-//   - 形成：每轮结束（含中止的轮次）按本轮绑定在 m 中登记抽取任务，由宿主运行的 m.Run 异步处理；任务按"会话/轮次"幂等。
+// WithLongTermMemory attaches cross-session long-term memory. It requires
+// WithSessionLog; the host binds the namespace in the request context via
+// memory.WithNamespace.
+//   - Binding: at the start of each turn the memory binding (memory.TurnMemory)
+//     is determined and recorded in turn/start; resuming the turn reuses it,
+//     and if the host rebinds the namespace it returns
+//     ErrMemoryNamespaceChanged.
+//   - Recall: before the first model request of each turn, memories are
+//     recalled using the turn's input; the durable journal records only
+//     references (memory/recall, memory/use/<step>). When each step's request
+//     is assembled, the recall block is inserted as one low-trust user message
+//     before the run context; it does not enter the session history or the
+//     durable journal. It applies only to the native tool stream. Request hooks
+//     must not rewrite or move the recall message; otherwise the intent will
+//     not match when a durable run resumes.
+//   - Formation: at the end of each turn (including aborted turns), an
+//     extraction task is registered in m under the turn's binding and processed
+//     asynchronously by the host-run m.Run; tasks are idempotent per
+//     session/turn.
 //
-// 需要模型自行检索或保存时，另行注册 m.Tools()。
+// To let the model search or save memories itself, register m.Tools()
+// separately.
 func (b *AgentBuilder[S]) WithLongTermMemory(m *memory.Memory) *AgentBuilder[S] {
 	b.config.LongTermMemory = m
 	return b

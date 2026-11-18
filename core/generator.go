@@ -5,14 +5,15 @@ import (
 	"iter"
 )
 
-// Generator 定义生成器类型（基于 Go 1.25 iter.Seq2）
+// Generator defines a generator type based on Go 1.25 iter.Seq2.
 //
-// Generator 提供惰性求值的流式处理能力，相比 Channel 有以下优势：
-//   - 零内存分配（无 channel、goroutine 开销）
-//   - 支持早期终止（通过 yield 返回值）
-//   - 统一的迭代接口（for-range 循环）
+// Generator provides lazily evaluated streaming with these advantages over
+// channels:
+//   - Zero allocation (no channel or goroutine overhead)
+//   - Early termination (through the yield return value)
+//   - A uniform iteration interface (for-range loops)
 //
-// 示例：
+// Example:
 //
 //	gen := agent.RunGenerator(ctx, input)
 //	for output, err := range gen {
@@ -23,20 +24,20 @@ import (
 //	}
 type Generator[T any] iter.Seq2[T, error]
 
-// GeneratorFunc 将函数转换为 Generator
+// GeneratorFunc converts a function into a Generator.
 //
-// 参数：
-//   - fn - 生成器函数，接受 yield 函数作为参数
+// Parameters:
+//   - fn - the generator function, which takes a yield function
 //
-// 返回：
-//   - Generator 实例
+// Returns:
+//   - a Generator
 //
-// 示例：
+// Example:
 //
 //	gen := GeneratorFunc(func(yield func(T, error) bool) {
 //	    for i := 0; i < 10; i++ {
 //	        if !yield(data, nil) {
-//	            return  // 早期终止
+//	            return  // early termination
 //	        }
 //	    }
 //	})
@@ -44,23 +45,26 @@ func GeneratorFunc[T any](fn func(yield func(T, error) bool)) Generator[T] {
 	return Generator[T](fn)
 }
 
-// ToChannel 将 Generator 转换为 Channel
+// ToChannel converts a Generator into a channel.
 //
-// 参数：
-//   - ctx - 上下文（用于取消）
-//   - gen - Generator 实例
-//   - bufferSize - channel 缓冲区大小（0 表示无缓冲）
+// Parameters:
+//   - ctx - the context (for cancellation)
+//   - gen - the Generator
+//   - bufferSize - the channel buffer size (0 means unbuffered)
 //
-// 返回：
-//   - 只读 channel，包含 StreamChunk
+// Returns:
+//   - a receive-only channel of StreamChunk
 //
-// 注意：
-//   - 此函数会启动 goroutine 消费 Generator
-//   - 当 ctx 取消或 Generator 结束时，channel 自动关闭
-//   - ctx 取消时只在消费方正在接收或缓冲有空位时送出取消错误块，否则直接关闭；
-//     channel 关闭后应检查 ctx.Err() 区分正常结束与取消
+// Notes:
+//   - This function starts a goroutine that consumes the Generator
+//   - The channel closes automatically when ctx is canceled or the Generator
+//     ends
+//   - On ctx cancellation, a cancellation error chunk is sent only if the
+//     consumer is receiving or the buffer has room; otherwise the channel just
+//     closes. After the channel closes, check ctx.Err() to tell normal
+//     completion from cancellation
 //
-// 示例：
+// Example:
 //
 //	ch := ToChannel(ctx, gen, 10)
 //	for item := range ch {
@@ -107,19 +111,19 @@ func ToChannel[T any](ctx context.Context, gen Generator[T], bufferSize int) <-c
 	return ch
 }
 
-// FromChannel 将 Channel 转换为 Generator
+// FromChannel converts a channel into a Generator.
 //
-// 参数：
-//   - ch - 输入 channel
+// Parameters:
+//   - ch - the input channel
 //
-// 返回：
-//   - Generator 实例
+// Returns:
+//   - a Generator
 //
-// 示例：
+// Example:
 //
 //	gen := FromChannel(ch)
 //	for data, err := range gen {
-//	    // 处理数据
+//	    // process data
 //	}
 func FromChannel[T any](ch <-chan StreamChunk[T]) Generator[T] {
 	return func(yield func(T, error) bool) {
@@ -134,19 +138,19 @@ func FromChannel[T any](ch <-chan StreamChunk[T]) Generator[T] {
 	}
 }
 
-// Collect 收集 Generator 的所有输出到切片
+// Collect collects all Generator output into a slice.
 //
-// 参数：
-//   - gen - Generator 实例
+// Parameters:
+//   - gen - the Generator
 //
-// 返回：
-//   - 所有数据的切片和第一个错误
+// Returns:
+//   - a slice of all data and the first error
 //
-// 注意：
-//   - 遇到第一个错误时停止收集
-//   - 适用于小数据集，大数据集建议流式处理
+// Notes:
+//   - Collection stops at the first error
+//   - Suitable for small datasets; stream large datasets instead
 //
-// 示例：
+// Example:
 //
 //	results, err := Collect(gen)
 //	if err != nil {
@@ -169,20 +173,20 @@ func Collect[T any](gen Generator[T]) ([]T, error) {
 	return results, firstErr
 }
 
-// Take 从 Generator 中取前 n 个元素
+// Take takes the first n elements from a Generator.
 //
-// 参数：
-//   - gen - Generator 实例
-//   - n - 要取的元素数量
+// Parameters:
+//   - gen - the Generator
+//   - n - the number of elements to take
 //
-// 返回：
-//   - 新的 Generator，最多产生 n 个元素
+// Returns:
+//   - a new Generator that yields at most n elements
 //
-// 示例：
+// Example:
 //
 //	first5 := Take(gen, 5)
 //	for data, err := range first5 {
-//	    // 最多处理 5 个元素
+//	    // process at most 5 elements
 //	}
 func Take[T any](gen Generator[T], n int) Generator[T] {
 	return func(yield func(T, error) bool) {
@@ -197,16 +201,16 @@ func Take[T any](gen Generator[T], n int) Generator[T] {
 	}
 }
 
-// Filter 过滤 Generator 输出
+// Filter filters Generator output.
 //
-// 参数：
-//   - gen - Generator 实例
-//   - predicate - 过滤条件函数
+// Parameters:
+//   - gen - the Generator
+//   - predicate - the filter function
 //
-// 返回：
-//   - 新的 Generator，仅包含满足条件的元素
+// Returns:
+//   - a new Generator containing only elements that satisfy predicate
 //
-// 示例：
+// Example:
 //
 //	filtered := Filter(gen, func(data T) bool {
 //	    return data.Score > 0.5
@@ -226,16 +230,16 @@ func Filter[T any](gen Generator[T], predicate func(T) bool) Generator[T] {
 	}
 }
 
-// Map 映射 Generator 输出
+// Map maps Generator output.
 //
-// 参数：
-//   - gen - Generator 实例
-//   - mapper - 映射函数
+// Parameters:
+//   - gen - the Generator
+//   - mapper - the mapping function
 //
-// 返回：
-//   - 新的 Generator，包含映射后的元素
+// Returns:
+//   - a new Generator containing the mapped elements
 //
-// 示例：
+// Example:
 //
 //	mapped := Map(gen, func(data T) R {
 //	    return transform(data)

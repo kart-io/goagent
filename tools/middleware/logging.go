@@ -13,23 +13,24 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// LoggingMiddleware 提供工具调用的日志记录功能。
+// LoggingMiddleware logs tool calls.
 //
-// 它记录：
-//   - 工具名称和描述
-//   - 输入参数（默认不记录，WithInputLogging 开启）
-//   - 输出结果（默认不记录，WithOutputLogging 开启）
-//   - 执行耗时
-//   - 错误信息
+// It records:
+//   - tool name and description
+//   - input arguments (not logged by default; enable with WithInputLogging)
+//   - output results (not logged by default; enable with WithOutputLogging)
+//   - execution duration
+//   - error information
 //
-// 参数与结果常含用户数据和凭证，默认只记录调用本身。
+// Arguments and results often contain user data and credentials, so by
+// default only the call itself is logged.
 //
-// 使用示例:
+// Example:
 //
 //	logger := core.GetLogger("tools")
 //	loggingMW := NewLoggingMiddleware(
 //	    WithLogger(logger),
-//	    WithOutputLogging(), // 记录结果；确认其中没有敏感数据时才开启
+//	    WithOutputLogging(), // log results; enable only when they contain no sensitive data
 //	)
 //	wrappedTool := middleware.Wrap(myTool, loggingMW.Wrap)
 type LoggingMiddleware struct {
@@ -39,35 +40,38 @@ type LoggingMiddleware struct {
 	maxArgBytes int // 最大参数字节数，避免日志过大
 }
 
-// LoggingOption 定义日志中间件的配置选项
+// LoggingOption is a configuration option for the logging middleware.
 type LoggingOption func(*LoggingMiddleware)
 
-// WithLogger 设置自定义日志器
+// WithLogger sets a custom logger.
 //
-// 不设置时使用输出到 stdout 的 JSON slog；显式传 nil 可关闭日志。
+// When unset, a JSON slog logger writing to stdout is used; passing nil
+// explicitly disables logging.
 func WithLogger(logger loggerCore.Logger) LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logger = logger
 	}
 }
 
-// WithInputLogging 记录输入参数（以 __ 开头的内部键除外）；参数可能含密码、API 密钥等时不要开启。
+// WithInputLogging logs input arguments (except internal keys starting with
+// __); do not enable it when arguments may contain passwords, API keys, etc.
 func WithInputLogging() LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logInput = true
 	}
 }
 
-// WithOutputLogging 记录输出结果；结果可能含敏感数据时不要开启。
+// WithOutputLogging logs output results; do not enable it when results may
+// contain sensitive data.
 func WithOutputLogging() LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logOutput = true
 	}
 }
 
-// WithMaxArgBytes 设置参数序列化的最大字节数
+// WithMaxArgBytes sets the maximum number of bytes for serialized arguments.
 //
-// 超过此限制的参数将被截断，默认值为 1024 字节
+// Arguments exceeding this limit are truncated; the default is 1024 bytes.
 func WithMaxArgBytes(maxBytes int) LoggingOption {
 	return func(m *LoggingMiddleware) {
 		if maxBytes > 0 {
@@ -76,13 +80,13 @@ func WithMaxArgBytes(maxBytes int) LoggingOption {
 	}
 }
 
-// NewLoggingMiddleware 创建一个新的日志中间件
+// NewLoggingMiddleware creates a new logging middleware.
 //
-// 参数:
-//   - opts: 配置选项
+// Parameters:
+//   - opts: configuration options
 //
-// 返回:
-//   - *LoggingMiddleware: 日志中间件实例
+// Returns:
+//   - *LoggingMiddleware: the logging middleware instance
 func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
 	// 创建默认的 slog logger
 	defaultLogger, err := slog.NewSlogLogger(&option.LogOption{
@@ -109,8 +113,9 @@ func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
 	return middleware
 }
 
-// Wrap 为每次调用独立计时，不通过业务参数或元数据传递内部状态。
-// 日志不改变执行错误及其部分结果；空输入和空输出也原样传递。
+// Wrap times each call independently and does not pass internal state through
+// business arguments or metadata. Logging does not change execution errors or
+// their partial results; empty input and output are passed through unchanged.
 func (m *LoggingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInvoker {
 	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		if m.logger == nil {
@@ -155,7 +160,7 @@ func (m *LoggingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 	}
 }
 
-// Logging 返回直接用于装配的日志中间件函数。
+// Logging returns a logging middleware function ready for assembly.
 func Logging(opts ...LoggingOption) ToolMiddlewareFunc {
 	return NewLoggingMiddleware(opts...).Wrap
 }

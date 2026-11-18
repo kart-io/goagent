@@ -2,11 +2,13 @@ package errors
 
 import "runtime/debug"
 
-// PanicError 是从 panic 恢复得到的错误，保留 panic 值与发生 panic 时的调用栈，可用 errors.As 识别。
-// Error 只含位置，不含 panic 值与调用栈：错误文本可能进入日志、事件或交给模型，不应泄露实现细节；
-// 排查时用 errors.As 取 Value 与 Stack。
+// PanicError is an error recovered from a panic, preserving the panic value and
+// the call stack at the time of the panic; it can be identified with errors.As.
+// Error contains only the location, not the panic value or call stack: error
+// text may enter logs, events, or the model and should not leak implementation
+// details. Use errors.As to get Value and Stack when debugging.
 type PanicError struct {
-	// Op 描述发生 panic 的位置，例如 `工具 "lookup"`。
+	// Op describes where the panic occurred, for example "checkpoint decoding".
 	Op    string
 	Value any
 	Stack []byte
@@ -14,8 +16,10 @@ type PanicError struct {
 
 func (e *PanicError) Error() string { return e.Op + " 发生 panic" }
 
-// NewPanicError 必须在 defer 的 recover 处调用，Stack 才指向 panic 发生处。
-// value 已是 *PanicError（内层恢复后重新抛出）时原样返回，保留最初的位置与调用栈。
+// NewPanicError must be called at the deferred recover so that Stack points to
+// where the panic occurred. When value is already a *PanicError (re-panicked
+// after an inner recovery) it is returned as is, preserving the original
+// location and call stack.
 func NewPanicError(op string, value any) *PanicError {
 	if p, ok := value.(*PanicError); ok {
 		return p

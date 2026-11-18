@@ -2,7 +2,8 @@ package tools
 
 import "time"
 
-// DispatchGovernance 是不含回调和资源引用的配置快照；不代表具体业务调用已获授权。
+// DispatchGovernance is a configuration snapshot without callbacks or resource
+// references; it does not mean any specific business call is authorized.
 type DispatchGovernance struct {
 	ToolNames                                          []string
 	AuthorizationConfigured, PipelineConfigured        bool
@@ -10,7 +11,7 @@ type DispatchGovernance struct {
 	Timeout                                            time.Duration
 }
 
-// Governance 返回当前派发器的独立配置快照。
+// Governance returns an independent configuration snapshot of the dispatcher.
 func (d *Dispatcher) Governance() DispatchGovernance {
 	if d == nil {
 		return DispatchGovernance{}

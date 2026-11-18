@@ -158,7 +158,8 @@ type middlewareSlice struct {
 }
 
 // MiddlewareChain manages a sequence of middleware
-// 使用 atomic.Pointer 实现零拷贝读取，避免热路径上的 slice 复制
+// It uses atomic.Pointer for zero-copy reads, avoiding slice copies on the hot
+// path.
 type MiddlewareChain struct {
 	middlewares atomic.Pointer[middlewareSlice]
 	handler     Handler
@@ -176,7 +177,7 @@ func NewMiddlewareChain(handler Handler) *MiddlewareChain {
 }
 
 // Use adds middleware to the chain
-// 写操作使用 copy-on-write 模式，确保读取端无锁
+// Writes use copy-on-write so that readers are lock-free.
 func (c *MiddlewareChain) Use(middleware ...Middleware) *MiddlewareChain {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -202,7 +203,8 @@ func RequestFromContext(ctx context.Context) (*MiddlewareRequest, bool) {
 }
 
 // Execute runs the request through the middleware chain
-// 热路径零拷贝：直接读取不可变 slice，无需加锁或复制
+// The hot path is zero-copy: it reads the immutable slice directly without
+// locking or copying.
 func (c *MiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
 	return executeMiddleware(ctx, request, c.handler, c.middlewares.Load().items, true)
 }
@@ -281,7 +283,7 @@ func (c *MiddlewareChain) WithHandler(handler Handler) *MiddlewareChain {
 	return clone
 }
 
-// Size 返回当前 middleware 数量
+// Size returns the current number of middleware.
 func (c *MiddlewareChain) Size() int {
 	return len(c.middlewares.Load().items)
 }
@@ -402,7 +404,9 @@ func (m *LoggingMiddleware) OnError(ctx context.Context, err error) error {
 
 // TimingMiddleware tracks execution time
 //
-// 只保留最近 constants.DefaultTimingWindow 条记录，长期运行时内存有界；平均值按全部记录累计。
+// It keeps only the most recent constants.DefaultTimingWindow records, so
+// memory stays bounded in long-running use; the average is accumulated over
+// all records.
 type TimingMiddleware struct {
 	*BaseMiddleware
 	mu      sync.RWMutex

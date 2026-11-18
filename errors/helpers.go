@@ -254,15 +254,18 @@ func NewInternalError(component, operation string, cause error) *AgentError {
 		WithOperation(operation)
 }
 
-// ErrorWithRetry 返回附带重试信息的错误，不修改 err。
-// 错误链顶层是 *AgentError 时返回其副本（Context 另行复制）；否则包装 err 并沿用链上已有的错误码。
+// ErrorWithRetry returns an error carrying retry information without modifying
+// err. When the top of the error chain is an *AgentError it returns a copy (with
+// Context copied separately); otherwise it wraps err and keeps the error code
+// already in the chain.
 func ErrorWithRetry(err error, attempt, maxAttempts int) *AgentError {
 	return annotate(err).
 		WithContext("retry_attempt", attempt).
 		WithContext("max_attempts", maxAttempts)
 }
 
-// ErrorWithDuration 返回附带耗时信息的错误，不修改 err，规则同 ErrorWithRetry。
+// ErrorWithDuration returns an error carrying duration information without
+// modifying err, following the same rules as ErrorWithRetry.
 func ErrorWithDuration(err error, durationMs int64) *AgentError {
 	return annotate(err).WithContext("duration_ms", durationMs)
 }

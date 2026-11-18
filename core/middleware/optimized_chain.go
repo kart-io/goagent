@@ -4,13 +4,14 @@ import (
 	"context"
 )
 
-// ImmutableMiddlewareChain 持有固定中间件集合，与可变链共用执行协议。
+// ImmutableMiddlewareChain holds a fixed set of middleware and shares the
+// execution protocol with the mutable chain.
 type ImmutableMiddlewareChain struct {
 	middlewares []Middleware
 	handler     Handler
 }
 
-// NewImmutableMiddlewareChain 创建不可变中间件链
+// NewImmutableMiddlewareChain creates an immutable middleware chain.
 func NewImmutableMiddlewareChain(handler Handler, middlewares ...Middleware) *ImmutableMiddlewareChain {
 	chain := &ImmutableMiddlewareChain{
 		middlewares: make([]Middleware, len(middlewares)),
@@ -21,25 +22,25 @@ func NewImmutableMiddlewareChain(handler Handler, middlewares ...Middleware) *Im
 	return chain
 }
 
-// Execute 执行中间件链
+// Execute runs the middleware chain.
 func (c *ImmutableMiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
 	return executeMiddleware(ctx, request, c.handler, c.middlewares, true)
 }
 
-// Middlewares 返回中间件列表
+// Middlewares returns the list of middleware.
 func (c *ImmutableMiddlewareChain) Middlewares() []Middleware {
 	return append([]Middleware(nil), c.middlewares...)
 }
 
-// FastMiddlewareChain 快速中间件链（无 OnAfter 支持）
+// FastMiddlewareChain is a fast middleware chain (without OnAfter support).
 //
-// 用于只需要 OnBefore 的场景，进一步减少开销
+// It is for scenarios that only need OnBefore, further reducing overhead.
 type FastMiddlewareChain struct {
 	middlewares []Middleware
 	handler     Handler
 }
 
-// NewFastMiddlewareChain 创建快速中间件链
+// NewFastMiddlewareChain creates a fast middleware chain.
 func NewFastMiddlewareChain(handler Handler, middlewares ...Middleware) *FastMiddlewareChain {
 	return &FastMiddlewareChain{
 		middlewares: append([]Middleware(nil), middlewares...),
@@ -47,14 +48,14 @@ func NewFastMiddlewareChain(handler Handler, middlewares ...Middleware) *FastMid
 	}
 }
 
-// Execute 执行（仅 OnBefore）
+// Execute runs the chain (OnBefore only).
 //
 //go:inline
 func (c *FastMiddlewareChain) Execute(ctx context.Context, request *MiddlewareRequest) (*MiddlewareResponse, error) {
 	return executeMiddleware(ctx, request, c.handler, c.middlewares, false)
 }
 
-// Middlewares 返回中间件列表
+// Middlewares returns the list of middleware.
 func (c *FastMiddlewareChain) Middlewares() []Middleware {
 	return append([]Middleware(nil), c.middlewares...)
 }

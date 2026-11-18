@@ -13,13 +13,17 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// RecallTool 让模型取回本会话中被压缩或卸载换掉的原始消息（日志中被 history/rewrite 改写、仍未被撤销的消息）。
-// 会话 ID 取自请求上下文（tools.WithSessionID，Builder 缺省时填入 WithSessionID 的值），只能读本会话。
+// RecallTool lets the model retrieve original messages in this session that
+// were replaced by compaction or offloading (messages rewritten by
+// history/rewrite in the log and not yet undone). The session ID comes from the
+// request context (tools.WithSessionID; the Builder fills in the WithSessionID
+// value by default), so only this session can be read.
 type RecallTool struct {
 	store session.Store
 }
 
-// NewRecallTool 返回读取 store 中会话日志的取回工具，须与 WithSessionLog 使用同一个 store。
+// NewRecallTool returns a recall tool that reads session logs from store; it
+// must use the same store as WithSessionLog.
 func NewRecallTool(store session.Store) (*RecallTool, error) {
 	if store == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "recall_history 需要会话日志存储").WithComponent("builder/contextpolicy").WithOperation("new_recall_tool")
@@ -42,7 +46,9 @@ type recalled struct {
 	Tool    string `json:"tool,omitempty"`
 }
 
-// Invoke 从最近往前取匹配的消息，结果按序号升序；next_before 为 0 表示没有更早的匹配。
+// Invoke fetches matching messages from the most recent backward, returning
+// results in ascending sequence order; next_before of 0 means there are no
+// earlier matches.
 func (r *RecallTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	id := tools.SessionIDFrom(ctx)
 	if id == "" {

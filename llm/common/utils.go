@@ -35,8 +35,9 @@ func ParseRetryAfter(header string) int {
 	return 60 // Fallback
 }
 
-// RetryAfterDuration 解析秒数或 HTTP 日期；缺失、无法解析或已过期都返回 0，即视为没有给出。
-// 与 ParseRetryAfter 不同，它不对无法解析的值回退为 60 秒。
+// RetryAfterDuration parses seconds or an HTTP date; missing, unparsable, or
+// already-expired values all return 0, meaning none was given. Unlike
+// ParseRetryAfter, it does not fall back to 60 seconds for unparsable values.
 func RetryAfterDuration(header string, now time.Time) time.Duration {
 	if seconds, err := strconv.ParseInt(strings.TrimSpace(header), 10, 64); err == nil {
 		return time.Duration(min(max(seconds, 0), math.MaxInt64/int64(time.Second))) * time.Second
@@ -58,7 +59,8 @@ func GenerateCallID() string {
 	return fmt.Sprintf("call_%d_%s", time.Now().UnixNano(), hex.EncodeToString(b))
 }
 
-// IsRetryable 优先使用提供方的恢复信息；只有缺少该信息时才兼容既有框架码。
+// IsRetryable prefers the provider's recovery information; only when that is
+// missing does it fall back to the existing framework codes.
 func IsRetryable(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false

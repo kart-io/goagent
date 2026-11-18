@@ -13,13 +13,17 @@ type queuedEvent struct {
 	event Event
 }
 
-// AsyncObserver 通过有界队列和固定数量的工作协程交付观察事件。
-// Observe 不等待观察者；队列溢出或 Close 后收到事件时增加 Dropped。
-// 工作协程多于一个时，观察者必须支持并发调用。阻塞的观察者只占用其工作协程，
-// 但若忽略上下文取消，则无法强制停止。
-// 已入队事件保留上下文值，不继承调用者的取消信号。
-// Close 等待已入队事件交付完毕；其 ctx 取消时会取消观察者上下文，并丢弃待交付事件。
-// 可以再次调用 Close 等待工作协程退出。观察者内部不得同步调用自身适配器的 Close。
+// AsyncObserver delivers observation events through a bounded queue and a
+// fixed number of worker goroutines. Observe does not wait for the observer;
+// Dropped is incremented when the queue overflows or an event arrives after
+// Close. With more than one worker, the observer must support concurrent
+// calls. A blocked observer only occupies its own worker, but cannot be forced
+// to stop if it ignores context cancellation. Enqueued events keep context
+// values but do not inherit the caller's cancellation. Close waits for enqueued
+// events to be delivered; when its ctx is canceled it cancels the observer
+// context and drops pending events. Close can be called again to wait for the
+// workers to exit. The observer must not synchronously call Close on its own
+// adapter.
 type AsyncObserver struct {
 	sink      Observer
 	queue     chan queuedEvent
@@ -32,7 +36,8 @@ type AsyncObserver struct {
 	dropped   atomic.Uint64
 }
 
-// NewAsyncObserver 要求提供观察者，队列容量和工作协程数量均须为正数。
+// NewAsyncObserver requires an observer, and both the queue capacity and the
+// number of workers must be positive.
 func NewAsyncObserver(sink Observer, capacity, workers int) (*AsyncObserver, error) {
 	if sink == nil || capacity <= 0 || workers <= 0 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "async observer requires a sink and positive capacity/workers").WithComponent("async_observer").WithOperation("new_async_observer")
@@ -60,8 +65,9 @@ func (a *AsyncObserver) Observe(ctx context.Context, event Event) {
 	}
 }
 
-// Dropped 统计队列溢出、Close 后收到的事件，以及取消时丢弃的待交付事件。
-// 观察者的 panic 会被隔离，不计入队列丢弃数量。
+// Dropped counts events lost to queue overflow, events received after Close,
+// and pending events dropped on cancellation. Observer panics are isolated and
+// not counted as queue drops.
 func (a *AsyncObserver) Dropped() uint64 { return a.dropped.Load() }
 
 func (a *AsyncObserver) work() {
@@ -91,8 +97,9 @@ func (a *AsyncObserver) deliver(item queuedEvent) {
 	a.sink.Observe(deliveryContext{Context: a.ctx, values: item.ctx}, item.event)
 }
 
-// Close 立即停止接收事件。ctx 取消时结束等待并取消观察者上下文，
-// 不会为等待阻塞的观察者而创建额外协程。
+// Close stops accepting events immediately. When ctx is canceled it stops
+// waiting and cancels the observer context, without creating extra goroutines
+// to wait on blocked observers.
 func (a *AsyncObserver) Close(ctx context.Context) error {
 	a.mu.Lock()
 	if !a.closed {

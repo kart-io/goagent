@@ -8,60 +8,61 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Runnable 定义统一的可执行接口
+// Runnable defines a unified executable interface.
 //
-// 借鉴 LangChain 的 Runnable 设计，提供统一的执行接口，支持:
-// - 单个输入执行 (Invoke)
-// - 流式执行 (Stream)
-// - 批量执行 (Batch)
-// - 管道连接 (Pipe)
-// - 回调支持 (WithCallbacks)
+// Modeled on LangChain's Runnable, it provides a unified execution interface
+// that supports:
+//   - single-input execution (Invoke)
+//   - streaming execution (Stream)
+//   - batch execution (Batch)
+//   - pipeline composition (Pipe)
+//   - callbacks (WithCallbacks)
 //
-// 泛型参数:
-//   - I: 输入类型
-//   - O: 输出类型
+// Type parameters:
+//   - I: the input type
+//   - O: the output type
 type Runnable[I, O any] interface {
-	// Invoke 执行单个输入并返回输出
+	// Invoke executes a single input and returns the output.
 	Invoke(ctx context.Context, input I) (O, error)
 
-	// Stream 流式执行，返回输出通道
-	// 调用者负责从通道读取并处理结果
+	// Stream executes in streaming mode and returns an output channel. The
+	// caller is responsible for reading and handling results from the channel.
 	Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error)
 
-	// Batch 批量执行多个输入
+	// Batch executes multiple inputs as a batch.
 	Batch(ctx context.Context, inputs []I) ([]O, error)
 
-	// Pipe 连接到另一个 Runnable，形成管道
-	// 当前 Runnable 的输出成为下一个 Runnable 的输入
+	// Pipe connects to another Runnable to form a pipeline. The output of this
+	// Runnable becomes the input of the next one.
 	Pipe(next Runnable[O, any]) Runnable[I, any]
 
-	// WithCallbacks 添加回调处理器
+	// WithCallbacks adds callback handlers.
 	WithCallbacks(callbacks ...Callback) Runnable[I, O]
 
-	// WithConfig 配置 Runnable
+	// WithConfig configures the Runnable.
 	WithConfig(config RunnableConfig) Runnable[I, O]
 }
 
-// StreamChunk 流式输出的数据块
+// StreamChunk is a chunk of streaming output.
 type StreamChunk[T any] struct {
-	Data  T            // 数据
-	Error error        // 错误（如果有）
-	Done  bool         // 是否完成
-	Event *StreamEvent // 可选增量事件；只有 Done 且 Error 为空时 Data 才是最终结果
+	Data  T            // data
+	Error error        // error, if any
+	Done  bool         // whether the stream is finished
+	Event *StreamEvent // optional incremental event; Data is the final result only when Done is set and Error is nil
 }
 
-// RunnableConfig Runnable 配置
+// RunnableConfig is the Runnable configuration.
 type RunnableConfig struct {
-	// Callbacks 回调处理器列表
+	// Callbacks is the list of callback handlers.
 	Callbacks []Callback `json:"-"`
 
-	// Tags 标签，用于标识和分类
+	// Tags are labels used for identification and classification.
 	Tags []string `json:"tags"`
 
-	// Metadata 元数据
+	// Metadata is the metadata.
 	Metadata map[string]interface{} `json:"metadata"`
 
-	// MaxConcurrency 最大并发数（用于 Batch）
+	// MaxConcurrency is the maximum concurrency (used by Batch).
 	MaxConcurrency int `json:"max_concurrency"`
 }
 
@@ -114,15 +115,15 @@ func safeInvoke[I, O any](fn func(context.Context, I) (O, error), ctx context.Co
 	return fn(ctx, input)
 }
 
-// BaseRunnable 提供 Runnable 的基础实现
+// BaseRunnable provides a base implementation of Runnable.
 //
-// 实现了通用的功能如批处理、回调等
-// 具体的 Invoke 和 Stream 需要由子类实现
+// It implements common functionality such as batching and callbacks. Concrete
+// Invoke and Stream must be implemented by embedding types.
 type BaseRunnable[I, O any] struct {
 	config RunnableConfig
 }
 
-// NewBaseRunnable 创建基础 Runnable
+// NewBaseRunnable creates a base Runnable.
 func NewBaseRunnable[I, O any]() *BaseRunnable[I, O] {
 	return &BaseRunnable[I, O]{
 		config: RunnableConfig{
@@ -134,9 +135,9 @@ func NewBaseRunnable[I, O any]() *BaseRunnable[I, O] {
 	}
 }
 
-// Batch 默认的批处理实现
+// Batch is the default batch implementation.
 //
-// 使用 goroutines 并发执行多个输入
+// It executes multiple inputs concurrently using goroutines.
 func (r *BaseRunnable[I, O]) Batch(ctx context.Context, inputs []I, invoker func(context.Context, I) (O, error)) ([]O, error) {
 	if len(inputs) == 0 {
 		return []O{}, nil
@@ -206,14 +207,14 @@ func (r *BaseRunnable[I, O]) Batch(ctx context.Context, inputs []I, invoker func
 	return outputs, firstError
 }
 
-// WithCallbacks 添加回调
+// WithCallbacks adds callbacks.
 func (r *BaseRunnable[I, O]) WithCallbacks(callbacks ...Callback) *BaseRunnable[I, O] {
 	newRunnable := *r
 	newRunnable.config.Callbacks = append(append([]Callback(nil), r.config.Callbacks...), callbacks...)
 	return &newRunnable
 }
 
-// WithConfig 配置 Runnable
+// WithConfig configures the Runnable.
 func (r *BaseRunnable[I, O]) WithConfig(config RunnableConfig) *BaseRunnable[I, O] {
 	newRunnable := *r
 	newRunnable.config = cloneRunnableConfig(config)
@@ -228,19 +229,19 @@ func cloneRunnableConfig(config RunnableConfig) RunnableConfig {
 	return config
 }
 
-// GetConfig 获取配置
+// GetConfig returns the configuration.
 func (r *BaseRunnable[I, O]) GetConfig() RunnableConfig {
 	return r.config
 }
 
-// RunnablePipe 管道 Runnable，连接两个 Runnable
+// RunnablePipe is a pipeline Runnable that connects two Runnables.
 type RunnablePipe[I, M, O any] struct {
 	first  Runnable[I, M]
 	second Runnable[M, O]
 	config RunnableConfig
 }
 
-// NewRunnablePipe 创建管道 Runnable
+// NewRunnablePipe creates a pipeline Runnable.
 func NewRunnablePipe[I, M, O any](first Runnable[I, M], second Runnable[M, O]) *RunnablePipe[I, M, O] {
 	return &RunnablePipe[I, M, O]{
 		first:  first,
@@ -252,7 +253,7 @@ func NewRunnablePipe[I, M, O any](first Runnable[I, M], second Runnable[M, O]) *
 	}
 }
 
-// Invoke 执行管道
+// Invoke executes the pipeline.
 func (p *RunnablePipe[I, M, O]) Invoke(ctx context.Context, input I) (O, error) {
 	runner := NewStreamRunnable(StreamModeFinal, func(ctx context.Context, input I, emit func(StreamChunk[O]) error) error {
 		output, err := p.invoke(ctx, input)
@@ -291,7 +292,7 @@ func (p *RunnablePipe[I, M, O]) invoke(ctx context.Context, input I) (O, error) 
 	return output, nil
 }
 
-// Stream 流式执行管道
+// Stream executes the pipeline in streaming mode.
 func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error) {
 	runner := NewStreamRunnable(StreamModeSteps, func(ctx context.Context, input I, emit func(StreamChunk[O]) error) error {
 		middle, err := safeInvoke(p.first.Invoke, ctx, input)
@@ -310,40 +311,40 @@ func (p *RunnablePipe[I, M, O]) Stream(ctx context.Context, input I) (<-chan Str
 	return runner.WithConfig(p.config).Stream(ctx, input)
 }
 
-// Batch 批量执行管道
+// Batch executes the pipeline as a batch.
 func (p *RunnablePipe[I, M, O]) Batch(ctx context.Context, inputs []I) ([]O, error) {
 	base := NewBaseRunnable[I, O]().WithConfig(p.config)
 	return base.Batch(ctx, inputs, p.Invoke)
 }
 
-// Pipe 连接到另一个 Runnable
+// Pipe connects to another Runnable.
 func (p *RunnablePipe[I, M, O]) Pipe(next Runnable[O, any]) Runnable[I, any] {
 	return NewRunnablePipe[I, O, any](p, next)
 }
 
-// WithCallbacks 添加回调
+// WithCallbacks adds callbacks.
 func (p *RunnablePipe[I, M, O]) WithCallbacks(callbacks ...Callback) Runnable[I, O] {
 	newPipe := *p
 	newPipe.config.Callbacks = append(slices.Clone(p.config.Callbacks), callbacks...)
 	return &newPipe
 }
 
-// WithConfig 配置管道
+// WithConfig configures the pipeline.
 func (p *RunnablePipe[I, M, O]) WithConfig(config RunnableConfig) Runnable[I, O] {
 	newPipe := *p
 	newPipe.config = cloneRunnableConfig(config)
 	return &newPipe
 }
 
-// RunnableFunc 函数式 Runnable
+// RunnableFunc is a function-based Runnable.
 //
-// 将普通函数包装成 Runnable
+// It wraps an ordinary function as a Runnable.
 type RunnableFunc[I, O any] struct {
 	*BaseRunnable[I, O]
 	fn func(context.Context, I) (O, error)
 }
 
-// NewRunnableFunc 创建函数式 Runnable
+// NewRunnableFunc creates a function-based Runnable.
 func NewRunnableFunc[I, O any](fn func(context.Context, I) (O, error)) *RunnableFunc[I, O] {
 	return &RunnableFunc[I, O]{
 		BaseRunnable: NewBaseRunnable[I, O](),
@@ -351,7 +352,7 @@ func NewRunnableFunc[I, O any](fn func(context.Context, I) (O, error)) *Runnable
 	}
 }
 
-// Invoke 执行函数
+// Invoke executes the function.
 func (f *RunnableFunc[I, O]) Invoke(ctx context.Context, input I) (O, error) {
 	callbacks := f.GetConfig().Callbacks
 	if _, err := NotifyCallbacks(ctx, "runnable_func", "on_start", callbacks, func(cb Callback) error {
@@ -376,7 +377,8 @@ func (f *RunnableFunc[I, O]) Invoke(ctx context.Context, input I) (O, error) {
 	return output, err
 }
 
-// Stream 流式执行（默认实现：包装成单个块）
+// Stream executes in streaming mode (default implementation: wraps the result
+// in a single chunk).
 func (f *RunnableFunc[I, O]) Stream(ctx context.Context, input I) (<-chan StreamChunk[O], error) {
 	outChan := make(chan StreamChunk[O], 1)
 
@@ -394,39 +396,39 @@ func (f *RunnableFunc[I, O]) Stream(ctx context.Context, input I) (<-chan Stream
 	return outChan, nil
 }
 
-// Batch 批量执行
+// Batch executes as a batch.
 func (f *RunnableFunc[I, O]) Batch(ctx context.Context, inputs []I) ([]O, error) {
 	return f.BaseRunnable.Batch(ctx, inputs, f.Invoke)
 }
 
-// Pipe 连接到另一个 Runnable
+// Pipe connects to another Runnable.
 func (f *RunnableFunc[I, O]) Pipe(next Runnable[O, any]) Runnable[I, any] {
 	return NewRunnablePipe[I, O, any](f, next)
 }
 
-// WithCallbacks 添加回调（重写以返回正确的类型）
+// WithCallbacks adds callbacks (overridden to return the correct type).
 func (f *RunnableFunc[I, O]) WithCallbacks(callbacks ...Callback) Runnable[I, O] {
 	newFunc := *f
 	newFunc.BaseRunnable = f.BaseRunnable.WithCallbacks(callbacks...)
 	return &newFunc
 }
 
-// WithConfig 配置 Runnable（重写以返回正确的类型）
+// WithConfig configures the Runnable (overridden to return the correct type).
 func (f *RunnableFunc[I, O]) WithConfig(config RunnableConfig) Runnable[I, O] {
 	newFunc := *f
 	newFunc.BaseRunnable = f.BaseRunnable.WithConfig(config)
 	return &newFunc
 }
 
-// RunnableSequence 顺序执行多个 Runnable
+// RunnableSequence executes multiple Runnables in sequence.
 //
-// 类似于 Unix 管道: r1 | r2 | r3
+// It is similar to a Unix pipeline: r1 | r2 | r3
 type RunnableSequence struct {
 	runnables []Runnable[any, any]
 	config    RunnableConfig
 }
 
-// NewRunnableSequence 创建顺序执行的 Runnable 序列
+// NewRunnableSequence creates a sequence of Runnables executed in order.
 func NewRunnableSequence(runnables ...Runnable[any, any]) *RunnableSequence {
 	return &RunnableSequence{
 		runnables: slices.Clone(runnables),
@@ -437,7 +439,7 @@ func NewRunnableSequence(runnables ...Runnable[any, any]) *RunnableSequence {
 	}
 }
 
-// Invoke 顺序执行所有 Runnable
+// Invoke executes all Runnables in order.
 func (s *RunnableSequence) Invoke(ctx context.Context, input any) (any, error) {
 	runner := NewStreamRunnable(StreamModeFinal, func(ctx context.Context, input any, emit func(StreamChunk[any]) error) error {
 		output, err := s.invoke(ctx, input)
@@ -470,7 +472,7 @@ func (s *RunnableSequence) invoke(ctx context.Context, input any) (any, error) {
 	return current, nil
 }
 
-// Stream 流式执行序列
+// Stream executes the sequence in streaming mode.
 func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan StreamChunk[any], error) {
 	runner := NewStreamRunnable(StreamModeSteps, func(ctx context.Context, input any, emit func(StreamChunk[any]) error) error {
 		current := input
@@ -496,13 +498,13 @@ func (s *RunnableSequence) Stream(ctx context.Context, input any) (<-chan Stream
 	return runner.WithConfig(s.config).Stream(ctx, input)
 }
 
-// Batch 批量执行序列
+// Batch executes the sequence as a batch.
 func (s *RunnableSequence) Batch(ctx context.Context, inputs []any) ([]any, error) {
 	base := NewBaseRunnable[any, any]().WithConfig(s.config)
 	return base.Batch(ctx, inputs, s.Invoke)
 }
 
-// Pipe 连接到另一个 Runnable
+// Pipe connects to another Runnable.
 func (s *RunnableSequence) Pipe(next Runnable[any, any]) Runnable[any, any] {
 	newRunnables := append(slices.Clone(s.runnables), next)
 	clone := *s
@@ -511,14 +513,14 @@ func (s *RunnableSequence) Pipe(next Runnable[any, any]) Runnable[any, any] {
 	return &clone
 }
 
-// WithCallbacks 添加回调
+// WithCallbacks adds callbacks.
 func (s *RunnableSequence) WithCallbacks(callbacks ...Callback) Runnable[any, any] {
 	newSeq := *s
 	newSeq.config.Callbacks = append(slices.Clone(s.config.Callbacks), callbacks...)
 	return &newSeq
 }
 
-// WithConfig 配置序列
+// WithConfig configures the sequence.
 func (s *RunnableSequence) WithConfig(config RunnableConfig) Runnable[any, any] {
 	newSeq := *s
 	newSeq.config = cloneRunnableConfig(config)

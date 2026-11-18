@@ -1,4 +1,7 @@
-// 管理服务的固定领域信号与其他核心控制信号共同维护；同类错误仍保持独立身份。
+// Fixed domain signals of the management service are maintained together with
+// the other core control signals; errors of the same category still keep
+// distinct identities.
+
 package errors
 
 var (

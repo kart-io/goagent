@@ -1,4 +1,5 @@
-// Package execution 组合宿主提供的会话、日志、预算和观测配置。
+// Package execution combines the session, journal, budget and observation
+// configuration supplied by the host into one execution scope.
 package execution
 
 import (
@@ -18,7 +19,8 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// Config 由宿主提供；Scope 不创建默认存储或额度，也不关闭这些资源。
+// Config is supplied by the host. Scope does not create default stores or
+// quotas, and does not close these resources.
 type Config struct {
 	RunID     string
 	SessionID string
@@ -29,7 +31,8 @@ type Config struct {
 	Tracer    trace.Tracer
 }
 
-// Scope 保存一次逻辑执行的不可变装配配置；每次调用从宿主 context 重新 Bind。
+// Scope holds the immutable wiring of one logical execution. Each call binds
+// it again from the host context.
 type Scope struct {
 	config Config
 	valid  bool
@@ -48,7 +51,8 @@ func typedNil(v any) bool {
 }
 func validID(id string) bool { return id != "" && strings.TrimSpace(id) == id }
 
-// NewScope 在执行前验证身份、预算和可选组件，不访问存储。
+// NewScope validates identities, budget and optional components before
+// execution. It does not access the store.
 func NewScope(config Config) (*Scope, error) {
 	if !validID(config.RunID) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "execution: RunID 必须非空且无首尾空白").WithComponent("execution").WithOperation("new_scope")
@@ -73,7 +77,7 @@ func NewScope(config Config) (*Scope, error) {
 	return &Scope{config: config, valid: true}, nil
 }
 
-// RunID 返回宿主传给图 RunRequest 的根运行身份。
+// RunID returns the root run identity the host passes to a graph RunRequest.
 func (s *Scope) RunID() string {
 	if s == nil {
 		return ""
@@ -81,7 +85,7 @@ func (s *Scope) RunID() string {
 	return s.config.RunID
 }
 
-// SessionID 返回宿主会话身份。
+// SessionID returns the host session identity.
 func (s *Scope) SessionID() string {
 	if s == nil {
 		return ""
@@ -89,8 +93,9 @@ func (s *Scope) SessionID() string {
 	return s.config.SessionID
 }
 
-// Bind 绑定根执行键；图和 Agent 仍负责派生自己的持久键。
-// cancel 仅取消派生 context，不关闭宿主的日志或观测资源。
+// Bind binds the root execution key; graphs and agents still derive their own
+// durable keys. The returned cancel only cancels the derived context and does
+// not close the host's journal or observation resources.
 func (s *Scope) Bind(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	if s == nil || !s.valid {
 		return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "execution: Scope 尚未初始化").WithComponent("execution").WithOperation("bind")
@@ -150,8 +155,9 @@ func (s *Scope) Bind(ctx context.Context) (context.Context, context.CancelFunc, 
 	return ctx, cancel, nil
 }
 
-// ConfigureBuilder 设置稳定的会话和 Agent 身份，不构建或关闭 Agent。
-// 调用方应在此之后保留这两个设置，重建时使用相同的 agentID。
+// ConfigureBuilder sets stable session and agent identities; it neither builds
+// nor closes the agent. Callers should keep both settings afterwards and use
+// the same agentID when rebuilding.
 func ConfigureBuilder[S core.State](b *builder.AgentBuilder[S], s *Scope, agentID string) (*builder.AgentBuilder[S], error) {
 	if b == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "execution: builder 不能为空").WithComponent("execution").WithOperation("configure_builder")

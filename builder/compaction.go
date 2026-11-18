@@ -7,9 +7,13 @@ import (
 	"github.com/kart-io/goagent/builder/contextpolicy"
 )
 
-// WithCompaction 把 c 装为带身份（c.Identity()）的 PreStep：对话超过阈值时把较早的消息换成摘要；
-// 并追加一个 RequestError 钩子，请求因超出上下文失败时只保留最近一次交互强制压缩一次后重试。仅作用于原生工具流。
-// 需要模型取回被压缩的原文时，另行注册 contextpolicy.NewRecallTool。
+// WithCompaction installs c as a PreStep with an identity (c.Identity()): when
+// the conversation exceeds the threshold, older messages are replaced with a
+// summary. It also appends a RequestError hook: when a request fails because it
+// exceeds the context, it keeps only the most recent exchange, forces one
+// compaction, and retries. It applies only to the native tool stream. To let
+// the model retrieve compacted originals, register contextpolicy.NewRecallTool
+// separately.
 func (b *AgentBuilder[S]) WithCompaction(c *contextpolicy.Compaction) *AgentBuilder[S] {
 	if c == nil {
 		return b

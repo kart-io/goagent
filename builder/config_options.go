@@ -21,23 +21,23 @@ import (
 // - [Core]: 标准 API，覆盖 95% 使用场景（性能调优）
 // - [Advanced]: 完整 API，覆盖所有场景（细粒度控制）
 
-// OutputFormat 定义 LLM 输出格式类型
+// OutputFormat defines the LLM output format type.
 type OutputFormat string
 
 const (
-	// OutputFormatDefault 不指定格式，由 LLM 自行决定
+	// OutputFormatDefault specifies no format; the LLM decides.
 	OutputFormatDefault OutputFormat = ""
 
-	// OutputFormatPlainText 纯文本格式，不使用 Markdown 语法
+	// OutputFormatPlainText is plain text without Markdown syntax.
 	OutputFormatPlainText OutputFormat = "plain_text"
 
-	// OutputFormatMarkdown Markdown 格式
+	// OutputFormatMarkdown is Markdown format.
 	OutputFormatMarkdown OutputFormat = "markdown"
 
-	// OutputFormatJSON JSON 格式
+	// OutputFormatJSON is JSON format.
 	OutputFormatJSON OutputFormat = "json"
 
-	// OutputFormatCustom 自定义格式（需配合 CustomOutputPrompt 使用）
+	// OutputFormatCustom is a custom format (used with CustomOutputPrompt).
 	OutputFormatCustom OutputFormat = "custom"
 )
 
@@ -48,43 +48,53 @@ var outputFormatPrompts = map[OutputFormat]string{
 	OutputFormatJSON:      "请使用 JSON 格式回复。",
 }
 
-// AgentConfig 保存 Agent 配置选项
+// AgentConfig holds agent configuration options.
 type AgentConfig struct {
 	OutputValidators []OutputValidator      `json:"-"`
 	Reasoning        *usage.ReasoningConfig `json:"reasoning,omitzero"`
 	UsageHook        budget.UsageHook       `json:"-"`
 	AgentID          string                 `json:",omitempty"`
-	// TokenEstimator 是宿主的保守 Token 估计函数，不写入持久配置。
+	// TokenEstimator is the host's conservative token estimator; it is not
+	// written to the durable configuration.
 	TokenEstimator TokenEstimator `json:"-"`
 
 	// DurableScope identifies one logical Agent invocation within a durable node.
 	// It must be unique among siblings and stable across restarts.
 	DurableScope string
 
-	// Offloads 是 WithOffload 装入的结果卸载；仅作用于原生工具流。
+	// Offloads are the result offloads installed by WithOffload; they apply
+	// only to the native tool stream.
 	Offloads []*contextpolicy.Offload `json:"-"`
 
-	// LongTermMemory 是 WithLongTermMemory 接入的长期记忆。
+	// LongTermMemory is the long-term memory attached by WithLongTermMemory.
 	LongTermMemory *memory.Memory `json:"-"`
 
-	// ModelCache 是 WithModelCache 配置的模型调用缓存。
+	// ModelCache is the model call cache configured by WithModelCache.
 	ModelCache *ModelCache `json:"-"`
 
-	// ReturnDirectTools 允许单个工具调用直接提供最终答案；仅作用于原生工具流。
+	// ReturnDirectTools lets a single tool call provide the final answer
+	// directly; it applies only to the native tool stream.
 	ReturnDirectTools []string
 
-	// EmptyAnswerRetries 是模型正常结束却返回空回答时允许重问的次数，仅作用于原生工具流；0 表示不重问。
+	// EmptyAnswerRetries is the number of times to re-ask when the model
+	// finishes normally but returns an empty answer; it applies only to the
+	// native tool stream. 0 means no re-asking.
 	EmptyAnswerRetries int
 
-	// ParallelToolCalls 是同一轮可并发执行的工具调用数上限；小于 2（默认 0）时按顺序执行。
+	// ParallelToolCalls is the maximum number of tool calls in one round that
+	// may run concurrently; below 2 (default 0) they run sequentially.
 	ParallelToolCalls int
 
-	// ToolErrorFeedback 把可恢复的工具失败作为工具结果交给模型，仅作用于原生工具流；见 WithToolErrorFeedback。
+	// ToolErrorFeedback hands recoverable tool failures to the model as tool
+	// results; it applies only to the native tool stream. See
+	// WithToolErrorFeedback.
 	ToolErrorFeedback bool
-	// ReplayablePartialOutput 声明调用方能丢弃失败请求已输出的增量；见 WithReplayablePartialOutput。
+	// ReplayablePartialOutput declares that the caller can discard deltas
+	// already emitted by a failed request; see WithReplayablePartialOutput.
 	ReplayablePartialOutput bool
 
-	// 循环扩展点与提示词组装，见 loop_hooks.go；仅作用于原生工具流。
+	// Loop extension points and prompt assembly; see loop_hooks.go. They apply
+	// only to the native tool stream.
 	PreStep              []preStep          `json:"-"`
 	RequestHooks         []RequestHook      `json:"-"`
 	RequestErrorHooks    []RequestErrorHook `json:"-"`
@@ -93,39 +103,44 @@ type AgentConfig struct {
 	PromptSections       []PromptSection    `json:"-"`
 	PromptContexts       []PromptContext    `json:"-"`
 	SessionLog           session.Store      `json:"-"`
-	// SessionState 见 WithSessionState。
+	// SessionState: see WithSessionState.
 	SessionState bool
 
-	// ResendInterruptedModel 见 WithInterruptedModelResend。
+	// ResendInterruptedModel: see WithInterruptedModelResend.
 	ResendInterruptedModel bool
 
-	// MaxIterations 限制推理步骤的最大次数
+	// MaxIterations limits the maximum number of reasoning steps.
 	MaxIterations int
 
-	// Timeout 设置 Agent 执行超时时间
+	// Timeout sets the agent execution timeout.
 	Timeout time.Duration
 
-	// MaxTokens 限制 LLM 响应的最大 token 数；0 表示不下发，由 LLM 客户端配置决定
+	// MaxTokens limits the maximum number of tokens in the LLM response; 0
+	// means it is not sent and the LLM client configuration decides.
 	MaxTokens int
 
-	// Temperature 控制 LLM 采样的随机性，仅在 TemperatureSet 为真时下发
+	// Temperature controls the randomness of LLM sampling; it is sent only when
+	// TemperatureSet is true.
 	Temperature float64
 
-	// TemperatureSet 表示 Temperature 被显式设置；为假时由 LLM 客户端配置决定
+	// TemperatureSet reports whether Temperature was set explicitly; when
+	// false, the LLM client configuration decides.
 	TemperatureSet bool
 
-	// SessionID 是会话日志的缺省会话 ID；请求上下文经 tools.WithSessionID 给出时以请求为准
+	// SessionID is the default session ID for the session log; a session ID
+	// supplied in the request context via tools.WithSessionID takes precedence.
 	SessionID string
 
-	// Verbose 启用详细日志
+	// Verbose enables verbose logging.
 	Verbose bool
 
-	// OutputFormat 指定 LLM 输出格式
-	// 支持：OutputFormatDefault（默认）、OutputFormatPlainText、OutputFormatMarkdown、OutputFormatJSON、OutputFormatCustom
+	// OutputFormat specifies the LLM output format. Supported values:
+	// OutputFormatDefault (default), OutputFormatPlainText,
+	// OutputFormatMarkdown, OutputFormatJSON, and OutputFormatCustom.
 	OutputFormat OutputFormat
 
-	// CustomOutputPrompt 自定义输出格式提示词
-	// 仅当 OutputFormat 为 OutputFormatCustom 时生效
+	// CustomOutputPrompt is the custom output format prompt. It takes effect
+	// only when OutputFormat is OutputFormatCustom.
 	CustomOutputPrompt string
 }
 
@@ -137,72 +152,105 @@ func (b *AgentBuilder[S]) WithDurableScope(scope string) *AgentBuilder[S] {
 	return b
 }
 
-// WithInterruptedModelResend 让持久运行恢复时重发被进程停止、崩溃或截止时间打断的模型请求，同一回合最多发出 3 次。
-// 默认不重发，因为被打断的请求可能已经计费：开启后可能重复计费，每次重发各占一份预算，额度不足时不发送。
-// 已提交的回合、模型明确失败的请求和工具调用都不受影响。开关须在运行的整个生命周期内保持一致，否则恢复时报策略变更。
+// WithInterruptedModelResend makes a resumed durable run resend model requests
+// that were interrupted by a process stop, crash, or deadline, sending at most
+// 3 times per turn. Resending is off by default because an interrupted request
+// may already have been billed: enabling it may cause duplicate charges, each
+// resend takes its own budget share, and nothing is sent when the quota is
+// insufficient. Committed turns, requests the model explicitly failed, and tool
+// calls are unaffected. The switch must stay the same for the entire lifetime
+// of a run; otherwise resuming reports a policy change.
 func (b *AgentBuilder[S]) WithInterruptedModelResend() *AgentBuilder[S] {
 	b.config.ResendInterruptedModel = true
 	return b
 }
 
-// WithReturnDirectTools 指定结果已可直接展示的终态工具，省去模型总结请求。
-// 在 ExecuteStream/AsRunnable 中生效，要求 ToolStreamClient。每次调用替换名单。
-// 本轮多个工具调用时仍走完整模型循环；字符串原样输出，其他结果编码为 JSON。
-// 启用者负责工具结果的格式、完整性与适用场景，模型输出格式指令不会再被执行。
+// WithReturnDirectTools names terminal tools whose results can be shown
+// directly, skipping the model's summarization request. It takes effect in
+// ExecuteStream/AsRunnable and requires a ToolStreamClient. Each call replaces
+// the list. When a round has multiple tool calls, the full model loop still
+// runs; string results are output as-is and other results are encoded as JSON.
+// Whoever enables it is responsible for the format, completeness, and
+// suitability of the tool results; model output format instructions are no
+// longer applied.
 func (b *AgentBuilder[S]) WithReturnDirectTools(names ...string) *AgentBuilder[S] {
 	b.config.ReturnDirectTools = append([]string(nil), names...)
 	return b
 }
 
-// WithEmptyAnswerRetries 设置空回答重问次数（默认 0，不重问）。
+// WithEmptyAnswerRetries sets how many times to re-ask after an empty answer
+// (default 0, no re-asking).
 //
-// [Advanced] 模型以 stop 结束、没有正文也没有工具调用时，不追加空 assistant 消息，
-// 改为追加一条固定的 user 消息要求直接回答或调用工具，再请求下一轮。每次重问占用一次
-// MaxIterations 额度并消耗一次预算；超过 n 次或已是最后一轮时按原方式报错。
-// 持久模式下空回合按已完成记录，恢复时回放。负数视为 0。
+// [Advanced] When the model stops with neither content nor tool calls, no empty
+// assistant message is appended; instead a fixed user message asking it to
+// answer directly or call a tool is appended and the next round is requested.
+// Each re-ask uses one MaxIterations slot and consumes one budget share; after
+// n re-asks, or on the last round, it errors as before. In durable mode an
+// empty turn is recorded as completed and replayed on resume. Negative values
+// are treated as 0.
 func (b *AgentBuilder[S]) WithEmptyAnswerRetries(n int) *AgentBuilder[S] {
 	b.config.EmptyAnswerRetries = max(n, 0)
 	return b
 }
 
-// WithParallelToolCalls 设置同一轮工具调用的并发上限（默认 0，按顺序执行）。
+// WithParallelToolCalls sets the concurrency limit for tool calls within one
+// round (default 0, sequential).
 //
-// [Advanced] 仅作用于原生工具流。n>=2 时，一轮有多个调用、且每个调用的工具都实现
-// interfaces.ConcurrentCallTool（如 Dispatcher.Tools）时最多 n 个并发执行，实际峰值还受工具自身
-// 限流（Dispatcher.MaxConcurrency）约束；不另设上限时传 math.MaxInt。n<2 按顺序执行，负数视为 0；
-// 任一工具未声明并发能力时整轮按顺序执行。
+// [Advanced] It applies only to the native tool stream. With n>=2, when a round
+// has multiple calls and every called tool implements
+// interfaces.ConcurrentCallTool (such as Dispatcher.Tools), up to n calls run
+// concurrently; the actual peak is also bounded by the tool's own throttling
+// (Dispatcher.MaxConcurrency). Pass math.MaxInt for no extra limit. n<2 runs
+// sequentially and negative values are treated as 0; if any tool does not
+// declare concurrency support, the whole round runs sequentially.
 //
-// 并发时执行先后不保证与模型给出的顺序一致，即使 Dispatcher.MaxConcurrency=1 也一样；工具内部不要
-// 按执行顺序分配编号或依赖同轮调用的先后。结果仍按模型给出的顺序交还模型，tool_start 在派发前、
-// tool_end 在全部结束后按该顺序发出，Dispatcher 的 OnResult 也在全部结束后按该顺序触发。
-// 某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误。
+// With concurrency, execution order is not guaranteed to match the order the
+// model gave, even with Dispatcher.MaxConcurrency=1; tools must not assign
+// numbers by execution order or depend on the ordering of calls within the same
+// round. Results are still returned to the model in the model's order:
+// tool_start is emitted before dispatch and tool_end after all calls finish,
+// both in that order, and the Dispatcher's OnResult also fires in that order
+// after all calls finish. A failed call does not cancel the others; after all
+// finish, the earliest error in order is returned.
 func (b *AgentBuilder[S]) WithParallelToolCalls(n int) *AgentBuilder[S] {
 	b.config.ParallelToolCalls = max(n, 0)
 	return b
 }
 
-// WithToolErrorFeedback 让模型看到可恢复的工具失败并自行纠正，而不是中止运行（默认关闭）。
+// WithToolErrorFeedback lets the model see recoverable tool failures and
+// correct itself instead of aborting the run (off by default).
 //
-// [Advanced] 仅作用于原生工具流。开启后以下情况按业务拒绝（tools.Rejected）交给模型，占用正常的迭代额度：
-//   - 调用了本轮未提供的工具、参数不是 JSON 对象：由模型输出决定，持久运行中同样生效；
-//   - 工具返回 error：仅限非持久运行。持久运行无法记录失败结果，恢复时会重新执行，仍按原方式中止。
+// [Advanced] It applies only to the native tool stream. When enabled, the
+// following are handed to the model as business rejections (tools.Rejected) and
+// use the normal iteration quota:
+//   - Calls to tools not offered this round, or arguments that are not a JSON
+//     object: these depend on model output and also apply in durable runs.
+//   - Tools returning an error: non-durable runs only. Durable runs cannot
+//     record a failed result and would re-execute on resume, so they still
+//     abort as before.
 //
-// 运行 ctx 已结束、预算耗尽、panic 与持久等待始终中止运行。
+// A finished run ctx, budget exhaustion, panics, and durable waits always abort
+// the run.
 func (b *AgentBuilder[S]) WithToolErrorFeedback() *AgentBuilder[S] {
 	b.config.ToolErrorFeedback = true
 	return b
 }
 
-// WithReplayablePartialOutput 声明调用方只使用最终结果，或能丢弃失败请求已输出的增量（默认关闭）。
-// 开启后模型请求中途失败时，RequestError 钩子看到的 Emitted 恒为 false，RetryTransient 会照常重发。
-// 适合 AsRunnable().Invoke 等只取最终答复的调用：服务端过载时流常先输出几个字节再停住，默认规则下这次失败不会重试。
-// 通过 ExecuteStream 或 Stream 逐段展示输出的调用方开启后，重试会让已展示的片段再出现一次。
+// WithReplayablePartialOutput declares that the caller uses only the final
+// result, or can discard deltas already emitted by a failed request (off by
+// default). When enabled and a model request fails midway, the RequestError
+// hook always sees Emitted as false, and RetryTransient resends as usual. It
+// suits callers that only take the final reply, such as AsRunnable().Invoke:
+// when the server is overloaded, the stream often emits a few bytes and then
+// stalls, and under the default rule such a failure is not retried. For callers
+// that display output incrementally through ExecuteStream or Stream, enabling
+// it makes retries show already-displayed fragments a second time.
 func (b *AgentBuilder[S]) WithReplayablePartialOutput() *AgentBuilder[S] {
 	b.config.ReplayablePartialOutput = true
 	return b
 }
 
-// DefaultAgentConfig 返回默认配置
+// DefaultAgentConfig returns the default configuration.
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
 		MaxIterations: shared.DefaultAgentMaxIterations,
@@ -212,10 +260,11 @@ func DefaultAgentConfig() *AgentConfig {
 	}
 }
 
-// WithMaxIterations 设置最大迭代次数
+// WithMaxIterations sets the maximum number of iterations.
 //
-// [Simple] 常用配置，控制 Agent 推理的最大步骤数（默认 10）。
-// 推荐根据任务复杂度调整：简单任务 5-10，复杂任务 15-30。
+// [Simple] Common option that controls the maximum number of agent reasoning
+// steps (default 10). Adjust it to task complexity: 5-10 for simple tasks,
+// 15-30 for complex ones.
 func (b *AgentBuilder[S]) WithMaxIterations(max int) *AgentBuilder[S] {
 	if max > 0 {
 		b.config.MaxIterations = max
@@ -223,9 +272,10 @@ func (b *AgentBuilder[S]) WithMaxIterations(max int) *AgentBuilder[S] {
 	return b
 }
 
-// WithTimeout 设置超时时间
+// WithTimeout sets the timeout.
 //
-// [Core] 标准配置，防止 Agent 执行时间过长（默认 5 分钟）。
+// [Core] Standard option that prevents agent execution from running too long
+// (default 5 minutes).
 func (b *AgentBuilder[S]) WithTimeout(timeout time.Duration) *AgentBuilder[S] {
 	if timeout > 0 {
 		b.config.Timeout = timeout
@@ -233,10 +283,11 @@ func (b *AgentBuilder[S]) WithTimeout(timeout time.Duration) *AgentBuilder[S] {
 	return b
 }
 
-// WithMaxTokens 设置最大 token 数
+// WithMaxTokens sets the maximum number of tokens.
 //
-// [Core] 标准配置，限制 LLM 响应的最大 token 数（默认不设置，沿用 LLM 客户端配置）。
-// 用于控制成本和响应长度。
+// [Core] Standard option that limits the maximum number of tokens in the LLM
+// response (unset by default, deferring to the LLM client configuration). Use
+// it to control cost and response length.
 func (b *AgentBuilder[S]) WithMaxTokens(max int) *AgentBuilder[S] {
 	if max > 0 {
 		b.config.MaxTokens = max
@@ -244,12 +295,13 @@ func (b *AgentBuilder[S]) WithMaxTokens(max int) *AgentBuilder[S] {
 	return b
 }
 
-// WithTemperature 设置温度参数（控制随机性）
+// WithTemperature sets the temperature (controls randomness).
 //
-// [Simple] 常用配置，控制 LLM 输出的创造性（默认不设置，沿用 LLM 客户端配置）。
-// - 0.0-0.3: 精确、确定性（适合事实查询、代码生成）
-// - 0.4-0.7: 平衡（适合通用对话）
-// - 0.8-1.0: 创造性（适合写作、头脑风暴）
+// [Simple] Common option that controls the creativity of LLM output (unset by
+// default, deferring to the LLM client configuration).
+// - 0.0-0.3: precise, deterministic (fact lookup, code generation)
+// - 0.4-0.7: balanced (general conversation)
+// - 0.8-1.0: creative (writing, brainstorming)
 func (b *AgentBuilder[S]) WithTemperature(temp float64) *AgentBuilder[S] {
 	if temp >= 0 && temp <= 2.0 {
 		b.config.Temperature, b.config.TemperatureSet = temp, true
@@ -257,9 +309,10 @@ func (b *AgentBuilder[S]) WithTemperature(temp float64) *AgentBuilder[S] {
 	return b
 }
 
-// WithSessionID 设置会话 ID
+// WithSessionID sets the session ID.
 //
-// [Advanced] 高级配置，用于检查点保存和会话恢复（自动生成）。
+// [Advanced] Used for checkpointing and session recovery (auto-generated by
+// default).
 func (b *AgentBuilder[S]) WithSessionID(sessionID string) *AgentBuilder[S] {
 	if sessionID != "" {
 		b.config.SessionID = sessionID
@@ -267,27 +320,28 @@ func (b *AgentBuilder[S]) WithSessionID(sessionID string) *AgentBuilder[S] {
 	return b
 }
 
-// WithVerbose 设置是否启用详细日志
+// WithVerbose sets whether verbose logging is enabled.
 //
-// [Core] 标准配置，用于调试和开发（默认 false）。
+// [Core] Standard option for debugging and development (default false).
 func (b *AgentBuilder[S]) WithVerbose(verbose bool) *AgentBuilder[S] {
 	b.config.Verbose = verbose
 	return b
 }
 
-// WithOutputFormat 设置 LLM 输出格式
+// WithOutputFormat sets the LLM output format.
 //
-// [Simple] 常用配置，控制 LLM 响应的输出格式。
-// 支持以下格式：
-//   - OutputFormatDefault: 不指定格式，由 LLM 自行决定
-//   - OutputFormatPlainText: 纯文本格式，不使用 Markdown 语法（适合终端显示）
-//   - OutputFormatMarkdown: Markdown 格式（适合富文本显示）
-//   - OutputFormatJSON: JSON 格式（适合程序解析）
+// [Simple] Common option that controls the output format of LLM responses.
+// Supported formats:
+//   - OutputFormatDefault: no format specified; the LLM decides
+//   - OutputFormatPlainText: plain text without Markdown syntax (suits terminal
+//     display)
+//   - OutputFormatMarkdown: Markdown (suits rich text display)
+//   - OutputFormatJSON: JSON (suits programmatic parsing)
 //
-// 使用示例：
+// Example:
 //
 //	agent, err := builder.NewSimpleBuilder(llmClient).
-//	    WithSystemPrompt("你是一个助手").
+//	    WithSystemPrompt("You are an assistant").
 //	    WithOutputFormat(builder.OutputFormatPlainText).
 //	    Build()
 func (b *AgentBuilder[S]) WithOutputFormat(format OutputFormat) *AgentBuilder[S] {
@@ -295,16 +349,16 @@ func (b *AgentBuilder[S]) WithOutputFormat(format OutputFormat) *AgentBuilder[S]
 	return b
 }
 
-// WithCustomOutputFormat 设置自定义输出格式提示词
+// WithCustomOutputFormat sets a custom output format prompt.
 //
-// [Simple] 常用配置，允许用户指定任意格式提示词。
-// 此方法会自动将 OutputFormat 设置为 OutputFormatCustom。
+// [Simple] Common option that lets the user specify an arbitrary format prompt.
+// It automatically sets OutputFormat to OutputFormatCustom.
 //
-// 使用示例：
+// Example:
 //
 //	agent, err := builder.NewSimpleBuilder(llmClient).
-//	    WithSystemPrompt("你是一个助手").
-//	    WithCustomOutputFormat("请用表格格式回复，每行一个条目").
+//	    WithSystemPrompt("You are an assistant").
+//	    WithCustomOutputFormat("Reply in a table, one item per row").
 //	    Build()
 func (b *AgentBuilder[S]) WithCustomOutputFormat(prompt string) *AgentBuilder[S] {
 	if prompt != "" {
@@ -314,8 +368,8 @@ func (b *AgentBuilder[S]) WithCustomOutputFormat(prompt string) *AgentBuilder[S]
 	return b
 }
 
-// GetOutputFormatPrompt 获取输出格式对应的提示词
-// 如果格式为 Default 或未定义，返回空字符串
+// GetOutputFormatPrompt returns the prompt for the given output format. It
+// returns an empty string for Default or undefined formats.
 func GetOutputFormatPrompt(format OutputFormat) string {
 	if prompt, ok := outputFormatPrompts[format]; ok {
 		return prompt

@@ -9,7 +9,8 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// StreamMode 描述实际输出能力，不能从方法名 Stream 推断首字延迟。
+// StreamMode describes the actual output capability; time to first token cannot
+// be inferred from the method name Stream.
 type StreamMode string
 
 const (
@@ -18,8 +19,9 @@ const (
 	StreamModeTokens StreamMode = "tokens"
 )
 
-// StreamEvent 保存跨 Runnable 的业务事件，Data 仍使用原有泛型输出类型。
-// Usage 是累计快照，不应在消费端将多个快照再次相加。
+// StreamEvent holds business events across Runnables; Data still uses the
+// existing generic output type. Usage is a cumulative snapshot; consumers
+// should not add multiple snapshots together.
 type StreamEvent struct {
 	Type    string                       `json:"type"`
 	Delta   string                       `json:"delta,omitempty"`
@@ -29,15 +31,19 @@ type StreamEvent struct {
 	Usage   *interfaces.TokenUsage       `json:"usage,omitzero"`
 }
 
-// StreamCapability 让调用方显式区分最终块、步骤流和原生文本增量。
+// StreamCapability lets callers explicitly distinguish final chunks, step
+// streams, and native text deltas.
 type StreamCapability interface{ StreamMode() StreamMode }
 
-// StreamSource 必须串行调用 emit，并在返回前停止发送。
-// 成功时恰好提交一个 Done 块；错误通过返回值传播。emit 的错误必须返回。
+// StreamSource must call emit serially and stop emitting before it returns. On
+// success it commits exactly one Done chunk; errors propagate through the
+// return value. Errors from emit must be returned.
 type StreamSource[I, O any] func(context.Context, I, func(StreamChunk[O]) error) error
 
-// StreamRunnable 从同一个执行源提供 Invoke、Stream、Batch 与 Pipe。
-// 最终块在执行源和完成回调均成功后发出，避免错误后仍出现成功终止块。
+// StreamRunnable provides Invoke, Stream, Batch, and Pipe from a single
+// execution source. The final chunk is emitted only after both the source and
+// the completion callbacks succeed, so no successful terminal chunk appears
+// after an error.
 type StreamRunnable[I, O any] struct {
 	*BaseRunnable[I, O]
 	source          StreamSource[I, O]
@@ -145,10 +151,14 @@ func (r *StreamRunnable[I, O]) run(ctx context.Context, input I, send func(Strea
 	return result, err
 }
 
-// NotifyCallbacks 依次调用宿主回调，遇到错误即停止，供所有调用 Callback 的组件共用。
-// 回调自身 panic 时 panicked 为 true，err 可用 errors.As 识别出 *agentErrors.PanicError（经全局 PanicHandler 转换）；
-// 调用方应返回该错误，不再调用剩余回调，也不把它交给 OnError，避免回调处理自身 panic 形成递归
-// （与 builder 的 handleError/notifyEnd 一致）。忽略回调错误的通知（如 OnError）让 call 返回 nil。
+// NotifyCallbacks invokes host callbacks in order and stops at the first error;
+// all components that call Callback share it. If a callback itself panics,
+// panicked is true and errors.As can detect *agentErrors.PanicError in err
+// (converted by the global PanicHandler). The caller should return that error,
+// not call the remaining callbacks, and not pass it to OnError, to avoid
+// recursion from callbacks handling their own panic (consistent with the
+// builder's handleError/notifyEnd). For notifications that ignore callback
+// errors (such as OnError), have call return nil.
 func NotifyCallbacks(ctx context.Context, component, operation string, callbacks []Callback, call func(Callback) error) (panicked bool, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -251,8 +261,11 @@ func forwardRunnableStream[T any](ctx context.Context, stream <-chan StreamChunk
 	}
 }
 
-// WithFinalValidator 追加成功终态发布前的验收；WithConfig 和 WithCallbacks 保留这些验收器。
-// 验收在完成回调之后执行，须只读且可重复调用；不会回滚已执行的回调或外部效果。
+// WithFinalValidator appends validators that run before a successful terminal
+// result is published; WithConfig and WithCallbacks keep these validators.
+// Validation runs after the completion callbacks and must be read-only and safe
+// to call repeatedly; it does not roll back callbacks or external effects that
+// have already run.
 func (r *StreamRunnable[I, O]) WithFinalValidator(validators ...func(context.Context, O) error) *StreamRunnable[I, O] {
 	copy := *r
 	copy.finalValidators = append(append([]func(context.Context, O) error(nil), r.finalValidators...), validators...)

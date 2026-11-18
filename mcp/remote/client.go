@@ -22,8 +22,10 @@ func Connect(ctx context.Context, transport mcp.Transport) (*mcp.ClientSession, 
 	return ConnectWithOptions(ctx, transport, nil)
 }
 
-// ConnectWithOptions 允许宿主配置旧协议的 ElicitationHandler 或采样等 SDK 处理器。
-// 默认将新协议输入交给可保存的续接检查点；显式 MultiRoundTrip 选项保持不变。
+// ConnectWithOptions lets the host configure an ElicitationHandler for the old
+// protocol or SDK handlers such as sampling. By default, new-protocol input is
+// handed to a savable continuation checkpoint; an explicit MultiRoundTrip
+// option is left unchanged.
 func ConnectWithOptions(ctx context.Context, transport mcp.Transport, options *mcp.ClientOptions) (*mcp.ClientSession, error) {
 	var opts mcp.ClientOptions
 	if options != nil {
@@ -40,7 +42,7 @@ func ConnectWithOptions(ctx context.Context, transport mcp.Transport, options *m
 	return client.Connect(ctx, transport, nil)
 }
 
-// Option 配置 Tools 适配出的工具。
+// Option configures the tools adapted by Tools.
 type Option func(*options)
 
 type options struct {
@@ -52,34 +54,44 @@ type options struct {
 	durableInput   *string
 }
 
-// WithDurableInput 让远端工具在持久运行中以 durable 等待处理输入请求：每次远端调用记入日志，
-// 远端要求输入时以 durable.AwaitInput 暂停，Continuation 的 Info 是 InputRequiredError 的 JSON；
-// 宿主以 mcp.InputResponseMap 的 JSON 恢复后发送续接，已完成的远端调用回放而不重发。
-// version 是持久 intent 版本（tools.InterruptibleTool），不能与 WithDurablePolicy 同用。
-// 不在持久运行中时沿用 WithInputHandler 或返回 InputRequiredError。
+// WithDurableInput makes remote tools handle input requests in durable runs by
+// durable waiting: each remote call is journaled, and when the remote side
+// requests input the tool pauses with durable.AwaitInput, whose Continuation
+// Info is the JSON of an InputRequiredError. After the host resumes with the
+// JSON of an mcp.InputResponseMap, the continuation is sent, and completed
+// remote calls are replayed rather than resent. version is the durable intent
+// version (tools.InterruptibleTool) and cannot be combined with
+// WithDurablePolicy. Outside durable runs, WithInputHandler is used, or an
+// InputRequiredError is returned.
 func WithDurableInput(version string) Option {
 	return func(o *options) { o.durableInput = &version }
 }
 
-// WithInputHandler 由宿主收集人工输入；不自动批准、不猜测采样或根目录请求。
-// 最大轮数限制连续输入与空输入请求重试；每轮仍遵守调用方 context。
+// WithInputHandler lets the host collect human input; it does not auto-approve
+// or guess sampling or roots requests. The maximum number of rounds bounds
+// consecutive input and empty-input request retries; each round still honors
+// the caller's context.
 func WithInputHandler(handler InputHandler, maxRounds int) Option {
 	return func(o *options) { o.inputHandler = handler; o.maxInputRounds = maxRounds }
 }
 
-// WithToolName 决定每个远端工具暴露给模型的名称；返回 false 时不提供该工具。
+// WithToolName decides the name each remote tool exposes to the model;
+// returning false omits that tool.
 func WithToolName(name func(remote string) (string, bool)) Option {
 	return func(o *options) { o.name = name }
 }
 
-// WithToolErrorsAsRejected 把远端工具返回的错误结果（IsError）作为 tools.Rejected 交给模型，而不是中止运行。
-// 连接与协议错误仍以 Go error 返回。
+// WithToolErrorsAsRejected passes error results returned by remote tools
+// (IsError) to the model as tools.Rejected instead of aborting the run.
+// Connection and protocol errors are still returned as Go errors.
 func WithToolErrorsAsRejected() Option {
 	return func(o *options) { o.rejectToolErrs = true }
 }
 
-// WithDurablePolicy 声明工具在持久运行中的日志策略（tools.DurablePolicyProvider），
-// 如 MaxAttempts 为 1 时，中断或失败的调用不会在恢复时重跑，副作用无法确认的远端调用不被盲目重试。
+// WithDurablePolicy declares the tool's journal policy in durable runs
+// (tools.DurablePolicyProvider). For example, with MaxAttempts set to 1,
+// interrupted or failed calls are not rerun on resume, so remote calls whose
+// side effects cannot be confirmed are not blindly retried.
 func WithDurablePolicy(p durable.OperationPolicy) Option {
 	return func(o *options) { o.policy = &p }
 }
@@ -145,7 +157,8 @@ type remoteTool struct {
 // maxInputRounds 限制单次调用的连续输入轮数。
 const maxInputRounds = 64
 
-// InterruptibleVersion 实现 tools.InterruptibleTool，仅在 WithDurableInput 时开启。
+// InterruptibleVersion implements tools.InterruptibleTool and is only enabled
+// with WithDurableInput.
 func (t *remoteTool) InterruptibleVersion() (string, bool) {
 	return t.durableInput, t.durableInput != ""
 }

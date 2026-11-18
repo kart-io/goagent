@@ -17,29 +17,29 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// InputSerializer 定义输入序列化接口
+// InputSerializer defines how input is serialized.
 type InputSerializer interface {
 	Serialize(input interface{}) (string, error)
 }
 
-// DefaultInputSerializer 默认输入序列化器（使用 fmt.Sprintf）
+// DefaultInputSerializer is the default input serializer (uses fmt.Sprintf).
 type DefaultInputSerializer struct{}
 
 func (s *DefaultInputSerializer) Serialize(input interface{}) (string, error) {
 	return fmt.Sprintf("%v", input), nil
 }
 
-// AgentBuilder 提供用于构建 Agent 的 fluent API
+// AgentBuilder provides a fluent API for building agents.
 //
-// 受 LangChain 的 create_agent 函数启发,它集成了:
-//   - LLM 客户端配置
-//   - 工具注册
-//   - 状态管理
-//   - 运行时上下文
-//   - 中间件栈
-//   - 系统提示词
-//   - 对话记忆管理
-//   - 输入序列化
+// Inspired by LangChain's create_agent function, it integrates:
+//   - LLM client configuration
+//   - Tool registration
+//   - State management
+//   - Runtime context
+//   - Middleware stack
+//   - System prompt
+//   - Conversation memory management
+//   - Input serialization
 type AgentBuilder[S core.State] struct {
 	// 核心组件
 	llmClient     llm.Client
@@ -73,7 +73,7 @@ type AgentBuilder[S core.State] struct {
 	metadata map[string]interface{}
 }
 
-// NewAgentBuilder 创建一个新的 Agent 构建器
+// NewAgentBuilder creates a new agent builder.
 func NewAgentBuilder[S core.State](llmClient llm.Client) *AgentBuilder[S] {
 	return &AgentBuilder[S]{
 		llmClient:       llmClient,
@@ -86,13 +86,14 @@ func NewAgentBuilder[S core.State](llmClient llm.Client) *AgentBuilder[S] {
 	}
 }
 
-// Build 构建最终的 Agent
+// Build builds the final agent.
 func (b *AgentBuilder[S]) Build() (*ConfigurableAgent[S], error) {
 	return b.BuildContext(context.Background())
 }
 
-// BuildContext 使用宿主上下文构建并初始化 Agent。
-// 取消会阻止后续初始化步骤；忽略上下文的宿主调用仍需自行返回。
+// BuildContext builds and initializes the agent using the host context.
+// Cancellation prevents subsequent initialization steps; host calls that ignore
+// the context must still return on their own.
 func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[S], error) {
 	if ctx == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "构建 Agent 的 context 不能为空").WithComponent("builder").WithOperation("build_context")
@@ -231,7 +232,7 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 	return agent, nil
 }
 
-// WithInputSerializer 设置输入序列化器
+// WithInputSerializer sets the input serializer.
 func (b *AgentBuilder[S]) WithInputSerializer(serializer InputSerializer) *AgentBuilder[S] {
 	b.inputSerializer = serializer
 	return b
@@ -241,46 +242,47 @@ func (b *AgentBuilder[S]) WithInputSerializer(serializer InputSerializer) *Agent
 // 简化 API（推荐使用）
 // ==============================
 
-// SimpleAgentBuilder 是 AgentBuilder 的简化版本类型别名
+// SimpleAgentBuilder is a simplified type alias for AgentBuilder.
 //
-// 使用最常见的类型参数组合：
-//   - Context: any (通用上下文)
-//   - State: *core.AgentState (标准状态实现)
+// It uses the most common combination of type parameters:
+//   - Context: any (generic context)
+//   - State: *core.AgentState (standard state implementation)
 //
-// 这个类型别名消除了 95% 以上使用场景中的泛型复杂度。
-// 如果需要自定义 Context 或 State，请使用原始的 NewAgentBuilder[S] 函数。
+// This alias removes generic complexity in more than 95% of use cases. To
+// customize Context or State, use the original NewAgentBuilder[S] function.
 //
-// 使用示例：
+// Example:
 //
 //	builder := builder.NewSimpleBuilder(llmClient)
 //	agent, err := builder.
-//	WithSystemPrompt("你是一个助手").
+//	WithSystemPrompt("You are an assistant").
 //	Build()
 type SimpleAgentBuilder = AgentBuilder[*core.AgentState]
 
-// SimpleAgent 是 ConfigurableAgent 的简化版本类型别名
+// SimpleAgent is a simplified type alias for ConfigurableAgent.
 //
-// 使用最常见的类型参数组合，与 SimpleAgentBuilder 匹配。
+// It uses the most common combination of type parameters and matches
+// SimpleAgentBuilder.
 type SimpleAgent = ConfigurableAgent[*core.AgentState]
 
-// NewSimpleBuilder 创建一个简化的 Agent 构建器
+// NewSimpleBuilder creates a simplified agent builder.
 //
-// 这是推荐的构建器创建方式，适用于大多数使用场景。
-// 相比 NewAgentBuilder[*core.AgentState](client)，
-// 此函数无需显式指定泛型参数，使用更简洁。
+// This is the recommended way to create a builder and suits most use cases.
+// Compared with NewAgentBuilder[*core.AgentState](client), it does not require
+// explicit type parameters and is more concise.
 //
-// 参数：
-//   - llmClient: LLM 客户端实例
+// Parameters:
+//   - llmClient: the LLM client instance
 //
-// 返回：
-//   - *SimpleAgentBuilder: 简化的构建器实例
+// Returns:
+//   - *SimpleAgentBuilder: the simplified builder instance
 //
-// 使用示例：
+// Example:
 //
 //	client := providers.NewOpenAIClient(apiKey)
 //	builder := builder.NewSimpleBuilder(client)
 //	agent, err := builder.
-//	WithSystemPrompt("你是一个助手").
+//	WithSystemPrompt("You are an assistant").
 //	WithTools(calculatorTool, searchTool).
 //	Build()
 func NewSimpleBuilder(llmClient llm.Client) *SimpleAgentBuilder {

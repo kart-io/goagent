@@ -33,13 +33,24 @@ type OffloadConfig struct {
 	Store                ResultStore `json:"-"`
 }
 
-// Offload 把超长的工具结果写入 ResultStore，在对话中换成引用，模型经读取工具（实例本身，名为 constants.ToolReadContextResult）分页读回；
-// 最后一次请求前把引用还原为原文。Builder 经 WithOffload 把它装为带身份的 PreStep，读取工具由宿主与其他工具一起注册。
+// Offload writes oversized tool results to the ResultStore and replaces them in
+// the conversation with references, which the model reads back page by page
+// through the read tool (the instance itself, named
+// constants.ToolReadContextResult); references are restored to the originals
+// before the last request. The Builder installs it via WithOffload as a PreStep
+// with an identity, and the host registers the read tool along with the other
+// tools.
 //
-// 一个实例供多次执行并发共享，引用表按结果作用域区分。引用中带有证据的键与摘要，引用表可从对话重建：
-// 持久运行恢复时 PreStep 的结果被回放，Builder 用回放的对话调用 Track，读取不受影响。
-// 证据保留到对该作用域调用 Release：Builder 为非持久执行自动生成的临时作用域在执行结束时释放；
-// 宿主经 WithResultScope 提供作用域（包括持久执行）时，由宿主在运行不再恢复后调用 Release。
+// One instance is shared concurrently by multiple executions, with reference
+// tables separated by result scope. References carry the evidence key and
+// digest, so the reference table can be rebuilt from the conversation: when a
+// durable run resumes, the PreStep result is replayed and the Builder calls
+// Track with the replayed conversation, so reads are unaffected. Evidence is
+// retained until Release is called for that scope: temporary scopes generated
+// automatically by the Builder for non-durable executions are released when
+// execution ends; when the host provides a scope via WithResultScope (including
+// for durable executions), the host calls Release once the run will no longer
+// resume.
 type Offload struct {
 	config     OffloadConfig
 	identity   string
@@ -97,17 +108,21 @@ func NewOffload(cfg OffloadConfig) (*Offload, error) {
 	return p, nil
 }
 
-// Identity 标识配置（ID、版本与各项限制）；作为 PreStep 的身份进入持久日志，配置改变后旧日志不被复用。
+// Identity identifies the configuration (ID, version, and limits); it enters
+// the durable journal as the PreStep identity, so old journals are not reused
+// after the configuration changes.
 func (p *Offload) Identity() string { return p.identity }
 
-// Stats 返回本实例累计换成引用的结果数。
+// Stats returns the cumulative number of results this instance has replaced
+// with references.
 func (p *Offload) Stats() map[string]int64 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return map[string]int64{"offloaded_results": p.offloaded}
 }
 
-// Release 删除当前结果作用域的全部证据与引用表。
+// Release deletes all evidence and the reference table of the current result
+// scope.
 func (p *Offload) Release(ctx context.Context) error {
 	run := ResultScope(ctx)
 	if run == "" {
@@ -146,7 +161,8 @@ func (p *Offload) track(run string, messages []llm.Message) map[string]Ref {
 	return table
 }
 
-// Track 从对话重建当前结果作用域的引用表，供 PreStep 的结果被回放后读取。
+// Track rebuilds the reference table of the current result scope from the
+// conversation, so reads work after the PreStep result is replayed.
 func (p *Offload) Track(ctx context.Context, messages []llm.Message) {
 	if run := ResultScope(ctx); run != "" {
 		p.mu.Lock()
@@ -155,8 +171,12 @@ func (p *Offload) Track(ctx context.Context, messages []llm.Message) {
 	}
 }
 
-// Reduce 返回改写后的对话：超长的工具结果写入存储后换成引用；final 为真时（最后一次请求，模型无法再读取）把引用还原为原文。
-// 结果只取决于对话与配置，同一对话重复调用得到逐字节相同的结果。
+// Reduce returns the rewritten conversation: oversized tool results are written
+// to the store and replaced with references; when final is true (the last
+// request, after which the model can no longer read), references are restored
+// to the originals. The result depends only on the conversation and
+// configuration, so repeated calls with the same conversation yield
+// byte-identical results.
 func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool) ([]llm.Message, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

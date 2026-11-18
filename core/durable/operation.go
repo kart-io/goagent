@@ -17,8 +17,10 @@ type journalContext struct{}
 
 type replayOnlyContext struct{}
 
-// WithReplayOnly 限制派生上下文中的 Do 只能回放已完成记录，不调用 run 或 Reconcile。
-// 宿主回调、授权逻辑及直接访问存储的代码仍须自行保证只读。
+// WithReplayOnly restricts Do in the derived context to replaying completed
+// records, without calling run or Reconcile. Host callbacks, authorization
+// logic, and code that accesses storage directly must still ensure on their own
+// that they are read-only.
 func WithReplayOnly(ctx context.Context) context.Context {
 	return context.WithValue(ctx, replayOnlyContext{}, true)
 }
@@ -29,7 +31,9 @@ func WithJournal(ctx context.Context, store Store) context.Context {
 	return context.WithValue(ctx, journalContext{}, store)
 }
 
-// JournalStore 返回 ctx 绑定的日志 Store，没有时为 nil。嵌套的子流程用它把状态写在父日志的同一 Store 中。
+// JournalStore returns the journal Store bound to ctx, or nil if there is none.
+// Nested subflows use it to write their state into the same Store as the parent
+// journal.
 func JournalStore(ctx context.Context) Store {
 	s, _ := ctx.Value(journalContext{}).(Store)
 	return s
@@ -54,17 +58,28 @@ type OperationPolicy struct {
 	MaxAttempts int `json:"max_attempts"`
 	// RetryFailed permits another attempt on a subsequent explicit invocation.
 	// Do never loops or retries within a single invocation.
-	// 只作用于结果已知的普通失败；中断的记录（崩溃、取消、超时）须由 Reconcile 核对未生效或声明 RetryInterrupted 才重跑。
+	// It applies only to ordinary failures with a known outcome; interrupted
+	// records (crash, cancellation, timeout) are rerun only after Reconcile
+	// confirms the effect did not take place or RetryInterrupted is declared.
 	RetryFailed bool `json:"retry_failed"`
-	// Reconcile 在记录被中断（停在 pending 或因取消、超时而失败，结果未知）时先于重跑调用，按派生执行键查询效果是否已生效：
-	// found 为真时用 value 补记为 completed，不执行 run、不计尝试次数；返回错误时记录不变。
+	// Reconcile is called before a rerun when a record was interrupted (stuck
+	// in pending, or failed due to cancellation or timeout, with an unknown
+	// outcome) and checks by derived execution key whether the effect has taken
+	// place: if found is true the record is completed with value without
+	// calling run or counting an attempt; if it returns an error the record is
+	// unchanged.
 	Reconcile func(ctx context.Context) (value json.RawMessage, found bool, err error) `json:"-"`
-	// Resumable 声明 run 的全部效果都记在派生执行键下，重新进入只会回放已完成的步骤：
-	// waiting 记录总是重新进入且不计尝试次数，pending 记录在 MaxAttempts 内重新进入。
-	// 只有声明它的操作能把 *WaitError 记为等待。
+	// Resumable declares that all effects of run are recorded under derived
+	// execution keys, so re-entering only replays completed steps: waiting
+	// records are always re-entered without counting an attempt, and pending
+	// records are re-entered within MaxAttempts. Only operations that declare
+	// it can record a *WaitError as waiting.
 	Resumable bool `json:"resumable"`
-	// RetryInterrupted 允许在 MaxAttempts 内重跑被中断的操作：记录停在 pending（进程崩溃）或因取消、超时而失败。
-	// 上次执行可能已经生效，调用方须接受重复的效果；普通失败不算中断。
+	// RetryInterrupted allows rerunning an interrupted operation within
+	// MaxAttempts: one whose record is stuck in pending (process crash) or
+	// failed due to cancellation or timeout. The previous execution may already
+	// have taken effect, so the caller must accept duplicate effects; ordinary
+	// failures are not interruptions.
 	RetryInterrupted bool `json:"retry_interrupted"`
 }
 
@@ -77,9 +92,11 @@ type OperationRecord struct {
 	MaxAttempts int             `json:"max_attempts"`
 	Value       json.RawMessage `json:"value"`
 	FailureKind string          `json:"failure_kind,omitempty"`
-	// Continuation 是 waiting 记录保存的等待项（[]*WaitError 的 JSON），只含定位信息。
+	// Continuation is the set of waits saved by a waiting record (JSON of
+	// []*WaitError) and contains only location information.
 	Continuation json.RawMessage `json:"continuation,omitempty"`
-	// Reconciled 表示 completed 结果来自 Reconcile 核对，而非本次执行。
+	// Reconciled reports that the completed result came from Reconcile rather
+	// than from this execution.
 	Reconciled bool `json:"reconciled,omitzero"`
 	Replayed   bool `json:"-"`
 }
@@ -88,8 +105,10 @@ const operationVersion = "goagent-operation-v2"
 
 type waitableContext struct{}
 
-// CanWait 报告在 ctx 中返回 *WaitError 能否被续跑：ctx 所在的最内层持久操作带日志且声明了 Resumable。
-// 会产生等待的子流程（如 DurableGraph.AsChildRunnable）据此在执行任何步骤之前失败。
+// CanWait reports whether returning *WaitError in ctx can be resumed: the
+// innermost durable operation containing ctx has a journal and declares
+// Resumable. Subflows that may wait (such as DurableGraph.AsChildRunnable) use
+// it to fail before running any step.
 func CanWait(ctx context.Context) bool {
 	ok, _ := ctx.Value(waitableContext{}).(bool)
 	return ok
@@ -111,15 +130,19 @@ type WaitStep struct {
 // WaitError is a normal pause awaiting host continuation (e.g. an approval).
 // It is neither a failure nor a result. Do records it as waiting and prefixes
 // its own step, so the path leads from the outermost operation to the wait.
-// 只有声明 Resumable 的操作能承载等待，其余操作把它记为失败并返回 ErrWaitNotResumable。
+// Only operations that declare Resumable can host a wait; other operations
+// record it as a failure and return ErrWaitNotResumable.
 type WaitError struct {
 	Path         []WaitStep      `json:"path,omitempty"`
 	Continuation json.RawMessage `json:"continuation,omitempty"`
-	// Cause 是本次等待的进程内诊断，如 validate 的 panic；不持久化，也不经 Unwrap 暴露，以免等待被当作失败。
+	// Cause is the in-process diagnostic for this wait, such as a panic in
+	// validate; it is not persisted and not exposed through Unwrap, so the wait
+	// is not treated as a failure.
 	Cause error `json:"-"`
 }
 
-// ErrorCode 标识等待分类，不改变等待叶子或诊断原因的展开规则。
+// ErrorCode identifies the wait category without changing how wait leaves or
+// diagnostic causes are unwrapped.
 func (e *WaitError) ErrorCode() agentErrors.ErrorCode {
 	if e == nil {
 		return agentErrors.CodeInternal
@@ -192,7 +215,9 @@ func storedWaits(r *OperationRecord) error {
 	return errors.Join(errs...)
 }
 
-// OperationStorageID 返回操作在当前日志 Store 中的存储身份；不访问存储或改变执行状态。
+// OperationStorageID returns the storage identity of an operation in the
+// current journal Store; it neither accesses storage nor changes execution
+// state.
 func OperationStorageID(key string) string { return "goagent/operation/" + key }
 
 // InspectOperation reads a child record under the same host store/parent key.
@@ -218,8 +243,10 @@ func loadOperation(ctx context.Context, store Store, key, id string) (*Operation
 	return DecodeOperationRecord(snapshot, key, id)
 }
 
-// DecodeOperationRecord 只解码与验证当前版本的操作快照，不访问 Store、不执行业务、不修改输入。
-// key 和 id 是调用方预期的操作身份；迁移工具与在线执行共用同一数据契约。
+// DecodeOperationRecord only decodes and validates an operation snapshot of the
+// current version; it does not access the Store, run business logic, or modify
+// its inputs. key and id are the operation identity the caller expects;
+// migration tools and online execution share the same data contract.
 func DecodeOperationRecord(snapshot *Snapshot, key, id string) (*OperationRecord, error) {
 	var r OperationRecord
 	if key == "" || id == "" || snapshot == nil || snapshot.Version != operationVersion || snapshot.RunID != OperationStorageID(key) || json.Unmarshal(snapshot.Data, &r) != nil ||
@@ -379,7 +406,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 
 type attemptContext struct{}
 
-// OperationAttempt 返回 ctx 所在持久操作当前是第几次尝试（从 1 起）；不在带日志的操作内时返回 0。
+// OperationAttempt returns the current attempt number (starting at 1) of the
+// durable operation containing ctx; it returns 0 outside an operation with a
+// journal.
 func OperationAttempt(ctx context.Context) int {
 	n, _ := ctx.Value(attemptContext{}).(int)
 	return n
