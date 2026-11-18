@@ -23,11 +23,11 @@ Related repositories:
 
 ## Why GoAgent
 
-Most agent libraries stop at "call the model, run a tool". Services that run agents in production also need the run to **survive a restart, wait for a human, and stay within a budget**. GoAgent treats these as part of the execution kernel instead of add-ons:
+Services that run agents in production need each run to **survive a restart, wait for a human, and stay within a budget**. GoAgent builds these into the execution kernel instead of leaving them to the host:
 
-- **Durable** - `core/durable` journals model turns and tool calls and durable graphs checkpoint each step, so a restarted process resumes from the last checkpoint instead of starting over.
+- **Durable** - `core/durable` journals every model turn and tool call of the agent loop, and durable graphs checkpoint each step; a restarted process replays completed operations and continues. A file store is built in; a multi-instance Postgres store is in goagent-contrib.
 - **Human approval as a first-class pause** - a graph node, parallel branch or tool can stop and wait for validated human input, then resume in another process.
-- **Governed** - root request budgets, tool admission limits, approvals and guards (`core/budget`, `tools.Dispatcher`/`Pipeline`).
+- **Governed** - one root budget per run caps model requests, reserved tokens, tool calls, sub-agent calls and the deadline, and can be journaled with the run (`core/budget`); tool admission, approvals and guards sit on the single tool path (`tools.Dispatcher`/`Pipeline`).
 - **Observable** - read-only execution events (`core/observe`) and optional OpenTelemetry tracing and metrics.
 
 ```mermaid
