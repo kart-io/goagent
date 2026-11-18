@@ -81,7 +81,7 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 
 **Agent 侧**：
 
-- 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope，日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”。每个 Step 是独立节点，循环中每次访问的执行键包含步数，互不冲突。同一节点内第二次调用 Agent 必须换 scope。作用域规则见[原生编排：多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+- 每个 Agent 用 `WithDurableScope` 设置稳定的非空 scope，日志键为“节点执行键 → `agent/<scope>` → 模型或工具操作键”。每个 Step 是独立节点，循环中每次访问的执行键包含步数，互不冲突。同一节点内第二次调用 Agent 必须换 scope。作用域规则见[原生编排：多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION_CN.md#多-agent-作用域与入口约束)。
 - 带工具时，模型客户端必须实现 `llm.ToolStreamClient`，工具必须经 `Dispatcher.Tools()` 包装；否则在模型调用前失败。
 - 会话由 `AgentFactory` 每次新建。记忆、检索结果、当前时间、随机示例、render 等任何非确定性内容在恢复时变化，都会使已完成请求的意图不一致而报错，不会静默回放。
 

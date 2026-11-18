@@ -1,34 +1,36 @@
-# Provider 能力边界与回归
+# Provider Capability Boundaries and Regression
 
-本表描述仓库当前适配器实现，不代表同名供应商所有模型的服务端能力。所有 Provider 都实现 `llm.Client.CompleteStream`（携带结束状态和用量），需要完整响应时用 `llm.Complete` / `llm.Chat` 收集。
+[English](PROVIDER_CAPABILITIES.md) | [中文](PROVIDER_CAPABILITIES_CN.md)
 
-| Provider | 原生工具流 | 默认声明 Embedding |
+This table describes the repository's current adapter implementations, not the server-side capabilities of every model from a vendor of the same name. Every Provider implements `llm.Client.CompleteStream` (carrying finish status and usage); when you need a complete response, collect it with `llm.Complete` / `llm.Chat`.
+
+| Provider | Native tool streaming | Embedding declared by default |
 |---|---|---|
-| OpenAI | 有 | 有，仍须选用可用端点/模型 |
-| DeepSeek | 有 | 无；旧兼容 HTTP 方法保留 |
-| Gemini | 有 | 有，独立 Embedding 模型 |
-| Anthropic | 有 | 无 |
-| Kimi | 有 | 无 |
-| SiliconFlow | 有 | 无 |
-| Ollama | 有 | 无 |
+| OpenAI | Yes | Yes; you still need to choose an available endpoint/model |
+| DeepSeek | Yes | No; the old compatible HTTP method is kept |
+| Gemini | Yes | Yes, with a separate embedding model |
+| Anthropic | Yes | No |
+| Kimi | Yes | No |
+| SiliconFlow | Yes | No |
+| Ollama | Yes | No |
 
-DeepSeekStreamingProvider 与 GeminiStreamingProvider 包装器继承对应基础接口；二者当前均支持结构化流和原生工具流。尚未实现的能力会在 Builder 原生入口或构建阶段拒绝，不通过模拟 Token 或占位结果冒充。
+The DeepSeekStreamingProvider and GeminiStreamingProvider wrappers inherit the corresponding base interfaces; both currently support structured streaming and native tool streaming. Capabilities not yet implemented are rejected at the Builder's native entry points or at build time, rather than faked with simulated tokens or placeholder results.
 
-## 实现说明
+## Implementation Notes
 
-- 所有内置 Provider 都实现 `CapabilityChecker`。Kimi、SiliconFlow、Ollama 是 `OpenAIProvider` 的预设，`Provider()` 返回各自身份；不声明 Embedding（`Embed` 固定使用 OpenAI 向量模型）、视觉与 JSON 模式，也不接受显式推理配置。工具调用与流式是否可用取决于所选模型。
-- Gemini 的 `Embed` 发送真实 API 请求，使用独立的 `EmbeddingModel`（默认 `gemini-embedding-001`），校验向量非空、非全零且有限；取消与上游错误原样返回。
-- DeepSeek 的 `Embed` 方法向 `/embeddings` 发送兼容请求，模型名硬编码，不构成已验证的官方能力，因此不声明 Embedding，`HasEmbedding` 返回 false。官方模型目录见 [Lists Models](https://api-docs.deepseek.com/api/list-models/)，自定义端点需另行验证。
-- `llm.HasEmbedding` / `AsEmbedder` 同时检查方法与能力声明；没有实现 `CapabilityChecker` 的自定义客户端只按接口判断。
+- All built-in Providers implement `CapabilityChecker`. Kimi, SiliconFlow, and Ollama are presets of `OpenAIProvider`, and `Provider()` returns their own identity; they do not declare Embedding (`Embed` always uses the OpenAI embedding model), vision, or JSON mode, and do not accept explicit reasoning configuration. Whether tool calling and streaming work depends on the chosen model.
+- Gemini's `Embed` sends real API requests using a separate `EmbeddingModel` (default `gemini-embedding-001`) and validates that vectors are non-empty, not all zeros, and finite; cancellation and upstream errors are returned as-is.
+- DeepSeek's `Embed` method sends a compatible request to `/embeddings` with a hard-coded model name. This is not a verified official capability, so Embedding is not declared and `HasEmbedding` returns false. See [Lists Models](https://api-docs.deepseek.com/api/list-models/) for the official model catalog; custom endpoints need separate verification.
+- `llm.HasEmbedding` / `AsEmbedder` check both the method and the capability declaration; custom clients that do not implement `CapabilityChecker` are judged by interface only.
 
-## 验证范围
+## Verification Scope
 
 ```sh
 go test -race -count=1 ./llm/providers -run 'TestProviderCapabilityContractMatrix|TestGeminiEmbeddingCannotReturnMockSuccess|TestNativeProviders'
 ```
 
-能力矩阵覆盖 9 个基础 Provider 与 2 个包装器：声明与可执行接口一致、不支持的 Builder 入口在请求前拒绝、Gemini 在上游失败时不返回模拟向量。OpenAI、DeepSeek 另有本地 SSE 协议回归，Gemini 有本地 HTTP 协议回归（`gemini_protocol_test.go`）。真实模型验证包括 DeepSeek、Gemini 官方兼容端点、[GeminiProvider 旧公开方法](../evaluation/2026-10-27-gemini-provider/REPORT.md)（六个方法各两次全部通过）和[原生结构化流、工具循环与 Embedding](../evaluation/2026-10-27-gemini-native-support/REPORT.md)（12/12 通过）。这些结果不证明其余供应商的线上请求、认证、模型可用性或错误流处理已通过生产验收。
+The capability matrix covers 7 base Providers and 2 wrappers: declarations match the executable interfaces, unsupported Builder entry points are rejected before any request, and Gemini returns no simulated vectors on upstream failure. OpenAI and DeepSeek additionally have local SSE protocol regressions, and Gemini has a local HTTP protocol regression (`gemini_protocol_test.go`). Real-model verification includes DeepSeek, Gemini's official compatible endpoint, the [old public GeminiProvider methods](../evaluation/2026-10-27-gemini-provider/REPORT.md) (all six methods passed twice each), and [native structured streaming, tool loop, and Embedding](../evaluation/2026-10-27-gemini-native-support/REPORT.md) (12/12 passed). These results do not prove that other vendors' live requests, authentication, model availability, or error-stream handling have passed production acceptance.
 
-Gemini 原生验证可运行 `go run ./examples/llm/gemini-verify -live -suite native`（需 `GEMINI_API_KEY`）。默认模型为 `gemini-2.5-flash`；`GEMINI_BASE_URL` 是原生根地址，与 agentbench 的 `gemini-openai` 所需兼容路径不同。配置、结果与限制见[案例说明](../../examples/llm/gemini-verify/README.md)。
+For Gemini native verification, run `go run ./examples/llm/gemini-verify -live -suite native` (requires `GEMINI_API_KEY`). The default model is `gemini-2.5-flash`; `GEMINI_BASE_URL` is the native root URL, which differs from the compatible path required by agentbench's `gemini-openai`. See the [case description](../../examples/llm/gemini-verify/README.md) for configuration, results, and limitations.
 
-`CompleteStream` / `CompleteToolsStream` 返回统一的 `stop` / `tool_calls` 结束原因。`llm.Message.ProviderState` 和终态 `StreamChunk.ProviderState` 用于保留原生签名；Builder 自动续接，不将其作为答案文本展示。一次响应多个工具时按 ID 匹配并在同一 user 内容中回传结果；工具实际并发执行策略由 Builder 决定。
+`CompleteStream` / `CompleteToolsStream` return unified `stop` / `tool_calls` finish reasons. `llm.Message.ProviderState` and the terminal `StreamChunk.ProviderState` preserve native signatures; the Builder carries them forward automatically and does not display them as answer text. When one response contains multiple tools, results are matched by ID and returned within the same user content; the actual concurrent execution policy for tools is decided by the Builder.

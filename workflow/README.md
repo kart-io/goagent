@@ -1,11 +1,13 @@
-# 通用流程编排
+# General Flow Orchestration
 
-`workflow.Graph[T]` 将串行节点、条件分支、显式并行汇合与有界循环编译为 `core.StreamRunnable[T,T]`。节点共享同一状态类型 T；不同输入/输出的 Agent 使用 Adapt 显式转换。
+[English](README.md) | [中文](README_CN.md)
 
-人工介入使用持久图的 `ApprovalNodes`、`Snapshot` 与 `Resume`；通过 `WithResumeHandler` 校验人工输入并修改业务状态，状态与放行一次性落盘后再执行节点。详见 [暂停、恢复与检查点](../docs/guides/HUMAN_IN_THE_LOOP.md) 和 [离线示例](../examples/human-in-the-loop/README.md)。
+`workflow.Graph[T]` compiles sequential nodes, conditional branches, explicit parallel joins, and bounded loops into a `core.StreamRunnable[T,T]`. All nodes share the same state type T; Agents with different input/output types are converted explicitly with Adapt.
+
+Human-in-the-loop uses the durable graph's `ApprovalNodes`, `Snapshot`, and `Resume`; `WithResumeHandler` validates human input and modifies business state, and the state and the release are persisted together in one write before the node runs. See [Pause, Resume, and Checkpoints](../docs/guides/HUMAN_IN_THE_LOOP.md) and the [offline example](../examples/human-in-the-loop/README.md).
 
 ```go
-// 导入 github.com/kart-io/goagent/constants。
+// Import github.com/kart-io/goagent/constants.
 graph := workflow.NewGraph[int](workflow.Config{MaxSteps: 20, MaxConcurrency: 4})
 err := graph.AddNode("increment", func(ctx context.Context, value int) (int, error) {
     return value + 1, nil
@@ -21,28 +23,28 @@ if err != nil { return err }
 result, err := run.Invoke(ctx, 0) // 3
 ```
 
-## 构图与编译
+## Building and Compiling Graphs
 
-| API | 用途 |
+| API | Purpose |
 |---|---|
-| `AddNode(name, Node[T])` | 注册同步状态变换函数 |
-| `AddRunnable(name, core.Runnable[T,T])` | 接入已有 Runnable、子图并保留事件 |
-| `Adapt(runnable, input, output)` | 将 Runnable[I,O] 映射为 Runnable[T,T] |
-| `AdaptStream(runnable, input, output, intermediate)` | 显式转换中间 Data/Event，终态仍单独校验 |
-| `AddEdge(from, to)` | 唯一普通后继 |
-| `AddBranch(from, router, targets...)` | 从节点输出选择一个预先声明的后继 |
-| `AddParallel(name, ParallelConfig[T])` | 注册并行分支及显式汇合 |
-| `Compile(ctx)` | 验证并生成 Runnable |
+| `AddNode(name, Node[T])` | Register a synchronous state transformation function |
+| `AddRunnable(name, core.Runnable[T,T])` | Plug in an existing Runnable or subgraph, keeping its events |
+| `Adapt(runnable, input, output)` | Map a Runnable[I,O] to a Runnable[T,T] |
+| `AdaptStream(runnable, input, output, intermediate)` | Explicitly convert intermediate Data/Event; the final state is still validated separately |
+| `AddEdge(from, to)` | The single ordinary successor |
+| `AddBranch(from, router, targets...)` | Choose one pre-declared successor from the node's output |
+| `AddParallel(name, ParallelConfig[T])` | Register parallel branches with an explicit join |
+| `Compile(ctx)` | Validate and produce a Runnable |
 
-START 只允许一条入口边；END 无后继。每个节点恰好配置一条普通边或一个条件分支。Compile 拒绝未知引用、无后继、不可达节点和没有结构性出口的循环；重复名称、重复路由及保留名称在构图时拒绝。
+START allows only one entry edge; END has no successors. Each node has exactly one ordinary edge or one conditional branch. Compile rejects unknown references, missing successors, unreachable nodes, and loops with no structural exit; duplicate names, duplicate routes, and reserved names are rejected while building the graph.
 
-允许存在出口的循环，运行时路由仍可能一直不选出口。MaxSteps 默认 100，每次节点执行计一步，START/END 不计；超限返回 `workflow.ErrMaxSteps`，可通过 errors.Is 检查。一个并行节点计一步，分支和嵌套子图各有自己的执行边界。框架不自动重试节点或回滚已发生的副作用。
+Loops with an exit are allowed, but runtime routing may still never choose the exit. MaxSteps defaults to 100; each node execution counts as one step, and START/END do not count; exceeding the limit returns `errors.ErrWorkflowMaxSteps`, which can be checked with errors.Is. A parallel node counts as one step, and branches and nested subgraphs each have their own execution bounds. The framework does not automatically retry nodes or roll back side effects that have already happened.
 
-普通多入边表示不同路径可以到达同一个节点，只执行被选中的路径，不等待其他路径。AND 汇合必须使用 AddParallel，而非添加多条普通边。
+Multiple ordinary incoming edges mean different paths can reach the same node; only the selected path is executed, without waiting for other paths. An AND join must use AddParallel, not multiple ordinary edges.
 
-Compile 复制图定义，已编译结果不受后续构图修改影响；函数闭包和 Runnable 资源仍属于调用方。Graph Builder 不支持并发修改。编译结果可以并发执行，但节点资源和输入状态必须支持这种用法。一个有会话状态的 Builder Agent 不应被当成多个独立会话共用。
+Compile copies the graph definition, so compiled results are not affected by later changes to the graph; function closures and Runnable resources still belong to the caller. The Graph Builder does not support concurrent modification. Compiled results can execute concurrently, but node resources and input state must support such use. A Builder Agent with session state should not be shared as multiple independent sessions.
 
-## 并行与状态隔离
+## Parallelism and State Isolation
 
 ```go
 err := graph.AddParallel("lookup", workflow.ParallelConfig[State]{
@@ -52,19 +54,19 @@ err := graph.AddParallel("lookup", workflow.ParallelConfig[State]{
     },
     Clone: cloneState,
     Merge: func(ctx context.Context, original State, results []State) (State, error) {
-        // results[0] 始终是 documents，results[1] 始终是 orders。
+        // results[0] is always documents, results[1] is always orders.
         return combine(original, results), nil
     },
 })
 ```
 
-Clone 和 Merge 均为必填。框架在启动 worker 前串行调用 Clone 为每个分支准备输入。T 包含 map、slice、pointer 时，调用方需深复制分支可能修改的内容；标量或不可变状态可原样返回。Merge 获得原始输入和按注册顺序排列的成功结果；分支完成顺序不改变结果顺序。
+Clone and Merge are both required. Before starting workers, the framework calls Clone serially to prepare each branch's input. When T contains maps, slices, or pointers, the caller must deep-copy whatever a branch might modify; scalar or immutable state can be returned as is. Merge receives the original input and the successful results ordered by registration; the order in which branches finish does not change the result order.
 
-MaxConcurrency 默认 4，限制每个并行节点的 worker 数量。Batch 并发与此限制相互独立；多个图执行或嵌套并行不会共享全局并发额度。
+MaxConcurrency defaults to 4 and limits the number of workers per parallel node. Batch concurrency is independent of this limit; multiple graph executions or nested parallel nodes do not share a global concurrency quota.
 
-任意分支出错或 panic，取消同组其他任务，停止调度并等待已启动 worker 退出，Merge 不执行。业务函数必须遵守 context；不响应取消的函数会阻止该并行节点结束。Clone/路由/Merge 的 panic 也会转为整个图的错误。这里没有事务或副作用补偿。
+If any branch errors or panics, the other tasks in the group are canceled, scheduling stops, already-started workers are awaited, and Merge does not run. Business functions must honor context; a function that does not respond to cancellation prevents the parallel node from finishing. Panics in Clone/routing/Merge are also turned into an error of the whole graph. There are no transactions or side-effect compensation here.
 
-## 接入 Builder Agent
+## Plugging in a Builder Agent
 
 ```go
 node, err := workflow.Adapt(agent.AsRunnable(),
@@ -74,26 +76,26 @@ node, err := workflow.Adapt(agent.AsRunnable(),
         return s, nil
     },
 )
-// 检查 err 后：graph.AddRunnable("answer", node)
+// After checking err: graph.AddRunnable("answer", node)
 ```
 
-输入/输出转换错误直接传播。Adapt 等待合法的节点终态和流结束后再转换输出，不丢弃最终结果。中间文本、来源、用量等事件透传；不同类型的中间 Data 不做隐式转换。并行分支需要调用 Agent 时，可在 Branch.Run 中调用已适配节点的 Invoke；这时并行层提供分支起止事件，不透传分支内部 Token 事件。
+Input/output conversion errors propagate directly. Adapt waits for a valid node final state and the end of the stream before converting the output, without dropping the final result. Intermediate events such as text, sources, and usage pass through; intermediate Data of different types is not implicitly converted. When parallel branches need to call an Agent, call Invoke on the adapted node inside Branch.Run; in that case the parallel layer provides branch start/end events and does not pass through the branch's internal token events.
 
-## 执行与事件
+## Execution and Events
 
-编译结果支持 Invoke、Stream、Batch、Pipe、WithConfig、WithCallbacks。同步和流式执行使用同一源。`StreamMode()` 为 steps；节点已有文本事件会透传，但边上的状态始终在节点成功完成后才交付给下游。
+Compiled results support Invoke, Stream, Batch, Pipe, WithConfig, and WithCallbacks. Synchronous and streaming execution use the same source. `StreamMode()` is steps; existing text events from nodes pass through, but the state on an edge is always delivered downstream only after the node completes successfully.
 
 | Event.Type | Event.Step |
 |---|---|
-| `node_start` / `node_end` | 节点名 |
-| `branch_start` / `branch_end` | 并行节点名/分支名 |
-| 节点原有事件 | 节点名/原 Step，原 Step 为空时只有节点名 |
+| `node_start` / `node_end` | node name |
+| `branch_start` / `branch_end` | parallel node name/branch name |
+| the node's own events | node name/original Step; only the node name when the original Step is empty |
 
-节点 Done 不向外冒充图完成。只有全部选中节点及图完成回调成功后，才发一个无错误 Done，Data 为最终 T。错误时以带 Error 的终态结束；取消以 ctx.Err() 为准，错误终态为尽力发送。提前停止消费必须取消 context。
+A node's Done is not passed off as graph completion. Only after all selected nodes and the graph completion callbacks succeed is a single error-free Done emitted, with Data being the final T. On error, the stream ends with a final chunk carrying Error; for cancellation ctx.Err() is authoritative, and sending the error final chunk is best effort. Stopping consumption early requires canceling the context.
 
-自定义 Runnable 必须关闭流，并且恰好提供一个终态。缺失/重复终态、终态后的数据或错误、nil 流均失败，不运行下游。用户提供的 Runnable 或 Node 必须停止自己启动的后台工作。节点事件中的 usage 是该节点报告的累计快照，Step 标识作用域；图不将不同节点的用量自动累加，跨节点汇总由应用处理。
+A custom Runnable must close its stream and provide exactly one final chunk. A missing/duplicate final chunk, data or errors after the final chunk, or a nil stream all fail, and downstream does not run. User-provided Runnables or Nodes must stop any background work they start. Usage in node events is a cumulative snapshot reported by that node, with Step identifying the scope; the graph does not automatically add up usage across nodes, and cross-node aggregation is up to the application.
 
-## 示例与验证
+## Examples and Verification
 
 ```sh
 go run ./examples/workflow
@@ -101,25 +103,25 @@ go run ./examples/workflow -stream
 go test -race ./workflow -count=1
 ```
 
-示例无需模型或 API Key，演示验证输入、选择快速路径/检索路径、双分支检索汇合、草稿审查循环和最终结果。更详细的执行边界见[执行契约](../docs/guides/EXECUTION_CONTRACT.md)。
+The example needs no model or API key; it demonstrates input validation, choosing a fast path/retrieval path, a two-branch retrieval join, a draft review loop, and the final result. For more detailed execution boundaries see the [Execution Contract](../docs/guides/EXECUTION_CONTRACT.md).
 
 ```mermaid
 flowchart LR
-    start([START]) --> validate[验证输入]
-    validate -->|快速路径| fast[快速处理]
-    validate -->|检索路径| retrieve[并行检索并汇合]
-    retrieve --> draft[生成草稿]
-    draft --> review[审查]
-    review -->|未通过且仍有步骤预算| draft
-    review -->|通过| finish([END])
+    start([START]) --> validate[Validate input]
+    validate -->|fast path| fast[Fast processing]
+    validate -->|retrieval path| retrieve[Parallel retrieval and join]
+    retrieve --> draft[Generate draft]
+    draft --> review[Review]
+    review -->|rejected and step budget remains| draft
+    review -->|approved| finish([END])
     fast --> finish
 ```
 
-当前不提供异构节点自动类型推断、字段映射 DSL、跨节点 Collect/Transform 或分布式调度。`Compile` 为内存执行；节点边界恢复使用下文的 `CompileDurable`。`core/durable.Runner` 仍用于显式可恢复顺序步骤。
+Not currently provided: automatic type inference for heterogeneous nodes, a field-mapping DSL, cross-node Collect/Transform, or distributed scheduling. `Compile` executes in memory; node-boundary recovery uses `CompileDurable` described below. `core/durable.Runner` is still used for explicitly recoverable sequential steps.
 
-## 节点边界的持久化恢复
+## Durable Recovery at Node Boundaries
 
-`CompileDurable` 使用相同图定义和 `core/durable.Store`。支持串行节点、条件分支、有界循环、节点前审批和单机重启恢复。`AddParallel` 会保存各分支输入与成功结果，恢复时跳过已保存的分支，按注册顺序汇合。原 `Compile` 的内存执行和流式语义保持不变。
+`CompileDurable` uses the same graph definition and a `core/durable.Store`. It supports sequential nodes, conditional branches, bounded loops, pre-node approval, and single-machine restart recovery. `AddParallel` saves each branch's input and successful result; on recovery, saved branches are skipped and the join happens in registration order. The in-memory execution and streaming semantics of the original `Compile` are unchanged.
 
 ```go
 store, err := durable.NewFileStore("./checkpoints")
@@ -131,49 +133,49 @@ runnable, err := graph.CompileDurable(ctx, workflow.DurableConfig{
 })
 if err != nil { return err }
 snapshot, err := runnable.Run(ctx, runID, initialState, "")
-if errors.Is(err, durable.ErrApprovalRequired) {
-    // 持久化等待已保存。宿主完成身份认证和业务授权后，才传回 snapshot.Key。
-    // 下次调用：runnable.Run(ctx, runID, initialState, snapshot.Key)
+if errors.Is(err, agentErrors.ErrApprovalRequired) { // agentErrors is github.com/kart-io/goagent/errors
+    // The durable wait has been saved. Pass back snapshot.Key only after the host completes authentication and business authorization.
+    // Next call: runnable.Run(ctx, runID, initialState, snapshot.Key)
 }
-// 成功时 snapshot.Done=true，最终业务状态在 snapshot.State。
+// On success snapshot.Done=true, and the final business state is in snapshot.State.
 ```
 
-状态必须可无损 JSON 往返，使用具名结构体，避免接口字段中的具体类型丢失。恢复忽略新 initialState。节点代码、状态结构或业务策略变化须增加 `Version`；节点、边、候选路由、执行预算和审批配置的变化自动导致计划指纹不匹配并拒绝旧检查点。
+State must round-trip losslessly through JSON; use named structs to avoid losing concrete types in interface fields. Recovery ignores a new initialState. Changes to node code, state structure, or business policy require bumping `Version`; changes to nodes, edges, candidate routes, execution budgets, and approval configuration automatically cause a plan fingerprint mismatch and old checkpoints are rejected.
 
-执行前持久化意图，节点成功后保存输出，再单独保存下一条路由。因此路由失败不会重跑已保存的节点。Router 必须无副作用，其执行可能在崩溃后重放；Router 对输入的修改不保存。`MaxSteps` 跨重启累计。审批键绑定 run、版本计划和具体节点访问，循环每轮使用不同键；它不是身份认证凭证。
+The intent is persisted before execution, the output is saved after the node succeeds, and the next route is saved separately. Therefore a routing failure does not re-run an already saved node. Routers must be side-effect free, since they may be replayed after a crash; modifications a Router makes to its input are not saved. `MaxSteps` accumulates across restarts. The approval key is bound to the run, the versioned plan, and the specific node visit, and each loop iteration uses a different key; it is not an authentication credential.
 
-宿主需要在批准生效前核对外部数据（例如 SQL 工单在审批暂停期间是否被改动）时，用 `g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(fn))` 注册前置校验。它在运行锁内、审批键匹配之后、批准写入之前调用，`snap` 是锁内最新检查点的独立副本，先 `Snapshot` 再 `Run` 之间的窗口由它覆盖。返回错误时批准被拒绝，检查点保持 Waiting、审批键不变，返回 `*workflow.ApprovalRejectedError`（文本为 `批准前置校验拒绝: ...`，`Unwrap` 得到原错误）；钩子 panic 时返回 `*errors.PanicError`，不属于拒绝。`Run` 与 `AsRunnable` 两条入口都会调用，不带审批键的恢复不调用。钩子不参与计划指纹。钩子内不要再对同一 run 调用 `Snapshot`/`Run`，运行锁已被持有。`durable.Runner` 的 `BeforeApprove` 字段语义相同。
+When the host needs to check external data before an approval takes effect (for example, whether a SQL ticket was changed while paused for approval), register a pre-check with `g.CompileDurable(ctx, cfg, workflow.WithBeforeApprove(fn))`. It is called inside the run lock, after the approval key matches and before the approval is written; `snap` is an independent copy of the latest checkpoint inside the lock, which covers the window between calling `Snapshot` and then `Run`. If it returns an error, the approval is rejected, the checkpoint stays Waiting with the approval key unchanged, and `*workflow.ApprovalRejectedError` is returned (its text is `批准前置校验拒绝: ...`, and `Unwrap` yields the original error); if the hook panics, `*errors.PanicError` is returned, which is not a rejection. Both the `Run` and `AsRunnable` entry points call it; resumes without an approval key do not. The hook does not take part in the plan fingerprint. Do not call `Snapshot`/`Run` on the same run inside the hook, since the run lock is already held. The `BeforeApprove` field of `durable.Runner` has the same semantics.
 
-其他入口：`Graph.Describe()` 校验并返回确定排序的拓扑描述；`DurableGraph.Snapshot(ctx, id)` 读取最近提交的检查点；`Diagnose(ctx, id, refs...)` 只读诊断续跑元数据；`AsChildRunnable()` 让持久图作为子流程嵌套（如经 `tools.NewRunnableToolFactory` 包成可续跑工具），检查点写在父操作日志的 Store 中，审批暂停返回 `*durable.WaitError`，其中的 `ChildContinuation` 给出续跑所需的审批键，审批键不符时为 `ErrApprovalMismatch`。
+Other entry points: `Graph.Describe()` validates and returns a deterministically ordered topology description; `DurableGraph.Snapshot(ctx, id)` reads the most recently committed checkpoint; `Diagnose(ctx, id, refs...)` performs read-only diagnosis of continuation metadata; `AsChildRunnable()` lets a durable graph be nested as a subflow (for example wrapped as a resumable tool via `tools.NewRunnableToolFactory`), with checkpoints written to the Store of the parent operation journal; an approval pause returns `*durable.WaitError`, whose `ChildContinuation` gives the approval key needed to continue, and a mismatched approval key yields `ErrApprovalMismatch`.
 
-节点通过 `workflow.DurableKey(ctx)` 读取稳定执行键。效果提交后、检查点保存前发生崩溃时节点仍可能重跑，外部服务必须用该键或更强的业务请求 ID 去重。节点函数仍从入口重新执行；使用 Dispatcher.Tools 的 Builder 原生工具循环会按模型回合和工具调用恢复，详见下文。它不恢复任意 Go 调用栈。`AsRunnable` 为持久图提供 Invoke/Stream/Batch；审批暂停返回 Waiting=true、Done=false 的状态。兼容 `Run` 仍返回审批哨兵错误。实时事件不承诺持久化重放。FileStore 只提供本地锁与原子文件保存，不提供跨主机租约或接管。Merge 必须无副作用；效果完成后但分支检查点保存前仍可能重跑，业务服务须执行幂等。
+Nodes read a stable execution key through `workflow.DurableKey(ctx)`. If a crash happens after an effect is committed but before the checkpoint is saved, the node may still re-run, so external services must deduplicate with this key or a stronger business request ID. Node functions are still re-executed from their entry; the Builder's native tool loop using Dispatcher.Tools recovers by model turn and tool call, as described below. It does not restore arbitrary Go call stacks. `AsRunnable` provides Invoke/Stream/Batch for durable graphs; an approval pause returns a state with Waiting=true and Done=false. The compatible `Run` still returns the approval sentinel error. Real-time events are not guaranteed to be replayed durably. FileStore provides only local locking and atomic file saves, with no cross-host leases or takeover. Merge must be side-effect free; it may still re-run after effects complete but before the branch checkpoint is saved, so business services must be idempotent.
 
 ```sh
 go test -race ./workflow -run DurableGraph
 ```
 
-包含真实子进程在效果落盘后退出、重新启动仅产生一个效果的测试，以及审批、循环预算、路由失败、保存失败、取消等待与损坏检查点测试。
+This includes a test where a real subprocess exits after an effect is persisted and a restart produces only one effect, as well as tests for approval, loop budgets, routing failures, save failures, cancellation while waiting, and corrupted checkpoints.
 
-## 原生工具与统一恢复入口
+## Native Tools and a Unified Recovery Entry Point
 
-`tools.Dispatcher.AsRunnable()` 可通过 Adapt 注册为图节点；`dispatcher.Tools()` 可注册给 Builder。两者共享参数校验、授权钩子、超时与并发限制，且不自动重试。持久节点/分支的执行键会自动注入 ToolInput.ExecutionKey。完整配置、恢复语义及可运行退款案例见[原生编排与工具体系](../docs/guides/NATIVE_ORCHESTRATION.md)。
-
-
-## 单节点内的模型与多工具恢复
-
-持久图和 `core/durable.Runner` 自动向节点 context 注入操作日志。Builder 必须设置 `WithDurableScope("agent-name")`，同一节点内不同逻辑调用使用不同稳定名称。Builder 的原生工具循环会先保存模型计划（调用 ID、参数、用量、Provider 续接状态），整轮 Schema 预检通过后才执行工具；恢复先重放计划和已完成工具结果。工具必须经 `Dispatcher.Tools()` 或实现 `interfaces.DurableCallTool` 的适配器接入；裸 Tool 在付费请求前被拒绝。
-
-手写多工具节点使用宿主生成的稳定 `ToolInput.CallID`，例如 `"reserve"`、`"notify"`。Dispatcher 将 `父执行键 + tool/CallID` 派生为独立子键，注入工具的 context 与 ExecutionKey。已完成调用直接读取结果；效果已提交但结果未保存的调用只能依靠目标服务对同一子键去重。旧的空 CallID 保持单效果节点行为。
-
-失败模型回合不会自动重试，`durable.InspectOperation` 在 Agent 子作用域 context 中可读取状态与已知用量，后续恢复返回 `durable.ErrOperationAttention`。工具的 `MaxAttempts` 默认 3，限制跨显式恢复的总尝试数，单次 Invoke 不循环重试。详细约束与代码见[操作日志指南](../docs/guides/NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
-
-`AdaptStream` 的 intermediate 回调接收原状态和中间 chunk，可显式保留 Data 与 Event；它不能返回 Done，也不能修改共享原状态。中间块只是预览，可能在恢复时重放，不驱动后继节点或写入图状态。最终 output 仍需等待完整合法流；映射失败会取消上游。
+`tools.Dispatcher.AsRunnable()` can be registered as a graph node via Adapt; `dispatcher.Tools()` can be registered with the Builder. Both share argument validation, authorization hooks, timeouts, and concurrency limits, and neither retries automatically. The execution key of a durable node/branch is automatically injected into ToolInput.ExecutionKey. For full configuration, recovery semantics, and a runnable refund case see [Native Orchestration and the Tool System](../docs/guides/NATIVE_ORCHESTRATION.md).
 
 
-持久图的 `AsRunnable().Stream` 同样保留 `AdaptStream` 的类型化预览：中间块 `Data.Preview=true`，预览值在 `Data.State`。即使没有 Event 或数据为零值也不丢弃。预览不写入检查点；失败或取消后 `Snapshot` 仍返回上次提交状态，Preview=false。最终成功块也为 Preview=false，业务完成须继续检查 Data.Done。
+## Model and Multi-Tool Recovery Within a Single Node
 
-持久化入口现支持无工具 `llm.Client` 的模型日志与恢复。旧无作用域模型日志不会自动迁移为新键；补充 scope、核对已有业务效果并提升 Version，详见[接入约束](../docs/guides/NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+Durable graphs and `core/durable.Runner` automatically inject the operation journal into the node context. The Builder must set `WithDurableScope("agent-name")`, and different logical calls within the same node use different stable names. The Builder's native tool loop first saves the model plan (call IDs, arguments, usage, provider continuation state) and executes tools only after the whole turn passes Schema pre-checks; recovery first replays the plan and the completed tool results. Tools must be plugged in through `Dispatcher.Tools()` or an adapter implementing `interfaces.DurableCallTool`; bare Tools are rejected before the paid request.
 
-## 只读恢复诊断
+Hand-written multi-tool nodes use a stable host-generated `ToolInput.CallID`, for example `"reserve"` and `"notify"`. The Dispatcher derives `parent execution key + tool/CallID` into an independent child key and injects it into the tool's context and ExecutionKey. Completed calls read their results directly; calls whose effect was committed but whose result was not saved can only rely on the target service deduplicating on the same child key. The legacy empty CallID keeps single-effect node behavior.
 
-`Diagnose` 与 `CheckCompatibility` 和执行器共享节点、路由、并行输入输出、中断及审批绑定的结构校验。普通、审批后、并行及嵌套动态中断均属于合法等待；中断的键、ID、信息或绑定状态损坏时仍会阻止恢复。结构校验只检查原始 JSON，不解码业务状态，不执行节点或宿主 `UnmarshalJSON`，不写 Store 或获取执行锁。业务状态类型能否解码仍由真正执行恢复时验证。
+A failed model turn is not retried automatically; `durable.InspectOperation` can read the status and known usage in the Agent's sub-scope context, and later recovery returns `errors.ErrOperationAttention`. A tool's `MaxAttempts` defaults to 3 and limits the total attempts across explicit recoveries; a single Invoke does not retry in a loop. For detailed constraints and code see the [operation journal guide](../docs/guides/NATIVE_ORCHESTRATION.md#tool-call-journaling-and-recovery).
+
+The intermediate callback of `AdaptStream` receives the original state and the intermediate chunk and can explicitly keep Data and Event; it cannot return Done and cannot modify the shared original state. Intermediate chunks are only previews and may be replayed on recovery; they do not drive successor nodes or write graph state. The final output still waits for a complete, valid stream; a mapping failure cancels upstream.
+
+
+The durable graph's `AsRunnable().Stream` likewise keeps the typed previews of `AdaptStream`: intermediate chunks have `Data.Preview=true`, with the preview value in `Data.State`. They are not dropped even when there is no Event or the data is a zero value. Previews are not written to checkpoints; after failure or cancellation `Snapshot` still returns the last committed state with Preview=false. The final success chunk also has Preview=false, so business completion must still check Data.Done.
+
+Durable entry points now support model journaling and recovery for tool-less `llm.Client`. Old unscoped model journals are not automatically migrated to new keys; add a scope, reconcile existing business effects, and bump Version; see [integration constraints](../docs/guides/NATIVE_ORCHESTRATION.md#multi-agent-scopes-and-entry-constraints).
+
+## Read-Only Recovery Diagnostics
+
+`Diagnose` and `CheckCompatibility` share with the executor the structural checks for nodes, routes, parallel inputs and outputs, interrupts, and approval bindings. Ordinary, post-approval, parallel, and nested dynamic interrupts are all valid waits; recovery is still blocked when an interrupt's key, ID, information, or binding state is corrupted. Structural checks examine only the raw JSON: they do not decode business state, do not run nodes or the host's `UnmarshalJSON`, and do not write to the Store or acquire the execution lock. Whether the business state type can be decoded is still verified when recovery actually runs.

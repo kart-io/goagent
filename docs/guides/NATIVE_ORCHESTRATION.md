@@ -1,18 +1,20 @@
-# GoAgent 原生编排与工具体系
+# GoAgent Native Orchestration and Tooling
 
-图编排、工具执行、审批与恢复均由 GoAgent 实现，主模块没有引入其他编排框架。Builder 的模型工具循环继续使用现有 Provider；确定性业务流程由 `workflow.Graph` 调度，两者通过 Runnable 和显式状态映射组合。
+[English](NATIVE_ORCHESTRATION.md) | [中文](NATIVE_ORCHESTRATION_CN.md)
 
-| 组件 | 职责 |
+Graph orchestration, tool execution, approval and recovery are all implemented by GoAgent; the main module does not pull in any other orchestration framework. The Builder's model tool loop continues to use the existing providers; deterministic business flows are scheduled by `workflow.Graph`, and the two are composed through Runnable and explicit state mapping.
+
+| Component | Responsibility |
 |---|---|
-| `workflow.Graph[T]` | 条件路由、并行分支、确定顺序的汇合、有界循环 |
-| `Compile` | 内存执行，Invoke/Stream/Batch 与节点事件 |
-| `CompileDurable` | 节点及并行分支检查点、审批、重启恢复 |
-| `DurableGraph.AsRunnable` | 持久流程的 Invoke/Stream/Batch，统一事件入口 |
-| `tools.Registry` | 工具注册与查找 |
-| `tools.Dispatcher` | Schema/自定义校验、授权钩子、`Pipeline` 准入与审批、超时、并发限制、调用日志、失败传播 |
-| `workflow/refund.Service` | 业务幂等、审批时效、订单事实与累计金额保护 |
+| `workflow.Graph[T]` | Conditional routing, parallel branches, deterministically ordered joins, bounded loops |
+| `Compile` | In-memory execution, Invoke/Stream/Batch and node events |
+| `CompileDurable` | Node and parallel-branch checkpoints, approval, restart recovery |
+| `DurableGraph.AsRunnable` | Invoke/Stream/Batch for durable flows, unified event entry |
+| `tools.Registry` | Tool registration and lookup |
+| `tools.Dispatcher` | Schema/custom validation, authorization hook, `Pipeline` admission and approval, timeout, concurrency limit, call journal, failure propagation |
+| `workflow/refund.Service` | Business idempotency, approval expiry, order-fact and cumulative-amount protection |
 
-## 工具接入图与 Builder
+## Wiring Tools into Graphs and the Builder
 
 ```go
 registry := tools.NewRegistry()
@@ -39,7 +41,7 @@ node, err := workflow.Adapt(dispatcher.AsRunnable(),
 if err != nil { return err }
 if err := graph.AddRunnable("lookup", node); err != nil { return err }
 
-// 也可以供模型选择调用；使用相同的校验、授权和并发门。
+// The model can also choose to call it; the same validation, authorization and concurrency gate apply.
 agent, err := builder.NewSimpleBuilder(client).
     WithDurableScope("assistant").
     WithTools(dispatcher.Tools()...).
@@ -47,24 +49,24 @@ agent, err := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-Dispatcher 构造时冻结工具名、描述与 Schema，Registry 后续增删不影响已构造实例。工具实现仍需支持并发；不支持时设置 MaxConcurrency=1。Schema 根类型要求 object，按已固定版本的 JSON Schema 实现校验嵌套对象、额外字段、数值约束等；外部 `$ref` 无加载器，构造时拒绝。不会自动填充默认参数，也不重试。
+The Dispatcher freezes tool names, descriptions and Schemas at construction; later additions or removals in the Registry do not affect an existing instance. Tool implementations must still support concurrency; if they do not, set MaxConcurrency=1. The Schema root type must be object; nested objects, additional properties, numeric constraints and so on are validated with a pinned-version JSON Schema implementation; external `$ref` has no loader and is rejected at construction. Default arguments are not filled in automatically, and there are no retries.
 
-`DispatchConfig.Timeout` 是单次调用的默认超时（默认 30 秒）。工具实现 `tools.DispatchTimeoutProvider`（`DispatchTimeout() time.Duration`）时，以声明的正值替代默认值，可长可短；返回 0 沿用默认值，负值在构造 Dispatcher 时拒绝。子 Agent 通常需要远超 30 秒，应在组合工具上设置 `RunnableToolConfig.Timeout`，而不是调大整个 Dispatcher 的默认值；它只在经 Dispatcher 调用时生效。计时从取得并发槽位开始，不含排队，排队只受调用方 ctx 约束；需要限制总耗时的宿主应在 ctx 上设置截止时间。执行中的工具必须响应 context，执行器不会启动一个无法回收的后台 goroutine 来伪造超时。nil 输出、Success=false、Error 字段非空、panic、取消均返回错误。Authorize 可为空（无额外调度层授权）；涉及业务权限必须由宿主提供授权或由业务服务执行检查。CallerID 与审批身份不能来自模型参数。
+`DispatchConfig.Timeout` is the default timeout for a single call (30 seconds by default). When a tool implements `tools.DispatchTimeoutProvider` (`DispatchTimeout() time.Duration`), a declared positive value replaces the default, longer or shorter; returning 0 keeps the default, and negative values are rejected when the Dispatcher is constructed. Sub-Agents usually need far more than 30 seconds; set `RunnableToolConfig.Timeout` on the composite tool rather than raising the whole Dispatcher's default; it only takes effect when called through a Dispatcher. Timing starts after a concurrency slot is acquired and excludes queueing; queueing is bounded only by the caller's ctx, so hosts that need to limit total duration should set a deadline on ctx. Running tools must respond to context; the executor never starts an unreclaimable background goroutine to fake a timeout. nil output, Success=false, a non-empty Error field, panics and cancellation all return errors. Authorize may be empty (no extra dispatch-layer authorization); anything involving business permissions must be authorized by the host or checked by the business service. CallerID and approval identity must not come from model arguments.
 
-### 参数错误交还模型
+### Returning Argument Errors to the Model
 
-默认任何工具错误都会中止 Agent。设置 `DispatchConfig{ReturnArgumentErrors: true}` 后，经 `Dispatcher.Tools()` 发起的模型调用遇到以下错误时，改为返回 `Success=false`、`Error` 为空、`Result={"error":"invalid_arguments","message":...}` 的结果，由模型在下一轮改正：
+By default any tool error aborts the Agent. With `DispatchConfig{ReturnArgumentErrors: true}`, model calls made through `Dispatcher.Tools()` that hit the following errors instead return a result with `Success=false`, an empty `Error` and `Result={"error":"invalid_arguments","message":...}`, so the model can correct them in the next turn:
 
-- Schema 校验失败；
-- 自定义 `Validate` 或工具 `Invoke` 返回的 `*tools.ArgumentError`（可被 `%w` 包装；`errors.Join` 只有每个分支都是参数错误才算），包括内置工具 `ValidationError` 的返回值与经 `MarkModelArgument()` 标记的 `*errors.AgentError`。`Message` 原样展示给模型，`Err` 不展示；
-- `NewRunnableTool`/`NewRunnableToolFactory` 的 Schema 错误，以及 `Decode` 返回的 `*tools.ArgumentError`，此时不会创建子会话。`Decode` 的其他错误仍然中止；
-- 直接注册进本 Dispatcher、且自身开启该选项的另一个 Dispatcher 工具交还的参数错误结果，原样透传。其他工具返回同形状的结果仍按失败中止。
+- Schema validation failures;
+- `*tools.ArgumentError` returned by a custom `Validate` or by the tool's `Invoke` (may be wrapped with `%w`; with `errors.Join` it counts only if every branch is an argument error), including `ValidationError` returned by built-in tools and `*errors.AgentError` marked with `MarkModelArgument()`. `Message` is shown to the model as is; `Err` is not shown;
+- Schema errors of `NewRunnableTool`/`NewRunnableToolFactory`, and `*tools.ArgumentError` returned by `Decode`; in that case no child session is created. Other `Decode` errors still abort;
+- An argument-error result returned by another Dispatcher tool registered directly into this Dispatcher that has the option enabled itself is passed through unchanged. Results of the same shape returned by other tools are still treated as failures and abort.
 
-`Dispatcher.Invoke` 与 `AsRunnable`（workflow 节点等宿主路径）不受开关影响，仍以 error 报告参数错误。授权拒绝、超时与取消、嵌套深度超限、Dispatcher 重入、等待宿主继续、未知工具、参数不是 JSON 对象仍然中止；参数不合法时也会先执行 `Authorize`，拒绝即中止，因此 `Authorize` 可能收到不满足 Schema 的参数。子会话或内层 Dispatcher 报告的任何错误（包括内层的参数错误）都属于本工具执行失败，外层不会当作自己模型的参数错误。内层 Dispatcher、组合工具和 Builder Agent 的执行入口会自动登记；自己调用其他内层组件的包装器须透传收到的 ctx，并用 `tools.Settle(ctx, err)` 登记返回的错误；丢弃 ctx 时屏障、重入与深度保护都会失效。工具把内层错误重新包进新的参数错误，视为本层重新定性；这一判定按错误值身份在本次调用内登记完成，不包装错误，经 Dispatcher 与组合工具返回的 error 仍是工具原始返回的同一个值。同一包级哨兵若在同一次调用中既由内层返回、又由工具自己返回，会保守地按内层错误中止。同一轮的其他合法调用照常执行。
+`Dispatcher.Invoke` and `AsRunnable` (host paths such as workflow nodes) are not affected by the switch and still report argument errors as errors. Authorization denial, timeout and cancellation, exceeding the nesting depth, Dispatcher re-entry, waiting for the host to continue, unknown tools, and arguments that are not a JSON object still abort; with invalid arguments `Authorize` still runs first and a denial aborts, so `Authorize` may receive arguments that do not satisfy the Schema. Any error reported by a child session or an inner Dispatcher (including the inner layer's argument errors) is a failure of this tool's execution, and the outer layer does not treat it as its own model's argument error. Execution entries of inner Dispatchers, composite tools and Builder Agents register automatically; wrappers that call other inner components themselves must pass through the ctx they received and register the returned error with `tools.Settle(ctx, err)`; if ctx is dropped, the barrier, re-entry and depth protections stop working. A tool that re-wraps an inner error into a new argument error is treated as reclassifying it at this layer; this decision is registered by error-value identity within the call and does not wrap the error, so the error returned through the Dispatcher and composite tools is still the very same value the tool originally returned. If the same package-level sentinel is both returned by an inner layer and returned by the tool itself within the same call, it conservatively aborts as an inner error. Other valid calls in the same turn run normally.
 
-参数错误结果与正常执行使用同一调用意图和日志记录，按已完成写入，恢复时回放原结果而不执行工具；开关不进入意图，切换后合法调用照常回放，但参数错误记录在未开启恢复的路径上回放会中止。开关关闭时已写入的失败记录，打开开关后只有允许重试失败的操作（默认工具策略）会重新判定；组合工具（`MaxAttempts=1`）与被拒绝的模型回合仍需宿主处理。Builder 持久模式下，实现 `interfaces.ArgumentErrorTool` 且返回 true 的工具，参数不合法时模型回合照常提交；包装器须显式转发该接口。直接返回工具遇到参数错误时，错误按普通工具结果交还模型改正并继续循环，不会把错误当作答案；最后一轮仍传错时按额度耗尽报错并附带该参数错误，直接返回工具的其他失败仍中止。反复传错由 `WithMaxIterations` 兜底，耗尽时报错附带最后一次工具失败信息（之后的调用成功则不附带，超过 500 字符截断）。
+Argument-error results use the same call intent and journal record as normal execution and are written as completed; on recovery the original result is replayed without running the tool. The switch is not part of the intent: after toggling it, valid calls replay normally, but replaying an argument-error record on a path where the option is not enabled aborts. For failure records written while the switch was off, after turning it on only operations that allow retrying failures (the default tool policy) are re-evaluated; composite tools (`MaxAttempts=1`) and rejected model turns still need host handling. In Builder durable mode, for tools implementing `interfaces.ArgumentErrorTool` and returning true, the model turn is committed normally when arguments are invalid; wrappers must forward this interface explicitly. When a direct-return tool hits an argument error, the error is returned to the model as an ordinary tool result to correct and the loop continues; the error is never treated as the answer. If the last turn still passes invalid arguments, it reports budget exhaustion with that argument error attached; other failures of direct-return tools still abort. Repeated invalid arguments are bounded by `WithMaxIterations`; on exhaustion the error includes the last tool failure message (not included if later calls succeeded; truncated beyond 500 characters).
 
-## 持久图的统一入口
+## Unified Entry for Durable Graphs
 
 ```go
 run, err := graph.CompileDurable(ctx, workflow.DurableConfig{
@@ -78,55 +80,55 @@ snapshot, err := run.AsRunnable().Invoke(ctx, workflow.RunRequest[State]{
 })
 if err != nil { return err }
 if snapshot.Waiting {
-    // 宿主完成身份与业务授权后，使用同一 RunID 和 snapshot.Key 发起恢复。
+    // After the host completes identity and business authorization, resume with the same RunID and snapshot.Key.
 }
 ```
 
-`AsRunnable` 的审批暂停是一次正常结束的调用：`snapshot.Waiting=true`、`snapshot.Done=false`。Stream 的最终 Done 只代表本次调用结束，业务流程是否完成要检查 Data.Done。兼容方法 `Run` 仍返回 `agentErrors.ErrApprovalRequired`。`Snapshot(ctx, runID)` 只读加载并验证持久状态，需要获取运行锁；活跃执行期间可能等待，调用方应设置超时。
+An approval pause in `AsRunnable` is a normally completed call: `snapshot.Waiting=true`, `snapshot.Done=false`. The final Done of Stream only means this call has ended; check Data.Done for whether the business flow is complete. The compatibility method `Run` still returns `agentErrors.ErrApprovalRequired`. `Snapshot(ctx, runID)` loads and validates the persisted state read-only and needs to acquire the run lock; it may wait during active execution, so callers should set a timeout.
 
-事件包括 node_start/node_end、branch_start/branch_end、工具及节点原有事件、approval_required。分支和子事件带节点作用域。它们是本次执行的实时观察，不是可恢复的事件日志；消费者断开不会撤销已经提交的业务效果。提前停止消费 Stream 必须取消 context。
+Events include node_start/node_end, branch_start/branch_end, tool and node native events, and approval_required. Branch and child events carry the node scope. They are live observations of this execution, not a recoverable event log; a consumer disconnecting does not undo business effects already committed. If you stop consuming Stream early, you must cancel the context.
 
-## 并行恢复与效果去重
+## Parallel Recovery and Effect Deduplication
 
-1. 开始并行节点前，Clone 的各分支输入先完成 JSON 持久化，再调度工具或其他效果。
-2. 每个成功分支单独保存结果。一个分支失败会取消同组未完成工作，并等待已启动函数退出；已保存的成功分支在恢复时跳过。
-3. 汇合始终按分支注册顺序执行。Merge 必须无副作用；其失败或输出检查点保存失败时，恢复仅重做 Merge，保留分支结果。
-4. 节点和每个分支都有独立稳定执行键，循环的不同访问使用不同键。效果已经提交但结果未保存时仍可能重跑，由业务服务做幂等。
+1. Before a parallel node starts, the Clone'd input of each branch is persisted as JSON before tools or other effects are scheduled.
+2. Each successful branch saves its result separately. A branch failure cancels unfinished work in the same group and waits for already-started functions to exit; saved successful branches are skipped on recovery.
+3. The join always runs in branch registration order. Merge must be side-effect free; if it fails or saving its output checkpoint fails, recovery redoes only the Merge and keeps the branch results.
+4. The node and each branch have their own stable execution key, and different visits in a loop use different keys. If an effect was committed but its result was not saved, it may still run again, and the business service provides idempotency.
 
-`workflow.DurableKey(ctx)` 与 `durable.ExecutionKey(ctx)` 返回同一执行键。Dispatcher 将该键注入 ToolInput.ExecutionKey；`core/durable.Runner` 同样向步骤 context 注入键。模型的 Args 无权覆盖此元数据。
+`workflow.DurableKey(ctx)` and `durable.ExecutionKey(ctx)` return the same execution key. The Dispatcher injects that key into ToolInput.ExecutionKey; `core/durable.Runner` likewise injects the key into the step context. The model's Args cannot override this metadata.
 
-一个键对应一个逻辑效果。手写多工具节点为每个操作设置稳定 CallID，Dispatcher 自动派生子键；Builder 原生工具循环通过已持久化的模型回合和调用 ID 生成 CallID。裸 Tool 不承诺调用级恢复，持久 Builder 会在模型请求前拒绝它。详见下文。
+One key corresponds to one logical effect. Hand-written multi-tool nodes set a stable CallID for each operation, and the Dispatcher derives child keys automatically; the Builder's native tool loop generates CallIDs from persisted model turns and call IDs. A bare Tool does not promise call-level recovery, and a durable Builder rejects it before the model request. See below for details.
 
-图中的状态和分支结果要求可 JSON 往返。串行 v1 检查点保持兼容；并行分支名称、顺序变化会改变计划指纹，拒绝旧检查点。函数、Merge、Clone 或状态结构发生语义变化时仍须提升 Version。FileStore 只提供单机可靠文件系统上的运行锁与原子保存，没有跨主机租约或接管；多实例共享运行用 goagent-contrib 的 `durable/pgstore`。框架不做自动补偿。
+State and branch results in the graph must round-trip through JSON. Serial v1 checkpoints remain compatible; changing parallel branch names or order changes the plan fingerprint and rejects old checkpoints. Semantic changes to functions, Merge, Clone or the state structure still require a Version bump. FileStore only provides a run lock and atomic saves on a reliable single-host file system, with no cross-host lease or takeover; for runs shared by multiple instances use goagent-contrib's `durable/pgstore`. The framework does no automatic compensation.
 
-## 可运行退款案例
+## Runnable Refund Case
 
-案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)，本节命令在该仓库根目录运行。
+The case lives in [goagent-examples](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md); run the commands in this section from the root of that repository.
 
 ```sh
-# 使用一个新目录，第一次运行停在审批前，无模型调用。
+# Use a new directory; the first run stops before approval, with no model calls.
 go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native
-# 将 KEY 替换为上一步 snapshot.Key。
+# Replace KEY with snapshot.Key from the previous step.
 go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native \
   -approve KEY -approver demo-reviewer -crash-after-refund
-# 上一步模拟退出码 86。重启返回原回执，账本仅一条退款。
+# The previous step simulates exit code 86. Restarting returns the original receipt, and the ledger has only one refund.
 go run ./workflow/refund-recovery -engine graph -dir /tmp/refund-native
 ```
 
-图流程：恢复既有申请 → 并行查询订单/校验申请 → 注册审核快照 → 审批 → Dispatcher 退款工具 → 完成。工具调用真实的本地 SQLite 事务适配器，订单与审批身份仍是演示数据，不连接支付机构。`-engine steps` 是旧默认入口，两个执行器使用独立检查点子目录，共享业务账本去重。
+Graph flow: recover the existing request → query the order / validate the request in parallel → register the review snapshot → approval → Dispatcher refund tool → done. The tool calls a real local SQLite transactional adapter; order and approval identities are still demo data, and no payment provider is contacted. `-engine steps` is the old default entry; the two executors use separate checkpoint subdirectories and share business ledger deduplication.
 
 ```sh
-# goagent 仓库
+# goagent repository
 go test -race ./workflow ./tools ./core/durable
-# goagent-examples 仓库
+# goagent-examples repository
 go test -race ./workflow/refund-recovery
 ```
 
-覆盖分支成功后跳过、失败/取消、汇合重试、分支保存失败的稳定键、真实进程崩溃、旧检查点兼容、工具 Schema/授权/结果失败、Builder 原生工具路径，以及退款图跨进程恢复。
+Covers skipping after branch success, failure/cancellation, join retries, stable keys when branch saving fails, real process crashes, old checkpoint compatibility, tool Schema/authorization/result failures, the Builder native tool path, and cross-process recovery of the refund graph.
 
-## DevOps、文章审核、自动回复
+## DevOps, Article Review, Auto-Reply
 
-[三个业务案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/business-cases/README.md)位于 goagent-examples 仓库，本节命令在该仓库根目录运行。案例提供完整 CLI、JSON 输入夹具和自动化测试：DevOps 并行诊断与审批后模拟重启；文章并行审核、拒绝与人工复核；自动回复基于本地 FAQ，有来源才回复，未知问题转人工。
+[Three business cases](https://github.com/kart-io/goagent-examples/blob/main/workflow/business-cases/README.md) live in the goagent-examples repository; run the commands in this section from the root of that repository. The cases provide a complete CLI, JSON input fixtures and automated tests: DevOps parallel diagnosis with a simulated restart after approval; article parallel review, rejection and human re-review; auto-reply based on a local FAQ, replying only when there is a source and handing unknown questions to a human.
 
 ```sh
 go run ./workflow/business-cases -case devops -dir /tmp/goagent-devops
@@ -135,90 +137,90 @@ go run ./workflow/business-cases -case auto-reply -dir /tmp/goagent-reply
 go test -race ./workflow/business-cases
 ```
 
-三个案例默认使用离线规则，可通过 `-live -provider gemini|deepseek|minimax -model MODEL` 接入真实模型；业务效果始终为本地模拟。模型判断持久化后，审批恢复和流程重放不再调用模型。测试覆盖审批前零效果、Schema 校验、失败/取消恢复、跨进程崩溃与业务 ID 去重。
+All three cases use offline rules by default and can be wired to real models with `-live -provider gemini|deepseek|minimax -model MODEL`; business effects are always simulated locally. Once the model's judgment is persisted, approval recovery and flow replay no longer call the model. Tests cover zero effects before approval, Schema validation, failure/cancellation recovery, cross-process crashes and business ID deduplication.
 
-真实模型测试使用 `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE`（或 `deepseek`、`minimax`），从环境读取相应 API Key 和模型名称；每个 Provider 最多 6 次请求，失败项保留、无自动重试。见[Gemini / DeepSeek 报告](../evaluation/2026-10-27-business-cases-live/REPORT.md)及[MiniMax 报告](../evaluation/2026-10-27-business-cases-minimax/REPORT.md)。
+Real-model tests use `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE` (or `deepseek`, `minimax`), reading the corresponding API key and model name from the environment; at most 6 requests per provider, failures are kept, and there are no automatic retries. See the [Gemini / DeepSeek report](../evaluation/2026-10-27-business-cases-live/REPORT.md) and the [MiniMax report](../evaluation/2026-10-27-business-cases-minimax/REPORT.md).
 
-## 后续能力边界
+## Capability Boundaries and Follow-up Work
 
-当前保留同一图状态类型，异构数据用 Adapt 显式转换。跨节点 Collect/Transform、字段映射 DSL、可视化调试器和分布式调度尚未实现。原生编排和工具执行已经连通，不等于所有通用编排能力均已覆盖。
+The same graph state type is kept for now; heterogeneous data is converted explicitly with Adapt. Cross-node Collect/Transform, a field-mapping DSL, a visual debugger and distributed scheduling are not implemented yet. Native orchestration and tool execution being connected does not mean all general orchestration capabilities are covered.
 
 
-## 工具调用级日志与恢复
+## Tool-Call Journaling and Recovery
 
 ```go
-// ctx 来自持久图节点，包含 store 和该次节点访问的父执行键。
+// ctx comes from a durable graph node and contains the store and the parent execution key of this node visit.
 out, err := dispatcher.Invoke(ctx, tools.ToolRequest{
     Name: "reserve_stock",
     Input: &interfaces.ToolInput{
-        CallID: "reserve", // 宿主定义的稳定逻辑 ID；第二个效果必须使用不同 ID
+        CallID: "reserve", // stable logical ID defined by the host; a second effect must use a different ID
         Args: map[string]any{"sku": "demo", "quantity": 1},
     },
 })
 ```
 
-每次操作依次执行：获取子操作锁 → 校验意图摘要 → 保存 pending 与尝试次数 → 执行 → 保存 completed/failed。重复的完成调用返回保存结果；同一 ID 的参数、schema、调用方或尝试预算改变时拒绝恢复。调用输出跨 JSON 边界，fresh/replay 都按 JSON 解码：对象为 map、数值为 json.Number，自定义 Go 类型须在应用边界显式转换。旧空 CallID 不启用此日志，不改变原工具输出类型。
+Each operation runs in order: acquire the child operation lock → verify the intent digest → save pending and the attempt count → execute → save completed/failed. A repeated call to a completed operation returns the saved result; if the arguments, schema, caller or attempt budget for the same ID change, recovery is rejected. Call output crosses a JSON boundary and is decoded as JSON for both fresh runs and replays: objects become maps and numbers become json.Number; custom Go types must be converted explicitly at the application boundary. An old empty CallID does not enable this journal and does not change the original tool output type.
 
-`DispatchConfig.MaxAttempts` 默认 3，包含首次执行；只有下一次显式调用才会尝试失败或未确定的操作。恢复每次仍先做 schema、自定义校验及授权。授权函数不能有副作用；首次执行和回放都可能调用。日志不提供外部效果 exactly-once：崩溃窗口里的工具必须让目标系统将去重键和业务写入放在同一事务中。保存失败不会被当成成功。
+`DispatchConfig.MaxAttempts` defaults to 3, including the first execution; a failed or indeterminate operation is retried only on the next explicit call. Each recovery still runs schema validation, custom validation and authorization first. Authorization functions must have no side effects; they may be called on both first execution and replay. The journal does not provide exactly-once external effects: for tools inside a crash window, the target system must put the deduplication key and the business write in the same transaction. Save failures are never treated as success.
 
-回放直接返回日志中的结果，不再经过工具本身或包在 Dispatcher 内部的包装器。宿主若按执行顺序维护状态（例如证据账本按到达顺序分配引用号），应放进 `DispatchConfig.OnResult`：它在得到结果后、`tool_end` 之前同步调用，首次执行、日志回放和交还模型的参数错误结果都会触发，参数为 `tools.DispatchResult{Name, CallID, ExecutionKey, Args, Output, Replayed}`。持久调用的 `Output` 总从日志解码，首次与回放值相同；`ExecutionKey` 由父键与 CallID 派生，重启后不变，可作宿主去重键。崩溃恢复时已完成的调用回放并再次触发回调。顺序执行的调用按调用顺序触发；Builder 同轮并发执行的调用经 `tools.DeferResults` 推迟到整轮结束后按模型给出的顺序触发，首次执行与恢复回放顺序一致，按到达顺序编号的账本因此能原样重建。宿主自行并发调用 `Invoke` 时触发顺序不确定且会并发触发，需自行加锁，编号应从 `ExecutionKey` 派生而不是按到达顺序分配。回调返回错误或 panic 时本次调用失败，已写入的日志不变。回调不进入意图摘要，不受 `Timeout` 约束，不得修改 `Args` 与 `Output`。
+Replay returns the result from the journal directly, without passing through the tool itself or wrappers inside the Dispatcher. If the host maintains state in execution order (for example an evidence ledger that assigns citation numbers in arrival order), put it in `DispatchConfig.OnResult`: it is called synchronously after the result is obtained and before `tool_end`, and is triggered by first execution, journal replay and argument-error results returned to the model; its parameter is `tools.DispatchResult{Name, CallID, ExecutionKey, Args, Output, Replayed}`. For durable calls `Output` is always decoded from the journal, so first-run and replay values are the same; `ExecutionKey` is derived from the parent key and the CallID, is stable across restarts, and can serve as the host's deduplication key. During crash recovery, already completed calls are replayed and trigger the callback again. Sequentially executed calls trigger in call order; calls executed concurrently within the same Builder turn are deferred via `tools.DeferResults` until the whole turn ends and then triggered in the order given by the model, so first execution and recovery replay have the same order and an arrival-ordered ledger can be rebuilt exactly. When the host calls `Invoke` concurrently itself, trigger order is nondeterministic and triggers happen concurrently, so it must lock on its own, and numbering should be derived from `ExecutionKey` rather than assigned in arrival order. If the callback returns an error or panics, the call fails and the already written journal is unchanged. The callback is not part of the intent digest, is not bounded by `Timeout`, and must not modify `Args` or `Output`.
 
-Builder 要求显式配置 `WithDurableScope("assistant")`，先从节点键派生 Agent 调用键，再在其下用 `model/turn/N` 保存完整模型回合、用 `tool/turn/N/call/ID` 保存每个工具。因此 Gemini 的 ProviderState 与 DeepSeek/MiniMax 的 reasoning_content 可在重启后续接，已执行的调用 ID 不依赖重新生成。原生续接数据仅在本地检查点中使用，公开测试报告不包含这些内容。Store 可能包含业务数据和模型内容，宿主负责访问控制与保留期限。
+The Builder requires explicitly configuring `WithDurableScope("assistant")`; it first derives the Agent call key from the node key, then under it saves complete model turns with `model/turn/N` and each tool with `tool/turn/N/call/ID`. As a result Gemini's ProviderState and DeepSeek/MiniMax's reasoning_content can continue after a restart, and executed call IDs do not depend on regeneration. Native continuation data is used only in local checkpoints, and public test reports do not include it. The Store may contain business data and model content; the host is responsible for access control and retention.
 
-模型回合先验证所有工具名、ID、JSON 参数及 Schema；任一调用无效则整轮不执行工具。网络错误、截断、无效计划也保存已取得的用量。除 `WithRequestError` 钩子（如 `builder.RetryTransient`）在同一回合记录内的原样重试外，模型操作最多请求一次；替换消息或客户端的恢复决定在持久运行中以错误结束。请求后崩溃但结果未落盘会保留 pending/ambiguous，恢复返回 `ErrOperationAttention`，不会再次付费；此时尚未得到的用量无法重建。在对应 Agent 作用域 context 上调用 `InspectOperation(ctx, "model/turn/0")` 可读取详细状态；不能直接使用节点的父 context 查询子作用域。处理不确定效果后，由业务宿主决定补偿或启动新工作流；不直接删除日志强制重试。
+A model turn first validates all tool names, IDs, JSON arguments and Schemas; if any call is invalid, no tool in the turn runs. Network errors, truncation and invalid plans also save the usage already obtained. Apart from verbatim retries within the same turn record by a `WithRequestError` hook (such as `builder.RetryTransient`), a model operation requests at most once; recovery decisions that replace messages or the client end with an error in durable runs. If the process crashes after the request but before the result is persisted, pending/ambiguous is kept, and recovery returns `ErrOperationAttention` without paying again; usage not yet obtained at that point cannot be reconstructed. Call `InspectOperation(ctx, "model/turn/0")` on the corresponding Agent-scope context to read the detailed state; the node's parent context cannot be used directly to query a child scope. After handling the indeterminate effect, the business host decides whether to compensate or start a new workflow; do not delete the journal directly to force a retry.
 
-`durable.Do` 可供其他节点保存具名子操作，`WithJournal` 与 `WithExecutionKey` 可供宿主显式接入。其输入保存摘要，输出保存 JSON，错误仅保存类别。默认一次尝试；`RetryFailed: true` 配合 MaxAttempts 允许显式恢复。未绑定日志时直接执行，不提供持久性。
+`durable.Do` lets other nodes save named child operations, and `WithJournal` and `WithExecutionKey` let the host wire them explicitly. Inputs are saved as digests, outputs as JSON, and errors only as categories. One attempt by default; `RetryFailed: true` together with MaxAttempts allows explicit recovery. Without a bound journal it executes directly with no durability.
 
-模型、提示词、工具实现、策略或输入结构改变时，必须提升 `DurableConfig.Version`。模型请求中的 provider、消息与工具定义另有意图校验，但框架不能推断闭包配置的全部变化。恢复要求固定输入和上下文；PreStep（含 `WithOffload`）的结果随日志回放，见[工具上下文](CONTEXT_POLICY.md)。外部记忆、检索、中间件、完成回调也不是任意调用栈检查点，需由宿主保证稳定或自行持久化。
+When the model, prompts, tool implementations, policies or input structure change, `DurableConfig.Version` must be bumped. Provider, messages and tool definitions in model requests have separate intent checks, but the framework cannot infer every change to closure configuration. Recovery requires fixed input and context; PreStep results (including `WithOffload`) are replayed with the journal; see [Tool Context](CONTEXT_POLICY.md). External memory, retrieval, middleware and completion callbacks are also not arbitrary call-stack checkpoints; the host must keep them stable or persist them itself.
 
-## 类型化流适配与能力声明
+## Typed Stream Adaptation and Capability Declaration
 
-`workflow.AdaptStream` 增加显式 intermediate chunk 映射，保留类型化预览和业务事件；最终映射仍在合法终态及 EOF 后运行。预览不提交图状态、不调度下游，可在恢复时重复。映射错误、取消和上游协议错误会终止执行。
+`workflow.AdaptStream` adds an explicit intermediate chunk mapping that keeps typed previews and business events; the final mapping still runs after a valid terminal state and EOF. Previews do not commit graph state, do not schedule downstream nodes, and may repeat on recovery. Mapping errors, cancellation and upstream protocol errors terminate execution.
 
-Builder 会读取模型可选的 `core.StreamCapability`。MiniMax 案例适配器当前支持真实原生工具调用，但 HTTP 响应完整后才交付：模型为 final，Agent 为 steps，不宣称逐 token 流。跨节点 Collect/Transform 仍未实现，也未引入外部编排框架依赖。
+The Builder reads the model's optional `core.StreamCapability`. The MiniMax case adapter currently supports real native tool calls but delivers only after the HTTP response is complete: the model is final and the Agent is steps, with no claim of token-by-token streaming. Cross-node Collect/Transform is still not implemented, and no external orchestration framework dependency has been introduced.
 
-## 多工具真实进程恢复验证
+## Multi-Tool Real-Process Recovery Verification
 
-以下命令在 goagent-examples 仓库根目录运行。
+Run the following commands from the root of the goagent-examples repository.
 
 ```sh
-# 默认离线：模拟原生协议，验证真实子进程退出与续接。
+# Offline by default: simulate the native protocol and verify real child-process exit and continuation.
 go test -race ./workflow/business-cases -run TestNativeToolLoopProcessRecovery
-# 显式真实模型：选择一个 provider，每次最多 4 个请求。
+# Explicit real model: choose one provider, at most 4 requests each time.
 DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
 ```
 
-同一个 Agent 节点执行 A、B 两个工具，在 B 效果落盘后 `os.Exit(86)`；新进程应跳过 A、恢复 B 并仅请求最终回答；第三次进程启动应零模型/工具调用。效果按子执行键去重，断言只有两条记录、两个不同键及最终答案包含两条回执。见[三模型实测及首次失败记录](../evaluation/2026-10-27-durable-tool-loop/REPORT.md)。
+The same Agent node runs two tools, A and B, and calls `os.Exit(86)` after B's effect is persisted; the new process should skip A, recover B and request only the final answer; a third process start should make zero model/tool calls. Effects are deduplicated by child execution key, asserting there are only two records, two distinct keys, and that the final answer contains both receipts. See [three-model measurements and first-failure records](../evaluation/2026-10-27-durable-tool-loop/REPORT.md).
 
-## 可组合编排 R2
+## Composable Orchestration R2
 
-新增根预算、受控 Runnable 工具、OTel 观察及不可变上下文结果引用；见 [可组合编排指南](COMPOSABLE_ORCHESTRATION.md)。上下文结果卸载使用 `WithOffload`，持久运行中读取工具与业务工具一起经宿主 Dispatcher。流预览仍不代表业务终态，core/flow 仅为实验原型。
+Adds root budgets, controlled Runnable tools, OTel observation and immutable context result references; see the [Composable Orchestration guide](COMPOSABLE_ORCHESTRATION.md). Context result offloading uses `WithOffload`; in durable runs the read tool goes through the host Dispatcher together with business tools. Stream previews still do not represent business terminal state; core/flow is only an experimental prototype.
 
 
-## 多 Agent 作用域与入口约束
+## Multi-Agent Scopes and Entry Constraints
 
-同一节点中的每个逻辑 Agent 调用必须有不同且跨重启稳定的作用域：
+Each logical Agent call in the same node must have a distinct scope that is stable across restarts:
 
 ```go
 author, err := builder.NewSimpleBuilder(client).
     WithDurableScope("author").WithTools(dispatcher.Tools()...).Build()
-// 检查 err 后构造另一组件：
+// After checking err, build the other component:
 reviewer, err := builder.NewSimpleBuilder(client).
     WithDurableScope("reviewer").WithTools(dispatcher.Tools()...).Build()
 ```
 
-调用键派生为 `durable.ChildKey(nodeKey, "agent/" + scope)`，模型和工具日志均在此键下。重用同一个 scope 表示恢复**同一次逻辑调用**，不是启动新工作；同一 Agent 在一个节点内处理多个业务项时，宿主应使用稳定业务 ID 派生不同父键，或使用不同作用域/图节点。不要使用随机 ID、进程指针或并发完成顺序。没有作用域、空白作用域或旧的无作用域日志都会在模型请求前报错。
+The call key is derived as `durable.ChildKey(nodeKey, "agent/" + scope)`, and both model and tool journals live under this key. Reusing the same scope means resuming **the same logical call**, not starting new work; when the same Agent handles multiple business items within one node, the host should derive different parent keys from stable business IDs, or use different scopes/graph nodes. Do not use random IDs, process pointers or concurrent completion order. A missing scope, a blank scope or old unscoped journals all error before the model request.
 
-无工具的 `llm.Client` 也通过相同的模型操作日志执行，成功结果可重放，失败保留已知用量并停止重复请求。有工具的持久化 Agent 必须使用 `ToolStreamClient` 和 `Dispatcher.Tools()`（或等价 DurableCallTool）；这些检查在中间件、检索及模型请求前完成，日志检查的锁等待计入 Agent 超时。
+A tool-less `llm.Client` also runs through the same model operation journal: successful results can be replayed, and failures keep known usage and stop repeated requests. A durable Agent with tools must use `ToolStreamClient` and `Dispatcher.Tools()` (or an equivalent DurableCallTool); these checks complete before middleware, retrieval and the model request, and lock waits for journal checks count toward the Agent timeout.
 
-同一轮的多个工具调用默认按顺序执行。`WithParallelToolCalls(n)` 设为 n>=2（不另设上限传 `math.MaxInt`）且每个工具都实现 `interfaces.ConcurrentCallTool`（`Dispatcher.Tools()` 已实现，包装器须显式转发）时并发执行，峰值为 `min(n, MaxConcurrency)`；任一工具未实现该接口时整轮顺序执行（直接注册、未经 Dispatcher 的 `contextpolicy.Offload` 读取工具即未实现）。并发时执行先后不保证与模型给出的顺序一致，即使 `MaxConcurrency=1` 也一样。工具消息与 `tool_start`/`tool_end` 事件按模型给出的顺序，与完成顺序无关；`OnResult` 推迟到整轮结束后按同一顺序触发。某个调用失败不取消其他调用，全部结束后返回顺序最靠前的错误，避免兄弟调用被记为取消失败而在恢复时需要宿主处理。工具内部不要按执行顺序分配编号或依赖同轮调用的先后。直接返回工具只在本轮只有它一个调用时生效，因此不参与并发。
+Multiple tool calls in the same turn run sequentially by default. When `WithParallelToolCalls(n)` is set to n>=2 (pass `math.MaxInt` for no separate cap) and every tool implements `interfaces.ConcurrentCallTool` (`Dispatcher.Tools()` already does; wrappers must forward it explicitly), they run concurrently with a peak of `min(n, MaxConcurrency)`; if any tool does not implement the interface, the whole turn runs sequentially (a `contextpolicy.Offload` read tool registered directly rather than through a Dispatcher does not implement it). When concurrent, execution order is not guaranteed to match the order given by the model, even with `MaxConcurrency=1`. Tool messages and `tool_start`/`tool_end` events follow the order given by the model, regardless of completion order; `OnResult` is deferred until the whole turn ends and triggered in the same order. A failing call does not cancel the others; after all finish, the earliest error in order is returned, so sibling calls are not recorded as cancellation failures that the host would have to handle on recovery. Inside tools, do not assign numbers by execution order or depend on the order of calls in the same turn. A direct-return tool only takes effect when it is the only call in the turn, so it does not participate in concurrency.
 
-`WithEmptyAnswerRetries(n)` 默认关闭。开启后，模型以 stop 结束且既无正文也无工具调用的回合按已完成写入日志，不追加空 assistant 消息，而是追加一条固定 user 消息重问；重问计入 MaxIterations 并占用一次预算。超过 n 次或已是最后一轮时按原方式报错，持久回合记为失败。
+`WithEmptyAnswerRetries(n)` is off by default. When enabled, a turn in which the model ends with stop and has neither body text nor tool calls is written to the journal as completed; instead of appending an empty assistant message, a fixed user message is appended to ask again. Re-asks count toward MaxIterations and consume one unit of budget. Beyond n times, or on the last turn, it errors as before and the durable turn is recorded as failed.
 
-这是持久化接入契约的变更。原有宿主需要补充作用域并提升 `DurableConfig.Version`；先核对旧运行已发生的业务效果，再决定迁移或发起新的逻辑工作，不直接删除检查点重试。检测到节点下旧 `model/turn/0` 或 `model/answer/0` 日志时，不会悄悄换键执行。原生多工具案例已提升为 native-loop-v3，避免把历史 v2 运行当成新键继续执行。
+This is a change to the durable integration contract. Existing hosts need to add scopes and bump `DurableConfig.Version`; verify the business effects that old runs already produced before deciding whether to migrate or start new logical work, and do not delete checkpoints directly to retry. When old `model/turn/0` or `model/answer/0` journals are detected under a node, execution never silently switches keys. The native multi-tool case has been bumped to native-loop-v3 to avoid treating historical v2 runs as new keys to continue.
 
-## 持久流中的类型化预览
+## Typed Previews in Durable Streams
 
-持久图 `AsRunnable().Stream` 保留节点中间 Data：通过 `chunk.Data.State` 获取，且 `chunk.Data.Preview=true`、`chunk.Done=false`。零值数据和没有 Event 的数据块也会转发；事件仍保留节点作用域。纯事件块的 State 可能是 T 的零值，不应据此推断业务状态。
+Durable graph `AsRunnable().Stream` keeps intermediate node Data: read it via `chunk.Data.State`, with `chunk.Data.Preview=true` and `chunk.Done=false`. Zero-value data and data chunks without an Event are also forwarded; events still keep the node scope. The State of a pure event chunk may be the zero value of T, so do not infer business state from it.
 
-Preview 是本次执行的临时观察，不是检查点；不驱动下游、不提交持久状态，也不代表审批或完成。消费方不要把它用作恢复状态。`Snapshot`/`Run` 返回的持久状态以及最终成功块均为 Preview=false。预览之后出错或取消，恢复仍从上次已提交状态开始；重新执行可能再次产生预览。
+Preview is a temporary observation of this execution, not a checkpoint; it does not drive downstream nodes, does not commit durable state, and does not represent approval or completion. Consumers must not use it as recovery state. The durable state returned by `Snapshot`/`Run` and the final success chunk all have Preview=false. If an error or cancellation happens after a preview, recovery still starts from the last committed state; re-execution may produce previews again.

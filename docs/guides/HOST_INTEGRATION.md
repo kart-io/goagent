@@ -1,56 +1,58 @@
-# 宿主标准接入
+# Standard Host Integration
 
-`execution.Scope` 组合宿主已有的执行身份、会话、日志、预算、期限与观察者，不创建新的运行引擎，只负责装配。
+[English](HOST_INTEGRATION.md) | [中文](HOST_INTEGRATION_CN.md)
 
-## 构建与运行
+`execution.Scope` combines the host's existing execution identity, session, journal, budget, deadline, and observers. It does not create a new run engine; it only does the wiring.
 
-完整可运行代码见 [离线示例](../../examples/execution-scope/main.go)，不需要模型密钥：
+## Build and Run
+
+The complete runnable code is in the [offline example](../../examples/execution-scope/main.go); no model key is required:
 
 ```bash
 go run ./examples/execution-scope
 ```
 
-典型顺序是 `execution.NewScope(config)` → `scope.Bind(requestCtx)` → `execution.ConfigureBuilder(b, scope, agentID)` → `b.BuildContext(runCtx)` → `agent.AsRunnable().Invoke/Stream(runCtx, input)`。每一步都检查错误，并对 Bind 返回的取消函数使用 defer。ConfigureBuilder 返回配置后的 Builder；泛型参数由 Builder 推导。Builder 是可变对象，不应并发配置。
+The typical order is `execution.NewScope(config)` → `scope.Bind(requestCtx)` → `execution.ConfigureBuilder(b, scope, agentID)` → `b.BuildContext(runCtx)` → `agent.AsRunnable().Invoke/Stream(runCtx, input)`. Check the error at every step and defer the cancel function returned by Bind. ConfigureBuilder returns the configured Builder; the type parameter is inferred from the Builder. The Builder is mutable and must not be configured concurrently.
 
-`BuildContext(ctx)` 拒绝 nil、已取消和已超时上下文，将同一上下文传入检查点初始化和 OnStart 回调，并在存储操作、各回调返回后检查取消。旧 `Build()` 仍使用 Background。框架不能强制中断忽略上下文的同步实现，也不回滚初始化回调已经发生的外部效果。宿主应使用支持上下文的存储与回调。
+`BuildContext(ctx)` rejects nil, canceled, and timed-out contexts, passes the same context to checkpoint initialization and OnStart callbacks, and checks for cancellation after store operations and after each callback returns. The old `Build()` still uses Background. The framework cannot forcibly interrupt synchronous implementations that ignore the context, and it does not roll back external effects already produced by initialization callbacks. Hosts should use stores and callbacks that honor the context.
 
-## 身份与恢复
+## Identity and Recovery
 
-- `Config.RunID` 必填且无首尾空白；Budget 的 RootKey 必须与 RunID 一致。恢复时保留 RunID、agentID、预算版本和配置。
-- SessionID 为空时使用 RunID；显式 SessionID 作为宿主会话身份保留。多个运行可以共享会话，宿主仍须协调不同 Agent 实例对同一会话的并发写入。
-- `ConfigureBuilder` 设置会话与持久作用域，之后不要另行覆盖这些身份。工作流的 `RunRequest.RunID` 使用 `scope.RunID()`；节点执行键继续由图派生，不能全部替换成根 RunID。
-- `observe.RunIDFromContext(ctx)` 可以读取观察身份。Bind 检查已有执行键、会话、观察身份和预算冲突。
+- `Config.RunID` is required and must have no leading or trailing whitespace; the Budget's RootKey must equal the RunID. On recovery, keep the RunID, agentID, budget version, and configuration.
+- An empty SessionID defaults to the RunID; an explicit SessionID is kept as the host session identity. Multiple runs may share a session, but the host must still coordinate concurrent writes to the same session from different Agent instances.
+- `ConfigureBuilder` sets the session and durable scope; do not override these identities afterwards. A workflow's `RunRequest.RunID` uses `scope.RunID()`; node execution keys are still derived from the graph and must not all be replaced with the root RunID.
+- `observe.RunIDFromContext(ctx)` reads the observation identity. Bind checks for conflicts with an existing execution key, session, observation identity, and budget.
 
-每次 Bind 使用新的宿主请求上下文；不要重用上次已绑定的上下文。任何预绑定 Journal 都会被拒绝，包括没有执行键的 Journal；这防止宿主请求误继承其他运行的日志。已有匹配的裸身份及同一预算控制器可接受。
+Use a fresh host request context for each Bind; do not reuse a context that was already bound. Any pre-bound Journal is rejected, including a Journal without an execution key; this prevents a host request from accidentally inheriting another run's journal. A matching bare identity and the same budget controller are accepted.
 
-## 资源与期限
+## Resources and Deadlines
 
-`Config` 可选 Journal、Budget、Timeout、Observer、Tracer。绑定 Journal 时如同时使用预算，预算必须持久化；仅使用 Journal 不强制创建预算。Scope 不关闭 Store、Observer 或 Tracer，宿主负责这些资源的共享与关闭。未显式配置 Observer/Tracer 时继承父上下文。Scope 只取消派生上下文，实际期限取父上下文、Scope Timeout 与预算期限中最早者。
+`Config` optionally takes a Journal, Budget, Timeout, Observer, and Tracer. When a Journal is bound and a budget is also used, the budget must be durable; using only a Journal does not force a budget to be created. Scope does not close the Store, Observer, or Tracer; the host owns sharing and closing these resources. If Observer/Tracer are not configured explicitly, they are inherited from the parent context. Scope only cancels the derived context; the effective deadline is the earliest of the parent context, the Scope Timeout, and the budget deadline.
 
-Scope 不提供跨进程调度、分布式会话互斥或自动副作用补偿；多实例共享持久运行需要支持租约的 Store（如 goagent-contrib 的 `durable/pgstore`）。持久审批与恢复由现有 Runner、工作流和 Dispatcher 负责；其行为见 [执行治理](EXECUTION_GOVERNANCE.md)。恢复集成测试见 [execution/integration_test.go](../../execution/integration_test.go)，覆盖审批暂停、执行后检查点失败、重建恢复与完成回放，并验证副作用和预算不重复。
+Scope does not provide cross-process scheduling, distributed session mutual exclusion, or automatic side-effect compensation; sharing durable runs across instances requires a Store that supports leases (such as `durable/pgstore` in goagent-contrib). Durable approval and recovery are handled by the existing Runner, workflows, and Dispatcher; see [Execution Governance](EXECUTION_GOVERNANCE.md) for their behavior. The recovery integration test is [execution/integration_test.go](../../execution/integration_test.go); it covers approval pause, checkpoint failure after execution, rebuild-and-resume, and replay after completion, and verifies that side effects and budget are not duplicated.
 
-## 持久化分工
+## Division of Persistence
 
-Builder 的持久化入口各管一件事，不能相互替代：
+The Builder's persistence entry points each handle one concern and cannot substitute for one another:
 
-| 关注点 | 入口 | 行为 |
+| Concern | Entry point | Behavior |
 |---|---|---|
-| 运行中途崩溃恢复 | Scope 的 Journal 与 `WithDurableScope` | 记录模型与工具调用，以同一执行键恢复时回放已完成操作 |
-| 对话历史 | `WithMemory` 或 `WithSessionLog` | 配置 SessionLog 后历史从日志推导，不再读取记忆；SessionLog 可同时作为 durable 日志（`session.DurableStore`） |
-| 轮次之间的业务状态 | `WithState` | 只在进程内保留，Builder 不加载也不保存；需要跨进程时由宿主持久化，或作为 `workflow.CompileDurable` 图的状态 |
+| Recovery from a mid-run crash | Scope's Journal and `WithDurableScope` | Records model and tool calls; when resuming with the same execution key, completed operations are replayed |
+| Conversation history | `WithSessionLog` | History is derived from the session log; a SessionLog can also serve as the durable journal (`session.DurableStore`) |
+| Business state between turns | `WithState` | Kept in-process by default; `WithSessionState` restores state across processes through the session log; otherwise the host persists it, or it becomes the state of a `workflow.CompileDurable` graph |
 
-持久日志只回放操作结果，不保存 `WithState` 的状态。
+The durable journal only replays operation results; it does not save `WithState` state.
 
-## 开销与验收
+## Overhead and Acceptance
 
-[实测报告](../evaluation/2026-10-31-execution-overhead/REPORT.md) 保存三种预算模式、10/100/1000 操作矩阵、固定账本微基准与原始数据。探针可独立运行：
+The [measurement report](../evaluation/2026-10-31-execution-overhead/REPORT.md) contains the three budget modes, the 10/100/1000-operation matrix, fixed-ledger micro-benchmarks, and raw data. The probe can be run standalone:
 
 ```bash
 go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,memory,file -timeout=10m
 ```
 
-这是本机合成负载，文件模式只包含预算持久化，没有真实模型、工具日志或业务服务。接入真实服务后仍须验证典型任务的延迟、取消、恢复、预算和资源生命周期。
+This is a synthetic load on a single machine; file mode only covers budget persistence, with no real model, tool journal, or business service. After integrating a real service, you still need to verify latency, cancellation, recovery, budget, and resource lifecycle for typical tasks.
 
-## 受治理工具流
+## Governed Tool Flow
 
-需要显式授权和有限根预算、准入与排队时，使用 `execution.NewGovernedBuilder`，并以同一个Scope.Bind执行；工具通过WithDispatcher统一提供，禁止混入WithTools。它返回常规Builder和静态治理报告，不建立新运行引擎或接管资源。见[完整指南](EXECUTION_ACCEPTANCE.md#标准治理装配)与[离线示例](../../examples/execution-governed/main.go)。
+When you need explicit authorization plus a bounded root budget, admission, and queuing, use `execution.NewGovernedBuilder` and run it under the same Scope.Bind; tools are supplied uniformly through WithDispatcher and must not be mixed with WithTools. It returns a regular Builder and a static governance report, without creating a new run engine or taking ownership of resources. See the [full guide](EXECUTION_ACCEPTANCE.md#标准治理装配) and the [offline example](../../examples/execution-governed/main.go).

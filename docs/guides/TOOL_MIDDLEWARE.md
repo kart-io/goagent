@@ -1,11 +1,13 @@
-# 工具中间件
+# Tool Middleware
 
-工具调用的横切逻辑有两层：
+[English](TOOL_MIDDLEWARE.md) | [中文](TOOL_MIDDLEWARE_CN.md)
 
-| 层 | 入口 | 适用 |
+Cross-cutting logic for tool calls lives in two layers:
+
+| Layer | Entry point | Use for |
 |---|---|---|
-| 单个工具的包装 | `middleware.Wrap` + `tools/middleware` | 日志、结果缓存、限流等与调用方无关的逻辑 |
-| Dispatcher 管线 | `tools.DispatchConfig.Pipeline`（`tools.Pipeline`） | 模型可见调用的准入、审批、硬性拒绝、执行包装与结果后处理；与调用日志、恢复、并发和超时一起工作 |
+| Wrapping a single tool | `middleware.Wrap` + `tools/middleware` | Caller-independent logic such as logging, result caching, and rate limiting |
+| Dispatcher pipeline | `tools.DispatchConfig.Pipeline` (`tools.Pipeline`) | Admission, approval, hard rejection, execution wrapping, and result post-processing of model-visible calls; works together with call journaling, recovery, concurrency, and timeouts |
 
 ## middleware.Wrap
 
@@ -22,34 +24,34 @@ import (
 ownedCache := cache.NewSimpleCache(10*time.Minute)
 defer ownedCache.Close()
 wrapped := middleware.Wrap(calculator,
-    middleware.Logging(),                          // 最外层
+    middleware.Logging(),                          // outermost
     middleware.Caching(
         middleware.WithCache(ownedCache),
         middleware.WithTTL(10*time.Minute),
     ),
-    middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5)), // 最内层
+    middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5)), // innermost
 )
 output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a": 1, "b": 2}})
 ```
 
-`middleware.Wrap(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；空中间件函数或返回空调用器的函数在装配时以 `errors.CodeInvalidConfig` 失败。
-不传中间件时返回原工具。包装结果是 `*middleware.WrappedTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
+`middleware.Wrap(tool, middlewares ...middleware.ToolMiddlewareFunc)` wraps in an onion model; the first function is the outermost. `Logging`, `Caching`, and `RateLimit` return the same strongly typed function; when you need to keep the object to read statistics, pass `NewCachingMiddleware(...).Wrap` or `NewRateLimitMiddleware(...).Wrap` explicitly. Objects or any other types do not compile as arguments; a nil middleware function, or one that returns a nil invoker, fails at assembly time with `errors.CodeInvalidConfig`.
+With no middleware, the original tool is returned. The wrapped result is a `*middleware.WrappedTool`, which implements only `interfaces.Tool` and `Unwrap()` and **does not forward** optional interfaces declared by the original tool (such as `DispatchTimeoutProvider`, `DurablePolicyProvider`, `interfaces.ArgumentErrorTool`); the Dispatcher does not call `Unwrap` either. Tools that depend on these declarations should not be wrapped before registration.
 
-### 内置中间件
+### Built-in Middleware
 
-**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认输出到 stdout 的 JSON slog，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
+**Logging**: `Logging(opts...)` (or `NewLoggingMiddleware(opts...).Wrap`). By default it writes JSON slog to stdout, recording the tool name, CallerID, TraceID, and duration. Arguments and results often contain user data and credentials, so they are not logged by default; enable them with `WithInputLogging` and `WithOutputLogging` respectively. Other options: `WithLogger`, `WithMaxArgBytes` (default 1024 bytes; longer values are truncated). Timing is kept in per-call local variables and does not modify business input; on success it writes `Metadata["execution_time"]`. Errors and partial results are passed through unchanged, and empty input and output are not rewritten by the logging wrapper.
 
-**Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
+**Caching**: `Caching(opts...)` (or `NewCachingMiddleware(opts...).Wrap`, whose `GetStats()` returns hit/miss counts).
 
-- 默认缓存 `cache.NewSimpleCache(5*time.Minute, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))`（无后台协程，最多 10000 条）、TTL 5 分钟；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithCache(cache.Cache)`、`WithTTL`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
-- 默认键 `tool:<name>:<sha256(参数JSON) 的完整十六进制摘要>`，忽略 `__` 开头的参数；键中不含 CallerID 或会话，跨用户共享的缓存须自定义键函数。
-- 只缓存 `err == nil` 且 `Success=true` 的结果（不含 `__` 开头的元数据）。命中时不调用内层，返回副本并设置 `Metadata["cache_hit"]=true`、`Metadata["cached"]=true`；未命中且写入时设置 `cache_hit=false`、`cache_stored=true`。
+- The default cache is `cache.NewSimpleCache(5*time.Minute, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))` (no background goroutine, at most 10000 entries) with a 5-minute TTL. Keys are isolated by the session from `tools.WithSessionID` and by `ToolInput.CallerID`; `WithCacheKeyFunc` only determines the key within that scope. Options: `WithCache(cache.Cache)`, `WithTTL`, `WithCacheKeyFunc(func(toolName string, args map[string]any) string)`, `WithCacheLogger`.
+- The default key is `tool:<name>:<full hex digest of sha256(args JSON)>`, ignoring arguments that start with `__`; the key contains no CallerID or session, so caches shared across users need a custom key function.
+- Only results with `err == nil` and `Success=true` are cached (excluding metadata starting with `__`). On a hit, the inner layer is not called; a copy is returned with `Metadata["cache_hit"]=true` and `Metadata["cached"]=true`. On a miss followed by a write, `cache_hit=false` and `cache_stored=true` are set.
 
-**RateLimit**：`RateLimit(opts...)`，基于 `golang.org/x/time/rate` 令牌桶。默认 10 QPS、突发 20、全局共享、不等待；选项 `WithQPS`、`WithBurst`、`WithPerToolRateLimit()`（按工具名独立限流）、`WithWaitTimeout`（大于 0 时最多等待这么久取令牌）、`WithRateLimitLogger`。拒绝时返回错误码 `errors.CodeMiddlewareExecution`，可用 `errors.IsCode(err, errors.CodeMiddlewareExecution)` 判断。
+**RateLimit**: `RateLimit(opts...)`, a token bucket based on `golang.org/x/time/rate`. Defaults: 10 QPS, burst 20, globally shared, no waiting. Options: `WithQPS`, `WithBurst`, `WithPerToolRateLimit()` (independent limits per tool name), `WithWaitTimeout` (when greater than 0, wait up to that long for a token), `WithRateLimitLogger`. Rejections return error code `errors.CodeMiddlewareExecution`, which can be checked with `errors.IsCode(err, errors.CodeMiddlewareExecution)`.
 
-缓存放在限流外层时，命中不消耗限流额度。
+When the cache sits outside the rate limiter, cache hits do not consume rate-limit quota.
 
-### 自定义
+### Custom
 
 ```go
 func Audit(log func(string, ...any)) middleware.ToolMiddlewareFunc {
@@ -64,16 +66,16 @@ func Audit(log func(string, ...any)) middleware.ToolMiddlewareFunc {
 }
 ```
 
-## Dispatcher 管线
+## Dispatcher Pipeline
 
-经 `Dispatcher.Tools()` 交给模型的调用与 `Dispatcher.Invoke`/`AsRunnable` 的宿主调用都按 PreHook → 审批 → Guard → Around（含超时）→ 工具 → PostHook 执行；参数不合法的调用不进入管线。
+Both calls handed to the model through `Dispatcher.Tools()` and host calls through `Dispatcher.Invoke`/`AsRunnable` run in the order PreHook → approval → Guard → Around (including timeout) → tool → PostHook; calls with invalid arguments do not enter the pipeline.
 
 ```go
 dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
     Pipeline: &tools.Pipeline{
         Guards: []tools.Guard{func(ctx context.Context, call *tools.Call) string {
             if call.Tool == "delete_order" && call.CallerID == "" {
-                return "缺少调用身份"
+                return "missing caller identity"
             }
             return ""
         }},
@@ -87,19 +89,19 @@ dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
 })
 ```
 
-| 阶段 | 类型 | 作用 |
+| Stage | Type | Role |
 |---|---|---|
-| `Pre` | `PreHook` → `PreDecision` | `PreAllow`/`PreDeny`（交还模型修订）/`PreAsk`（交给 `Approver`）/`PreStop`（终止运行）/`PreSubstitute`（改调另一个工具）；全部执行后按 Stop > Deny > Substitute > Ask > Allow 聚合 |
-| `Approver` | `Approver`/`ApproverFunc` | 宿主实现的人工审批；`ApprovalTimeout` 默认 10 分钟，`GrantTTL` 限制会话级授权有效期 |
-| `Guards` | `Guard` | 只能拒绝，返回非空原因即以 `tools.Rejected` 交给模型；审批也无法越过 |
-| `Around` | `Around` | 洋葱式包住工具执行，计入单次超时 |
-| `Post` | `PostHook` → `PostDecision` | 替换结果（`Replace`）或追加上下文（`AdditionalContext`）；也处理被拒绝的结果 |
+| `Pre` | `PreHook` → `PreDecision` | `PreAllow`/`PreDeny` (hand back to the model for revision)/`PreAsk` (hand to the `Approver`)/`PreStop` (terminate the run)/`PreSubstitute` (call a different tool instead); after all run, decisions are aggregated as Stop > Deny > Substitute > Ask > Allow |
+| `Approver` | `Approver`/`ApproverFunc` | Host-implemented human approval; `ApprovalTimeout` defaults to 10 minutes, and `GrantTTL` limits how long session-level grants stay valid |
+| `Guards` | `Guard` | Can only reject; returning a non-empty reason hands a `tools.Rejected` result to the model; approval cannot bypass it |
+| `Around` | `Around` | Wraps tool execution onion-style; counts toward the single-call timeout |
+| `Post` | `PostHook` → `PostDecision` | Replaces the result (`Replace`) or appends context (`AdditionalContext`); also handles rejected results |
 
-`Call.Args` 只读。准入阶段（Pre、审批、Guard）在操作日志之外执行，拒绝结果与执行结果一样写入日志；持久运行回放已完成的调用时直接返回日志中的结果，不再经过准入、Around 或包在 Dispatcher 内部的工具包装（含 `middleware.Wrap`）。授权（`DispatchConfig.Authorize`）、并发、排队与超时见[执行治理](EXECUTION_GOVERNANCE.md#dispatcher-的两阶段准入)，日志与恢复见[原生编排](NATIVE_ORCHESTRATION.md#工具调用级日志与恢复)。
+`Call.Args` is read-only. The admission stages (Pre, approval, Guard) run outside the operation journal; rejection results are written to the journal just like execution results. When a durable run replays a completed call, it returns the journaled result directly without going through admission, Around, or tool wrappers inside the Dispatcher (including `middleware.Wrap`). For authorization (`DispatchConfig.Authorize`), concurrency, queuing, and timeouts see [Execution Governance](EXECUTION_GOVERNANCE.md#two-phase-admission-in-the-dispatcher); for journaling and recovery see [Native Orchestration](NATIVE_ORCHESTRATION.md#tool-call-journaling-and-recovery).
 
-## 参考
+## References
 
-- 源码：`tools/middleware/`（`Wrap` 在 `wrap.go`）、`tools/pipeline.go`、`tools/dispatcher.go`
-- [缓存指南](CACHING_GUIDE.md)
+- Source: `tools/middleware/` (`Wrap` is in `wrap.go`), `tools/pipeline.go`, `tools/dispatcher.go`
+- [Caching Guide](CACHING_GUIDE.md)
 
-具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `middleware.Wrap(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；空函数或返回空调用器的函数在构造时以配置错误失败。原工具可选能力仍须按前述约束显式装配。
+Middleware objects with a `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` method must pass their `Wrap` explicitly, e.g. `middleware.Wrap(tool, logging.Wrap)`. The assembly entry point accepts only `ToolMiddlewareFunc`; other types are rejected by the compiler. A nil function, or one that returns a nil invoker, fails at construction with a configuration error. Optional capabilities of the original tool must still be assembled explicitly as described above.

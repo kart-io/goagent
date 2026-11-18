@@ -5,7 +5,7 @@ GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也
 | 缓存对象 | 组件 | 说明 |
 |---|---|---|
 | 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
-| 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE.md#内置中间件) |
+| 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE_CN.md#内置中间件) |
 | 单次模型调用 → 回答 | `builder.WithModelCache(builder.ModelCache{...})` | 以完整请求为键，按宿主声明的隔离身份隔离；命中只省掉一次模型调用，会话日志照常写入。见[模型调用缓存](#模型调用缓存) |
 
 ## 通用键值缓存

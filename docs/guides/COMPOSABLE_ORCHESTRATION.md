@@ -1,10 +1,12 @@
-# 可组合编排 R2
+# Composable Orchestration R2
 
-本轮已实现根模型请求预算、受控 Runnable 工具、OTel 关联观察、不可变结果引用与上下文结果卸载。`core/flow` 为实验性同步增量原型。现有 Runnable 接口、Pipe、Graph 和 Adapt 的必需契约保持不变。
+[English](COMPOSABLE_ORCHESTRATION.md) | [中文](COMPOSABLE_ORCHESTRATION_CN.md)
 
-## 离线运行
+This round implements a root model-request budget, controlled Runnable tools, correlated OTel observation, immutable result references and context result offloading. `core/flow` is an experimental synchronous incremental prototype. The required contracts of the existing Runnable interface, Pipe, Graph and Adapt are unchanged.
 
-示例位于 [goagent-examples](https://github.com/kart-io/goagent-examples) 仓库，以下命令在其根目录运行。所有示例使用本地确定性模型，无需密钥、没有真实退款等副作用：
+## Running Offline
+
+The examples live in the [goagent-examples](https://github.com/kart-io/goagent-examples) repository; run the commands below from its root. All examples use a local deterministic model, need no keys, and have no side effects such as real refunds:
 
 ```sh
 go run ./orchestration/runnable-tool
@@ -14,69 +16,69 @@ go run ./orchestration/parallel-diagnostics
 go run ./orchestration/stream-pipeline
 go run ./orchestration/context-recovery /tmp/goagent-evidence-demo
 go run ./orchestration/composed-order /tmp/goagent-order-demo
-# 使用相同目录再次运行 composed-order：新增模型请求应为 0。
+# Run composed-order again with the same directory: new model requests should be 0.
 ```
 
-订单示例将普通规则图和独立政策子 Agent 注册成工具，借助类型化 Adapt 映射订单字段。首次实际模型请求 4 次，根额度 4 次，已知用量 8 token；同一目录重放不会新建子 Agent 或再次调用模型。长证据在下一请求前先保存不可变引用。JSONL 只输出执行关联元数据。
+The order example registers an ordinary rules graph and a separate policy sub-Agent as tools, and maps order fields with a typed Adapt. The first run makes 4 actual model requests against a root quota of 4, with 8 tokens of known usage; replaying with the same directory creates no new sub-Agent and calls no model. Long evidence is saved as an immutable reference before the next request. The JSONL output contains only execution-correlation metadata.
 
-## 根预算和用量
+## Root Budget and Usage
 
-宿主用 `budget.New(Config{RootKey, Version, MaxModelRequests})` 或 `budget.NewDurable(config, store)` 构造账本，以 `budget.WithController(ctx, controller)` 或同时传播截止时间的 `budget.Bind` 传入根调用；Token、工具次数与截止时间限额见[执行治理](EXECUTION_GOVERNANCE.md#根预算)。RootKey 是受信业务运行 ID，不能来自模型参数。父子调用继承同一 context，不能另建预算来重置额度。
+The host builds a ledger with `budget.New(Config{RootKey, Version, MaxModelRequests})` or `budget.NewDurable(config, store)` and passes it to the root call with `budget.WithController(ctx, controller)`, or with `budget.Bind`, which also propagates the deadline; for token, tool-call and deadline limits see [Execution Governance](EXECUTION_GOVERNANCE.md#root-budget). RootKey is a trusted business run ID and must not come from model arguments. Parent and child calls inherit the same context; a separate budget cannot be created to reset the quota.
 
-根预算在 Builder 的统一入口上生效，所有模型请求都计入额度。
+The root budget applies to the Builder's unified entry, and every model request counts against the quota.
 
-统一模型入口在实际请求前预留；成功回放跳过预留。预留不退款，崩溃时可能无法判断请求是否发送。持久日志配内存预算会在请求前拒绝。同一 RootKey 改版本或上限会报错。账本和模型操作不是跨文件事务；结果已保存而用量登记失败时返回错误，后续读取已有记录修复用量，不重新付费取证。
+The unified model entry reserves before the actual request; a successful replay skips the reservation. Reservations are not refunded, and after a crash it may be impossible to tell whether the request was sent. A durable journal combined with an in-memory budget is rejected before the request. Changing the version or limit for the same RootKey is an error. The ledger and the model operation are not a cross-file transaction; if the result was saved but usage registration failed, an error is returned, and later reads repair usage from the existing record without paying again to fetch evidence.
 
-`Snapshot` 分开报告 ReservedRequests、KnownUsageEntries、UnknownUsageEntries、KnownTokens。未知包含预留后没有证据的条目，不能当作零费用；子输出的 TokenUsage 不再作为另一笔请求加入根账本。输出 `root_budget` 是根快照，`new_model_invocations` 是本次执行范围新增实际调用数，`model_calls` 是本层逻辑回合数。父子并行时以根账本及 transport 计数为准。Provider 内部重试、宿主自定义客户端或隐藏模型调用需宿主另行管控；这个预算限制统一入口的请求次数。
+`Snapshot` reports ReservedRequests, KnownUsageEntries, UnknownUsageEntries and KnownTokens separately. Unknown includes entries reserved without evidence afterwards and must not be treated as zero cost; a child output's TokenUsage is no longer added to the root ledger as another request. The output `root_budget` is the root snapshot, `new_model_invocations` is the number of actual calls newly made within this execution scope, and `model_calls` is the number of logical turns at this layer. With parent and child running in parallel, the root ledger and transport counts are authoritative. Provider-internal retries, host custom clients or hidden model calls must be governed separately by the host; this budget limits the number of requests through the unified entry.
 
-根账本统一支持归属查询：WithAgentID 标识角色，Attribution 按调用/角色给出 Self、Inclusive 与未知字段；Observer 的 model_attempt_start/model_usage 提供逐尝试元数据。没有格式切换或降级模式，接入见[多 Agent 用量](MULTI_AGENT_USAGE.md)。[原审核](../research/2026-11-01-agent-hooks-usage-audit.md)记录实施前状态。
+The root ledger uniformly supports attribution queries: WithAgentID identifies the role, Attribution gives Self, Inclusive and unknown fields per call/role, and the Observer's model_attempt_start/model_usage provide per-attempt metadata. There is no format switch or degraded mode; for integration see [Multi-Agent Usage](MULTI_AGENT_USAGE.md). The [original audit](../research/2026-11-01-agent-hooks-usage-audit.md) records the state before implementation.
 
-`Remaining(ctx)` 返回尚可预留的模型请求次数（`MaxModelRequests` 减已预留条目）。持久预算在 Store 锁内读取，能看到其他进程的预留。结果只是时点快照，准入仍以 `Reserve` 为准。未绑定预算时 `budget.FromContext` 返回 nil 控制器，对它调用 `Remaining` 返回 `constants.BudgetUnlimited`（目标架构的 `math.MaxInt`）。子预算暂不提供。
+`Remaining(ctx)` returns the number of model requests that can still be reserved (`MaxModelRequests` minus reserved entries). A durable budget reads it under the Store lock and can see reservations from other processes. The result is only a point-in-time snapshot; admission is still decided by `Reserve`. When no budget is bound, `budget.FromContext` returns a nil controller, and calling `Remaining` on it returns `constants.BudgetUnlimited` (`math.MaxInt` on the target architecture). Child budgets are not provided yet.
 
-## Runnable 工具与子会话
+## Runnable Tools and Child Sessions
 
-`tools.NewRunnableTool` 包装共享无状态 Runnable；宿主提供名称、对象 Schema、Version、Decode 和 Encode。原对象的资源仍由宿主关闭。适配器必须经过 `Dispatcher.Tools()` 才具有持久调用能力。
+`tools.NewRunnableTool` wraps a shared stateless Runnable; the host provides the name, object Schema, Version, Decode and Encode. Resources of the original object are still closed by the host. The adapter gains durable-call capability only through `Dispatcher.Tools()`.
 
-有状态子 Agent 使用 `NewRunnableToolFactory`，每次返回 `OwnedRunnable{Runnable, Close}`。必须显式提供 Close，即便它是 no-op。部分构造失败仍清理已获得资源，成功、执行失败、取消均清理。清理 context 独立于父取消、最长 5 秒；忽略 context 的实现不能被强制终止。清理错误阻止工具记录 completed。
+Stateful sub-Agents use `NewRunnableToolFactory`, which returns `OwnedRunnable{Runnable, Close}` each time. Close must be provided explicitly, even if it is a no-op. Resources already acquired are cleaned up even if construction fails partway; cleanup happens on success, execution failure and cancellation. The cleanup context is independent of parent cancellation and lasts at most 5 seconds; implementations that ignore context cannot be forcibly terminated. A cleanup error prevents the tool from being recorded as completed.
 
-宿主负责为每个 child 分配独立 SessionID、长期记忆命名空间（`memory.WithNamespace`）及 Dispatcher。不同对象指针无法证明隔离；`agent-tool` 示例测试并发真实记忆隔离，并拒绝复用 SessionID。父历史不自动复制，输入解码只传必要业务字段。模型型工具须声明 `ModelInvoking: true`，缺根预算会在 factory 前拒绝；这项声明不是对隐藏模型调用的自动检测。
+The host is responsible for giving each child its own SessionID, long-term memory namespace (`memory.WithNamespace`) and Dispatcher. Different object pointers do not prove isolation; the `agent-tool` example tests real concurrent memory isolation and rejects reused SessionIDs. Parent history is not copied automatically, and input decoding passes only the necessary business fields. Model-backed tools must declare `ModelInvoking: true`; a missing root budget is rejected before the factory runs. This declaration is not automatic detection of hidden model calls.
 
-默认最大嵌套深度 8，祖先更小的限制继续生效。同一执行链重入同一 Dispatcher 在并发槽排队前拒绝；独立子 Dispatcher 允许嵌套。deadline 逐层继承；长工具需宿主显式配置 Dispatcher Timeout。
+The default maximum nesting depth is 8, and smaller limits from ancestors still apply. Re-entering the same Dispatcher within the same execution chain is rejected before queueing for a concurrency slot; separate child Dispatchers may nest. Deadlines are inherited layer by layer; long-running tools need the host to configure the Dispatcher Timeout explicitly.
 
-默认复合工具为不透明、一次尝试模式：相同版本 completed 可回放；pending/failed 返回 attention，不自动进入子检查点。Encode 必须拒绝等待或未完成的业务输出。需要嵌套审批时，显式使用 `RunnableToolConfig.Resumable` 与 `DurableGraph.AsChildRunnable()`，经带日志的 Dispatcher 运行，同一 Store 和稳定执行键承载等待及续跑；普通适配不会自动获得该能力。handoff 与任意外部副作用的 exactly-once 保证不在此契约内。详见 [Tool API](../api/TOOL_API.md) 和 [子图适配源码](../../workflow/durable_runnable.go)。
+By default composite tools are opaque and single-attempt: a completed call with the same version can be replayed; pending/failed returns attention and does not automatically enter the child checkpoint. Encode must reject waiting or incomplete business output. For nested approvals, explicitly use `RunnableToolConfig.Resumable` with `DurableGraph.AsChildRunnable()` and run through a Dispatcher with a journal, so the same Store and a stable execution key carry the wait and the resume; ordinary adapters do not get this capability automatically. Exactly-once guarantees for handoffs and arbitrary external side effects are outside this contract. See the [Tool API](../api/TOOL_API.md) and the [subgraph adapter source](../../workflow/durable_runnable.go).
 
-## 上下文结果卸载
+## Context Result Offloading
 
-上下文改写统一为 PreStep 钩子（见[工具上下文](CONTEXT_POLICY.md)）。`WithOffload(offload)` 把 `contextpolicy.Offload` 装为带身份的 PreStep，读取工具即 `offload` 本身，由宿主与业务工具一起注册；要求 native `llm.ToolStreamClient` 和已配置的业务工具。
+Context rewriting is unified as a PreStep hook (see [Tool Context](CONTEXT_POLICY.md)). `WithOffload(offload)` installs a `contextpolicy.Offload` as a PreStep with an identity; the read tool is `offload` itself and is registered by the host together with business tools. It requires a native `llm.ToolStreamClient` and configured business tools.
 
-`contextpolicy.NewOffload` 消费共享 ResultStore；阈值、保留轮数、分页、排除项、Namespace 均进入 `Identity()`，作为 PreStep 的身份进入持久日志。内存实例采用独立 nonce；持久实例从执行键、回合和工具调用 ID 派生稳定引用。Namespace 必须标识真实后端配置，切换后端需修改它或 Version。证据保留到对其运行键调用 `ResultStore.Release`：非持久执行未提供作用域时，Builder 生成临时作用域并在执行结束后自动释放；宿主经 `WithResultScope` 提供作用域（包括持久执行）时，由宿主在运行不再恢复后释放。释放后该运行键不可复用，迟到的写入返回 `agentErrors.ErrResultScopeReleased`。持久 ResultStore 的底层存储需实现 `durable.Scoped`（`durable.FileStore` 已实现）才支持释放：每次运行一个作用域，释放时整体删除，并为每个已释放运行保留一个 8 字节墓碑。墓碑（内存版是运行键与释放时间）由宿主定期调用 `ResultStore.PruneReleased(ctx, olderThan)` 回收：只删除释放早于 `olderThan` 的墓碑，与写入互斥；阈值内的迟到写入仍被拒绝，回收后的迟到写入不再被拒绝并可能留下残留，因此 `olderThan` 须大于最长的重试或恢复窗口（进程崩溃重启、重试）。跨进程拒绝写入、写入进程被杀后锁自动释放、释放中途崩溃后重试清理均有真实子进程测试覆盖（`builder/contextpolicy/store_process_test.go`、`core/durable/file_store_test.go`），仅适用于同一主机上可靠 flock/rename 的本地文件系统。
+`contextpolicy.NewOffload` consumes a shared ResultStore; the threshold, retained turns, paging, exclusions and Namespace all go into `Identity()`, which enters the durable journal as the PreStep's identity. In-memory instances use an independent nonce; durable instances derive stable references from the execution key, turn and tool call ID. Namespace must identify the real backend configuration; switching backends requires changing it or the Version. Evidence is kept until `ResultStore.Release` is called for its run key: for non-durable execution without a provided scope, the Builder creates a temporary scope and releases it automatically when execution ends; when the host provides a scope via `WithResultScope` (including durable execution), the host releases it once the run will no longer be resumed. After release that run key cannot be reused, and late writes return `agentErrors.ErrResultScopeReleased`. For a durable ResultStore to support release, the underlying store must implement `durable.Scoped` (`durable.FileStore` does): one scope per run, deleted as a whole on release, with an 8-byte tombstone kept for each released run. Tombstones (in the in-memory version, the run key and release time) are reclaimed by the host periodically calling `ResultStore.PruneReleased(ctx, olderThan)`: it deletes only tombstones released earlier than `olderThan` and is mutually exclusive with writes; late writes within the threshold are still rejected, while late writes after reclamation are no longer rejected and may leave residue, so `olderThan` must exceed the longest retry or recovery window (process crash and restart, retries). Cross-process write rejection, automatic lock release after the writing process is killed, and retrying cleanup after a crash mid-release are covered by real child-process tests (`builder/contextpolicy/store_process_test.go`, `core/durable/file_store_test.go`), and apply only to local file systems on the same host with reliable flock/rename.
 
-持久模式用 `NewDurableResultStore(store)`，读取工具与业务工具一起注册到宿主 Dispatcher，与其他工具一样记入日志（`composed-order` 中的 journalTools 是完整示例）。读取工具未注册或重复注册在 Build 时失败；结果存储不持久或缺少执行键时在首个模型请求前失败。恢复时 PreStep 的结果被回放，Builder 用回放的对话重建引用表。
+Durable mode uses `NewDurableResultStore(store)`; the read tool is registered with the host Dispatcher together with business tools and is journaled like any other tool (journalTools in `composed-order` is a complete example). A missing or duplicate registration of the read tool fails at Build; a non-durable result store or a missing execution key fails before the first model request. On recovery the PreStep's result is replayed, and the Builder rebuilds the reference table from the replayed conversation.
 
-存储要求先 PutIfAbsent 再发带引用的请求；同一逻辑 key 不同内容拒绝，读回重新验摘要。ResultScope 必须由宿主 context 绑定，默认使用当前稳定 execution key（内存执行使用随机 scope）。模型只能读取对话中已有引用的别名，无法自行选择 RunKey；独立 store 锁不复用当前操作锁。最后一次请求先还原原文、再移除读取工具，可能恢复大上下文，不能保证输入永不超模型窗口。
+The store requires PutIfAbsent before a request carrying the reference is sent; different content under the same logical key is rejected, and reads re-verify the digest. ResultScope must be bound through the host context and defaults to the current stable execution key (in-memory execution uses a random scope). The model can only read aliases of references already present in the conversation and cannot choose a RunKey itself; the independent store lock does not reuse the current operation lock. The last request first restores originals and then removes the read tool, which may bring back a large context; there is no guarantee the input never exceeds the model window.
 
-## 观察与报告
+## Observation and Reporting
 
-`observe.WithTracer(ctx, existingTracer)` 复用宿主 OTel；不设置全局 Provider。`WithObserver` 接收窄元数据事件。OperationKey 用于跨恢复关联，VisitID/EventID 包含本次调用的独立身份，区分重复访问与恢复；业务 RunID 和 OperationKey 保持稳定，恢复产生新 span。未配置观察时不创建运行身份或 span。自定义 observer 必须及时返回，panic 被隔离。
+`observe.WithTracer(ctx, existingTracer)` reuses the host's OTel; no global Provider is set. `WithObserver` receives narrow metadata events. OperationKey is used for correlation across recoveries; VisitID/EventID include an independent identity for this call to distinguish repeated visits from recoveries; the business RunID and OperationKey stay stable, and recovery creates new spans. Without observation configured, no run identity or span is created. Custom observers must return promptly; panics are isolated.
 
-`devtools.NewRecorder` 默认队列 64、最多 10,000 事件，写入异步，溢出累计 Dropped。新 JSONL 文件权限 0600、目录 0700；Close 返回写入错误。自定义 Writer 必须合作返回。事件结构不含输入、输出及原始异常文本；宿主应使用不含敏感信息的节点名和运行 ID。
+`devtools.NewRecorder` defaults to a queue of 64 and at most 10,000 events; writes are asynchronous and overflow accumulates in Dropped. New JSONL files have permission 0600 and directories 0700; Close returns write errors. Custom Writers must cooperate and return. The event structure contains no input, output or raw exception text; hosts should use node names and run IDs without sensitive information.
 
-Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goagent-graph-v1` 拓扑。`devtools.WriteReport(writer, description, events)` 输出转义、无脚本、无外部资源的 HTML，展示循环、分支、等待、失败、回放和观察丢弃。它不能执行、审批或恢复运行，缺少事件也不能推断业务状态。
+Graph.Describe or the optional Description of a compiled artifact returns a sorted, independent `goagent-graph-v1` topology. `devtools.WriteReport(writer, description, events)` outputs escaped HTML with no scripts and no external resources, showing loops, branches, waits, failures, replays and observation drops. It cannot execute, approve or resume runs, and missing events do not allow inferring business state.
 
-## 流原型和后续范围
+## Stream Prototype and Future Scope
 
-`core/flow.Source` 串行同步 yield，Map 不启动 goroutine；Fold.Init 每次执行独立创建 accumulator。默认最多 1024 项，可显式限制字节并提供 Size。任何 Source、Map、Add、preview 或 Finish 错误均阻止最终 Done，即使 Source 吞掉 yield 错误也不能假成功。preview 只能发事件，不能推进图。合作式源须响应 context 和 yield 错误，并在返回前停止生产者。
+`core/flow.Source` yields serially and synchronously, and Map starts no goroutines; Fold.Init creates an independent accumulator for each execution. Default limit is 1024 items; bytes can be limited explicitly with a Size provided. Any Source, Map, Add, preview or Finish error prevents the final Done, so even if Source swallows a yield error there is no false success. Preview can only emit events and cannot advance the graph. Cooperative sources must respond to context and yield errors, and stop the producer before returning.
 
-采用结论：保留实验包用于只读增量演示，不作为完整四范式稳定 API。反射 Mapping、持久摘要和通用 Debugger.Run 继续推迟，需独立需求与恢复协议。嵌套可恢复工作流已通过 AsChildRunnable 与 Resumable 工具支持，见[组合指南](AGENT_COMPOSITION.md)；独立后台子任务调度不在此能力范围。类型化映射优先使用已有 Adapt/Clone/Merge。
+Adopted conclusion: keep the experimental package for read-only incremental demos; it is not a stable API covering all four paradigms. Reflection-based Mapping, durable summaries and a general Debugger.Run remain deferred and need separate requirements and a recovery protocol. Nested resumable workflows are already supported through AsChildRunnable and Resumable tools; see the [composition guide](AGENT_COMPOSITION.md); independent background sub-task scheduling is outside this capability. Typed mapping should prefer the existing Adapt/Clone/Merge.
 
-## 迁移、验证和回退
+## Migration, Verification and Rollback
 
-没有新配置时不添加预算/策略意图字段。普通工具原意图 fixture 和已有执行测试保持通过。新工具版本、策略配置或根预算配置变化会拒绝旧运行；不能删除 pending、退款或增加重试次数来强行恢复。
+Without new configuration, no budget/policy intent fields are added. Original intent fixtures of ordinary tools and existing execution tests still pass. Changes to a new tool version, policy configuration or root budget configuration reject old runs; you cannot delete pending records, refunds or increase retry counts to force recovery.
 
-先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 [交付验证记录](../evaluation/2026-10-27-orchestration-r2/REPORT.md)。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。接入 DeepSeek、MiniMax 与 Gemini 的可运行案例见 [orchestration/live](https://github.com/kart-io/goagent-examples/blob/main/orchestration/live/README.md)，验证记录见[真实模型编排案例](../evaluation/2026-10-28-orchestration-live/REPORT.md)。
+Stop starting runs on the new version first, and keep workers of the matching version to process existing runs. Ledgers, references and checkpoints are retained per business run; active references must not be cleaned up early. Tests and performance measurements are in the [delivery verification record](../evaluation/2026-10-27-orchestration-r2/REPORT.md). Real models are only wired in explicitly by the host with a budget set; the delivery evidence for this round uses a local model. Runnable cases wiring DeepSeek, MiniMax and Gemini are in [orchestration/live](https://github.com/kart-io/goagent-examples/blob/main/orchestration/live/README.md), with the verification record in [real-model orchestration cases](../evaluation/2026-10-28-orchestration-live/REPORT.md).
 
-## 持久 Agent 作用域与升级
+## Durable Agent Scopes and Upgrades
 
-所有在持久 context 中执行的 Builder Agent 必须配置 `WithDurableScope("stable-name")`；同一父节点中的逻辑调用名称必须不同且跨重启稳定。`composed-order` 分别使用 `order-review` 和 `policy`，模型日志、工具日志和默认上下文结果引用位于对应 Agent 子作用域；根预算与 OTel context 继续共享。无工具 `llm.Client` 保留 R2 的 `model/answer/0` 日志和预算统计，原生工具循环使用 `model/turn/N`。
+Every Builder Agent executing in a durable context must configure `WithDurableScope("stable-name")`; logical call names within the same parent node must differ and stay stable across restarts. `composed-order` uses `order-review` and `policy` respectively; model journals, tool journals and default context result references live in the corresponding Agent sub-scope, while the root budget and OTel context remain shared. A tool-less `llm.Client` keeps R2's `model/answer/0` journal and budget accounting, and the native tool loop uses `model/turn/N`.
 
-检测到旧的无作用域 `model/turn/0` 或 `model/answer/0` 记录时提前拒绝，避免换键重跑。已有目录不能直接当作新运行；先核对业务效果，再制定版本迁移。演示新运行可使用新的空目录，不能通过删除旧评测或检查点来掩盖迁移问题。详细契约见[多 Agent 作用域与入口约束](NATIVE_ORCHESTRATION.md#多-agent-作用域与入口约束)。
+When old unscoped `model/turn/0` or `model/answer/0` records are detected, the run is rejected early to avoid re-running under a different key. An existing directory cannot simply be treated as a new run; verify business effects first, then plan a version migration. Demo runs can use a new empty directory, but migration problems must not be hidden by deleting old evaluations or checkpoints. For the detailed contract see [Multi-Agent Scopes and Entry Constraints](NATIVE_ORCHESTRATION.md#multi-agent-scopes-and-entry-constraints).

@@ -68,7 +68,7 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 - **Durable execution** - `core/durable` journals model turns and tool calls; `workflow.Graph` compiles typed graphs with branches, parallel joins, bounded loops and approval resume.
 - **Human in the loop** - approval gates accept validated human input via `DurableGraph.Resume`; nodes, parallel branches, interruptible tools and nested graphs pause mid-execution with `durable.AwaitInput` and resume from the checkpoint. See the [HITL guide](docs/guides/HUMAN_IN_THE_LOOP.md).
 - **Governance** - root request budgets (`core/budget`), `tools.Dispatcher`/`Pipeline` with approvals, guards and admission limits, tool-result offloading, session logs (`core/session`).
-- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-%E6%8F%90%E4%BE%9B%E5%95%86).
+- **LLM providers** - OpenAI (and compatible endpoints), DeepSeek and Gemini support `AsRunnable` and the native tool loop; Kimi, SiliconFlow and Ollama are OpenAI-compatible presets with the same support, and Anthropic uses the official SDK with the same support. See the [provider table](docs/README.md#llm-providers).
 - **Observability** - read-only execution events (`core/observe`) and OpenTelemetry integration (`observability`).
 - **A2A / MCP** - connect to external agents and MCP tools, and expose GoAgent through a shared task service with human input, approvals and cancellation. See the [protocol adapters guide](docs/guides/PROTOCOL_ADAPTERS.md).
 

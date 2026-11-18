@@ -1,56 +1,58 @@
-# GoAgent Builder API 参考
+# GoAgent Builder API Reference
 
-`builder` 包的方法速查，按用途分组。签名以 `go doc github.com/kart-io/goagent/builder` 为准；设计说明见 [builder README](../../builder/README.md)，入门见[快速入门](QUICKSTART.md)。
+[English](BUILDER_API_REFERENCE.md) | [中文](BUILDER_API_REFERENCE_CN.md)
 
-## 创建
+Quick reference for the `builder` package's methods, grouped by purpose. `go doc github.com/kart-io/goagent/builder` is authoritative for signatures; for design notes see the [builder README](../../builder/README.md), and to get started see the [Quickstart](QUICKSTART.md).
 
-| 函数 | 说明 |
+## Creation
+
+| Function | Description |
 |---|---|
-| `NewSimpleBuilder(client llm.Client) *SimpleAgentBuilder` | 常用入口，等价于 `NewAgentBuilder[*core.AgentState]` |
-| `NewAgentBuilder[S core.State](client)` | 自定义状态类型 `S`；`S` 不是 `*core.AgentState` 时必须 `WithState` |
-| `Build() (*ConfigurableAgent[S], error)` | 等价于 `BuildContext(context.Background())` |
-| `BuildContext(ctx) (*ConfigurableAgent[S], error)` | 把宿主上下文传给初始化回调，拒绝 nil 或已取消的上下文，见[宿主接入](HOST_INTEGRATION.md) |
+| `NewSimpleBuilder(client llm.Client) *SimpleAgentBuilder` | Common entry point, equivalent to `NewAgentBuilder[*core.AgentState]` |
+| `NewAgentBuilder[S core.State](client)` | Custom state type `S`; `WithState` is required when `S` is not `*core.AgentState` |
+| `Build() (*ConfigurableAgent[S], error)` | Equivalent to `BuildContext(context.Background())` |
+| `BuildContext(ctx) (*ConfigurableAgent[S], error)` | Passes the host context to initialization callbacks and rejects nil or canceled contexts; see [Host Integration](HOST_INTEGRATION.md) |
 
-状态只在进程内保留，Build 不加载也不保存状态；会话持久化使用 `WithSessionLog` 与 `WithDurableScope`。
+State is kept in process only; Build neither loads nor saves state. For session persistence use `WithSessionLog` and `WithDurableScope`.
 
-## 基础配置
+## Basic Configuration
 
-| 方法 | 默认值 | 说明 |
+| Method | Default | Description |
 |---|---|---|
-| `WithSystemPrompt(string)` | 空 | 系统提示词 |
-| `WithTools(...interfaces.Tool)` | 无 | 追加工具 |
-| `WithMaxIterations(int)` | 10 | 模型请求上限，包含最终回答；非正数忽略 |
-| `WithTimeout(time.Duration)` | 5 分钟 | 单次执行超时，排队等待会话串行锁也计入 |
-| `WithMaxTokens(int)` | 2000 | 模型最大输出 Token |
-| `WithTemperature(float64)` | 0.7 | 采样温度，支持显式 `0`；Builder 值优先于客户端配置 |
-| `WithOutputFormat(OutputFormat)` | `OutputFormatDefault` | 在系统提示词后追加格式说明：`OutputFormatPlainText`、`OutputFormatMarkdown`、`OutputFormatJSON` |
-| `WithCustomOutputFormat(string)` | 无 | 自定义格式说明（`OutputFormatCustom`） |
-| `WithInputSerializer(InputSerializer)` | `DefaultInputSerializer` | 把任意输入转为提示文本 |
-| `WithVerbose(bool)` | false | 追加日志与计时中间件 |
+| `WithSystemPrompt(string)` | empty | System prompt |
+| `WithTools(...interfaces.Tool)` | none | Appends tools |
+| `WithMaxIterations(int)` | 10 | Upper bound on model requests, including the final answer; non-positive values are ignored |
+| `WithTimeout(time.Duration)` | 5 minutes | Timeout per execution; time spent waiting for the session serialization lock also counts |
+| `WithMaxTokens(int)` | unset, uses client config | Maximum model output tokens |
+| `WithTemperature(float64)` | unset, uses client config | Sampling temperature; an explicit `0` is supported; the Builder value takes precedence over the client config |
+| `WithOutputFormat(OutputFormat)` | `OutputFormatDefault` | Appends format instructions after the system prompt: `OutputFormatPlainText`, `OutputFormatMarkdown`, `OutputFormatJSON` |
+| `WithCustomOutputFormat(string)` | none | Custom format instructions (`OutputFormatCustom`) |
+| `WithInputSerializer(InputSerializer)` | `DefaultInputSerializer` | Converts arbitrary input into prompt text |
+| `WithVerbose(bool)` | false | Adds logging and timing middleware |
 
-## 原生工具流
+## Native Tool Streaming
 
-以下选项只作用于原生工具流：客户端实现 `llm.ToolStreamClient`（OpenAI、DeepSeek、Gemini Provider）、配置了工具，并通过 `AsRunnable`、`ExecuteStream` 或 `Start` 执行。
+The following options apply only to native tool streaming: the client implements `llm.ToolStreamClient` (OpenAI, DeepSeek, Gemini, Anthropic providers), tools are configured, and execution goes through `AsRunnable`, `ExecuteStream`, or `Start`.
 
-| 方法 | 说明 |
+| Method | Description |
 |---|---|
-| `WithParallelToolCalls(n int)` | 同一轮工具调用并发上限；默认 0 按顺序。只有每个工具都实现 `interfaces.ConcurrentCallTool`（如 `Dispatcher` 的工具）时才并发 |
-| `WithReturnDirectTools(names ...string)` | 单个终态工具的结果直接作为答案，省去总结请求；工具名须唯一注册 |
-| `WithEmptyAnswerRetries(n int)` | 模型返回空回答时重问次数；默认 0，每次重问占用一次迭代额度 |
-| `WithOffload(*contextpolicy.Offload)` | 超长工具结果换成引用，经读取工具分页读回；`offload` 须同时注册为工具，见[上下文治理](CONTEXT_POLICY.md) |
-| `WithPreStep(...PreStepHook)` | 每次模型请求前改写 `Step.Messages`，或以 `PreStepResult{Halt: true}` 直接结束 |
-| `WithIdentifiedPreStep(identity, hook)` | 带身份的 PreStep；身份改变后恢复旧的持久运行以 `intent changed` 失败 |
-| `WithRequestHook(...RequestHook)` | 发送前替换 `ModelRequest.Client` 或修改 `Request` 参数 |
-| `WithRequestError(maxRecoveries int, ...RequestErrorHook)` | 模型请求失败时决定重试、替换消息或替换客户端；`maxRecoveries` 为单步恢复上限（默认 3） |
-| `RetryTransient(retries, backoff)` | 原样重试 `llm.ClassifyError` 判定为暂时性的失败（429、5xx、连接错误）；已输出文本后不重试 |
-| `WithTurnStopping(...TurnStoppingHook)` | 模型给出最终答复时返回非空字符串，作为 user 消息续跑 |
-| `WithPromptSections(...PromptSection)` | 每轮开始时计算一次，进入 system，保持提示词缓存前缀稳定 |
-| `WithPromptContexts(...PromptContext)` | 每步重算，作为一条 user 消息附在本次请求末尾，不进入历史 |
-| `WithSessionLog(session.Store)` | 会话写入 [core/session](../../core/session/README.md) 事件日志，模型历史从日志推导 |
-| `WithTokenEstimator(TokenEstimator)` | 根预算开启 Token 上限时的请求 Token 预估 |
-| `WithDurableScope(string)` | 持久执行必需：同一持久节点内每个逻辑调用的稳定名称 |
+| `WithParallelToolCalls(n int)` | Concurrency limit for tool calls within one round; default 0 means sequential. Calls run concurrently only when every tool implements `interfaces.ConcurrentCallTool` (such as the `Dispatcher`'s tools) |
+| `WithReturnDirectTools(names ...string)` | A single terminal tool's result is used directly as the answer, skipping the summarization request; the tool name must be registered uniquely |
+| `WithEmptyAnswerRetries(n int)` | Number of re-asks when the model returns an empty answer; default 0, and each re-ask consumes one iteration |
+| `WithOffload(*contextpolicy.Offload)` | Replaces oversized tool results with references read back page by page through a read tool; `offload` must also be registered as a tool, see [Context Governance](CONTEXT_POLICY.md) |
+| `WithPreStep(...PreStepHook)` | Rewrites `Step.Messages` before each model request, or ends directly with `PreStepResult{Halt: true}` |
+| `WithIdentifiedPreStep(identity, hook)` | PreStep with an identity; after the identity changes, resuming an old durable run fails with `intent changed` |
+| `WithRequestHook(...RequestHook)` | Replaces `ModelRequest.Client` or modifies `Request` parameters before sending |
+| `WithRequestError(maxRecoveries int, ...RequestErrorHook)` | Decides on a model request failure whether to retry, replace messages, or replace the client; `maxRecoveries` is the per-step recovery limit (default 3) |
+| `RetryTransient(retries, backoff)` | Retries unchanged the failures that `llm.ClassifyError` classifies as transient (429, 5xx, connection errors); does not retry once text has been emitted |
+| `WithTurnStopping(...TurnStoppingHook)` | When the model gives its final reply, a non-empty returned string is sent as a user message to continue the run |
+| `WithPromptSections(...PromptSection)` | Computed once at the start of each turn and placed in system, keeping the prompt cache prefix stable |
+| `WithPromptContexts(...PromptContext)` | Recomputed every step and attached as one user message at the end of the current request; not added to history |
+| `WithSessionLog(session.Store)` | Writes the session to the [core/session](../../core/session/README.md) event log; model history is derived from the log |
+| `WithTokenEstimator(TokenEstimator)` | Request token estimation when the root budget enables a token limit |
+| `WithDurableScope(string)` | Required for durable execution: a stable name for each logical call within the same durable node |
 
-持久运行中，PreStep、TurnStopping、提示词段落与上下文按步骤记入日志并在恢复时回放；RequestError 的原样重试在同一条回合记录内进行，替换消息或客户端的决定以错误结束。
+In durable runs, PreStep, TurnStopping, prompt sections, and contexts are logged per step and replayed on recovery; RequestError's unchanged retries happen within the same turn record, while decisions to replace messages or the client end with an error.
 
 ```go
 offload, err := contextpolicy.NewOffload(contextpolicy.OffloadConfig{
@@ -61,15 +63,15 @@ if err != nil {
     return nil, err
 }
 return builder.NewSimpleBuilder(client).
-    WithSystemPrompt("你是一个客服助手").
-    WithTools(searchTool, offload). // offload 本身是读取工具，须一起注册
+    WithSystemPrompt("You are a customer support assistant").
+    WithTools(searchTool, offload). // offload is itself a read tool and must be registered too
     WithMaxIterations(12).
     WithParallelToolCalls(4).
     WithOffload(offload).
     WithSessionLog(session.NewMemoryStore()).
     WithPromptSections(builder.PromptSection{
         Name: "rules",
-        Text: func(builder.PromptScope) string { return "只回答与订单有关的问题。" },
+        Text: func(builder.PromptScope) string { return "Only answer questions about orders." },
     }).
     WithRequestHook(func(ctx context.Context, req *builder.ModelRequest) error {
         req.Request.Temperature = 0.2
@@ -80,70 +82,70 @@ return builder.NewSimpleBuilder(client).
     })).
     WithTurnStopping(func(ctx context.Context, s *builder.Stopping) (string, error) {
         if s.Answer == "" && s.Continued == 0 {
-            return "请给出最终答复。", nil
+            return "Please give your final answer.", nil
         }
         return "", nil
     }).
     Build()
 ```
 
-## 检索、记忆与状态
+## Retrieval, Memory, and State
 
-| 方法 | 默认值 | 说明 |
+| Method | Default | Description |
 |---|---|---|
-| `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 篇、12000 字符 | 每次请求检索证据，来源写入输出元数据 `retrieval_sources`；`RetrievalConfig.Filter` 按请求生成元数据过滤条件，需检索器实现 `interfaces.RequestRetriever` |
-| `WithSessionLog(session.Store)` | 无 | 多轮历史来自会话日志；不配置时每次调用没有历史 |
-| `WithCompaction(*contextpolicy.Compaction)` | 无 | 对话超过阈值时压缩较早的消息；仅作用于原生工具流 |
-| `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；Request 钩子不得改写或移动召回消息 |
-| `WithModelCache(builder.ModelCache)` | 无 | 模型调用缓存：以完整请求为键，`Scope` 声明可信的隔离身份（配置了长期记忆时默认取其命名空间）；`Erase` 为 `EraseOff` / `EraseAuto`（默认）/ `EraseRequired`；使用标签删除时 `TagKey` 至少 32 字节；`Build` 校验配置，见[缓存指南](CACHING_GUIDE.md#模型调用缓存) |
-| `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话日志的缺省会话 ID；请求上下文中的 `tools.WithSessionID` 优先 |
-| `WithState(S)` | `core.NewAgentState()` | 初始状态 |
+| `WithRetriever(interfaces.DocumentRetriever, ...RetrievalConfig)` | 4 documents, 12000 characters | Retrieves evidence on every request and writes sources to the output metadata `retrieval_sources`; `RetrievalConfig.Filter` builds metadata filter conditions per request and requires the retriever to implement `interfaces.RequestRetriever` |
+| `WithSessionLog(session.Store)` | none | Multi-turn history comes from the session log; without it each call has no history |
+| `WithCompaction(*contextpolicy.Compaction)` | none | Compresses earlier messages when the conversation exceeds the threshold; applies only to native tool streaming |
+| `WithLongTermMemory(*memory.Memory)` | none | Cross-session long-term memory: recalls each turn and registers an extraction task at turn end; requires `WithSessionLog` and `memory.WithNamespace` in the request context; recall applies only to native tool streaming; Request hooks must not rewrite or move the recall message |
+| `WithModelCache(builder.ModelCache)` | none | Model call cache keyed by the full request; `Scope` declares a trusted isolation identity (defaults to the long-term memory namespace when long-term memory is configured); `Erase` is `EraseOff` / `EraseAuto` (default) / `EraseRequired`; with tag-based deletion `TagKey` must be at least 32 bytes; `Build` validates the config, see the [Caching Guide](CACHING_GUIDE.md#模型调用缓存) |
+| `WithSessionID(string)` | `session-<nanosecond timestamp>` | Default session ID for the session log; `tools.WithSessionID` in the request context takes precedence |
+| `WithState(S)` | `core.NewAgentState()` | Initial state |
 
-需要进程重启后续跑的多步任务使用 `core/durable` 与 `workflow`，见[原生编排](NATIVE_ORCHESTRATION.md)。
+Multi-step tasks that must resume after a process restart use `core/durable` and `workflow`; see [Native Orchestration](NATIVE_ORCHESTRATION.md).
 
-## 中间件、回调与元数据
+## Middleware, Callbacks, and Metadata
 
-| 方法 | 说明 |
+| Method | Description |
 |---|---|
-| `WithMiddleware(...middleware.Middleware)` | `core/middleware` 中间件链，如 `NewLoggingMiddleware`、`NewTimingMiddleware`、`NewRateLimiterMiddleware` |
-| `WithCallbacks(...core.Callback)` | 执行回调，如 `core.NewStdoutCallback`、`core.NewMetricsCallback` |
-| `WithErrorHandler(func(error) error)` | 包装或替换执行错误 |
-| `WithMetadata(key, value)` | 写入 Agent 元数据 |
+| `WithMiddleware(...middleware.Middleware)` | `core/middleware` middleware chain, e.g. `NewLoggingMiddleware`, `NewTimingMiddleware`, `NewRateLimiterMiddleware` |
+| `WithCallbacks(...core.Callback)` | Execution callbacks, e.g. `core.NewStdoutCallback`, `core.NewMetricsCallback` |
+| `WithErrorHandler(func(error) error)` | Wraps or replaces execution errors |
+| `WithMetadata(key, value)` | Writes agent metadata |
 
-## 场景预设与快速函数
+## Scenario Presets and Quick Functions
 
-| 方法 / 函数 | 配置内容 |
+| Method / function | Configuration |
 |---|---|
-| `ConfigureForRAG()` | 计时中间件，MaxTokens 3000，Temperature 0.3 |
-| `ConfigureForChatbot()` | 限流（每分钟 20 次）与输入长度校验，Temperature 0.8 |
-| `ConfigureForAnalysis()` | 计时与输出结构化中间件，Temperature 0.1，MaxIterations 20 |
-| `QuickAgent(client, systemPrompt)` | 仅系统提示词 |
-| `ChatAgent(client, userName)` | 聊天提示词 + `ConfigureForChatbot` |
-| `RAGAgent(client, retriever)` | `ConfigureForRAG` + 检索；`retriever` 可为 `DocumentRetriever`、带 `Retrieve` 方法的对象或 `VectorStore`（取前 4 条），nil 时只有提示词 |
-| `AnalysisAgent(client, dataSource)` | `ConfigureForAnalysis`，数据源写入状态 |
-| `WorkflowAgent(client, workflows)` | 日志、熔断与校验中间件，MaxIterations 15 |
-| `MonitoringAgent(client, checkInterval)` | 限流与计时中间件，MaxIterations 100，Temperature 0.3 |
-| `ResearchAgent(client, sources)` | 计时中间件，MaxTokens 4000，Temperature 0.5，MaxIterations 15 |
+| `ConfigureForRAG()` | Timing middleware, MaxTokens 3000, Temperature 0.3 |
+| `ConfigureForChatbot()` | Rate limiting (20 per minute) and input length validation, Temperature 0.8 |
+| `ConfigureForAnalysis()` | Timing and output structuring middleware, Temperature 0.1, MaxIterations 20 |
+| `QuickAgent(client, systemPrompt)` | System prompt only |
+| `ChatAgent(client, userName)` | Chat prompt + `ConfigureForChatbot` |
+| `RAGAgent(client, retriever)` | `ConfigureForRAG` + retrieval; `retriever` may be a `DocumentRetriever`, an object with a `Retrieve` method, or a `VectorStore` (top 4); with nil only the prompt is set |
+| `AnalysisAgent(client, dataSource)` | `ConfigureForAnalysis`, data source written to state |
+| `WorkflowAgent(client, workflows)` | Logging, circuit breaker, and validation middleware, MaxIterations 15 |
+| `MonitoringAgent(client, checkInterval)` | Rate limiting and timing middleware, MaxIterations 100, Temperature 0.3 |
+| `ResearchAgent(client, sources)` | Timing middleware, MaxTokens 4000, Temperature 0.5, MaxIterations 15 |
 
-快速函数返回 `*SimpleAgent`（`ConfigurableAgent[*core.AgentState]`）。
+Quick functions return `*SimpleAgent` (`ConfigurableAgent[*core.AgentState]`).
 
 ## ConfigurableAgent
 
-| 方法 | 说明 |
+| Method | Description |
 |---|---|
-| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | 推荐入口：`Invoke`、`Stream`、`Batch`、`Pipe`；接受任意 `llm.Client` |
-| `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | 同一事件源的通道形式 |
-| `Start(ctx, input) *Handle` | 进程内后台运行；`Handle` 提供 `Steer`、`Inject`、`Redirect`、`Followup`、`Interrupt`、`Wait`、`PendingInputs`。只支持原生工具流，不是持久后台调度服务 |
-| `Initialize(ctx)`、`Shutdown(ctx)` | 生命周期；Build 已调用 Initialize |
-| `GetState()`、`GetMetrics()` | 当前状态与指标 |
+| `AsRunnable() *core.StreamRunnable[any, *AgentOutput]` | Recommended entry point: `Invoke`, `Stream`, `Batch`, `Pipe`; accepts any `llm.Client` |
+| `ExecuteStream(ctx, input) (<-chan AgentEvent, error)` | Channel form of the same event source |
+| `Start(ctx, input) *Handle` | In-process background run; `Handle` provides `Steer`, `Inject`, `Redirect`, `Followup`, `Interrupt`, `Wait`, `PendingInputs`. Supports native tool streaming only; it is not a durable background scheduling service |
+| `Initialize(ctx)`, `Shutdown(ctx)` | Lifecycle; Build has already called Initialize |
+| `GetState()`, `GetMetrics()` | Current state and metrics |
 
-同一 Agent 的所有执行入口按会话串行；跨会话并发应创建独立 Agent。入口行为对照见[执行契约](EXECUTION_CONTRACT.md)。
+All execution entry points of the same agent are serialized per session; for cross-session concurrency create separate agents. For an entry point behavior comparison see the [Execution Contract](EXECUTION_CONTRACT.md).
 
-`Handle.PendingInputs() []builder.PendingInput` 返回未被循环领取的队列快照；每项有 `Kind`（steer/inject/redirect/followup）与 `Text`。同队列有序，跨队列不承诺全局顺序。查询不消费，已领取不代表处理成功。入队与快照不持久化；运行收敛后的剩余输入由宿主处置，见[组合指南](AGENT_COMPOSITION.md)。
+`Handle.PendingInputs() []builder.PendingInput` returns a snapshot of the queues not yet picked up by the loop; each item has a `Kind` (steer/inject/redirect/followup) and `Text`. Order is preserved within a queue; no global order is promised across queues. Querying does not consume, and being picked up does not mean processed successfully. Enqueued items and snapshots are not persisted; inputs remaining after the run converges are handled by the host, see the [Composition Guide](AGENT_COMPOSITION.md).
 
-`Interrupt` 请求合作式取消；`Wait` 仍等待本轮执行源退出及同步工具清理，等待 context 超时只结束等待。持久 Followup 链必须由宿主按原批次重建，Start/WithResume 不自动恢复其调度。
+`Interrupt` requests cooperative cancellation; `Wait` still waits for the current turn's execution source to exit and for synchronous tool cleanup, and a timeout on the wait context only ends the wait. Durable Followup chains must be rebuilt by the host in their original batches; Start/WithResume does not automatically resume their scheduling.
 
-## 自定义状态
+## Custom State
 
 ```go
 type CustomState struct {
@@ -153,7 +155,7 @@ type CustomState struct {
 
 agent, err := builder.NewAgentBuilder[*CustomState](client).
     WithState(&CustomState{AgentState: core.NewAgentState(), Tenant: "t1"}).
-    WithSystemPrompt("你是一个企业助手").
+    WithSystemPrompt("You are an enterprise assistant").
     Build()
 if err != nil {
     return err
@@ -161,14 +163,14 @@ if err != nil {
 fmt.Println(agent.GetState().Tenant)
 ```
 
-## Agent 身份与用量
+## Agent Identity and Usage
 
-`WithUsageHook(budget.UsageHook)` 接收单次模型证据和可用的 Attribution 累计报告；只读、支持并发、向子 Agent 继承，子非 nil 钩子替换继承项。也可用 `budget.WithUsageHook` 绑定 context，不替换 Observer。详见[专用钩子契约](../design/TOKEN_USAGE_HOOK.md)。
+`WithUsageHook(budget.UsageHook)` receives per-call model evidence and, when available, cumulative Attribution reports; it is read-only, concurrency-safe, and inherited by sub-agents, where a non-nil child hook replaces the inherited one. You can also bind it to a context with `budget.WithUsageHook`; this does not replace the Observer. See the [dedicated hook contract](../design/TOKEN_USAGE_HOOK.md).
 
-`WithAgentID(id)` 设置逻辑角色，独立于 DurableScope；绑定预算会自动建立调用身份，未命名角色为 anonymous。`observe.Event.Agent/Usage` 与 model_attempt_start/model_usage 提供只读元数据；`budget.Config.MaxAgentCalls` 限制调用节点数，所有预算统一保存字段证据，`Controller.Attribution` 返回 Self/Inclusive/Root 及未知字段统计。`AsRunnable().Invoke` 与流式入口共用计量路径。见[多 Agent 用量指南](MULTI_AGENT_USAGE.md)。
+`WithAgentID(id)` sets the logical role, independent of DurableScope; binding a budget automatically establishes call identity, and unnamed roles are anonymous. `observe.Event.Agent/Usage` and model_attempt_start/model_usage provide read-only metadata; `budget.Config.MaxAgentCalls` limits the number of call nodes, all budgets store field evidence uniformly, and `Controller.Attribution` returns Self/Inclusive/Root plus unknown-field statistics. `AsRunnable().Invoke` and the streaming entry points share the same metering path. See the [Multi-Agent Usage Guide](MULTI_AGENT_USAGE.md).
 
-### 显式推理配置
+### Explicit Reasoning Configuration
 
-`WithReasoning(usage.ReasoningConfig)` 覆盖当前 Agent 的请求配置。OpenAI 兼容/DeepSeek 使用 `Effort`；Gemini 使用受支持的 level，或 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确拒绝。每请求复制配置，RequestHook 修改本次设置不会污染默认值。
+`WithReasoning(usage.ReasoningConfig)` overrides the current agent's request configuration. OpenAI-compatible/DeepSeek use `Effort`; Gemini uses a supported level, or `BudgetSet: true` with `BudgetTokens`. Unsupported clients reject it explicitly. The configuration is copied per request, so a RequestHook changing the current settings does not pollute the default.
 
-UsageHook 可读取 `Model.ResponseModel`、`Model.ReasoningConfigured`、`Model.Reasoning`、`Model.Tokens.ReasoningTokens`、`Model.Tokens.ToolUsePromptTokens`。先检查 `KnownFields`，不将可选细项重复加进 TotalTokens。详情见[可解释性契约](../design/TOKEN_USAGE_EXPLAINABILITY.md)。
+A UsageHook can read `Model.ResponseModel`, `Model.ReasoningConfigured`, `Model.Reasoning`, `Model.Tokens.ReasoningTokens`, and `Model.Tokens.ToolUsePromptTokens`. Check `KnownFields` first, and do not add optional sub-items into TotalTokens again. For details see the [explainability contract](../design/TOKEN_USAGE_EXPLAINABILITY.md).

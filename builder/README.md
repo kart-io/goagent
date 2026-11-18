@@ -1,18 +1,20 @@
-# builder Agent 构建器
+# builder: Agent Builder
 
-`builder` 用流畅 API 构建 `ConfigurableAgent`，并实现原生工具循环、循环扩展点与运行句柄。方法与默认值速查见 [Builder API 参考](../docs/guides/BUILDER_API_REFERENCE.md)，入门见[快速入门](../docs/guides/QUICKSTART.md)，各执行入口的能力对照见[执行契约](../docs/guides/EXECUTION_CONTRACT.md)。
+[English](README.md) | [中文](README_CN.md)
 
-## 核心类型
+`builder` builds a `ConfigurableAgent` through a fluent API and implements the native tool loop, loop extension points, and run handles. For a quick reference of methods and defaults see the [Builder API Reference](../docs/guides/BUILDER_API_REFERENCE.md); to get started see the [Quick Start](../docs/guides/QUICKSTART.md); for a comparison of what each execution entry point supports see the [Execution Contract](../docs/guides/EXECUTION_CONTRACT.md).
 
-- `AgentBuilder[S core.State]`：泛型构建器，`S` 是状态类型。`NewSimpleBuilder(client)` 返回 `SimpleAgentBuilder`（`AgentBuilder[*core.AgentState]`）。
-- `ConfigurableAgent[S]`：`Build` / `BuildContext` 的结果。`Build` 校验配置，组装中间件链并调用 `Initialize`。会话持久化与恢复使用 `WithSessionLog`、`WithDurableScope`，对话记忆使用 `WithMemory`。
-- `AgentConfig`：配置项，`DefaultAgentConfig()` 给出默认值（MaxIterations 10、Timeout 5 分钟、MaxTokens 2000、Temperature 0.7、MaxConversationHistory 20）。
+## Core Types
 
-## 使用
+- `AgentBuilder[S core.State]`: generic builder; `S` is the state type. `NewSimpleBuilder(client)` returns a `SimpleAgentBuilder` (`AgentBuilder[*core.AgentState]`).
+- `ConfigurableAgent[S]`: the result of `Build` / `BuildContext`. `Build` validates the configuration, assembles the middleware chain, and calls `Initialize`. Session persistence and recovery use `WithSessionLog` and `WithDurableScope`; long-term memory uses `WithLongTermMemory`.
+- `AgentConfig`: configuration; `DefaultAgentConfig()` provides the defaults (MaxIterations 10, Timeout 5 minutes; MaxTokens and Temperature are not sent unless set explicitly, so the LLM client configuration decides).
+
+## Usage
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).
-    WithSystemPrompt("你是一个专业的数据分析师").
+    WithSystemPrompt("You are a professional data analyst").
     WithTools(calculatorTool, searchTool).
     WithMaxIterations(5).
     WithTimeout(2 * time.Minute).
@@ -25,96 +27,96 @@ agent, err := builder.NewSimpleBuilder(client).
 if err != nil {
     return err
 }
-output, err := agent.AsRunnable().Invoke(ctx, "分析这些数据……")
+output, err := agent.AsRunnable().Invoke(ctx, "Analyze this data...")
 ```
 
-输出格式：`OutputFormatPlainText`、`OutputFormatMarkdown`、`OutputFormatJSON` 在系统提示词后追加对应说明；`WithCustomOutputFormat("请以 YAML 格式输出结果")` 使用自定义说明。
+Output formats: `OutputFormatPlainText`, `OutputFormatMarkdown`, and `OutputFormatJSON` append the corresponding instruction after the system prompt; `WithCustomOutputFormat("Output the result in YAML format")` uses a custom instruction.
 
-场景预设 `ConfigureForRAG`、`ConfigureForChatbot`、`ConfigureForAnalysis` 与快速函数 `QuickAgent`、`ChatAgent`、`RAGAgent`、`AnalysisAgent`、`WorkflowAgent`、`MonitoringAgent`、`ResearchAgent` 的具体配置见 [API 参考](../docs/guides/BUILDER_API_REFERENCE.md#场景预设与快速函数)。
+For the exact configuration of the scenario presets `ConfigureForRAG`, `ConfigureForChatbot`, `ConfigureForAnalysis` and the quick functions `QuickAgent`, `ChatAgent`, `RAGAgent`, `AnalysisAgent`, `WorkflowAgent`, `MonitoringAgent`, `ResearchAgent`, see the [API Reference](../docs/guides/BUILDER_API_REFERENCE.md#scenario-presets-and-quick-functions).
 
-## 执行入口
+## Execution Entry Points
 
-| 入口 | 客户端要求 | 行为 |
+| Entry point | Client requirement | Behavior |
 |---|---|---|
-| `AsRunnable().Invoke/Stream/Batch/Pipe` | `llm.Client` | 推荐入口；配置了工具且实现 `llm.ToolStreamClient` 时走原生工具循环 |
-| `ExecuteStream` | `llm.Client` | 同一事件源的通道形式（`sources`、`step`、`text`、`usage`、`error`、`done`） |
-| `Start` | `llm.ToolStreamClient` 且配置了工具 | 后台运行，返回 `*Handle` |
+| `AsRunnable().Invoke/Stream/Batch/Pipe` | `llm.Client` | Recommended entry point; uses the native tool loop when tools are configured and the client implements `llm.ToolStreamClient` |
+| `ExecuteStream` | `llm.Client` | Channel form of the same event source (`sources`, `step`, `text`, `usage`, `error`, `done`) |
+| `Start` | `llm.ToolStreamClient` with tools configured | Runs in the background and returns a `*Handle` |
 
-所有入口按会话串行执行，排队等待计入 Timeout；跨会话并发应创建独立 Agent。
+All entry points execute serially per session, and time spent waiting in the queue counts toward Timeout; for concurrency across sessions, create separate Agents.
 
-`Build` / `BuildContext` 为生成的 Agent 保存配置快照，后续修改 Builder 的选项、工具列表、回调列表和顶层元数据不会追溯修改已有 Agent。客户端、状态、存储、记忆、回调对象及元数据中的业务对象仍按引用共享；跨会话应创建独立 Builder，并按需提供独立状态。
+`Build` / `BuildContext` save a configuration snapshot for the generated Agent; later changes to the Builder's options, tool list, callback list, and top-level metadata do not retroactively modify existing Agents. The client, state, store, memory, callback objects, and business objects inside metadata are still shared by reference; across sessions, create separate Builders and provide separate state as needed.
 
-## 运行中交互与循环扩展点
+## In-Run Interaction and Loop Extension Points
 
-以下能力只作用于原生工具流（`llm.ToolStreamClient` 且配置了工具）。
+The following capabilities apply only to the native tool stream (`llm.ToolStreamClient` with tools configured).
 
 ```go
-h := agent.Start(ctx, "修复登录页的样式")
-_ = h.Steer(ctx, "顺便检查移动端")   // 当前工具批次结束后作为 user 消息追加；模型即将结束时唤醒续跑
-_ = h.Inject(ctx, "用户偏好深色主题") // 随下一次请求发送，不唤醒
-_ = h.Redirect(ctx, "先别改 CSS")     // 取消进行中的模型请求，保留已流出的文本后重新请求；工具执行中降级为 Steer
-_ = h.Followup(ctx, "再写个测试")     // 本轮结束后作为新一轮输入，续接对话
-out, err := h.Wait(ctx)         // h.Interrupt(cause) 中止运行
-pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行循环领取的输入
+h := agent.Start(ctx, "Fix the login page styles")
+_ = h.Steer(ctx, "Also check mobile")              // appended as a user message after the current tool batch; wakes the run to continue if the model is about to finish
+_ = h.Inject(ctx, "The user prefers a dark theme") // sent with the next request; does not wake the run
+_ = h.Redirect(ctx, "Don't touch the CSS yet")     // cancels the in-flight model request, keeps the text already streamed, then re-requests; degrades to Steer while tools are running
+_ = h.Followup(ctx, "Write a test as well")        // used as the input of a new turn after this turn ends, continuing the conversation
+out, err := h.Wait(ctx)                            // h.Interrupt(cause) aborts the run
+pending := h.PendingInputs()                       // independent snapshot: inputs still queued and not yet claimed by the execution loop
 ```
 
-入队成功不代表处理完成。Inject 不唤醒、Steer 到达过晚或额度耗尽时可能留下输入；失败时未领取的 Followup 也会保留。`PendingInputs` 不消费、不自动续跑，已领取但处理失败的输入不在其中。`Wait` 的 context 只控制等待；等待超时不代表 Handle 结束。收件箱是进程内对象，不提供跨重启可靠接收，详见[组合与输入契约](../docs/guides/AGENT_COMPOSITION.md)。
+A successful enqueue does not mean the input has been processed. Inputs can be left over because Inject does not wake the run, or because a Steer arrived too late or the quota was exhausted; unclaimed Followups are also kept on failure. `PendingInputs` neither consumes nor automatically continues, and inputs that were claimed but failed are not included. The context passed to `Wait` only controls waiting; a wait timeout does not mean the Handle has finished. The inbox is an in-process object and does not provide reliable delivery across restarts; see [Composition and Input Contract](../docs/guides/AGENT_COMPOSITION.md).
 
-`Interrupt` 后，Handle 等待本轮 ExecuteStream 退出（包括其同步执行的工具与清理），再完成 Wait。宿主工具和钩子必须合作返回；需要限制等待时间时给 Wait 单独设置 context。取消原因与已收到的执行错误通过错误链保留，不把取消解释成业务效果已撤销。
+After `Interrupt`, the Handle waits for the current ExecuteStream to exit (including the tools and cleanup it runs synchronously) before completing Wait. Host tools and hooks must cooperate and return; to bound the waiting time, give Wait its own context. The cancellation cause and any execution errors already received are kept in the error chain; cancellation is not interpreted as the business effects having been undone.
 
-| 选项 | 时机 | 能力 |
+| Option | When | Capability |
 |---|---|---|
-| `WithPreStep` / `WithIdentifiedPreStep` | 领取收件箱输入之后、发送请求之前 | 改写消息（如压缩），或以 `Halt` 不请求模型直接结束；带身份的版本在配置改变后拒绝恢复旧的持久运行 |
-| `WithOffload` | 同 PreStep | 超长工具结果换成引用，见[上下文治理](../docs/guides/CONTEXT_POLICY.md) |
-| `WithRequestHook` | 发送模型请求前 | 替换客户端（路由、换模型）、调整参数 |
-| `WithRequestError` | 模型请求失败 | 依据 `llm.ClassifyError` 的分类决定重试、压缩（替换消息）或回退（替换客户端）；`RetryTransient` 是原样重试暂时性失败的组件 |
-| `WithTurnStopping` | 模型给出最终答复、没有待处理的 Steer | 返回一条 user 消息续跑（目标驱动、Stop 钩子） |
-| `WithPromptSections` | 每轮开始时计算一次 | 追加到 system，同一轮内字节不变，保持提示词缓存前缀 |
-| `WithPromptContexts` | 每步重算 | 作为一条 user 消息附在本次请求末尾，不进入之后的历史 |
+| `WithPreStep` / `WithIdentifiedPreStep` | After claiming inbox inputs, before sending the request | Rewrite messages (e.g. compression), or `Halt` to finish without calling the model; the identified version refuses to resume old durable runs after the configuration changes |
+| `WithOffload` | Same as PreStep | Replace oversized tool results with references; see [Context Policy](../docs/guides/CONTEXT_POLICY.md) |
+| `WithRequestHook` | Before sending the model request | Replace the client (routing, switching models), adjust parameters |
+| `WithRequestError` | Model request failed | Decide to retry, compress (replace messages), or fall back (replace the client) based on the classification from `llm.ClassifyError`; `RetryTransient` is the component that retries transient failures unchanged |
+| `WithTurnStopping` | Model gave a final answer and no Steer is pending | Return a user message to continue (goal-driven, Stop hook) |
+| `WithPromptSections` | Computed once at the start of each turn | Appended to the system prompt; bytes stay unchanged within a turn to keep the prompt-cache prefix |
+| `WithPromptContexts` | Recomputed every step | Attached as a user message at the end of this request; does not enter later history |
 
-持久运行中，PreStep、TurnStopping、提示词段落与上下文、按步领取的 Steer/Inject 和唤醒决定记入日志，恢复时回放而不重新计算；以 `Start` 开始的持久运行须同样以 `Start` 恢复。持久运行中，`Steer`、`Inject`、`Redirect`、`Followup` 写入持久收件箱后才返回成功，写入失败时返回错误；`SteerOnce` 还按键去重，投递方崩溃后重投不产生第二条；用同一执行键再次 `Start` 会恢复未领取的输入，并按记录的批次继续 Followup 轮次，宿主不需要重建，也不应重复提交。Request 钩子须是确定性的；RequestError 的原样重试在同一条回合记录内进行，持久运行中替换消息或客户端的决定以错误结束；Redirect 只在非持久运行中生效（持久运行中降级为 Steer）。被进程停止或崩溃打断的模型请求默认不重发（可能已计费），恢复时报 `durable.ErrOperationAttention`；`WithInterruptedModelResend` 允许重发，同一回合最多发出 3 次，每次各占一份预算，开关须在运行的整个生命周期内保持一致。子流程等待宿主续跑时，执行以 `ErrWaiting`（`*WaitingError`）暂停，见[可组合编排](../docs/guides/COMPOSABLE_ORCHESTRATION.md)。
+In durable runs, PreStep, TurnStopping, prompt sections and contexts, per-step claimed Steer/Inject, and wake decisions are recorded in the journal and replayed on recovery instead of being recomputed; a durable run started with `Start` must also be resumed with `Start`. In durable runs, `Steer`, `Inject`, `Redirect`, and `Followup` return success only after writing to the durable inbox, and return an error if the write fails; `SteerOnce` additionally deduplicates by key, so redelivery after the sender crashes does not produce a second message; calling `Start` again with the same execution key restores unclaimed inputs and continues Followup turns by the recorded batches, so the host does not need to rebuild them and should not resubmit. Request hooks must be deterministic; RequestError's unchanged retries happen within the same turn record, and in durable runs a decision to replace messages or the client ends with an error; Redirect only takes effect in non-durable runs (in durable runs it degrades to Steer). A model request interrupted by process stop or crash is not resent by default (it may already have been billed), and recovery reports `errors.ErrOperationAttention`; `WithInterruptedModelResend` allows resending, with at most 3 sends per turn, each consuming its own share of the budget, and the switch must stay the same for the whole lifetime of the run. When a subflow waits for the host to continue, execution pauses with `errors.ErrAgentWaiting` (`*WaitingError`); see [Composable Orchestration](../docs/guides/COMPOSABLE_ORCHESTRATION.md).
 
-## 会话日志
+## Session Log
 
-`WithSessionLog(store)` 把会话记入 [`core/session`](../core/session/README.md) 的事件日志：模型历史从日志推导（不再读取记忆），每次模型请求前记录与日志不同的对话，PreStep 等对历史的改写记为 `history/rewrite`，因此每次请求都能由日志重建。持久运行可用 `session.DurableStore(store, id)` 作为 durable 日志，操作快照与对话位于同一份日志；`session.BuildTrajectory` 把日志导出为训练轨迹。支持普通流式聊天与原生工具循环；纯聊天无需配置占位工具。
+`WithSessionLog(store)` records the session in the event log of [`core/session`](../core/session/README.md): model history is derived from the log (memory is no longer read), the conversation is recorded before each model request wherever it differs from the log, and rewrites of history by PreStep and others are recorded as `history/rewrite`, so every request can be rebuilt from the log. Durable runs can use `session.DurableStore(store, id)` as the durable journal, so operation snapshots and the conversation live in the same log; `session.BuildTrajectory` exports the log as a training trajectory. Both plain streaming chat and the native tool loop are supported; plain chat needs no placeholder tools.
 
-再加 `WithSessionState()` 时状态随会话日志跨进程恢复：每轮结束把状态编码进 `turn/end`，下一轮开始时若日志中的状态不是当前状态对应的那条（新进程、换了会话或退回过），就用它替换当前状态，没有记录的会话从构建时的状态开始。编码由状态类型的 `MarshalJSON`/`UnmarshalJSON` 决定，`*core.AgentState` 编码为 JSON 对象，恢复后数字为 float64；需要保留字段类型时自定义状态类型并实现这两个方法。
+Adding `WithSessionState()` restores state across processes along with the session log: at the end of each turn the state is encoded into `turn/end`, and at the start of the next turn, if the state in the log is not the record corresponding to the current state (new process, switched session, or rewound), it replaces the current state; sessions with no record start from the state given at build time. Encoding is determined by the state type's `MarshalJSON`/`UnmarshalJSON`; `*core.AgentState` encodes as a JSON object and numbers become float64 after restoring; to preserve field types, define a custom state type that implements these two methods.
 
-每个 Agent 只写入自己显式配置的日志；工具中调用的子 Agent 和 Handle 不继承父轮次的日志写入权。子 Agent 需要独立日志且共享同一个 Store 时，宿主应通过 `tools.WithSessionID(ctx, childID)` 为子调用绑定独立会话身份。
+Each Agent writes only to the log it was explicitly configured with; sub-Agents and Handles called from tools do not inherit write access to the parent turn's log. When a sub-Agent needs its own log while sharing the same Store, the host should bind a separate session identity for the child call with `tools.WithSessionID(ctx, childID)`.
 
-## 代码结构
+## Code Layout
 
 ```text
 builder/
-├── builder.go              # AgentBuilder、Build/BuildContext
-├── agent_options.go        # 提示词、状态、上下文、回调、元数据
-├── config_options.go       # AgentConfig 与运行配置
-├── runtime_options.go      # 存储、记忆、检查点、中间件
+├── builder.go              # AgentBuilder, Build/BuildContext
+├── agent_options.go        # prompts, state, context, callbacks, metadata
+├── config_options.go       # AgentConfig and run configuration
+├── runtime_options.go      # WithMiddleware
 ├── tool_options.go         # WithTools
-├── configurable_agent.go   # 中间件链执行与生命周期
+├── configurable_agent.go   # middleware chain execution and lifecycle
 ├── runnable.go             # AsRunnable
-├── events.go               # ExecuteStream 与事件
-├── tool_events.go          # 原生工具循环
-├── loop_hooks.go           # PreStep、Request、RequestError、TurnStopping、提示词段落与上下文
-├── handle.go               # Start 与 Handle
+├── events.go               # ExecuteStream and events
+├── tool_events.go          # native tool loop
+├── loop_hooks.go           # PreStep, Request, RequestError, TurnStopping, prompt sections and contexts
+├── handle.go               # Start and Handle
 ├── offload.go              # WithOffload
 ├── compaction.go           # WithCompaction
 ├── long_term_memory.go     # WithLongTermMemory
 ├── retrieval.go            # WithRetriever
-├── session_log.go          # WithSessionLog、WithSessionState
-├── durable_turn.go         # 持久模型回合
-├── model_call.go           # 模型调用计数与用量记录
+├── session_log.go          # WithSessionLog, WithSessionState
+├── durable_turn.go         # durable model turns
+├── model_call.go           # model call counting and usage recording
 ├── model_budget.go         # WithTokenEstimator
-├── waiting.go              # ErrWaiting、WaitingError
-├── presets.go              # ConfigureFor* 场景预设
-├── quick_builders.go       # 快速创建函数
-└── contextpolicy/          # Offload、Compaction、recall_history 与结果存储
+├── waiting.go              # WaitingError
+├── presets.go              # ConfigureFor* scenario presets
+├── quick_builders.go       # quick creation functions
+└── contextpolicy/          # Offload, Compaction, recall_history, and the result store
 ```
 
-## 多 Agent 用量钩子
+## Multi-Agent Usage Hook
 
-`WithUsageHook(func(ctx context.Context, e budget.UsageEvent))` 直接获取逐尝试 Token 和可用的累计统计，父钩子向子 Agent 继承。无需自行筛选 Observer 事件；查询错误与回调 panic 不改变业务结果。未绑定预算时仍提供单次用量，详见下述指南。
+`WithUsageHook(func(ctx context.Context, e budget.UsageEvent))` directly receives per-attempt tokens and the available cumulative statistics; parent hooks are inherited by sub-Agents. There is no need to filter Observer events yourself; query errors and callback panics do not change the business result. Per-call usage is still provided when no budget is bound; see the guide below.
 
-`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过统一预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE.md)与[离线示例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)。
+`WithAgentID` identifies the role; sub-Agents share the budget and Observer through the parent context. model_attempt_start/model_usage provide the attempt key, parent/child identity, and field evidence; reliable totals come from the Attribution query on the unified budget. Self, Inclusive, and Root must not be added together; see the [guide](../docs/guides/MULTI_AGENT_USAGE.md) and the [offline example](https://github.com/kart-io/goagent-examples/tree/main/agent-usage).
 
-Token 统计钩子还可读取供应商报告的 `ReasoningTokens`、`ToolUsePromptTokens` 和 `ResponseModel`；先检查对应 `KnownFields`。通过 `WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置本 Agent 的显式推理控制，Gemini 思考预算使用 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确报错。见[用量指南](../docs/guides/MULTI_AGENT_USAGE.md)。
+Token usage hooks can also read the provider-reported `ReasoningTokens`, `ToolUsePromptTokens`, and `ResponseModel`; check the corresponding `KnownFields` first. Use `WithReasoning(usage.ReasoningConfig{Effort: "low"})` to set explicit reasoning control for this Agent; Gemini thinking budgets use `BudgetSet: true` and `BudgetTokens`. Unsupported clients return an explicit error. See the [usage guide](../docs/guides/MULTI_AGENT_USAGE.md).
