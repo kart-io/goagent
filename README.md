@@ -1,19 +1,11 @@
 # GoAgent - AI Agent Framework for Go
 
-[![Go Version](https://img.shields.io/badge/go-1.27.0-blue?style=flat-square&logo=go)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kart-io/goagent.svg)](https://pkg.go.dev/github.com/kart-io/goagent)
 [![Latest Release](https://img.shields.io/github/v/release/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/kart-io/goagent/actions/workflows/ci.yml)
-[![Provider Contracts](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/provider-contracts.yml?branch=master&style=flat-square&logo=github&label=provider%20contracts)](https://github.com/kart-io/goagent/actions/workflows/provider-contracts.yml)
-[![Nightly](https://img.shields.io/github/actions/workflow/status/kart-io/goagent/nightly.yml?branch=master&style=flat-square&logo=github&label=nightly)](https://github.com/kart-io/goagent/actions/workflows/nightly.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/kart-io/goagent?style=flat-square&logo=go)](go.mod)
 [![License](https://img.shields.io/github/license/kart-io/goagent?style=flat-square)](LICENSE)
-
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen?style=flat-square&logo=readthedocs)](docs/)
-[![Downloads](https://img.shields.io/endpoint?url=https://api.pinstudios.net/api/badges/downloads/kart-io/goagent/total)](https://github.com/kart-io/goagent/releases/latest)
-[![Go Reference](https://img.shields.io/badge/go-reference-blue?style=flat-square&logo=go)](https://pkg.go.dev/github.com/kart-io/goagent)
-[![Deepwiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
-[![Issues](https://img.shields.io/github/issues/kart-io/goagent?style=flat-square&logo=github)](https://github.com/kart-io/goagent/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/kart-io/goagent/master?style=flat-square&logo=github)](https://github.com/kart-io/goagent/commits/master/)
-[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/costa92/badge.svg)](https://hub.xerj.org/contributors/costa92)
+[![DeepWiki](https://img.shields.io/badge/deepwiki-view-blueviolet?style=flat-square)](https://deepwiki.com/kart-io/goagent)
 
 [English](README.md) | [Chinese](README_CN.md)
 
@@ -28,6 +20,44 @@ Related repositories:
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib) - retrievers (BM25, hybrid, reranking, Qdrant), document loaders, practical tools and the multi-instance Postgres `durable.Store`.
 - [goagent-examples](https://github.com/kart-io/goagent-examples) - business cases (DevOps, content review, auto-reply, refund recovery, live-model orchestration).
 - [goagent-harness](https://github.com/kart-io/goagent-harness) - presets, plan mode, compaction, Skills assembly, sub-agent components and coding tools. See the [Harness migration guide](docs/guides/HARNESS_MIGRATION.md).
+
+## Why GoAgent
+
+Services that run agents in production need each run to **survive a restart, wait for a human, and stay within a budget**. GoAgent builds these into the execution kernel instead of leaving them to the host:
+
+- **Durable** - `core/durable` journals every model turn and tool call of the agent loop, and durable graphs checkpoint each step; a restarted process replays completed operations and continues. A file store is built in; a multi-instance Postgres store is in goagent-contrib.
+- **Human approval as a first-class pause** - a graph node, parallel branch or tool can stop and wait for validated human input, then resume in another process.
+- **Governed** - one root budget per run caps model requests, reserved tokens, tool calls, sub-agent calls and the deadline, and can be journaled with the run (`core/budget`); tool admission, approvals and guards sit on the single tool path (`tools.Dispatcher`/`Pipeline`).
+- **Observable** - read-only execution events (`core/observe`) and optional OpenTelemetry tracing and metrics.
+
+```mermaid
+flowchart LR
+    host["Your Go service"] --> scope["execution.Scope<br/>run/session ID, budget, deadline"]
+    scope --> agent["builder agent<br/>native tool loop"]
+    scope --> wf["workflow.DurableGraph<br/>branches, parallel, approvals"]
+    agent --> llm["llm/providers<br/>OpenAI, DeepSeek, Gemini, Anthropic, ..."]
+    agent --> disp["tools.Dispatcher<br/>schema, authorize, admission"]
+    wf --> disp
+    disp --> tools["function tools, MCP, A2A"]
+    agent -. journal .-> durable[("core/durable<br/>file or Postgres store")]
+    wf -. checkpoint .-> durable
+    disp -. tool calls .-> durable
+    agent -. events .-> observe["core/observe -> OpenTelemetry"]
+```
+
+See it offline in three commands (no API key; the first process exits while waiting for approval):
+
+```bash
+DIR=$(mktemp -d)
+go run ./examples/human-in-the-loop -dir "$DIR" -text 'Draft reply to customer'
+# -> "Node": "review", "Waiting": true, "Key": "189efb28..."   (process exits)
+
+go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
+  -reviewer demo-reviewer -decision approve -text 'Edited reply'
+# -> "Node": "__end__", "Done": true, "status": "accepted", "text": "Edited reply"
+```
+
+> **Status:** GoAgent is pre-1.0 and its API still changes between minor versions. Breaking changes and migration notes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
@@ -222,6 +252,10 @@ golangci-lint run
 bash scripts/verify_imports.sh   # import layering
 bash scripts/check_coverage.sh   # coverage threshold
 ```
+
+## Contributing
+
+Bug reports, questions and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, commit conventions and checks to run before opening a PR.
 
 ## License
 

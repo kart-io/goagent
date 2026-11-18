@@ -1,0 +1,31 @@
+name: Bug report / 问题报告
+description: Something does not work as documented / 行为与文档不符
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / 现象
+      description: Expected vs. actual behavior, with error output if any.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction / 最小复现
+      description: Code or commands that reproduce the problem. Mock models (`testing/mocks`) are preferred over real providers.
+      render: go
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: GoAgent version / 版本
+      placeholder: v0.55.2
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Go version, OS, LLM provider / 环境
+      placeholder: go1.27.0 linux/amd64, DeepSeek

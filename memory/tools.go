@@ -50,7 +50,7 @@ func (m *Memory) Tools() []interfaces.Tool {
 				}
 				return map[string]any{"id": r.ID}, nil
 			}},
-		&memoryTool{name: constants.ToolMemoryReplace, desc: "用新内容取代一条已过时或错误的长期记忆，id 取自 memory_search 的结果或召回块。旧记录失效并指向新记录，钉住的旧记录由新记录继承钉住。",
+		&memoryTool{name: constants.ToolMemoryReplace, desc: "用新内容取代一条已过时或错误的长期记忆，id 取自 memory_search 的结果或召回块。旧记录失效并指向新记录，钉住的旧记录由新记录继承钉住。只在用户明确表示信息已变化或记录有误时使用；用户的说法与记录不一致但没有这样表示时，先向用户指出记录的内容并确认，不要直接取代。",
 			schema: `{"type":"object","properties":{"id":{"type":"string","minLength":1},"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["id","content"],"additionalProperties":false}`,
 			run: func(ctx context.Context, args map[string]any) (any, error) {
 				id, _ := args["id"].(string)

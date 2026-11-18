@@ -116,10 +116,16 @@ TMPDIR=/tmp taskset -c 2,3,6-27 go run /tmp/rejudge/main.go -baseline docs/evalu
 | # | 环节 | 缺陷 | 复现场景 | 影响 |
 |---|---|---|---|---|
 | 1 | answer | 分流成员没有长期记忆，结束时复述成员答复，把成员引用记忆得出的结论（蓝色、X200、没有相关记录）删掉 | premise、recall、forget | 6/90（premise-04/09、recall-03/10、forget-01/06），与 #5 并列最大单一来源：记忆召回正确，客户却看不到 |
-| 2 | recall | 召回块与 `memory_search` 结果只带日期（`memory/recall.go` `time.DateOnly`），按得分排序，同日多条记录无法排先后 | temporal | 4/10 如实答「无法判断」；所有「最早/最近」类问题都受影响 |
+| 2 | recall | 召回块与 `memory_search` 结果只带日期（`memory/recall.go` `time.DateOnly`），按得分排序，同日多条记录无法排先后 | temporal | 4/10 如实答「无法判断」；所有「最早/最近」类问题都受影响。已修复，见下文 |
 | 3 | extract（不排除 consolidate） | 同一客户第 2 张工单的「充电器发烫」没有留下有效记录 | temporal | 4/10；抽取输出未留存，需开启抽取与整理决定日志才能区分是抽取为空还是整理误判 noop |
 | 4 | tool | 成员按客户的错误前提调用 `memory_replace`，把正确的「蓝色」改成「红色…以用户最新说法为准」 | premise | 1/10，但会持久污染记忆；召回块的「与用户当前所说冲突时以用户为准」会诱导这一行为 |
 | 5 | answer | 记录已召回或已确认为空，成员答复仍不用或含糊其辞（multi-04、update-04、forget-02/03/08/10） | multi、update、forget | 6/90 |
+
+### 修复与复测
+
+| # | 修复 | 复测 |
+|---|---|---|
+| 2 | goagent `dc4e80aa`（v0.55.2）：召回块的记录与关系、`memory_search` 的记录都带到秒的生效时间 | temporal 10 次（运行目录 `/tmp/cs-scenarios/20261118-091828`，结果见 `temporal-retest.jsonl`）：两层都通过 2/10 → 4/10；答「无法判断」4 → 0；两条记录都在时 4/4 答对。其余 6 次都是缺陷 #3（缺「发烫」或「断连」记录） |
 
 评测自身的问题（不是系统缺陷，修订评测时处理）：update 的子串状态检查误判 9/10；LLM 评审对同构答复判定不一致（update 1–3 与 5–10，forget 06/08 与 01–03/10）。
 
