@@ -18,7 +18,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [skills/](skills/) | Skill registration, routing, a layered weather skill and [standalone SKILL.md loading](skills/03-catalog/) |
 | [advanced/](advanced/) | Multi-agent collaboration (four variants), observability, tool selector |
 | [integration/](integration/) | LangChain-style runnables, callbacks, cache and parsers; middleware chains; preconfigured agents |
-| [llm/](llm/) | Provider examples: Anthropic, Kimi, the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) and the MiniMax Anthropic-compatible verifier (`minimax-verify`) |
+| [llm/](llm/) | Provider examples: Anthropic, Kimi, the Gemini native API verifier ([gemini-verify](llm/gemini-verify/README.md)) the MiniMax Anthropic-compatible verifier (`minimax-verify`), and JSON mode with `WithJSONResponse` ([json-response](llm/json-response/main.go), offline by default) |
 | [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage) | 已迁至 goagent-examples：任务、单 Agent／子 Agent、多平台及错误边界 |
 | [workflow/](workflow/) | `workflow` graph with branching and streaming events, offline (`go run ./examples/workflow [-stream]`) |
 | [human-in-the-loop/](human-in-the-loop/) | Persisted review gates: inspect checkpoints, approve/reject, edit state and resume in another process, offline |

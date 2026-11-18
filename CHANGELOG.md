@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
+- `llm/providers`：`llm.WithResponseFormat` / `WithJSONResponse` 自 `llm.Client` 收敛为流式接口后不再生效，所有提供方都不发送该设置，模型照常返回带说明文字的非 JSON 回复。现在 OpenAI 兼容提供方（含 DeepSeek、Kimi、SiliconFlow、Ollama）发送 `response_format`，Gemini 设置 `responseMimeType`（不支持的类型返回 `CodeInvalidInput`），Anthropic 没有 JSON 模式，构造时对非 `text` 返回 `CodeInvalidInput`。新增离线示例 `examples/llm/json-response`。
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
 - `memory`：后台整理合并或否定钉住的记录时，取代它的新记录不再钉住，核心记忆随之从 `Pinned` 与每轮召回块中消失。现在取代者继承被取代记录的 `Pinned`。
 - `llm/providers`：DeepSeek 偶尔不返回 tool_calls，而把工具调用以 `<｜DSML｜…>` 标记写进正文，工具不执行，标记文本却成为答案。现在 `CompleteToolsStream` 会暂存这段正文，正常结束时若整段是合法调用块、工具名都在本轮声明内，就还原为 `ToolCalls`，否则原样补发。本轮没有声明工具时（例如 builder 的最后一轮）不处理；这种情况应给成员留够轮数。

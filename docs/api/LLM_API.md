@@ -179,7 +179,7 @@ type ClassifiedError struct {
 | `WithAPIKey`、`WithBaseURL`、`WithModel` | 为空时依次回退到 Provider 的环境变量和默认值 |
 | `WithEmbeddingModel` | 独立的向量模型，OpenAI 兼容 Provider 与 Gemini 使用 |
 | `WithMaxTokens`、`WithTemperature`、`WithTopP` | 请求未指定时使用的默认值 |
-| `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；当前没有内置 Provider 读取该选项 |
+| `WithResponseFormat`、`WithJSONResponse` | `ResponseFormatText` / `ResponseFormatJSON`；OpenAI 兼容提供方（OpenAI、DeepSeek、Kimi、SiliconFlow、Ollama）作为 `response_format` 发送；Gemini 映射为 `responseMimeType`，其他类型报错；Anthropic 无 JSON 模式，构造时拒绝非 `text`。OpenAI 与 DeepSeek 要求提示词中出现 “JSON”。示例见 [json-response](../../examples/llm/json-response/main.go) |
 | `WithSystemPrompt` | 前置到每次请求的系统提示 |
 | `WithReasoning` | 推理配置（`usage.ReasoningConfig`），请求的 `Reasoning` 未设置时使用 |
 | `WithStreamIdleTimeout`、`WithStreamTimeout` | 流式响应的空闲间隔上限与总时长上限 |
