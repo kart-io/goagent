@@ -124,6 +124,11 @@ func WithSystemPrompt(prompt string) ClientOption {
 //   - "text": plain text format (default)
 //   - "json_object": JSON object format (ensures the LLM returns valid JSON)
 //
+// OpenAI-compatible providers (OpenAI, DeepSeek, Kimi, SiliconFlow, Ollama)
+// send it as response_format; Gemini maps it to responseMimeType and rejects
+// other types. Anthropic has no JSON mode, so NewAnthropicWithOptions rejects
+// anything but "text". OpenAI and DeepSeek require the prompt to mention JSON.
+//
 // Example:
 //
 //	// Use a predefined constant

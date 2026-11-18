@@ -38,6 +38,11 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 	if err := base.EnsureAPIKey(shared.EnvAnthropicAPIKey, shared.ProviderAnthropic); err != nil {
 		return nil, err
 	}
+	if format := base.Config.ResponseFormat; format != nil && format.Type != agentllm.ResponseFormatText.Type {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: response format %q is not supported by the Messages API", format.Type).
+			WithComponent("anthropic").
+			WithOperation("new_provider")
+	}
 	// 关闭 SDK 隐式重试：一次调用对应一次上游请求，重试由 Builder 的 RequestError 钩子决定。
 	client := anthropic.NewClient(
 		option.WithAPIKey(base.Config.APIKey),

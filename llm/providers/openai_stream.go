@@ -53,6 +53,10 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		}
 		messages = append(messages, message)
 	}
+	var responseFormat *openai.ChatCompletionResponseFormat
+	if format := p.Config.ResponseFormat; format != nil {
+		responseFormat = &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatType(format.Type)}
+	}
 	model := p.GetModel(req.Model)
 	temperature := p.ResolveTemperature(req)
 	ctx = withOpenAITemperature(ctx, temperature)
@@ -61,7 +65,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
 		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
 		Temperature: float32(temperature), TopP: float32(req.TopP),
-		Stop: req.Stop, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
+		Stop: req.Stop, ResponseFormat: responseFormat, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
 	if err != nil {
 		if stall := watch.stalled(); stall != nil {
