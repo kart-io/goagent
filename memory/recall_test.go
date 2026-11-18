@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -148,4 +150,45 @@ func TestRenderTurnSkipsMemoryTools(t *testing.T) {
 	require.Contains(t, text, "我查一下", "同一条消息的普通正文保留")
 	require.Contains(t, text, "weather")
 	require.Contains(t, text, "晴")
+}
+
+// 同一天的多条记录要能排出先后：召回块与 memory_search 都带到秒的生效时间。
+func TestRecallShowsTimeOfDay(t *testing.T) {
+	ctx := WithNamespace(context.Background(), testNS...)
+	m := vectorMemory(t)
+	day := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	records := []Record{
+		{ID: "early", Content: "用户反馈耳机左耳没声音", Importance: 0.8, ValidFrom: day.Add(9*time.Hour + 5*time.Minute + 7*time.Second)},
+		{ID: "late", Content: "用户反馈耳机充电盒发烫", Importance: 0.8, ValidFrom: day.Add(14*time.Hour + 30*time.Minute)},
+	}
+	for _, r := range records {
+		_, err := m.Remember(ctx, r)
+		require.NoError(t, err)
+	}
+
+	block, err := m.RecallBlock(ctx, "用户反馈耳机")
+	require.NoError(t, err)
+	out, err := memoryToolNamed(m, constants.ToolMemorySearch).Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"query": "用户反馈耳机"}})
+	require.NoError(t, err)
+	var res struct {
+		Memories []struct {
+			ID        string `json:"id"`
+			ValidFrom string `json:"valid_from"`
+		} `json:"memories"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out.Result.(string)), &res))
+	got := map[string]string{}
+	for _, it := range res.Memories {
+		got[it.ID] = it.ValidFrom
+	}
+
+	for _, tc := range []struct{ id, want string }{
+		{"early", "2026-11-17 09:05:07"},
+		{"late", "2026-11-17 14:30:00"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			require.Contains(t, block, " "+tc.id+" "+tc.want+"]", "召回块")
+			require.Equal(t, tc.want, got[tc.id], "memory_search")
+		})
+	}
 }

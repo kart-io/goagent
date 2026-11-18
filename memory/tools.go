@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"time"
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
@@ -23,7 +24,7 @@ func (m *Memory) Tools() []interfaces.Tool {
 				items := make([]map[string]any, len(found))
 				var names []string
 				for i, r := range found {
-					items[i] = map[string]any{"id": r.ID, "kind": r.Kind, "content": r.Content, "score": r.Score}
+					items[i] = map[string]any{"id": r.ID, "kind": r.Kind, "content": r.Content, "valid_from": r.ValidFrom.Format(time.DateTime), "score": r.Score}
 					names = append(names, r.Entities...)
 				}
 				graph, err := m.Related(ctx, query, names, m.cfg.GraphHops, m.cfg.GraphRelations)

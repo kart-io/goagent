@@ -19,6 +19,7 @@ const RecallPrefix = "[相关长期记忆]\n"
 
 // RecallProtocol 标识召回块的渲染规则与引用格式，协议不同的快照恢复时视为空召回。
 // 计量收紧不升协议：旧快照按新预算宽松还原，放不下的行像已删除项一样丢弃。
+// 时间显示精度变化也不升协议：引用与摘要不变，升协议只会让旧快照恢复时丢掉召回。
 const RecallProtocol = "memory-recall/2"
 
 // recallProtocolV1 是 G0 的协议：引用不带作用域与版本。持久日志中的这类快照恢复时召回为空，摘要仍按 G0 的编码计算。
@@ -178,12 +179,12 @@ func recordItem(ns []string, scope string, r Record) recallItem {
 		tag = "核心"
 	}
 	return recallItem{ref: Ref{Kind: RefRecord, Namespace: ns, ID: r.ID, Scope: scope, Incarnation: r.Incarnation, ContentRev: r.ContentRev}, record: &r,
-		line: fmt.Sprintf("- [%s %s %s] %s", tag, r.ID, r.ValidFrom.Format(time.DateOnly), r.Content)}
+		line: fmt.Sprintf("- [%s %s %s] %s", tag, r.ID, r.ValidFrom.Format(time.DateTime), r.Content)}
 }
 
 func relationItem(ns []string, scope string, rel Relation) recallItem {
 	return recallItem{ref: Ref{Kind: RefRelation, Namespace: ns, ID: rel.ID, Scope: scope, Incarnation: rel.Incarnation, ContentRev: rel.ContentRev}, relation: &rel,
-		line: fmt.Sprintf("- [关系 自%s] %s", rel.ValidFrom.Format(time.DateOnly), rel.Fact)}
+		line: fmt.Sprintf("- [关系 自%s] %s", rel.ValidFrom.Format(time.DateTime), rel.Fact)}
 }
 
 func communityItem(ns []string, scope string, c Community) recallItem {
