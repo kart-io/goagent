@@ -131,7 +131,9 @@ func (s *FileStore) applyTxn(payload []byte) error {
 	return nil
 }
 
-// SaveAll 实现 Store：提交文件 rename 到位即提交，应用中途崩溃时由下一次 Load 或 Save 前滚。
+// SaveAll implements Store: the batch commits once the commit file is renamed
+// into place, and if the process crashes while applying it, the next Load or
+// Save rolls it forward.
 func (s *FileStore) SaveAll(ctx context.Context, writes ...Write) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -180,11 +182,16 @@ func (s *FileStore) scope(name string) *fileScope {
 	return &fileScope{files: &FileStore{dir: filepath.Join(root, digest(name))}, gate: filepath.Join(root, digest(name)+gateExt)}
 }
 
-// Scope 实现 Scoped。目录在首次写入时创建，Load 不存在的记录不产生任何文件；已删除作用域的 Load 返回 ErrScopeRemoved。
+// Scope implements Scoped. The directory is created on first write, and loading
+// a nonexistent record creates no files; Load on a removed scope returns
+// ErrScopeRemoved.
 func (s *FileStore) Scope(name string) Store { return s.scope(name) }
 
-// RemoveScope 实现 Scoped：等待进行中的写入结束，落盘墓碑，再删除作用域目录。
-// 中途崩溃时墓碑已生效，重复调用可清理剩余数据。每个被删除的作用域保留一个墓碑文件（8 字节），由 PruneRemoved 回收。
+// RemoveScope implements Scoped: it waits for in-flight writes to finish,
+// persists a tombstone, and then deletes the scope directory. If it crashes
+// midway the tombstone is already in effect, and calling it again cleans up the
+// remaining data. Each removed scope keeps one tombstone file (8 bytes),
+// reclaimed by PruneRemoved.
 func (s *FileStore) RemoveScope(ctx context.Context, name string) (err error) {
 	scope := s.scope(name)
 	gate, err := lockGate(ctx, scope.gate, false, true)
@@ -205,9 +212,13 @@ func (s *FileStore) RemoveScope(ctx context.Context, name string) (err error) {
 	return os.RemoveAll(scope.files.dir)
 }
 
-// PruneRemoved 实现 Scoped：回收墓碑写入时间（闸门文件 mtime）早于 now-olderThan 的已删除作用域，
-// 在闸门排他锁内删除残留目录和墓碑，与写入互斥。保证边界：阈值内的迟到写入仍被拒绝；
-// 墓碑回收后同名作用域的迟到写入会成功并留下残留，olderThan 须大于最长的重试或恢复窗口。
+// PruneRemoved implements Scoped: it reclaims removed scopes whose tombstone
+// write time (the gate file's mtime) is earlier than now-olderThan, deleting
+// leftover directories and tombstones under the gate's exclusive lock so that
+// it is mutually exclusive with writes. Guarantee boundary: late writes within
+// the threshold are still rejected; after a tombstone is reclaimed, a late
+// write to a scope of the same name succeeds and leaves residue, so olderThan
+// must exceed the longest retry or recovery window.
 func (s *FileStore) PruneRemoved(ctx context.Context, olderThan time.Duration) error {
 	if olderThan < 0 {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "墓碑保留时长不能为负：%v", olderThan).WithComponent("durable_store").WithOperation("prune_removed")
@@ -368,7 +379,8 @@ func (s *fileScope) enter(ctx context.Context) (func() error, error) {
 	return gate.Close, nil
 }
 
-// Lock 在整个持锁期间同时持有闸门共享锁，RemoveScope 会等待其释放。
+// Lock also holds the gate's shared lock for as long as the lock is held, so
+// RemoveScope waits for it to be released.
 func (s *fileScope) Lock(ctx context.Context, id string) (func() error, error) {
 	leave, err := s.enter(ctx)
 	if err != nil {
@@ -381,8 +393,11 @@ func (s *fileScope) Lock(ctx context.Context, id string) (func() error, error) {
 	return func() error { return errors.Join(unlock(), leave()) }, nil
 }
 
-// Load 不加锁：Save 以原子 rename 写入，读到的总是完整快照。读前检查墓碑，使 RemoveScope 中途崩溃残留的数据不可读；
-// 读后复核，使读取期间完成的 RemoveScope 同样生效。只 Stat 闸门，不产生任何文件。
+// Load does not lock: Save writes with an atomic rename, so reads always see a
+// complete snapshot. It checks the tombstone before reading so that data left
+// by a RemoveScope crash is unreadable, and rechecks after reading so that a
+// RemoveScope completed during the read also takes effect. It only stats the
+// gate and creates no files.
 func (s *fileScope) Load(ctx context.Context, id string) (*Snapshot, error) {
 	if err := s.checkRemoved(); err != nil {
 		return nil, err

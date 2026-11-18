@@ -1,6 +1,7 @@
 package interfaces
 
-// RetrievalSource 标识实际送入模型的参考资料，不代表引用已经通过事实核验。
+// RetrievalSource identifies reference material actually sent to the model; it
+// does not mean the citation has passed fact-checking.
 type RetrievalSource struct {
 	Reference int     `json:"reference"`
 	ID        string  `json:"id"`

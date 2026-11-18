@@ -13,15 +13,19 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// ProviderError 携带模型服务失败中可用于判定重试的信息，由 Provider 构造；
-// 调用方据此判断，不依赖任何 SDK 的错误类型。Error 文本与 Err 相同。
+// ProviderError carries the information from a model service failure that is
+// used to decide on retries; it is constructed by the Provider. Callers rely on
+// it rather than on any SDK error type. Its Error text is the same as Err's.
 type ProviderError struct {
-	// StatusCode 是 HTTP 状态码；0 表示没有得到响应，或流在响应开始后中断。
+	// StatusCode is the HTTP status code; 0 means no response was received, or the
+	// stream broke after the response started.
 	StatusCode int
-	// RetryAfter 是服务端建议的等待时长，0 表示未给出。
+	// RetryAfter is the wait duration suggested by the server; 0 means none was
+	// given.
 	RetryAfter time.Duration
-	// QuotaExhausted 表示账户额度或套餐用量已耗尽（如 OpenAI 的 insufficient_quota）。服务端常以 429 返回，
-	// 但须充值或等额度恢复，短时间内重试不会成功。
+	// QuotaExhausted reports that the account quota or plan usage is exhausted
+	// (such as OpenAI's insufficient_quota). Servers often return it as 429, but it
+	// requires a top-up or quota recovery, so short-term retries will not succeed.
 	QuotaExhausted bool
 	Err            error
 }
@@ -29,7 +33,8 @@ type ProviderError struct {
 func (e *ProviderError) Error() string { return e.Err.Error() }
 func (e *ProviderError) Unwrap() error { return e.Err }
 
-// ErrorCode 将提供方边界已知的失败映射到框架现有类别，不改变原始原因链。
+// ErrorCode maps failures known at the provider boundary to the framework's
+// existing categories without changing the original cause chain.
 func (e *ProviderError) ErrorCode() agentErrors.ErrorCode {
 	if e == nil {
 		return agentErrors.CodeInternal
@@ -66,8 +71,11 @@ func (e *ProviderError) ErrorCode() agentErrors.ErrorCode {
 	return agentErrors.CodeLLMRequest
 }
 
-// Retryable 报告失败是否可能因重试而消失：429、5xx，以及暂时性的连接错误（网络超时、连接被拒绝或重置、
-// 连接意外关闭、DNS 暂时失败）。额度耗尽、其他 4xx、取消与上下文超时、证书与 TLS 错误、域名不存在、协议或解码错误都不可重试。
+// Retryable reports whether the failure may go away on retry: 429, 5xx, and
+// transient connection errors (network timeouts, connection refused or reset,
+// unexpected connection close, temporary DNS failures). Exhausted quota, other
+// 4xx, cancellation and context deadlines, certificate and TLS errors,
+// nonexistent domains, and protocol or decoding errors are not retryable.
 func (e *ProviderError) Retryable() bool {
 	switch {
 	case e.QuotaExhausted:
@@ -94,7 +102,7 @@ func (e *ProviderError) Retryable() bool {
 	return false
 }
 
-// ErrorReason 是模型请求失败的分类。
+// ErrorReason classifies a model request failure.
 type ErrorReason string
 
 const (
@@ -110,14 +118,20 @@ const (
 	ReasonUnknown       ErrorReason = "unknown"
 )
 
-// ClassifiedError 是模型请求失败的分类与恢复提示。提示只供恢复策略参考，是否重试、压缩或回退由调用方决定。
+// ClassifiedError is the classification and recovery hints for a model request
+// failure. The hints are only advisory for recovery strategies; the caller
+// decides whether to retry, compress, or fall back.
 type ClassifiedError struct {
 	Reason ErrorReason
-	// Retryable 表示原样重试可能成功（与 ProviderError.Retryable 一致）。
+	// Retryable reports that retrying as is may succeed (consistent with
+	// ProviderError.Retryable).
 	Retryable bool
-	// ShouldCompress 表示请求超出上下文窗口，缩短消息后重试可能成功。
+	// ShouldCompress reports that the request exceeded the context window and
+	// retrying with shorter messages may succeed.
 	ShouldCompress bool
-	// ShouldFallback 表示换一个模型或提供方可能成功（限流、额度耗尽、服务端错误、鉴权失败、模型不存在）。
+	// ShouldFallback reports that switching to another model or provider may
+	// succeed (rate limiting, exhausted quota, server errors, authentication
+	// failures, model not found).
 	ShouldFallback bool
 }
 
@@ -127,7 +141,8 @@ var contextLengthMarkers = []string{
 	"prompt is too long", "too many tokens", "input is too long", "reduce the length",
 }
 
-// ClassifyError 对模型请求的错误分类，复用 ProviderError 的状态码与暂时性判断。
+// ClassifyError classifies a model request error, reusing ProviderError's
+// status code and transience checks.
 func ClassifyError(err error) ClassifiedError {
 	switch {
 	case err == nil:

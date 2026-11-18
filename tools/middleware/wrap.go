@@ -7,9 +7,9 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// WrappedTool 是经 Wrap 装配中间件后的工具。
+// WrappedTool is a tool with middleware assembled by Wrap.
 //
-// 使用示例:
+// Example:
 //
 //	wrapped := middleware.Wrap(tool,
 //	    middleware.Logging(),
@@ -21,8 +21,9 @@ type WrappedTool struct {
 	invoker ToolInvoker
 }
 
-// Wrap 按传入顺序装配函数式中间件，第一个位于最外层。
-// 需要读取对象统计时，调用方保留对象并显式传入其 Wrap 方法。
+// Wrap assembles functional middleware in the given order, with the first one
+// outermost. When object statistics are needed, the caller keeps the object
+// and passes its Wrap method explicitly.
 func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool {
 	if len(middlewares) == 0 {
 		return tool
@@ -54,29 +55,29 @@ func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.To
 	}
 }
 
-// Name 返回工具名称
+// Name returns the tool name.
 func (w *WrappedTool) Name() string {
 	return w.tool.Name()
 }
 
-// Description 返回工具描述
+// Description returns the tool description.
 func (w *WrappedTool) Description() string {
 	return w.tool.Description()
 }
 
-// ArgsSchema 返回参数模式
+// ArgsSchema returns the argument schema.
 func (w *WrappedTool) ArgsSchema() string {
 	return w.tool.ArgsSchema()
 }
 
-// Invoke 执行工具调用（通过中间件）
+// Invoke executes the tool call (through the middleware).
 func (w *WrappedTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	return w.invoker(ctx, input)
 }
 
-// Unwrap 返回被包装的原始工具
+// Unwrap returns the original wrapped tool.
 //
-// 这允许访问原始工具的方法或检查工具类型
+// This allows access to the original tool's methods or checking its type.
 func (w *WrappedTool) Unwrap() interfaces.Tool {
 	return w.tool
 }

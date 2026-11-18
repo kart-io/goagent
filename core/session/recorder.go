@@ -11,9 +11,12 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// Recorder 把一个会话的对话同步到日志。它只追加与日志推导结果不同的部分：新增的消息逐条记录，
-// 被改写的历史记为一条 history/rewrite。同一会话同时只应有一个 Recorder 写入消息；
-// 其间其他写入者追加的 boundary/snapshot 事件被跳过，其他类型的事件使写入返回 ErrConflict。
+// Recorder syncs a session's conversation to the journal. It appends only what
+// differs from the result derived from the journal: new messages are recorded
+// one by one, and rewritten history is recorded as one history/rewrite. Only
+// one Recorder should write messages to a session at a time; boundary/snapshot
+// events appended by other writers in the meantime are skipped, and events of
+// other types make writes return ErrConflict.
 type Recorder struct {
 	store  Store
 	id     string
@@ -23,7 +26,8 @@ type Recorder struct {
 	tools  string
 }
 
-// OpenRecorder 读取会话的全部事件（会话不存在时为空）并返回 Recorder 与读到的事件。
+// OpenRecorder reads all events of a session (empty if the session does not
+// exist) and returns the Recorder along with the events read.
 func OpenRecorder(ctx context.Context, store Store, id string) (*Recorder, []Event, error) {
 	if err := validID(id); err != nil {
 		return nil, nil, err
@@ -55,13 +59,13 @@ func (r *Recorder) absorb(events []Event) {
 	}
 }
 
-// Seq 返回已知的最后序号。
+// Seq returns the last known sequence number.
 func (r *Recorder) Seq() int64 { return r.seq }
 
-// Events 返回已知的非快照事件的独立副本。
+// Events returns an independent copy of the known non-snapshot events.
 func (r *Recorder) Events() []Event { return cloneEvents(r.events) }
 
-// Append 追加事件，返回分配了序号的事件。
+// Append appends events and returns them with assigned sequence numbers.
 func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error) {
 	if len(events) == 0 {
 		return nil, nil
@@ -92,7 +96,8 @@ func (r *Recorder) Append(ctx context.Context, events ...Event) ([]Event, error)
 	}
 }
 
-// SyncSystem 在 system 提示词与上次记录的不同时记录它。
+// SyncSystem records the system prompt when it differs from the last recorded
+// one.
 func (r *Recorder) SyncSystem(ctx context.Context, system string) error {
 	if system == r.system {
 		return nil
@@ -105,7 +110,8 @@ func (r *Recorder) SyncSystem(ctx context.Context, system string) error {
 	return err
 }
 
-// SyncTools 在工具定义与上次记录的不同时记录它。
+// SyncTools records the tool definitions when they differ from the last
+// recorded ones.
 func (r *Recorder) SyncTools(ctx context.Context, tools []ToolDefinition) error {
 	if len(tools) == 0 {
 		if r.tools == "" {
@@ -122,7 +128,9 @@ func (r *Recorder) SyncTools(ctx context.Context, tools []ToolDefinition) error 
 	return err
 }
 
-// Sync 使日志推导出的对话等于 messages（不含 system）。tools 按工具调用 ID 给出工具结果的信息。
+// Sync makes the conversation derived from the journal equal to messages
+// (excluding system). tools gives tool result information keyed by tool call
+// ID.
 func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[string]ToolMeta) error {
 	entries, err := Derive(r.events)
 	if err != nil {
@@ -176,8 +184,10 @@ func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[s
 	return err
 }
 
-// Replayed 报告 messages 是否等于序号不小于 from 的某个事件处日志推导出的对话：恢复中的持久运行回放到此前已记录的位置，
-// 不需要再记录。
+// Replayed reports whether messages equals the conversation derived from the
+// journal at some event whose sequence number is not less than from: a
+// recovering durable run that has replayed up to a previously recorded position
+// does not need to record again.
 func (r *Recorder) Replayed(from int64, messages []llm.Message) (bool, error) {
 	for i, ev := range r.events {
 		if ev.Seq < from {
@@ -210,8 +220,11 @@ func sameMessage(a, b llm.Message) bool {
 	return err1 == nil && err2 == nil && string(x) == string(y)
 }
 
-// Rewind 把会话退回到序号 to 之后的消息被遮蔽的状态。expected 是调用方看到的最后序号（CAS）：
-// 其间有新的写入时返回 ErrConflict，调用方应重新查看后再决定。被遮蔽的事件仍保留在日志中，持久操作的快照不受影响。
+// Rewind rewinds the session to the state where messages after sequence number
+// to are masked. expected is the last sequence number the caller saw (CAS): if
+// new writes happened in between it returns ErrConflict, and the caller should
+// look again before deciding. Masked events remain in the journal, and durable
+// operation snapshots are unaffected.
 func Rewind(ctx context.Context, store Store, id string, to, expected int64) (int64, error) {
 	if to < 0 || to >= expected {
 		return 0, agentErrors.Newf(agentErrors.CodeInvalidInput, "退回位置 %d 须在 [0, %d) 内", to, expected).WithComponent("session_recorder").WithOperation("rewind")

@@ -1,4 +1,5 @@
-// 模型配置错误字段及提供商错误提示。
+// Model configuration error fields and provider error hints.
+
 package errors
 
 const (

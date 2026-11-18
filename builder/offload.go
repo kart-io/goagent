@@ -15,11 +15,17 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// WithOffload 把 o 装为带身份（o.Identity()）的 PreStep：超长的工具结果写入结果存储并换成引用，最后一次请求前还原原文。
-// 读取工具即 o 本身，须由宿主与其他工具一起注册（WithTools）；持久运行中须经 Dispatcher，与其他工具一样记入日志。
+// WithOffload installs o as a PreStep with an identity (o.Identity()):
+// oversized tool results are written to the result store and replaced with
+// references, and the originals are restored before the last request. The read
+// tool is o itself and must be registered by the host along with the other
+// tools (WithTools); in durable runs it must go through the Dispatcher and be
+// recorded in the journal like any other tool.
 //
-// 结果作用域：宿主经 contextpolicy.WithResultScope 提供时由宿主回收；否则持久执行使用执行键（由宿主在运行不再恢复后
-// 调用 o.Release），非持久执行使用临时作用域并在执行结束时释放。
+// Result scope: when the host provides one via contextpolicy.WithResultScope,
+// the host reclaims it; otherwise durable executions use the execution key (the
+// host calls o.Release once the run will no longer resume), and non-durable
+// executions use a temporary scope that is released when execution ends.
 func (b *AgentBuilder[S]) WithOffload(o *contextpolicy.Offload) *AgentBuilder[S] {
 	b.config.Offloads = append(b.config.Offloads, o)
 	if o == nil {

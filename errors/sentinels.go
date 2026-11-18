@@ -1,7 +1,9 @@
 package errors
 
-// 框架控制信号只创建一次；调用方通过 errors.Is 判断身份、GetCode 判断类别。
-// 同码信号仍保持不同对象，禁止修改共享上下文或把类别相等当作身份相等。
+// Framework control signals are created only once; callers check identity with
+// errors.Is and category with GetCode. Signals with the same code remain
+// distinct objects; do not modify shared context or treat equal categories as
+// equal identities.
 var (
 	// builder/contextpolicy。
 	ErrResultScopeReleased = newSentinel(CodeScopeRemoved, "结果作用域已释放，拒绝读写")
@@ -9,9 +11,12 @@ var (
 	ErrAgentHandleDone = newSentinel(CodeInvalidInput, "agent handle is done")
 	ErrModelRedirected = newSentinel(CodeLLMRequest, "model request redirected")
 	ErrAgentWaiting    = newSentinel(CodeWaiting, "agent is waiting for host continuation")
-	// memory：恢复运行时宿主绑定的命名空间与轮次开始时不同。
+	// memory: the namespace bound by the host on resume differs from the one at
+	// the start of the turn.
 	ErrMemoryNamespaceChanged = newSentinel(CodeConflict, "长期记忆的命名空间与轮次开始时不同")
-	// memory：提交长期记忆时存储返回了无法判断结果的错误（如连接中断），写入可能已经生效；重试是安全的。
+	// memory: when committing long-term memory, the store returned an error whose
+	// outcome cannot be determined (such as a broken connection); the write may
+	// already have taken effect. Retrying is safe.
 	ErrMemoryCommitUnknown = newSentinel(CodeStoreConnection, "长期记忆的提交结果未知")
 	// cache。
 	ErrCacheMiss     = newSentinel(CodeNotFound, "cache miss")

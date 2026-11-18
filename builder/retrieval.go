@@ -14,8 +14,10 @@ import (
 type RetrievalConfig struct {
 	MaxDocuments    int `json:"max_documents"`     // Default: 4 documents.
 	MaxContextRunes int `json:"max_context_runes"` // Default: 12000 Unicode code points of document text.
-	// Filter 为每次请求生成元数据过滤条件（如从 ctx 取租户）。设置后检索器必须实现
-	// interfaces.RequestRetriever；返回空条件视为错误，避免漏设租户时检索到全部数据。
+	// Filter builds metadata filter conditions for each request (for example,
+	// taking the tenant from ctx). When set, the retriever must implement
+	// interfaces.RequestRetriever; returning empty conditions is an error, so a
+	// missing tenant cannot retrieve all data.
 	Filter func(ctx context.Context, query string) (map[string]any, error) `json:"-"`
 }
 

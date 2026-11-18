@@ -7,10 +7,10 @@ import (
 	shared "github.com/kart-io/goagent/constants"
 )
 
-// ClientOption 定义 LLM 客户端配置选项
+// ClientOption defines an LLM client configuration option.
 type ClientOption func(*LLMOptions)
 
-// DefaultClientConfig 返回默认的客户端配置
+// DefaultClientConfig returns the default client configuration.
 func DefaultClientConfig() *LLMOptions {
 	return &LLMOptions{
 		Provider:    shared.ProviderCustom,
@@ -21,28 +21,28 @@ func DefaultClientConfig() *LLMOptions {
 	}
 }
 
-// WithProvider 设置 LLM 提供商
+// WithProvider sets the LLM provider.
 func WithProvider(provider shared.Provider) ClientOption {
 	return func(c *LLMOptions) {
 		c.Provider = provider
 	}
 }
 
-// WithAPIKey 设置 API 密钥
+// WithAPIKey sets the API key.
 func WithAPIKey(apiKey string) ClientOption {
 	return func(c *LLMOptions) {
 		c.APIKey = apiKey
 	}
 }
 
-// WithBaseURL 设置自定义 API 端点
+// WithBaseURL sets a custom API endpoint.
 func WithBaseURL(baseURL string) ClientOption {
 	return func(c *LLMOptions) {
 		c.BaseURL = baseURL
 	}
 }
 
-// WithModel 设置默认模型
+// WithModel sets the default model.
 func WithModel(model string) ClientOption {
 	return func(c *LLMOptions) {
 		c.Model = model
@@ -54,7 +54,7 @@ func WithEmbeddingModel(model string) ClientOption {
 	return func(c *LLMOptions) { c.EmbeddingModel = model }
 }
 
-// WithMaxTokens 设置最大 token 数
+// WithMaxTokens sets the maximum number of tokens.
 func WithMaxTokens(maxTokens int) ClientOption {
 	return func(c *LLMOptions) {
 		if maxTokens > 0 {
@@ -63,7 +63,7 @@ func WithMaxTokens(maxTokens int) ClientOption {
 	}
 }
 
-// WithTemperature 设置温度参数
+// WithTemperature sets the temperature parameter.
 func WithTemperature(temperature float64) ClientOption {
 	return func(c *LLMOptions) {
 		if temperature >= 0 && temperature <= 2.0 {
@@ -73,7 +73,9 @@ func WithTemperature(temperature float64) ClientOption {
 	}
 }
 
-// WithTimeout 设置请求超时时间。配置按整秒保存，正数时长向上取整，避免不足 1 秒的值被截断为 0 而当作未设置。
+// WithTimeout sets the request timeout. The configuration is stored in whole
+// seconds and positive durations are rounded up, so values under 1 second are
+// not truncated to 0 and treated as unset.
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(c *LLMOptions) {
 		c.Timeout = 0
@@ -83,19 +85,24 @@ func WithTimeout(timeout time.Duration) ClientOption {
 	}
 }
 
-// WithStreamIdleTimeout 设置流式响应两次收到数据之间的最长间隔，超过时中断并报告可重试的超时。
-// 服务端过载时流可能只发出首包就停住，响应头超时（WithTimeout）管不到。0 表示不限制。
+// WithStreamIdleTimeout sets the maximum gap between two data receipts in a
+// streaming response; when exceeded, the stream is aborted with a retryable
+// timeout. An overloaded server may stall after sending only the first chunk,
+// which the response header timeout (WithTimeout) does not cover. 0 means no
+// limit.
 func WithStreamIdleTimeout(d time.Duration) ClientOption {
 	return func(c *LLMOptions) { c.StreamIdleTimeout = max(d, 0) }
 }
 
-// WithStreamTimeout 设置一次流式请求的总时长上限，超过时中断并报告可重试的超时。
-// 服务端过载时数据可能一点点地来，空闲时限触发不了；上限应大于正常最长回答所需的时间。0 表示不限制。
+// WithStreamTimeout sets the upper bound on the total duration of one streaming
+// request; when exceeded, the stream is aborted with a retryable timeout. An
+// overloaded server may trickle data so the idle timeout never fires; the bound
+// should exceed the time the longest normal answer takes. 0 means no limit.
 func WithStreamTimeout(d time.Duration) ClientOption {
 	return func(c *LLMOptions) { c.StreamTimeout = max(d, 0) }
 }
 
-// WithTopP 设置 Top-P 采样参数
+// WithTopP sets the Top-P sampling parameter.
 func WithTopP(topP float64) ClientOption {
 	return func(c *LLMOptions) {
 		if topP >= 0 && topP <= 1.0 {
@@ -104,25 +111,25 @@ func WithTopP(topP float64) ClientOption {
 	}
 }
 
-// WithSystemPrompt 设置默认系统提示
+// WithSystemPrompt sets the default system prompt.
 func WithSystemPrompt(prompt string) ClientOption {
 	return func(c *LLMOptions) {
 		c.SystemPrompt = prompt
 	}
 }
 
-// WithResponseFormat 设置响应格式
+// WithResponseFormat sets the response format.
 //
-// 支持的格式类型：
-//   - "text": 普通文本格式（默认）
-//   - "json_object": JSON 对象格式（确保 LLM 返回有效的 JSON）
+// Supported format types:
+//   - "text": plain text format (default)
+//   - "json_object": JSON object format (ensures the LLM returns valid JSON)
 //
-// 使用示例：
+// Example:
 //
-//	// 使用预定义常量
+//	// Use a predefined constant
 //	llm.WithResponseFormat(llm.ResponseFormatJSON)
 //
-//	// 自定义格式
+//	// Custom format
 //	llm.WithResponseFormat(&llm.ResponseFormat{Type: "json_object"})
 func WithResponseFormat(format *ResponseFormat) ClientOption {
 	return func(c *LLMOptions) {
@@ -130,16 +137,17 @@ func WithResponseFormat(format *ResponseFormat) ClientOption {
 	}
 }
 
-// WithJSONResponse 便捷方法：设置响应格式为 JSON
+// WithJSONResponse is a convenience option that sets the response format to
+// JSON.
 //
-// 等同于 WithResponseFormat(ResponseFormatJSON)
+// It is equivalent to WithResponseFormat(ResponseFormatJSON).
 func WithJSONResponse() ClientOption {
 	return func(c *LLMOptions) {
 		c.ResponseFormat = ResponseFormatJSON
 	}
 }
 
-// WithCustomHeaders 设置自定义 HTTP 头
+// WithCustomHeaders sets custom HTTP headers.
 func WithCustomHeaders(headers map[string]string) ClientOption {
 	return func(c *LLMOptions) {
 		if c.CustomHeaders == nil {
@@ -151,7 +159,7 @@ func WithCustomHeaders(headers map[string]string) ClientOption {
 	}
 }
 
-// ApplyOptions 应用选项到配置
+// ApplyOptions applies options to the configuration.
 func ApplyOptions(config *LLMOptions, opts ...ClientOption) *LLMOptions {
 	if config == nil {
 		config = DefaultLLMOptions()
@@ -164,7 +172,7 @@ func ApplyOptions(config *LLMOptions, opts ...ClientOption) *LLMOptions {
 	return config
 }
 
-// NewConfigWithOptions 使用选项创建新配置
+// NewLLMOptionsWithOptions creates a new configuration from options.
 func NewLLMOptionsWithOptions(opts ...ClientOption) *LLMOptions {
 	config := DefaultLLMOptions()
 	return ApplyOptions(config, opts...)

@@ -50,21 +50,29 @@ func (d *DurableGraph[T]) AsRunnable() *core.StreamRunnable[RunRequest[T], *Grap
 	}).WithDescription(func() any { return describe(d.graph) })
 }
 
-// ChildContinuation 是嵌套运行的图在审批暂停或中断等待时放进 durable.WaitError 的定位信息。
-// 审批暂停时用 workflow.WithResume(ctx, 等待处的执行键, ResumeRequest{Key: ApprovalKey}) 提供批准；中断等待时 ApprovalKey 为空，
-// 须用 Interrupts[i].Key（最内层中断键）回应。
+// ChildContinuation is the location information that a nested graph run puts
+// into durable.WaitError when paused for approval or waiting on an interrupt.
+// For an approval pause, provide the approval with workflow.WithResume(ctx,
+// <execution key of the wait>, ResumeRequest{Key: ApprovalKey}); when waiting
+// on an interrupt, ApprovalKey is empty and the response must use
+// Interrupts[i].Key (the innermost interrupt key).
 type ChildContinuation struct {
 	RunID       string `json:"run_id"`
 	Node        string `json:"node"`
 	ApprovalKey string `json:"approval_key"`
-	// Rejected 表示本次提供的审批未被采纳，图的状态未改变，仍在等待；Reason 为原因类别
-	// constants.WorkflowRejectApprovalMismatch（含中断等待时用意图键交输入）、
-	// constants.WorkflowRejectBeforeApprove 或 constants.WorkflowRejectResumeInput。
-	// 存储失败、panic 等不属于拒绝，照常作为失败返回。
+	// Rejected reports that the supplied approval was not accepted; the graph state
+	// is unchanged and still waiting. Reason is the cause category:
+	// constants.WorkflowRejectApprovalMismatch (including supplying input with the
+	// intent key while waiting on an interrupt),
+	// constants.WorkflowRejectBeforeApprove, or
+	// constants.WorkflowRejectResumeInput. Storage failures, panics, and the like
+	// are not rejections and are returned as failures as usual.
 	Rejected bool   `json:"rejected,omitzero"`
 	Reason   string `json:"reason,omitempty"`
-	// Interrupts 是子图（含更深层）待回应的中断，Key 为最内层中断键。可以直接用
-	// durable.WithResume(ctx, Key, input) 回应，也可以经 WithResume 封装给本子图。
+	// Interrupts are the pending interrupts of the subgraph (including deeper
+	// levels), with Key being the innermost interrupt key. They can be answered
+	// directly with durable.WithResume(ctx, Key, input), or wrapped for this
+	// subgraph via WithResume.
 	Interrupts []InterruptPoint `json:"interrupts,omitempty"`
 }
 
@@ -89,13 +97,21 @@ func approvalWait(err error) (reason string, ok bool) {
 	return "", false
 }
 
-// AsChildRunnable 供图作为子流程嵌套运行，例如经 tools.NewRunnableToolFactory 包成可续跑工具。
-// 检查点与节点内的持久操作写在父操作日志的 Store 中，不使用 DurableConfig.Store：子流程必须与父流程共用
-// 同一 Store，否则崩溃后子图从头重跑、已执行的节点再执行一次。读取子图状态时以该 Store 编译图后调用 Snapshot。
-// 运行 ID 取当前执行键，须在声明 Resumable 的持久操作内调用（见 durable.CanWait），否则在执行任何节点前
-// 返回 durable.ErrWaitNotResumable：其他操作不会重新进入，审批之后无法续跑。审批暂停返回 *durable.WaitError 而不是成功，
-// 等待不会被当作结果交给上层。续跑时只解析 WithResume 编码的 ResumeRequest，裸审批键会被拒绝；首次运行时续跑输入被忽略。
-// 完成时返回最终状态。
+// AsChildRunnable lets the graph run nested as a subflow, for example wrapped
+// as a resumable tool via tools.NewRunnableToolFactory. Checkpoints and durable
+// operations inside nodes are written to the Store of the parent operation
+// journal, not DurableConfig.Store: the subflow must share the same Store as
+// the parent, otherwise after a crash the subgraph reruns from scratch and
+// already executed nodes run again. To read the subgraph state, compile the
+// graph with that Store and call Snapshot. The run ID is the current execution
+// key, and it must be called within a durable operation declared Resumable
+// (see durable.CanWait); otherwise it returns durable.ErrWaitNotResumable
+// before executing any node, because other operations are not re-entered and
+// cannot resume after approval. An approval pause returns *durable.WaitError
+// instead of success, so the wait is not passed upward as a result. On resume,
+// only a ResumeRequest encoded by WithResume is parsed and a bare approval key
+// is rejected; on the first run, resume input is ignored. On completion it
+// returns the final state.
 func (d *DurableGraph[T]) AsChildRunnable() *core.RunnableFunc[T, T] {
 	return core.NewRunnableFunc(func(ctx context.Context, initial T) (T, error) {
 		var zero T

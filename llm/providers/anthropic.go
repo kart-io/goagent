@@ -21,8 +21,10 @@ import (
 
 var _ agentllm.ToolStreamClient = (*AnthropicProvider)(nil)
 
-// AnthropicProvider 基于官方 SDK 调用 Messages API。SDK 发送的 API 版本不接受采样参数，
-// 因此温度与 top_p 不随请求发送；思考块经 ProviderState 原样回放。
+// AnthropicProvider calls the Messages API through the official SDK. The API
+// version sent by the SDK does not accept sampling parameters, so temperature
+// and top_p are not sent with requests; thinking blocks are replayed verbatim
+// through ProviderState.
 type AnthropicProvider struct {
 	*common.BaseProvider
 	*common.ProviderCapabilities

@@ -30,7 +30,8 @@ func (p *DeepSeekProvider) CompleteStream(ctx context.Context, request *agentllm
 }
 
 // CompleteToolsStream preserves native tool IDs, reasoning content and usage.
-// 写进正文的 DSML 工具调用会还原为 ToolCalls，见 recoverDSMLToolCalls。
+// DSML tool calls written into the content are restored as ToolCalls; see
+// recoverDSMLToolCalls.
 func (p *DeepSeekProvider) CompleteToolsStream(ctx context.Context, request *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
 	chunks, err := p.nativeStreamProvider().CompleteToolsStream(ctx, request, tools)
 	if err != nil || len(tools) == 0 {

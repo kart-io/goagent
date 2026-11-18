@@ -11,9 +11,13 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Diagnose 只读取保存的续跑元数据，不执行节点、路由、审批钩子或 Store 写入与加锁。
-// 报告不能证明是否有其他执行者活跃。显式操作引用可使用嵌套父键，不列举 Store 或自动发现操作。
-// 检查点与操作读取不构成事务；恢复未知执行前，宿主须协调活跃执行者并核对外部效果。
+// Diagnose only reads the saved resume metadata; it does not execute nodes,
+// routes, or approval hooks, nor write to or lock the Store. The report cannot
+// prove whether other executors are active. Explicit operation references may
+// use nested parent keys; it does not enumerate the Store or discover
+// operations automatically. Checkpoint and operation reads are not
+// transactional; before resuming an unknown execution, the host must
+// coordinate active executors and reconcile external effects.
 func (d *DurableGraph[T]) Diagnose(ctx context.Context, id string, refs ...durable.OperationRef) (*durable.DiagnosticReport, error) {
 	if d == nil || d.store == nil || d.graph == nil || id == "" {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "诊断需要已编译的持久图和运行 ID").WithComponent("workflow").WithOperation("diagnose")

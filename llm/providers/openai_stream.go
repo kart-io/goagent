@@ -25,7 +25,8 @@ func (p *OpenAIProvider) CompleteStream(ctx context.Context, req *agentllm.Compl
 	return p.completeStream(ctx, req, nil)
 }
 
-// CompleteToolsStream 同时提供原生工具选择与答案增量，无需 READY 确认轮。
+// CompleteToolsStream provides both native tool selection and answer deltas,
+// without a READY confirmation round.
 func (p *OpenAIProvider) CompleteToolsStream(ctx context.Context, req *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
 	return p.completeStream(ctx, req, tools)
 }

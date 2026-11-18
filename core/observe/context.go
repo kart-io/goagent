@@ -2,7 +2,8 @@ package observe
 
 import "context"
 
-// RunIDFromContext 只读返回已绑定的运行身份；未绑定或 nil context 时返回空串。
+// RunIDFromContext returns the bound run identity read-only; it returns an
+// empty string when none is bound or the context is nil.
 func RunIDFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""

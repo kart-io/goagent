@@ -12,7 +12,8 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// GovernanceReport 描述创建时的治理装配快照；后续Builder配置不回写到此报告。
+// GovernanceReport is a snapshot of the governance wiring at creation time.
+// Later Builder configuration is not reflected in it.
 type GovernanceReport struct {
 	RunID, SessionID, AgentID      string
 	Journaled, DurableBudget       bool
@@ -22,7 +23,9 @@ type GovernanceReport struct {
 	Dispatch                       tools.DispatchGovernance
 }
 
-// NewGovernedBuilder 以显式预算、期限、授权和有限准入装配标准Builder，宿主须使用同一Scope.Bind。
+// NewGovernedBuilder assembles a standard Builder with an explicit budget,
+// deadline, authorization and bounded admission. The host must use the same
+// Scope.Bind for the run.
 func NewGovernedBuilder(client llm.Client, s *Scope, agentID string, registry *tools.Registry, cfg tools.DispatchConfig) (*builder.SimpleAgentBuilder, GovernanceReport, error) {
 	if s == nil || !s.valid || client == nil || typedNil(client) || !validID(agentID) {
 		return nil, GovernanceReport{}, agentErrors.Newf(agentErrors.CodeInvalidConfig, "治理装配需要有效Scope、客户端和Agent身份").WithComponent("execution").WithOperation("new_governed_builder")

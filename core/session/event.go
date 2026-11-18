@@ -1,6 +1,9 @@
-// Package session 是追加写的会话事件日志：模型看到的对话、轮次边界与持久操作的快照都记在同一份日志中。
-// DeriveMessages 从日志推导模型历史；DurableStore 把日志作为 core/durable 的存储，恢复与回放基于同一份日志。
-// 设计见 docs/design/HARNESS_CORE_DESIGN.md 第 6、16 节。
+// Package session is an append-only session event journal: the conversation the
+// model sees, turn boundaries, and durable operation snapshots are all recorded
+// in the same journal. DeriveMessages derives the model history from the
+// journal; DurableStore uses the journal as the storage for core/durable, so
+// recovery and replay are based on the same journal. See sections 6 and 16 of
+// docs/design/HARNESS_CORE_DESIGN.md for the design.
 package session
 
 import (
@@ -14,17 +17,20 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// Event 是日志中的一条事件。Seq 由 Store 分配，从 1 起连续递增。
+// Event is an event in the journal. Seq is assigned by the Store and increases
+// consecutively from 1.
 type Event struct {
 	Seq  int64           `json:"seq"`
 	Type string          `json:"type"`
 	Time time.Time       `json:"time"`
 	Data json.RawMessage `json:"data,omitempty"`
-	// Surface 非空时遮蔽序号在 [Start, End] 内的消息事件；事件自带的替代消息出现在被遮蔽的位置。
+	// Surface, when non-nil, masks message events whose sequence numbers are
+	// within [Start, End]; the event's own replacement messages appear in the
+	// masked position.
 	Surface *Surface `json:"surface,omitzero"`
 }
 
-// Surface 是被遮蔽的事件序号区间（闭区间）。
+// Surface is a closed interval of masked event sequence numbers.
 type Surface struct {
 	Start int64 `json:"start"`
 	End   int64 `json:"end"`
@@ -32,63 +38,71 @@ type Surface struct {
 
 func (s *Surface) covers(seq int64) bool { return s != nil && seq >= s.Start && seq <= s.End }
 
-// TurnStart 是 turn/start 的数据。
+// TurnStart is the data of turn/start.
 type TurnStart struct {
 	Input string `json:"input"`
-	// ExecutionKey 是宿主传给持久运行的执行键（DurableScope 派生之前）：以同一执行键恢复时续写该轮。
+	// ExecutionKey is the execution key the host passed to the durable run
+	// (before DurableScope derivation); resuming with the same execution key
+	// continues this turn.
 	ExecutionKey string `json:"execution_key,omitempty"`
-	// Memory 是本轮的长期记忆绑定（memory.TurnMemory 的编码）：恢复本轮、登记中止轮次的任务时以它为准。
+	// Memory is this turn's long-term memory binding (an encoded
+	// memory.TurnMemory); it is authoritative when resuming this turn and when
+	// registering tasks for aborted turns.
 	Memory json.RawMessage `json:"memory,omitempty"`
 }
 
-// TurnEnd 是 turn/end 的数据。
+// TurnEnd is the data of turn/end.
 type TurnEnd struct {
 	Answer  string      `json:"answer,omitempty"`
 	Aborted bool        `json:"aborted,omitzero"`
 	Usage   *TokenUsage `json:"usage,omitzero"`
-	// State 是本轮结束时宿主状态的编码，由 Builder 的 WithSessionState 写入。
+	// State is the encoded host state at the end of this turn, written by the
+	// Builder's WithSessionState.
 	State json.RawMessage `json:"state,omitempty"`
 }
 
-// TokenUsage 是一轮的用量。
+// TokenUsage is the token usage of a turn.
 type TokenUsage = interfaces.TokenUsage
 
-// MessageData 是消息事件的数据。Tool 只在 tool/result 中出现。
+// MessageData is the data of a message event. Tool appears only in tool/result.
 type MessageData struct {
 	Message llm.Message `json:"message"`
 	Tool    *ToolMeta   `json:"tool,omitzero"`
 }
 
-// ToolMeta 是一次工具调用的结果信息，供导出统计。
+// ToolMeta is the result information of one tool call, used for export
+// statistics.
 type ToolMeta struct {
 	Name    string `json:"name"`
 	Success bool   `json:"success"`
 }
 
-// ToolsData 是 tool/definitions 的数据。
+// ToolsData is the data of tool/definitions.
 type ToolsData struct {
 	Tools []ToolDefinition `json:"tools"`
 }
 
-// ToolDefinition 是提供给模型的一个工具，Parameters 为 JSON Schema。
+// ToolDefinition is a tool provided to the model; Parameters is a JSON Schema.
 type ToolDefinition struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Parameters  json.RawMessage `json:"parameters"`
 }
 
-// RewriteData 是 history/rewrite 的数据。
+// RewriteData is the data of history/rewrite.
 type RewriteData struct {
 	Messages []MessageData `json:"messages"`
 }
 
-// BoundaryData 是 boundary/snapshot 的数据：durable.Store 中 ID 的一次 Save。
+// BoundaryData is the data of boundary/snapshot: one Save of an ID in the
+// durable.Store.
 type BoundaryData struct {
 	ID       string          `json:"id"`
 	Snapshot json.RawMessage `json:"snapshot"`
 }
 
-// NewEvent 构造一条事件，data 编码为 JSON。Seq 由 Store 分配。
+// NewEvent constructs an event with data encoded as JSON. Seq is assigned by
+// the Store.
 func NewEvent(typ string, data any) (Event, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -97,14 +111,17 @@ func NewEvent(typ string, data any) (Event, error) {
 	return Event{Type: typ, Time: time.Now().UTC(), Data: raw}, nil
 }
 
-// Entry 是推导出的一条消息与提供它的事件序号。
+// Entry is a derived message together with the sequence number of the event
+// that provided it.
 type Entry struct {
 	Seq     int64
 	Message llm.Message
 	Tool    *ToolMeta
 }
 
-// DeriveMessages 推导模型历史（不含 system）：按顺序取消息事件，再按 Surface 遮蔽并代入替代消息。
+// DeriveMessages derives the model history (excluding system): it takes message
+// events in order, then masks them by Surface and substitutes the replacement
+// messages.
 func DeriveMessages(events []Event) ([]llm.Message, error) {
 	entries, err := Derive(events)
 	if err != nil {
@@ -117,8 +134,10 @@ func DeriveMessages(events []Event) ([]llm.Message, error) {
 	return out, nil
 }
 
-// Derive 与 DeriveMessages 相同，另返回每条消息的来源事件序号。
-// session/rewind 与中止的 turn/end 撤销其区间内的全部事件（包括其中的改写）；history/rewrite 在其余事件上替换消息。
+// Derive is the same as DeriveMessages but also returns the source event
+// sequence number of each message. session/rewind and aborted turn/end events
+// undo all events within their interval (including rewrites in it);
+// history/rewrite replaces messages on the remaining events.
 func Derive(events []Event) ([]Entry, error) {
 	var entries []Entry
 	for _, ev := range activeEvents(events) {
@@ -157,8 +176,11 @@ func Derive(events []Event) ([]Entry, error) {
 	return entries, nil
 }
 
-// Archived 返回被 history/rewrite 改写掉、仍未被撤销的原始消息，按序号升序：压缩与卸载换掉的原文仍在日志中，可供取回。
-// 改写会把区间内未改动的消息原样带入替代消息，这些仍可见的消息不算被改写掉。
+// Archived returns the original messages that history/rewrite replaced and that
+// have not been undone, in ascending sequence order: the original text replaced
+// by compaction and offloading remains in the journal and can be retrieved. A
+// rewrite carries unchanged messages within its interval into the replacement
+// messages verbatim; those still-visible messages do not count as replaced.
 func Archived(events []Event) ([]Entry, error) {
 	derived, err := Derive(events)
 	if err != nil {
@@ -193,7 +215,9 @@ func Archived(events []Event) ([]Entry, error) {
 	return out, nil
 }
 
-// LastState 返回未被撤销的最后一个带状态的 turn/end 中的状态及其序号；没有时 state 为空、seq 为 0。
+// LastState returns the state and sequence number of the last turn/end with
+// state that has not been undone; if there is none, state is empty and seq is
+// 0.
 func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
 	active := activeEvents(events)
 	for i := len(active) - 1; i >= 0; i-- {
@@ -212,7 +236,8 @@ func LastState(events []Event) (state json.RawMessage, seq int64, err error) {
 	return nil, 0, nil
 }
 
-// Active 返回未被 session/rewind 与中止的 turn/end 撤销的事件。
+// Active returns the events not undone by session/rewind or aborted turn/end
+// events.
 func Active(events []Event) []Event { return activeEvents(events) }
 
 // activeEvents 去掉被 session/rewind 与中止的 turn/end 撤销的事件。
@@ -264,7 +289,8 @@ func undoes(ev Event) bool {
 	return false
 }
 
-// LastSeq 返回事件中最大的序号，没有事件时为 0。
+// LastSeq returns the largest sequence number among the events, or 0 when there
+// are none.
 func LastSeq(events []Event) int64 {
 	if len(events) == 0 {
 		return 0
@@ -272,7 +298,8 @@ func LastSeq(events []Event) int64 {
 	return events[len(events)-1].Seq
 }
 
-// OpenTurn 返回最后一个未结束的轮次的 turn/start 事件；没有时 ok 为假。
+// OpenTurn returns the turn/start event of the last unfinished turn; ok is
+// false if there is none.
 func OpenTurn(events []Event) (start Event, ok bool) {
 	for i := len(events) - 1; i >= 0; i-- {
 		switch events[i].Type {

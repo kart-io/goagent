@@ -13,75 +13,77 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// RateLimitConfig 限流中间件配置
+// RateLimitConfig is the rate limiting middleware configuration.
 type RateLimitConfig struct {
-	// QPS 每秒请求数限制
+	// QPS is the requests-per-second limit.
 	QPS float64 `json:"qps"`
-	// Burst 突发请求数（令牌桶容量）
+	// Burst is the number of burst requests (token bucket capacity).
 	Burst int `json:"burst"`
-	// PerTool 是否按工具名限流（false=全局限流）
+	// PerTool controls whether limits apply per tool name (false means a
+	// global limit).
 	PerTool bool `json:"per_tool"`
-	// Logger 日志记录器
+	// Logger is the logger.
 	Logger loggercore.Logger `json:"-"`
-	// WaitTimeout 等待令牌的超时时间（0表示不等待，直接拒绝）
+	// WaitTimeout is the timeout for waiting for a token (0 means do not wait;
+	// reject immediately).
 	WaitTimeout time.Duration `json:"wait_timeout"`
 }
 
-// RateLimitOption 限流中间件选项
+// RateLimitOption is a rate limiting middleware option.
 type RateLimitOption func(*RateLimitConfig)
 
-// WithQPS 设置 QPS 限制
+// WithQPS sets the QPS limit.
 func WithQPS(qps float64) RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.QPS = qps
 	}
 }
 
-// WithBurst 设置突发容量
+// WithBurst sets the burst capacity.
 func WithBurst(burst int) RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.Burst = burst
 	}
 }
 
-// WithPerToolRateLimit 启用按工具名限流
+// WithPerToolRateLimit enables per-tool-name rate limiting.
 func WithPerToolRateLimit() RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.PerTool = true
 	}
 }
 
-// WithRateLimitLogger 设置日志记录器
+// WithRateLimitLogger sets the logger.
 func WithRateLimitLogger(logger loggercore.Logger) RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.Logger = logger
 	}
 }
 
-// WithWaitTimeout 设置等待令牌的超时时间
+// WithWaitTimeout sets the timeout for waiting for a token.
 //
-// 如果设置为 0，则不等待，直接拒绝超过限制的请求
-// 如果设置为 > 0，则等待指定时间尝试获取令牌
+// If set to 0, requests over the limit are rejected immediately without
+// waiting. If set to > 0, it waits up to the given time to obtain a token.
 func WithWaitTimeout(timeout time.Duration) RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.WaitTimeout = timeout
 	}
 }
 
-// RateLimitMiddleware 提供工具调用的限流功能（使用函数式实现）。
+// RateLimitMiddleware rate-limits tool calls (functional implementation).
 //
-// 它使用令牌桶算法限制工具调用的速率，支持：
-//   - 全局限流：所有工具共享限流配额
-//   - 按工具限流：每个工具独立的限流配额
-//   - 可配置的 QPS 和突发容量
-//   - 可选的等待超时（阻塞或立即拒绝）
+// It uses a token bucket algorithm to limit the tool call rate and supports:
+//   - global limiting: all tools share one quota
+//   - per-tool limiting: each tool has its own quota
+//   - configurable QPS and burst capacity
+//   - an optional wait timeout (block or reject immediately)
 //
-// 使用示例:
+// Example:
 //
 //	rateLimitMW := RateLimit(
-//	    WithQPS(10),           // 每秒 10 个请求
-//	    WithBurst(20),         // 允许突发 20 个请求
-//	    WithPerToolRateLimit(), // 每个工具独立限流
+//	    WithQPS(10),           // 10 requests per second
+//	    WithBurst(20),         // allow bursts of 20 requests
+//	    WithPerToolRateLimit(), // limit each tool independently
 //	)
 //	wrappedTool := middleware.Wrap(myTool, rateLimitMW)
 type RateLimitMiddleware struct {
@@ -93,13 +95,13 @@ type RateLimitMiddleware struct {
 	allowed  atomic.Int64
 }
 
-// NewRateLimitMiddleware 创建一个新的限流中间件
+// NewRateLimitMiddleware creates a new rate limiting middleware.
 //
-// 参数:
-//   - opts: 配置选项
+// Parameters:
+//   - opts: configuration options
 //
-// 返回:
-//   - *RateLimitMiddleware: 限流中间件实例
+// Returns:
+//   - *RateLimitMiddleware: the rate limiting middleware instance
 func NewRateLimitMiddleware(opts ...RateLimitOption) *RateLimitMiddleware {
 	cfg := &RateLimitConfig{
 		QPS:         10,    // 默认 10 QPS
@@ -155,9 +157,10 @@ func (m *RateLimitMiddleware) getLimiter(toolName string) *rate.Limiter {
 	return limiter
 }
 
-// Wrap 实现函数式中间件包装
+// Wrap implements functional middleware wrapping.
 //
-// 这个方法返回一个新的 ToolInvoker，在超过限流时拒绝请求。
+// It returns a new ToolInvoker that rejects requests when the rate limit is
+// exceeded.
 func (m *RateLimitMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInvoker {
 	return func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		limiter := m.getLimiter(tool.Name())
@@ -217,18 +220,19 @@ func (m *RateLimitMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolI
 	}
 }
 
-// GetStats 获取限流统计信息（用于测试和监控）
+// GetStats returns rate limiting statistics (for testing and monitoring).
 func (m *RateLimitMiddleware) GetStats() (allowed, rejected int64) {
 	return m.allowed.Load(), m.rejected.Load()
 }
 
-// RateLimit 返回限流中间件函数（简化接口）
+// RateLimit returns the rate limiting middleware function (simplified
+// interface).
 //
-// 参数:
-//   - opts: 配置选项
+// Parameters:
+//   - opts: configuration options
 //
-// 返回:
-//   - ToolMiddlewareFunc: 中间件函数
+// Returns:
+//   - ToolMiddlewareFunc: the middleware function
 func RateLimit(opts ...RateLimitOption) ToolMiddlewareFunc {
 	middleware := NewRateLimitMiddleware(opts...)
 	return middleware.Wrap

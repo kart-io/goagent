@@ -9,51 +9,55 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// ToolStreamClient 在一次请求内选择工具或直接流式回答，保留原生消息和用量。
-// 工具列表只在无错误的 Done 块中返回完整值；不能执行未完成的参数分片。
+// ToolStreamClient either selects tools or streams an answer directly within a
+// single request, preserving native messages and usage. The full tool list is
+// returned only in an error-free Done chunk; incomplete argument fragments must
+// not be executed.
 type ToolStreamClient interface {
 	Client
 	CompleteToolsStream(context.Context, *CompletionRequest, []interfaces.Tool) (<-chan *StreamChunk, error)
 }
 
-// StreamChunk LLM 流式响应块
+// StreamChunk is an LLM streaming response chunk.
 type StreamChunk struct {
 	// ResponseModel is the supplier-reported model/version; empty means unreported.
 	ResponseModel string         `json:"response_model,omitempty"`
 	ProviderState *ProviderState `json:"provider_state,omitzero"`
-	// ToolCalls 仅在成功终止块中包含本轮完整的工具调用。
+	// ToolCalls contains the complete tool calls of this turn, only in a successful
+	// terminal chunk.
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-	// ReasoningContent 仅用于工具回合的原生续接，不作为答案文本增量展示。
+	// ReasoningContent is used only for native continuation of tool turns and is
+	// not shown as answer text delta.
 	ReasoningContent string `json:"reasoning_content,omitempty"`
-	// Content 完整内容（累积）
+	// Content is the full (accumulated) content.
 	Content string `json:"content"`
 
-	// Delta 增量内容
+	// Delta is the incremental content.
 	Delta string `json:"delta"`
 
-	// Role 角色
+	// Role is the role.
 	Role string `json:"role,omitempty"`
 
-	// FinishReason 结束原因
+	// FinishReason is the finish reason.
 	FinishReason string `json:"finish_reason,omitempty"`
 
-	// Usage 使用情况（仅在最后一个块）
+	// Usage is the usage information (only in the last chunk).
 	Usage *Usage `json:"usage,omitzero"`
 
-	// Index 块序号
+	// Index is the chunk sequence number.
 	Index int `json:"index"`
 
-	// Timestamp 时间戳
+	// Timestamp is the timestamp.
 	Timestamp time.Time `json:"timestamp"`
 
-	// Done 是否完成
+	// Done reports whether the stream is complete.
 	Done bool `json:"done"`
 
-	// Error 错误信息
+	// Error is the error information.
 	Error error `json:"error,omitzero"`
 }
 
-// Usage 使用情况
+// Usage is token usage information.
 type Usage struct {
 	PromptTokens        int `json:"prompt_tokens"`
 	CompletionTokens    int `json:"completion_tokens"`
@@ -84,25 +88,25 @@ func (u *Usage) Fields() usage.Fields {
 	return *u.KnownFields
 }
 
-// StreamOptions 流式选项
+// StreamOptions holds streaming options.
 type StreamOptions struct {
-	// BufferSize 缓冲区大小
+	// BufferSize is the buffer size.
 	BufferSize int `json:"buffer_size"`
 
-	// IncludeUsage 是否包含使用情况
+	// IncludeUsage reports whether to include usage information.
 	IncludeUsage bool `json:"include_usage"`
 
-	// OnChunk 块处理回调
+	// OnChunk is the chunk handling callback.
 	OnChunk func(*StreamChunk) error `json:"-"`
 
-	// OnComplete 完成回调
+	// OnComplete is the completion callback.
 	OnComplete func(string) error `json:"-"`
 
-	// OnError 错误回调
+	// OnError is the error callback.
 	OnError func(error) error `json:"-"`
 }
 
-// DefaultStreamOptions 返回默认流式选项
+// DefaultStreamOptions returns the default streaming options.
 func DefaultStreamOptions() *StreamOptions {
 	return &StreamOptions{
 		BufferSize:   100,
@@ -113,17 +117,17 @@ func DefaultStreamOptions() *StreamOptions {
 	}
 }
 
-// MockStreamClient 模拟流式客户端（用于测试）
+// MockStreamClient is a mock streaming client (for tests).
 type MockStreamClient struct {
 	provider shared2.Provider
 }
 
-// NewMockStreamClient 创建模拟流式客户端
+// NewMockStreamClient creates a mock streaming client.
 func NewMockStreamClient() *MockStreamClient {
 	return &MockStreamClient{provider: shared2.ProviderCustom}
 }
 
-// CompleteStream 流式补全
+// CompleteStream performs a streaming completion.
 func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error) {
 	// Increased buffer size to reduce blocking probability
 	// Buffer should accommodate the full response to prevent goroutine leaks
@@ -233,20 +237,20 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 	return out, nil
 }
 
-// Provider 返回提供商类型
+// Provider returns the provider type.
 func (m *MockStreamClient) Provider() shared2.Provider {
 	return m.provider
 }
 
-// StreamReader 流式读取器
+// StreamReader is a stream reader.
 //
-// 提供便捷的流式读取方法
+// It provides convenience methods for reading a stream.
 type StreamReader struct {
 	stream <-chan *StreamChunk
 	buffer []string
 }
 
-// NewStreamReader 创建流式读取器
+// NewStreamReader creates a stream reader.
 func NewStreamReader(stream <-chan *StreamChunk) *StreamReader {
 	return &StreamReader{
 		stream: stream,
@@ -254,7 +258,7 @@ func NewStreamReader(stream <-chan *StreamChunk) *StreamReader {
 	}
 }
 
-// ReadAll 读取所有内容
+// ReadAll reads all content.
 func (r *StreamReader) ReadAll(ctx context.Context) (string, error) {
 	var content string
 
@@ -281,7 +285,7 @@ func (r *StreamReader) ReadAll(ctx context.Context) (string, error) {
 	}
 }
 
-// ReadChunks 逐块读取
+// ReadChunks reads chunk by chunk.
 func (r *StreamReader) ReadChunks(ctx context.Context, handler func(*StreamChunk) error) error {
 	for {
 		select {
@@ -308,7 +312,7 @@ func (r *StreamReader) ReadChunks(ctx context.Context, handler func(*StreamChunk
 	}
 }
 
-// CollectDeltas 收集所有增量
+// CollectDeltas collects all deltas.
 func (r *StreamReader) CollectDeltas(ctx context.Context) ([]string, error) {
 	deltas := make([]string, 0)
 
@@ -336,21 +340,21 @@ func (r *StreamReader) CollectDeltas(ctx context.Context) ([]string, error) {
 	}
 }
 
-// StreamWriter 流式写入器
+// StreamWriter is a stream writer.
 //
-// 将标准输出转换为流式块
+// It converts written content into stream chunks.
 type StreamWriter struct {
 	out chan<- *StreamChunk
 }
 
-// NewStreamWriter 创建流式写入器
+// NewStreamWriter creates a stream writer.
 func NewStreamWriter(out chan<- *StreamChunk) *StreamWriter {
 	return &StreamWriter{
 		out: out,
 	}
 }
 
-// Write 写入增量内容
+// Write writes incremental content.
 func (w *StreamWriter) Write(delta string) error {
 	chunk := &StreamChunk{
 		Delta:     delta,
@@ -363,13 +367,13 @@ func (w *StreamWriter) Write(delta string) error {
 	return nil
 }
 
-// WriteChunk 写入完整块
+// WriteChunk writes a complete chunk.
 func (w *StreamWriter) WriteChunk(chunk *StreamChunk) error {
 	w.out <- chunk
 	return nil
 }
 
-// Close 关闭流
+// Close closes the stream.
 func (w *StreamWriter) Close() error {
 	close(w.out)
 	return nil

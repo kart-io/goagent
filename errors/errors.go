@@ -1,3 +1,5 @@
+// Package errors defines GoAgent's structured error type AgentError, its
+// error codes, and the sentinel errors returned by the framework.
 package errors
 
 import (
@@ -55,8 +57,9 @@ type StackFrame struct {
 	Function string
 }
 
-// Error 实现 error 接口。文本会流入日志、事件与模型输入，因此不包含 Context；
-// 需要 Context 时使用 GetContext 或结构化日志（LogValue）。
+// Error implements the error interface. The text flows into logs, events, and
+// model input, so it excludes Context; use GetContext or structured logging
+// (LogValue) when Context is needed.
 func (e *AgentError) Error() string {
 	if e == nil {
 		return "<nil>"
@@ -89,7 +92,8 @@ func (e *AgentError) Error() string {
 	return sb.String()
 }
 
-// LogValue 实现 slog.LogValuer，以 group 形式输出错误的结构化字段（含 Context），供结构化日志使用。
+// LogValue implements slog.LogValuer, emitting the error's structured fields
+// (including Context) as a group for structured logging.
 func (e *AgentError) LogValue() slog.Value {
 	if e == nil {
 		return slog.StringValue("<nil>")
@@ -119,8 +123,9 @@ func (e *AgentError) LogValue() slog.Value {
 	return slog.GroupValue(attrs...)
 }
 
-// MarshalLogObject 实现 zapcore.ObjectMarshaler，输出与 LogValue 相同的字段（含 Context），
-// 使 zap 及基于 zap 的日志引擎记录 *AgentError 时不只得到 Error() 文本。
+// MarshalLogObject implements zapcore.ObjectMarshaler, emitting the same fields
+// as LogValue (including Context), so that zap and zap-based logging engines
+// record more than the Error() text for *AgentError.
 func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if e == nil {
 		return nil
@@ -154,8 +159,9 @@ func (e *AgentError) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-// Format 实现 fmt.Formatter：%v、%s 与 Error() 相同，%q 为其带引号形式；
-// %+v 在 Error() 之后附带按键排序的 Context，仅用于本地调试与日志，不应交给模型。
+// Format implements fmt.Formatter: %v and %s are the same as Error(), and %q is
+// its quoted form; %+v appends Context sorted by key after Error(), for local
+// debugging and logs only, and should not be given to the model.
 func (e *AgentError) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':
@@ -186,14 +192,22 @@ func (e *AgentError) sortedContextKeys() []string {
 	return keys
 }
 
-// RedactURL 去掉 URL 中的 userinfo、query 与 fragment，用于把地址写入错误 Context 之前脱敏。
-//   - 无法按 URL 解析出主机的输入（如 host:port）按同样规则做字符串裁剪；
-//   - 逗号分隔的多地址（如 NATS 集群）逐段处理，query/fragment 中逗号之后的片段一并丢弃；
-//   - 密码含未转义的 /、?、# 时，scheme 之后到首个空白前最后一个 @ 之前的内容整体丢弃，
-//     因此 host:port/path 且路径含 @ 的地址会被过度裁剪；
-//   - key=value 形式的 DSN（如 "host=h password=p dbname=d"）只保留 host、port、dbname。
+// RedactURL strips userinfo, query, and fragment from a URL, for redacting an
+// address before writing it into an error Context.
+//   - Input whose host cannot be parsed as a URL (such as host:port) is trimmed
+//     as a string by the same rules;
+//   - comma-separated multiple addresses (such as a NATS cluster) are processed
+//     segment by segment, and segments after a comma inside query/fragment are
+//     dropped as well;
+//   - when the password contains unescaped /, ?, or #, everything after the
+//     scheme up to the last @ before the first whitespace is dropped, so a
+//     host:port/path address whose path contains @ is over-trimmed;
+//   - key=value DSNs (such as "host=h password=p dbname=d") keep only host,
+//     port, and dbname.
 //
-// 不处理把凭据放在路径中的 URL（如 Slack webhook、Telegram bot token），这类地址不应写入错误与日志。
+// URLs that carry credentials in the path (such as Slack webhooks or Telegram
+// bot tokens) are not handled; such addresses should not be written into
+// errors or logs.
 func RedactURL(raw string) string {
 	if isKeyValueDSN(raw) {
 		return redactKeyValueDSN(raw)
@@ -294,14 +308,21 @@ func redactKeyValueDSN(raw string) string {
 	return strings.Join(kept, " ")
 }
 
-// RedactURLError 返回把错误链上首个 *url.Error 的 URL 经 RedactURL 脱敏后的错误，用于把底层 HTTP 错误
-// （resty、net/http 的错误文本含完整请求 URL 与 query 中的凭据）返回调用方、写入工具输出或日志之前。
-// 原错误不被修改；err 为 nil、链上没有 *url.Error 或 URL 无需脱敏时原样返回。
-//   - *url.Error 位于顶层：返回其副本，Unwrap 仍得到原底层错误（如 *net.OpError），Timeout() 与
-//     errors.Is(context.DeadlineExceeded) 不受影响；
-//   - 位于 *AgentError 之下：返回该 *AgentError 的浅拷贝，Cause 递归脱敏，Code 等字段不变；
-//   - 位于其他包装之下：返回的错误文本中 URL 被替换，errors.Is 按原错误链判断，
-//     errors.As 只能取到脱敏后的 *url.Error 及其底层错误，中间的包装类型不再可见。
+// RedactURLError returns an error in which the URL of the first *url.Error in
+// the chain is redacted by RedactURL, for use before returning low-level HTTP
+// errors to callers or writing them into tool output or logs (resty and
+// net/http error text contains the full request URL and credentials in the
+// query). The original error is not modified; err is returned unchanged when it
+// is nil, the chain has no *url.Error, or the URL needs no redaction.
+//   - *url.Error at the top level: a copy is returned; Unwrap still yields the
+//     original underlying error (such as *net.OpError), and Timeout() and
+//     errors.Is(context.DeadlineExceeded) are unaffected;
+//   - under an *AgentError: a shallow copy of that *AgentError is returned with
+//     its Cause redacted recursively; Code and other fields are unchanged;
+//   - under other wrappers: the URL is replaced in the returned error text,
+//     errors.Is checks against the original chain, and errors.As can only reach
+//     the redacted *url.Error and its underlying errors; the intermediate
+//     wrapper types are no longer visible.
 func RedactURLError(err error) error {
 	var ue *url.Error
 	if !errors.As(err, &ue) {
@@ -375,8 +396,10 @@ func Newf(code ErrorCode, format string, args ...interface{}) *AgentError {
 }
 
 // Wrap wraps an existing error with context.
-// err 为 nil 时返回 nil 的 *AgentError，With* 等链式方法对其安全；但不要把结果直接作为 error 返回，
-// nil 的 *AgentError 装进 error 接口后不等于 nil。cause 可能为 nil 时先判断再包装。
+// When err is nil it returns a nil *AgentError, which With* chained methods
+// handle safely; but do not return the result directly as an error, because a
+// nil *AgentError stored in an error interface is not nil. When cause may be
+// nil, check before wrapping.
 func Wrap(err error, code ErrorCode, message string) *AgentError {
 	if err == nil {
 		return nil
@@ -422,8 +445,10 @@ func (e *AgentError) WithComponent(component string) *AgentError {
 	return e
 }
 
-// MarkModelArgument 标记此错误由模型生成的参数不合法引起，Message 可原样交还模型改正，
-// 因此 Message 不得包含内部细节。不改变 Error() 文本、错误码与类型。
+// MarkModelArgument marks this error as caused by invalid model-generated
+// arguments, so Message can be returned to the model verbatim for correction;
+// therefore Message must not contain internal details. It does not change the
+// Error() text, error code, or type.
 func (e *AgentError) MarkModelArgument() *AgentError {
 	if e == nil {
 		return nil
@@ -432,7 +457,9 @@ func (e *AgentError) MarkModelArgument() *AgentError {
 	return e
 }
 
-// ModelArgumentMessage 返回可交还模型的参数错误消息；未经 MarkModelArgument 标记时第二个值为 false。
+// ModelArgumentMessage returns the argument error message that can be returned
+// to the model; the second value is false if the error was not marked by
+// MarkModelArgument.
 func (e *AgentError) ModelArgumentMessage() (string, bool) {
 	if e == nil {
 		return "", false
@@ -467,7 +494,8 @@ func (e *AgentError) WithContextMap(ctx map[string]interface{}) *AgentError {
 }
 
 // GetCode extracts the error code from any error.
-// err 为 nil 时返回空字符串；按错误链顺序取首个框架错误码，未知错误返回 CodeInternal。
+// It returns an empty string when err is nil; it takes the first framework
+// error code in error chain order and returns CodeInternal for unknown errors.
 func GetCode(err error) ErrorCode {
 	if err == nil {
 		return ""
@@ -562,7 +590,8 @@ func callers() []uintptr {
 	return append([]uintptr(nil), pcs[:n]...)
 }
 
-// StackFrames 返回错误创建处的调用栈，每次调用时解析。
+// StackFrames returns the call stack at the point the error was created,
+// resolved on each call.
 func (e *AgentError) StackFrames() []StackFrame {
 	if e == nil || len(e.pcs) == 0 {
 		return nil

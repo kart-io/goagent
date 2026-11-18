@@ -1,55 +1,55 @@
 package errors
 
-// ErrorCode 标识框架操作的错误分类。
+// ErrorCode identifies the error category of a framework operation.
 type ErrorCode string
 
 const (
-	// Agent 执行错误
+	// Agent execution errors.
 	CodeAgentExecution      ErrorCode = "AGENT_EXECUTION"
 	CodeAgentValidation     ErrorCode = "AGENT_VALIDATION"
 	CodeAgentNotFound       ErrorCode = "AGENT_NOT_FOUND"
 	CodeAgentInitialization ErrorCode = "AGENT_INITIALIZATION"
 
-	// 工具错误
+	// Tool errors.
 	CodeToolExecution      ErrorCode = "TOOL_EXECUTION"
 	CodeToolNotFound       ErrorCode = "TOOL_NOT_FOUND"
 	CodeToolValidation     ErrorCode = "TOOL_VALIDATION"
 	CodeToolTimeout        ErrorCode = "TOOL_TIMEOUT"
 	CodeToolRetryExhausted ErrorCode = "TOOL_RETRY_EXHAUSTED"
 
-	// 中间件错误
+	// Middleware errors.
 	CodeMiddlewareExecution  ErrorCode = "MIDDLEWARE_EXECUTION"
 	CodeMiddlewareChain      ErrorCode = "MIDDLEWARE_CHAIN"
 	CodeMiddlewareValidation ErrorCode = "MIDDLEWARE_VALIDATION"
 
-	// 状态管理错误
+	// State management errors.
 	CodeStateLoad       ErrorCode = "STATE_LOAD"
 	CodeStateSave       ErrorCode = "STATE_SAVE"
 	CodeStateValidation ErrorCode = "STATE_VALIDATION"
 
-	// 流处理错误
+	// Stream processing errors.
 	CodeStreamRead    ErrorCode = "STREAM_READ"
 	CodeStreamWrite   ErrorCode = "STREAM_WRITE"
 	CodeStreamTimeout ErrorCode = "STREAM_TIMEOUT"
 	CodeStreamClosed  ErrorCode = "STREAM_CLOSED"
 
-	// 模型调用错误
+	// Model call errors.
 	CodeLLMRequest   ErrorCode = "LLM_REQUEST"
 	CodeLLMResponse  ErrorCode = "LLM_RESPONSE"
 	CodeLLMTimeout   ErrorCode = "LLM_TIMEOUT"
 	CodeLLMRateLimit ErrorCode = "LLM_RATE_LIMIT"
 
-	// 上下文错误
+	// Context errors.
 	CodeContextCanceled ErrorCode = "CONTEXT_CANCELED"
 	CodeContextTimeout  ErrorCode = "CONTEXT_TIMEOUT"
 
-	// 通用错误
+	// General errors.
 	CodeInvalidInput   ErrorCode = "INVALID_INPUT"
 	CodeInvalidConfig  ErrorCode = "INVALID_CONFIG"
 	CodeNotImplemented ErrorCode = "NOT_IMPLEMENTED"
 	CodeInternal       ErrorCode = "INTERNAL_ERROR"
 
-	// 分布式与网络错误
+	// Distributed and network errors.
 	CodeDistributedConnection    ErrorCode = "DISTRIBUTED_CONNECTION"
 	CodeDistributedSerialization ErrorCode = "DISTRIBUTED_SERIALIZATION"
 	CodeDistributedCoordination  ErrorCode = "DISTRIBUTED_COORDINATION"
@@ -57,35 +57,36 @@ const (
 	CodeDistributedHeartbeat     ErrorCode = "DISTRIBUTED_HEARTBEAT"
 	CodeDistributedRegistry      ErrorCode = "DISTRIBUTED_REGISTRY"
 
-	// 检索与 RAG 错误
+	// Retrieval and RAG errors.
 	CodeRetrievalSearch    ErrorCode = "RETRIEVAL_SEARCH"
 	CodeRetrievalEmbedding ErrorCode = "RETRIEVAL_EMBEDDING"
 	CodeDocumentNotFound   ErrorCode = "DOCUMENT_NOT_FOUND"
 	CodeVectorDimMismatch  ErrorCode = "VECTOR_DIM_MISMATCH"
 
-	// 解析错误
+	// Parsing errors.
 	CodeParserFailed       ErrorCode = "PARSER_FAILED"
 	CodeParserInvalidJSON  ErrorCode = "PARSER_INVALID_JSON"
 	CodeParserMissingField ErrorCode = "PARSER_MISSING_FIELD"
 
-	// 存储错误
+	// Storage errors.
 	CodeStoreConnection    ErrorCode = "STORE_CONNECTION"
 	CodeStoreSerialization ErrorCode = "STORE_SERIALIZATION"
 	CodeStoreNotFound      ErrorCode = "STORE_NOT_FOUND"
 
-	// 路由错误
+	// Routing errors.
 	CodeRouterNoMatch  ErrorCode = "ROUTER_NO_MATCH"
 	CodeRouterFailed   ErrorCode = "ROUTER_FAILED"
 	CodeRouterOverload ErrorCode = "ROUTER_OVERLOAD"
 
-	// 插件与类型系统错误
+	// Plugin and type system errors.
 	CodeTypeMismatch  ErrorCode = "TYPE_MISMATCH"
 	CodeAlreadyExists ErrorCode = "ALREADY_EXISTS"
 	CodeNotFound      ErrorCode = "NOT_FOUND"
 	CodeInvalidOutput ErrorCode = "INVALID_OUTPUT"
 )
 
-// 控制信号对应的实际运行类别，具体身份由固定哨兵区分。
+// Runtime categories for control signals; specific identities are distinguished
+// by fixed sentinels.
 const (
 	CodeWaiting           ErrorCode = "WAITING"
 	CodeBudgetExceeded    ErrorCode = "BUDGET_EXCEEDED"

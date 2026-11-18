@@ -37,45 +37,49 @@ import (
   &ToolOutput{Success: false, Result: {"error":"invalid_arguments","message":...}}、Error 为空、err 为 nil 返回
 */
 
-// ToolErrorResponse 统一的工具错误响应构建器
+// ToolErrorResponse is a unified tool error response builder.
 //
-// 提供一致的错误处理接口，确保所有工具返回统一格式的错误
+// It provides a consistent error handling interface so that all tools return
+// errors in a uniform format.
 type ToolErrorResponse struct {
 	toolName  string
 	operation string
 }
 
-// NewToolErrorResponse 创建错误响应构建器
+// NewToolErrorResponse creates an error response builder.
 //
 // Parameters:
-//   - toolName: 工具名称，用于错误追踪和日志记录
+//   - toolName: tool name, used for error tracing and logging
 func NewToolErrorResponse(toolName string) *ToolErrorResponse {
 	return &ToolErrorResponse{toolName: toolName}
 }
 
-// WithOperation 设置操作名称
+// WithOperation sets the operation name.
 //
-// 用于在错误上下文中标识具体的操作，便于问题定位
+// It identifies the specific operation in the error context to help locate
+// problems.
 func (r *ToolErrorResponse) WithOperation(op string) *ToolErrorResponse {
 	r.operation = op
 	return r
 }
 
-// ValidationError 返回验证错误（输入无效）
+// ValidationError returns a validation error (invalid input).
 //
-// 规范：返回 &ToolOutput{Success: false, Error: message} + *AgentError（CodeInvalidInput）。
-// 错误已标记 MarkModelArgument：Dispatcher.Tools() 开启 ReturnArgumentErrors 时只把 message 交还模型，
-// component、operation 与 details 不展示给模型。
+// Contract: returns &ToolOutput{Success: false, Error: message} plus an
+// *AgentError (CodeInvalidInput). The error is marked with MarkModelArgument:
+// when Dispatcher.Tools() has ReturnArgumentErrors enabled, only message is
+// returned to the model; component, operation and details are not shown to
+// the model.
 //
-// 使用场景：
-//   - 必需参数缺失
-//   - 参数类型错误
-//   - 参数格式不正确
-//   - 参数值超出允许范围
+// Use cases:
+//   - a required argument is missing
+//   - an argument has the wrong type
+//   - an argument is malformed
+//   - an argument value is out of the allowed range
 //
 // Parameters:
-//   - message: 错误描述信息
-//   - details: 可选的上下文键值对，格式为 key1, value1, key2, value2, ...
+//   - message: error description
+//   - details: optional context key-value pairs, as key1, value1, key2, value2, ...
 //
 // Example:
 //
@@ -101,31 +105,31 @@ func (r *ToolErrorResponse) ValidationError(message string, details ...interface
 	return output, err
 }
 
-// ExecutionError 返回执行错误
+// ExecutionError returns an execution error.
 //
-// 规范：
-//   - 始终返回 &ToolOutput{Success: false, Result: partialResult, Error: message} + error
-//   - partialResult 可以为 nil（完全失败）或包含部分结果
-//   - Error 字段包含 message 和 cause 的组合（如果 cause 存在）
+// Contract:
+//   - always returns &ToolOutput{Success: false, Result: partialResult, Error: message} plus an error
+//   - partialResult may be nil (complete failure) or contain partial results
+//   - the Error field combines message and cause (if cause is present)
 //
-// 使用场景：
-//   - HTTP 请求返回非 2xx 状态码（有响应体）
-//   - Shell 命令执行失败（有输出）
-//   - 搜索引擎返回部分结果
-//   - 网络连接失败（无结果）
-//   - 上下文取消（无结果）
+// Use cases:
+//   - an HTTP request returns a non-2xx status code (with a response body)
+//   - a shell command fails (with output)
+//   - a search engine returns partial results
+//   - a network connection fails (no result)
+//   - the context is canceled (no result)
 //
 // Parameters:
-//   - message: 错误描述信息
-//   - partialResult: 部分结果（可为 nil）
-//   - cause: 底层错误（可为 nil）
+//   - message: error description
+//   - partialResult: partial result (may be nil)
+//   - cause: underlying error (may be nil)
 //
 // Example:
 //
-//	// 有部分结果的情况
+//	// with a partial result
 //	return resp.ExecutionError("HTTP request failed", responseData, err)
 //
-//	// 完全失败的情况
+//	// complete failure
 //	return resp.ExecutionError("connection failed", nil, err)
 func (r *ToolErrorResponse) ExecutionError(message string, partialResult interface{}, cause error) (*interfaces.ToolOutput, error) {
 	var err error
@@ -154,13 +158,13 @@ func (r *ToolErrorResponse) ExecutionError(message string, partialResult interfa
 	return output, err
 }
 
-// Success 返回成功结果
+// Success returns a successful result.
 //
-// 规范：返回 &ToolOutput{Success: true, Result: result} + nil error
+// Contract: returns &ToolOutput{Success: true, Result: result} plus a nil error.
 //
 // Parameters:
-//   - result: 执行结果
-//   - metadata: 可选的元数据（可为 nil）
+//   - result: execution result
+//   - metadata: optional metadata (may be nil)
 //
 // Example:
 //

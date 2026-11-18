@@ -1,5 +1,6 @@
-// Package policy 提供按工具名与命令前缀裁决的权限规则，作为 tools.Pipeline 的调用前钩子使用，
-// 对任何工具生效（编码工具、MCP 工具、HTTP 工具）。
+// Package policy provides permission rules decided by tool name and command
+// prefix, used as a pre-call hook of tools.Pipeline. They apply to any tool
+// (coding tools, MCP tools, HTTP tools).
 package policy
 
 import (
@@ -13,44 +14,59 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// Decision 是规则的裁决。零值为 Ask。
+// Decision is a rule's verdict. The zero value is Ask.
 type Decision int
 
 const (
-	// Ask 交给审批人确认。
+	// Ask hands the call to the approver for confirmation.
 	Ask Decision = iota
-	// Allow 直接执行。
+	// Allow executes the call directly.
 	Allow
-	// Deny 不执行，以 tools.Rejected 告知模型。
+	// Deny does not execute the call and informs the model via tools.Rejected.
 	Deny
 )
 
-// Rule 是一条权限规则。
+// Rule is a permission rule.
 type Rule struct {
-	// Tool 是工具名，"*" 匹配所有工具，空串不匹配任何工具。
+	// Tool is the tool name; "*" matches all tools and the empty string
+	// matches none.
 	Tool string
-	// Command 只对带命令参数（Policy.CommandArg）的调用生效：命令按空白分词后以这些词开头才匹配，如 "go test"。
-	// 放行规则要求首词完全相同，含 shell 控制符、引号或反斜杠的命令不匹配放行规则。
-	// 拒绝与询问规则比较首词的文件名，/usr/bin/git push 匹配 "git push"；命令含上述字符而无法判断时，
-	// 该规则至少裁决为 Ask，交给审批人。
-	// 放行规则等于放行该命令的全部参数（go test -exec 可执行任意程序，测试代码本身也由模型编写）；
-	// 拒绝规则仍可被 env rm、sh -c、脚本文件等写法绕过，不能依赖。需要隔离时配合容器执行器。
+	// Command only applies to calls with a command argument
+	// (Policy.CommandArg): it matches when the command, split on whitespace,
+	// starts with these words, such as "go test". Allow rules require an
+	// identical first word, and commands containing shell control characters,
+	// quotes or backslashes do not match allow rules. Deny and ask rules
+	// compare the file name of the first word, so /usr/bin/git push matches
+	// "git push"; when a command contains the characters above and cannot be
+	// judged, the rule decides at least Ask and hands it to the approver.
+	// An allow rule allows all arguments of that command (go test -exec can
+	// run any program, and the test code itself is written by the model); deny
+	// rules can still be bypassed with env rm, sh -c, script files and the
+	// like, and cannot be relied on. Use a container executor when isolation is
+	// needed.
 	Command  string
 	Decision Decision
 }
 
-// Policy 在所有匹配的规则中取最严格的裁决（Deny > Ask > Allow），与规则顺序无关；都不匹配时用 Default。
-// 因此追加的规则只能收紧已有规则的结果，不能越过已有的 Deny 或 Ask。
+// Policy takes the strictest verdict among all matching rules (Deny > Ask >
+// Allow), regardless of rule order, and uses Default when none match. Rules
+// added later can therefore only tighten the result of existing rules and
+// cannot override an existing Deny or Ask.
 type Policy struct {
 	Rules   []Rule
 	Default Decision
-	// CommandArg 是命令前缀匹配读取的参数名，默认 "command"。
+	// CommandArg is the argument name read for command prefix matching,
+	// "command" by default.
 	CommandArg string
-	// ArgsArg 是参数数组的参数名，默认 "args"。argv 形式的工具（如 shell 工具）把子命令放在这里，
-	// 匹配时接在 CommandArg 分词之后；数组元素按原样作为一个词，不再分词。
+	// ArgsArg is the argument name of the argument array, "args" by default.
+	// argv-style tools (such as the shell tool) put subcommands here; when
+	// matching, they follow the words split from CommandArg, and each array
+	// element is taken as one word without further splitting.
 	ArgsArg string
-	// SessionTools 列出审批时可以整工具"本会话允许"的工具。带命令参数的调用总是收窄为命令前缀，
-	// 不在列表中的其他工具只能单次批准。
+	// SessionTools lists the tools that may be allowed as a whole tool "for
+	// this session" during approval. Calls with a command argument are always
+	// narrowed to a command prefix; other tools not in the list can only be
+	// approved once.
 	SessionTools []string
 }
 
@@ -86,7 +102,7 @@ func commandLine(args map[string]any, commandArg, argsArg string) (words []strin
 	return words, unsafeCommand(command), true
 }
 
-// Decide 返回调用的裁决。
+// Decide returns the verdict for the call.
 func (p *Policy) Decide(call *tools.Call) Decision {
 	words, unsafe, hasCommand := commandLine(call.Args, p.commandArg(), p.argsArg())
 	decision, matched := Allow, false
@@ -129,7 +145,7 @@ func strictness(d Decision) int {
 	return 0
 }
 
-// Hook 把策略适配为 tools.PreHook。
+// Hook adapts the policy to a tools.PreHook.
 func (p *Policy) Hook() tools.PreHook {
 	return func(_ context.Context, call *tools.Call) (tools.PreDecision, error) {
 		switch p.Decide(call) {
@@ -178,7 +194,8 @@ func isSubcommand(w string) bool {
 	return w != "" && w[0] != '-'
 }
 
-// CommandGrant 放行同一工具中以 Prefix 开头、且不含 shell 控制符的命令。
+// CommandGrant allows commands in the same tool that start with Prefix and
+// contain no shell control characters.
 type CommandGrant struct {
 	Tool    string
 	Arg     string
@@ -186,24 +203,24 @@ type CommandGrant struct {
 	Prefix  []string
 }
 
-// Describe 实现 tools.SessionGrant。
+// Describe implements tools.SessionGrant.
 func (g CommandGrant) Describe() string {
 	return fmt.Sprintf("本会话内允许 %s 执行以 %q 开头的命令", g.Tool, strings.Join(g.Prefix, " "))
 }
 
-// Matches 实现 tools.SessionGrant。
+// Matches implements tools.SessionGrant.
 func (g CommandGrant) Matches(call *tools.Call) bool {
 	words, unsafe, ok := commandLine(call.Args, g.Arg, g.ArgsArg)
 	return ok && !unsafe && call.Tool == g.Tool && wordsHavePrefix(words, strings.Join(g.Prefix, " "))
 }
 
-// ToolGrant 放行同一工具的全部调用。
+// ToolGrant allows all calls of the same tool.
 type ToolGrant struct{ Tool string }
 
-// Describe 实现 tools.SessionGrant。
+// Describe implements tools.SessionGrant.
 func (g ToolGrant) Describe() string { return "本会话内允许 " + g.Tool + " 的全部调用" }
 
-// Matches 实现 tools.SessionGrant。
+// Matches implements tools.SessionGrant.
 func (g ToolGrant) Matches(call *tools.Call) bool { return call.Tool == g.Tool }
 
 func unsafeCommand(command string) bool {

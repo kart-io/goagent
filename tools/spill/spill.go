@@ -1,5 +1,8 @@
-// Package spill 把超长的工具结果写入宿主提供的目录，交给模型的结果替换为预览与文件名，
-// 模型需要时用 read_spill 分段读取。目录不在工作区内，不受工作区只读模式与改动记录影响。
+// Package spill writes oversized tool results to a host-provided directory and
+// replaces the result passed to the model with a preview and a file name; the
+// model reads it in segments with read_spill when needed. The directory is
+// outside the workspace and is not affected by the workspace read-only mode or
+// change tracking.
 package spill
 
 import (
@@ -24,13 +27,15 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// Store 是溢出目录。溢出文件按会话分目录，文件名由工具名与调用 ID 组成。
+// Store is a spill directory. Spill files are grouped into per-session
+// directories, and file names are made of the tool name and call ID.
 type Store struct {
 	fs       *env.LocalFS
 	maxBytes int
 }
 
-// New 以 dir 为溢出目录（不存在时创建），结果的文本形式超过 maxBytes 字节时溢出。
+// New uses dir as the spill directory (creating it if missing); results whose
+// text form exceeds maxBytes bytes are spilled.
 func New(dir string, maxBytes int) (*Store, error) {
 	if maxBytes <= 0 {
 		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "spill max bytes must be positive").WithComponent("spill").WithOperation("new_store")
@@ -45,11 +50,13 @@ func New(dir string, maxBytes int) (*Store, error) {
 	return &Store{fs: local, maxBytes: maxBytes}, nil
 }
 
-// Dir 返回溢出目录。
+// Dir returns the spill directory.
 func (s *Store) Dir() string { return s.fs.Root() }
 
-// Hook 返回调用后钩子，适用于任何工具的成功结果。写入失败时仍返回预览并说明原因，不报错，
-// 以免已经产生副作用的工具因为溢出失败被重新执行。
+// Hook returns a post-call hook that applies to successful results of any
+// tool. When writing fails, it still returns the preview with the reason and
+// does not return an error, so that a tool whose side effects already happened
+// is not rerun because spilling failed.
 func (s *Store) Hook() tools.PostHook {
 	return func(ctx context.Context, call *tools.Call, out *interfaces.ToolOutput) (tools.PostDecision, error) {
 		if !out.Success {
@@ -97,7 +104,8 @@ func (s *Store) write(ctx context.Context, call *tools.Call, data []byte) (strin
 	return name, nil
 }
 
-// Prune 删除修改时间早于 olderThan 之前的溢出文件。
+// Prune removes spill files whose modification time is more than olderThan
+// ago.
 func (s *Store) Prune(olderThan time.Duration) error {
 	cutoff := time.Now().Add(-olderThan)
 	return filepath.WalkDir(s.Dir(), func(p string, d fs.DirEntry, err error) error {
@@ -115,7 +123,8 @@ func (s *Store) Prune(olderThan time.Duration) error {
 	})
 }
 
-// ReadTool 返回 read_spill 工具，只能读取本目录内的溢出文件。
+// ReadTool returns the read_spill tool, which can only read spill files in
+// this directory.
 func (s *Store) ReadTool() interfaces.Tool {
 	return tools.NewBaseTool(constants.ToolReadSpill,
 		"读取被截断的工具结果的完整内容，path 为截断结果中的 spill_path。返回带行号的内容（格式为 行号<TAB>内容），用 offset 与 limit 分段读取。",

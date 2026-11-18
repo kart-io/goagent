@@ -13,8 +13,9 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// InterruptPoint 是一处等待人工输入的中断。Key 只用于 Resume 定位，不是授权凭证；
-// 宿主必须先认证回应者并确认其有权回应。
+// InterruptPoint is an interrupt waiting for human input. Key is only used by
+// Resume for location and is not an authorization credential; the host must
+// first authenticate the responder and confirm they are allowed to respond.
 type InterruptPoint struct {
 	Key      string          `json:"key"`
 	ID       string          `json:"id"`

@@ -21,8 +21,9 @@ import (
 // DurableIntentVersioner versions otherwise opaque tool implementation semantics.
 type DurableIntentVersioner interface{ DurableIntentVersion() string }
 
-// InterruptibleTool 声明工具可以在执行中途调用 durable.AwaitInput；ok 为 false 时视为未声明。
-// version 是持久 intent 版本，开启时必填。
+// InterruptibleTool declares that the tool may call durable.AwaitInput
+// mid-execution; ok being false means it is not declared. version is the
+// durable intent version and is required when enabled.
 type InterruptibleTool interface {
 	InterruptibleVersion() (version string, ok bool)
 }
@@ -32,17 +33,23 @@ type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy
 }
 
-// DispatchTimeoutProvider 声明工具经 Dispatcher 调用时的超时，正值替代 DispatchConfig.Timeout，0 表示沿用它。
+// DispatchTimeoutProvider declares the tool's timeout when called through the
+// Dispatcher; a positive value replaces DispatchConfig.Timeout, and 0 keeps it.
 type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 
 // RunnableToolConfig defines trusted codecs and version identity. ModelInvoking is
 // a host declaration, not a mechanism to discover hidden SDK requests.
 // CleanupTimeout bounds OwnedRunnable.Close after parent cancellation; 0 means 5s.
-// Timeout 经 DispatchTimeoutProvider 交给 Dispatcher，0 表示沿用 Dispatcher 默认值；子 Agent 通常需要显式放宽。
-// 直接调用 Invoke 时它不生效，超时由调用方 ctx 决定。
-// Resumable 声明子流程的全部效果都记在调用的派生执行键下（同一 Store、稳定作用域），重新进入只会回放：
-// 等待（*durable.WaitError，如 DurableGraph.AsChildRunnable 的审批暂停）后可续跑，执行中断后可重新进入。
-// 开启后必须经带日志的 Dispatcher 调用，否则在启动子流程前失败。
+// Timeout is passed to the Dispatcher via DispatchTimeoutProvider; 0 keeps the
+// Dispatcher default. Sub-agents usually need it raised explicitly. It has no
+// effect when Invoke is called directly; the timeout is then determined by the
+// caller's ctx.
+// Resumable declares that all effects of the subflow are recorded under the
+// call's derived execution key (same Store, stable scope), so re-entering only
+// replays: after a wait (*durable.WaitError, such as an approval pause in
+// DurableGraph.AsChildRunnable) it can resume, and after an interrupted
+// execution it can be re-entered. When enabled, it must be called through a
+// journaled Dispatcher, otherwise it fails before starting the subflow.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)

@@ -14,7 +14,8 @@ type ToolCall struct {
 	} `json:"function"`
 }
 
-// ArgumentsObject 按默认规则解析 Arguments，只接受 JSON 对象（null 不算），数字为 float64。
+// ArgumentsObject parses Arguments with the default rules, accepting only a
+// JSON object (null does not count); numbers are float64.
 func (c ToolCall) ArgumentsObject() (map[string]any, bool) {
 	var args map[string]any
 	if json.Unmarshal([]byte(c.Function.Arguments), &args) != nil || args == nil {

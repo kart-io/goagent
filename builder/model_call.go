@@ -74,7 +74,8 @@ type savedTurn struct {
 	Resend         int            `json:"model_resend,omitzero"`
 	Metadata       *modelMetadata `json:"model_metadata,omitzero"`
 	EvidenceSource string         `json:"evidence_source,omitempty"`
-	// Cached 表示回合来自模型调用缓存：没有预留，回放时不记账。
+	// Cached reports that the turn came from the model call cache: nothing was
+	// reserved, and replay does not charge it.
 	Cached bool `json:"model_cached,omitzero"`
 }
 

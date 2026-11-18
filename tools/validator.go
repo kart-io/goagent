@@ -15,19 +15,19 @@ import (
 	"github.com/kart-io/goagent/tools/toolargs"
 )
 
-// InputValidator 提供工具输入验证功能
+// InputValidator validates tool input.
 type InputValidator struct {
-	// StrictMode 严格模式，不允许额外的未定义参数
+	// StrictMode rejects extra, undefined arguments.
 	StrictMode bool
 
-	// ValidateTypes 是否验证参数类型
+	// ValidateTypes controls whether argument types are validated.
 	ValidateTypes bool
 
-	// ValidateRequired 是否验证必需参数
+	// ValidateRequired controls whether required arguments are validated.
 	ValidateRequired bool
 }
 
-// NewInputValidator 创建默认配置的验证器
+// NewInputValidator creates a validator with the default configuration.
 func NewInputValidator() *InputValidator {
 	return &InputValidator{
 		StrictMode:       false,
@@ -36,7 +36,7 @@ func NewInputValidator() *InputValidator {
 	}
 }
 
-// NewStrictInputValidator 创建严格模式的验证器
+// NewStrictInputValidator creates a strict-mode validator.
 func NewStrictInputValidator() *InputValidator {
 	return &InputValidator{
 		StrictMode:       true,
@@ -45,14 +45,14 @@ func NewStrictInputValidator() *InputValidator {
 	}
 }
 
-// Validate 验证工具输入
+// Validate validates tool input.
 //
-// 验证步骤:
-// 1. 如果工具实现了 ValidatableTool 接口，调用其 Validate 方法
-// 2. 解析工具的 JSON Schema
-// 3. 验证必需参数
-// 4. 验证参数类型
-// 5. 在严格模式下验证是否有未定义的参数
+// Validation steps:
+// 1. If the tool implements the ValidatableTool interface, call its Validate method
+// 2. Parse the tool's JSON Schema
+// 3. Validate required arguments
+// 4. Validate argument types
+// 5. In strict mode, check for undefined arguments
 func (v *InputValidator) Validate(ctx context.Context, tool interfaces.Tool, input *interfaces.ToolInput) error {
 	if tool == nil {
 		return agentErrors.New(agentErrors.CodeInvalidInput, "tool cannot be nil").
@@ -145,7 +145,7 @@ type schema struct {
 	Type       string                 `json:"type"`
 	Properties map[string]property    `json:"properties"`
 	Required   []string               `json:"required"`
-	Additional map[string]interface{} `json:"-"` // 其他未解析的字段
+	Additional map[string]interface{} `json:"-"` // other unparsed fields
 }
 
 // property 表示属性定义
@@ -423,7 +423,8 @@ func (v *InputValidator) validateNoExtraArgs(s *schema, args map[string]interfac
 	return nil
 }
 
-// ValidateAndInvoke 验证后执行工具（便捷方法）
+// ValidateAndInvoke validates the input and then executes the tool (a
+// convenience method).
 func ValidateAndInvoke(ctx context.Context, tool interfaces.Tool, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	validator := NewInputValidator()
 	if err := validator.Validate(ctx, tool, input); err != nil {

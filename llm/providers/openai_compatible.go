@@ -7,7 +7,8 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 )
 
-// NewKimiWithOptions 创建 Moonshot（Kimi）客户端，经 OpenAI 兼容协议支持流式与原生工具流。
+// NewKimiWithOptions creates a Moonshot (Kimi) client that supports streaming
+// and native tool streams via the OpenAI-compatible protocol.
 func NewKimiWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderKimi,
@@ -20,7 +21,8 @@ func NewKimiWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) 
 	}, opts...)
 }
 
-// NewSiliconFlowWithOptions 创建 SiliconFlow 客户端，经 OpenAI 兼容协议支持流式与原生工具流。
+// NewSiliconFlowWithOptions creates a SiliconFlow client that supports
+// streaming and native tool streams via the OpenAI-compatible protocol.
 func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderSiliconFlow,
@@ -33,8 +35,10 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, 
 	}, opts...)
 }
 
-// NewOllamaWithOptions 创建本地 Ollama 客户端，不需要 API Key。BaseURL 须指向 /v1 兼容端点；
-// 本地模型首块较慢，未改动默认超时时使用 120 秒。
+// NewOllamaWithOptions creates a local Ollama client; no API key is needed.
+// BaseURL must point to the /v1 compatible endpoint. Local models are slow to
+// produce the first chunk, so 120 seconds is used when the default timeout is
+// unchanged.
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderOllama,
@@ -48,12 +52,13 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 	}, opts...)
 }
 
-// NewOllamaClientSimple 使用默认配置创建指定模型的 Ollama 客户端。
+// NewOllamaClientSimple creates an Ollama client for the given model with the
+// default configuration.
 func NewOllamaClientSimple(model string) (*OpenAIProvider, error) {
 	return NewOllamaWithOptions(agentllm.WithModel(model))
 }
 
-// ListModels 返回 /models 端点列出的模型 ID。
+// ListModels returns the model IDs listed by the /models endpoint.
 func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {
 	list, err := p.client.ListModels(ctx)
 	if err != nil {

@@ -8,10 +8,12 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// AsRunnable 将 Builder 接入标准泛型执行契约。
-// Invoke 收集 ExecuteStream 的最终结果，因此工具、检索、中间件及用量路径相同。
-// 需要 StreamClient；缓冲模型可声明实际流能力。
-// 同一 Builder 的状态与记忆属于一个会话，适配器串行执行，等待可被取消。
+// AsRunnable adapts the Builder to the standard generic execution contract.
+// Invoke collects the final result of ExecuteStream, so tools, retrieval,
+// middleware, and usage follow the same path. It requires a StreamClient;
+// buffered models can declare their actual streaming capability. The state and
+// memory of one Builder belong to one session, so the adapter executes
+// serially, and waiting can be canceled.
 func (a *ConfigurableAgent[S]) AsRunnable() *core.StreamRunnable[any, *AgentOutput] {
 	mode := core.StreamModeTokens
 	if capability, ok := a.llmClient.(core.StreamCapability); ok {

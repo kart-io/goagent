@@ -1,4 +1,6 @@
-// Package contextpolicy 提供上下文治理的组件：Offload 把超长的工具结果换成引用并按需读回，ResultStore 保存不可变的证据。
+// Package contextpolicy provides context governance components: Offload
+// replaces oversized tool results with references and reads them back on
+// demand, and ResultStore stores immutable evidence.
 package contextpolicy
 
 import (
@@ -23,12 +25,20 @@ type Ref struct{ RunKey, Key, SHA256, Version string }
 
 // ResultStore never overwrites a logical key with different evidence.
 //
-// Release 删除一次运行（Ref.RunKey）写入的全部证据，运行不存在时同样成功。释放后该运行键不可复用：
-// 迟到的 PutIfAbsent 返回 ErrReleased 且不留数据，Get 同样返回 ErrReleased（持久版 Release 中途崩溃、证据尚未删除时也是如此）。
+// Release deletes all evidence written by one run (Ref.RunKey) and also
+// succeeds when the run does not exist. After release the run key cannot be
+// reused: a late PutIfAbsent returns ErrReleased and leaves no data, and Get
+// likewise returns ErrReleased (also when a durable Release crashed midway
+// before the evidence was deleted).
 //
-// 拒绝迟到读写依赖每个已释放运行键的一个墓碑。PruneReleased 回收释放时间早于 olderThan 的墓碑，内存版与持久版语义一致：
-// 阈值内的迟到读写仍返回 ErrReleased；墓碑回收后 Get 返回 os.ErrNotExist，该运行键迟到的写入会成功并留下残留，
-// 宿主应把 olderThan 设得大于最长的重试或恢复窗口（例如进程崩溃重启、重试），并定期调用。
+// Rejecting late reads and writes relies on one tombstone per released run key.
+// PruneReleased reclaims tombstones released earlier than olderThan, with the
+// same semantics for the memory and durable implementations: late reads and
+// writes within the threshold still return ErrReleased; after a tombstone is
+// reclaimed, Get returns os.ErrNotExist and a late write for that run key
+// succeeds and leaves residue. The host should set olderThan greater than the
+// longest retry or recovery window (for example, process crash and restart,
+// retries) and call it periodically.
 type ResultStore interface {
 	PutIfAbsent(context.Context, Ref, []byte) error
 	Get(context.Context, Ref) ([]byte, error)
@@ -38,7 +48,9 @@ type ResultStore interface {
 type scopeKey struct{}
 
 // WithResultScope supplies trusted run ownership, never model arguments.
-// 宿主提供作用域时由宿主负责回收：运行结束且不再恢复后，用同一运行键调用 ResultStore.Release，此后不得复用该运行键。
+// When the host provides the scope, the host is responsible for reclaiming it:
+// after the run ends and will no longer resume, call ResultStore.Release with
+// the same run key, and do not reuse that run key afterward.
 func WithResultScope(ctx context.Context, runKey string) context.Context {
 	return context.WithValue(ctx, scopeKey{}, runKey)
 }
@@ -76,14 +88,19 @@ type resultStore struct {
 }
 
 // NewMemoryStore creates a concurrency-safe evidence store.
-// Release 后为该运行键保留一个墓碑（运行键与释放时间）以拒绝迟到的读写，由 PruneReleased 回收。
+// After Release it keeps a tombstone (run key and release time) for the run key
+// to reject late reads and writes; PruneReleased reclaims it.
 func NewMemoryStore() ResultStore {
 	return &resultStore{memory: map[string]map[string]entry{}, released: map[string]time.Time{}, now: time.Now}
 }
 
 // NewDurableResultStore stores immutable evidence snapshots independently of operation records.
-// 底层 store 实现 durable.Scoped 时（如 durable.FileStore）每次运行的证据写入独立作用域，Release 整体删除该作用域，
-// 拒绝读写的保证由底层实现给出（FileStore 覆盖本机所有进程）；否则证据写入底层 store 本身，Release 与 PruneReleased 返回错误。
+// When the underlying store implements durable.Scoped (such as
+// durable.FileStore), each run's evidence is written to its own scope and
+// Release deletes that scope as a whole; the guarantee of rejecting reads and
+// writes is provided by the underlying implementation (FileStore covers all
+// processes on the host). Otherwise evidence is written to the underlying store
+// itself, and Release and PruneReleased return errors.
 func NewDurableResultStore(store durable.Store) (ResultStore, error) {
 	if store == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "result store required").WithComponent("builder/contextpolicy").WithOperation("new_durable_result_store")
@@ -179,8 +196,10 @@ func (s *resultStore) PutIfAbsent(ctx context.Context, ref Ref, data []byte) (er
 	return store.Save(ctx, id, &durable.Snapshot{RunID: id, Version: resultVersion, Data: payload})
 }
 
-// Get 不加锁：证据不可变且持久写入是原子的，读到后按摘要核对；读取不存在的引用不产生任何文件。
-// 已释放的运行返回 ErrReleased，持久版由底层作用域检查墓碑。
+// Get takes no lock: evidence is immutable and durable writes are atomic, so it
+// verifies the digest after reading; reading a nonexistent reference creates no
+// files. Released runs return ErrReleased; the durable implementation checks
+// tombstones in the underlying scope.
 func (s *resultStore) Get(ctx context.Context, ref Ref) ([]byte, error) {
 	if err := validRef(ctx, ref); err != nil {
 		return nil, err
@@ -211,7 +230,7 @@ func (s *resultStore) Get(ctx context.Context, ref Ref) ([]byte, error) {
 	return append([]byte(nil), saved.Data...), nil
 }
 
-// Release 实现 ResultStore。
+// Release implements ResultStore.
 func (s *resultStore) Release(ctx context.Context, run string) error {
 	if run == "" {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "result run key required").WithComponent("builder/contextpolicy").WithOperation("release")
@@ -232,7 +251,8 @@ func (s *resultStore) Release(ctx context.Context, run string) error {
 	return scoped.RemoveScope(ctx, run)
 }
 
-// PruneReleased 实现 ResultStore。重复 Release 不刷新释放时间，与 FileStore 墓碑的 mtime 一致。
+// PruneReleased implements ResultStore. Repeated Release calls do not refresh
+// the release time, consistent with the mtime of FileStore tombstones.
 func (s *resultStore) PruneReleased(ctx context.Context, olderThan time.Duration) error {
 	if s.store != nil {
 		scoped, err := s.scoped()

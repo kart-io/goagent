@@ -15,7 +15,8 @@ const (
 	inboxVersion = "goagent-inbox-v1"
 )
 
-// InboxEntry 是持久收件箱中尚未确认的一条输入。Seq 在同一收件箱内递增且不复用。
+// InboxEntry is an unacknowledged input in the durable inbox. Seq increases
+// within an inbox and is never reused.
 type InboxEntry struct {
 	Seq  uint64 `json:"seq"`
 	Kind string `json:"kind"`
@@ -28,14 +29,17 @@ type inboxState struct {
 	Seen    []string     `json:"seen,omitempty"`
 }
 
-// Inbox 把运行中收到的输入保存在日志 Store 中，Append 返回即已落盘，Ack 之前重启不会丢失。
-// 确认和领取记录不在同一次写入中，崩溃在两者之间时条目还在：领取方须按 Seq 去重。
+// Inbox stores inputs received during a run in the journal Store. Once Append
+// returns the entry is persisted, and it survives restarts until Ack.
+// Acknowledgement and the claim record are not written together, so if a crash
+// happens between them the entry remains: claimers must deduplicate by Seq.
 type Inbox struct {
 	store Store
 	id    string
 }
 
-// OpenInbox 打开 ctx 所在运行的收件箱并返回未确认的条目；ctx 不是持久运行时返回 nil。
+// OpenInbox opens the inbox of the run that ctx belongs to and returns the
+// unacknowledged entries; it returns nil when ctx is not a durable run.
 func OpenInbox(ctx context.Context) (*Inbox, []InboxEntry, error) {
 	if !HasJournal(ctx) {
 		return nil, nil, nil
@@ -84,7 +88,10 @@ func (b *Inbox) update(ctx context.Context, change func(*inboxState) bool) (err 
 	return b.store.Save(ctx, b.id, &Snapshot{RunID: b.id, Version: inboxVersion, Data: data})
 }
 
-// Append 追加一条输入并返回序号。返回错误时调用方应视为未接受；提交结果未知的错误下条目可能已落盘，恢复后仍会被处理。
+// Append appends an input and returns its sequence number. When it returns an
+// error the caller should treat the input as not accepted; on errors with an
+// unknown commit outcome the entry may already be persisted and will still be
+// processed after recovery.
 func (b *Inbox) Append(ctx context.Context, kind, text string) (seq uint64, err error) {
 	err = b.update(ctx, func(state *inboxState) bool {
 		state.Next++
@@ -98,8 +105,11 @@ func (b *Inbox) Append(ctx context.Context, kind, text string) (seq uint64, err 
 	return seq, nil
 }
 
-// AppendOnce 与 Append 相同，但同一 key 只追加一次：键与条目在同一次写入中提交，条目被确认之后再次写入也不产生第二条。
-// 只记住最近的 constants.DurableInboxSeenLimit 个键。duplicate 为真时没有写入。
+// AppendOnce is like Append but appends only once per key: the key and the
+// entry are committed in the same write, so writing again after the entry is
+// acknowledged does not produce a second entry. Only the most recent
+// constants.DurableInboxSeenLimit keys are remembered. Nothing is written when
+// duplicate is true.
 func (b *Inbox) AppendOnce(ctx context.Context, key, kind, text string) (seq uint64, duplicate bool, err error) {
 	err = b.update(ctx, func(state *inboxState) bool {
 		if slices.Contains(state.Seen, key) {
@@ -121,7 +131,8 @@ func (b *Inbox) AppendOnce(ctx context.Context, key, kind, text string) (seq uin
 	return seq, duplicate, nil
 }
 
-// Ack 确认条目已被领取。可重复调用，已确认的序号被忽略。
+// Ack acknowledges that entries have been claimed. It is safe to call
+// repeatedly; already acknowledged sequence numbers are ignored.
 func (b *Inbox) Ack(ctx context.Context, seqs ...uint64) error {
 	return b.update(ctx, func(state *inboxState) bool {
 		kept := slices.DeleteFunc(slices.Clone(state.Entries), func(e InboxEntry) bool { return slices.Contains(seqs, e.Seq) })

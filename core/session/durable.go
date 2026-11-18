@@ -13,14 +13,20 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// DurableStore 把会话 id 的日志作为 durable.Store：每次 Save 追加一条 boundary/snapshot 事件，Load 取该 ID 最近一次写入的快照。
-// 持久操作的记录因此与对话位于同一份日志，按执行键（边界 + 次数）寻址；会话视图（DeriveMessages）忽略这些事件，
-// Rewind 也不影响它们。Lock 委托给 Store.Lock，名称为 DurableLockName(name)。
+// DurableStore exposes the journal of session id as a durable.Store: each Save
+// appends a boundary/snapshot event, and Load returns the most recently written
+// snapshot for the ID. Durable operation records therefore live in the same
+// journal as the conversation and are addressed by execution key (boundary +
+// count); the session view (DeriveMessages) ignores these events, and Rewind
+// does not affect them. Lock delegates to Store.Lock with the name
+// DurableLockName(name).
 func DurableStore(store Store, id string) durable.Store {
 	return &durableStore{store: store, id: id, snaps: map[string]json.RawMessage{}}
 }
 
-// DurableLockName 是 DurableStore 为快照 name 在会话上加锁所用的名称。以租约实现锁的 Store 据此在追加该快照时校验持有者。
+// DurableLockName is the name DurableStore uses to lock the session for
+// snapshot name. Stores that implement locks as leases use it to verify the
+// holder when appending that snapshot.
 func DurableLockName(name string) string { return "durable/" + name }
 
 type durableStore struct {
@@ -79,13 +85,16 @@ func (s *durableStore) Load(ctx context.Context, name string) (*durable.Snapshot
 	return &snap, nil
 }
 
-// Save 追加快照。
+// Save appends a snapshot.
 func (s *durableStore) Save(ctx context.Context, name string, snap *durable.Snapshot) error {
 	return s.SaveAll(ctx, durable.Write{ID: name, Snapshot: snap})
 }
 
-// SaveAll 实现 durable.Store：全部快照位于同一会话，作为一次 Append 写入。
-// 其他写入者（对话记录、其他持久操作）造成的序号冲突按最新序号重试：调用方持有这些 ID 的锁，冲突不涉及它们。
+// SaveAll implements durable.Store: all snapshots are in the same session and
+// are written as one Append. Sequence conflicts caused by other writers
+// (conversation records, other durable operations) are retried at the latest
+// sequence number: the caller holds the locks for these IDs, so the conflicts
+// do not involve them.
 func (s *durableStore) SaveAll(ctx context.Context, writes ...durable.Write) error {
 	if err := ctx.Err(); err != nil {
 		return err

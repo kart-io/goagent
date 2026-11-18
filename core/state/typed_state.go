@@ -23,7 +23,7 @@ import (
 // Schema Definition System
 // =============================================================================
 
-// FieldType 定义字段的数据类型
+// FieldType defines the data type of a field.
 type FieldType string
 
 const (
@@ -33,57 +33,58 @@ const (
 	FieldTypeBool   FieldType = "bool"
 	FieldTypeObject FieldType = "object"
 	FieldTypeArray  FieldType = "array"
-	FieldTypeAny    FieldType = "any" // 向后兼容
+	FieldTypeAny    FieldType = "any" // kept for backward compatibility
 	FieldTypeBytes  FieldType = "bytes"
 	FieldTypeTime   FieldType = "time"
 )
 
-// FieldSchema 定义单个字段的 Schema
+// FieldSchema defines the schema of a single field.
 type FieldSchema struct {
-	// Name 字段名称
+	// Name is the field name.
 	Name string `json:"name"`
 
-	// Type 字段类型
+	// Type is the field type.
 	Type FieldType `json:"type"`
 
-	// Required 是否必需
+	// Required reports whether the field is required.
 	Required bool `json:"required"`
 
-	// Description 字段描述
+	// Description is the field description.
 	Description string `json:"description,omitempty"`
 
-	// Default 默认值
+	// Default is the default value.
 	Default interface{} `json:"default,omitzero"`
 
-	// ItemType 数组元素类型（仅当 Type == FieldTypeArray 时有效）
+	// ItemType is the array element type (only valid when Type == FieldTypeArray).
 	ItemType FieldType `json:"item_type,omitempty"`
 
-	// ObjectSchema 嵌套对象的 Schema（仅当 Type == FieldTypeObject 时有效）
+	// ObjectSchema is the schema of a nested object (only valid when
+	// Type == FieldTypeObject).
 	ObjectSchema *StateSchema `json:"object_schema,omitzero"`
 
-	// Validator 自定义验证函数
+	// Validator is a custom validation function.
 	Validator func(value interface{}) error `json:"-"`
 }
 
-// StateSchema 定义状态的完整 Schema
+// StateSchema defines the complete schema of a state.
 type StateSchema struct {
-	// Name Schema 名称
+	// Name is the schema name.
 	Name string `json:"name"`
 
-	// Version Schema 版本（用于兼容性检查）
+	// Version is the schema version (used for compatibility checks).
 	Version string `json:"version"`
 
-	// Description Schema 描述
+	// Description is the schema description.
 	Description string `json:"description,omitempty"`
 
-	// Fields 字段定义
+	// Fields are the field definitions.
 	Fields map[string]*FieldSchema `json:"fields"`
 
-	// StrictMode 严格模式：不允许未定义的字段
+	// StrictMode enables strict mode: undefined fields are not allowed.
 	StrictMode bool `json:"strict_mode"`
 }
 
-// NewStateSchema 创建新的 Schema
+// NewStateSchema creates a new schema.
 func NewStateSchema(name, version string) *StateSchema {
 	return &StateSchema{
 		Name:    name,
@@ -92,19 +93,19 @@ func NewStateSchema(name, version string) *StateSchema {
 	}
 }
 
-// AddField 添加字段定义
+// AddField adds a field definition.
 func (s *StateSchema) AddField(field *FieldSchema) *StateSchema {
 	s.Fields[field.Name] = field
 	return s
 }
 
-// WithStrictMode 启用严格模式
+// WithStrictMode enables strict mode.
 func (s *StateSchema) WithStrictMode() *StateSchema {
 	s.StrictMode = true
 	return s
 }
 
-// Validate 验证数据是否符合 Schema
+// Validate checks whether data conforms to the schema.
 func (s *StateSchema) Validate(data map[string]interface{}) error {
 	// 检查必需字段
 	for name, field := range s.Fields {
@@ -275,7 +276,7 @@ func integerValue(value interface{}) (int64, error) {
 // Typed State Implementation
 // =============================================================================
 
-// TypedState 是带有 Schema 验证的类型安全状态
+// TypedState is a type-safe state with schema validation.
 type TypedState struct {
 	mu     sync.RWMutex
 	data   map[string]interface{}
@@ -283,7 +284,7 @@ type TypedState struct {
 	dirty  bool // 标记是否有未保存的更改
 }
 
-// NewTypedState 创建带有 Schema 的类型安全状态
+// NewTypedState creates a type-safe state with a schema.
 func NewTypedState(schema *StateSchema) *TypedState {
 	ts := &TypedState{
 		data:   make(map[string]interface{}),
@@ -302,7 +303,7 @@ func NewTypedState(schema *StateSchema) *TypedState {
 	return ts
 }
 
-// Get 获取字段值
+// Get returns a field value.
 func (ts *TypedState) Get(key string) (interface{}, bool) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
@@ -311,7 +312,7 @@ func (ts *TypedState) Get(key string) (interface{}, bool) {
 	return value, exists
 }
 
-// GetString 获取字符串字段
+// GetString returns a string field.
 func (ts *TypedState) GetString(key string) (string, error) {
 	value, exists := ts.Get(key)
 	if !exists {
@@ -326,7 +327,7 @@ func (ts *TypedState) GetString(key string) (string, error) {
 		WithContext("field", key)
 }
 
-// GetInt 获取整数字段
+// GetInt returns an integer field.
 func (ts *TypedState) GetInt(key string) (int64, error) {
 	value, exists := ts.Get(key)
 	if !exists {
@@ -336,7 +337,7 @@ func (ts *TypedState) GetInt(key string) (int64, error) {
 	return integerValue(value)
 }
 
-// GetFloat 获取浮点数字段
+// GetFloat returns a floating-point field.
 func (ts *TypedState) GetFloat(key string) (float64, error) {
 	value, exists := ts.Get(key)
 	if !exists {
@@ -351,7 +352,7 @@ func (ts *TypedState) GetFloat(key string) (float64, error) {
 		WithContext("field", key)
 }
 
-// GetBool 获取布尔字段
+// GetBool returns a boolean field.
 func (ts *TypedState) GetBool(key string) (bool, error) {
 	value, exists := ts.Get(key)
 	if !exists {
@@ -366,7 +367,7 @@ func (ts *TypedState) GetBool(key string) (bool, error) {
 		WithContext("field", key)
 }
 
-// Set 设置字段值（带验证）
+// Set sets a field value (with validation).
 func (ts *TypedState) Set(key string, value interface{}) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -391,7 +392,7 @@ func (ts *TypedState) Set(key string, value interface{}) error {
 	return nil
 }
 
-// SetBatch 批量设置字段值
+// SetBatch sets multiple field values.
 func (ts *TypedState) SetBatch(values map[string]interface{}) error {
 	// 先验证所有字段
 	if ts.schema != nil {
@@ -410,7 +411,7 @@ func (ts *TypedState) SetBatch(values map[string]interface{}) error {
 	return nil
 }
 
-// Delete 删除字段
+// Delete deletes a field.
 func (ts *TypedState) Delete(key string) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -428,7 +429,7 @@ func (ts *TypedState) Delete(key string) error {
 	return nil
 }
 
-// Keys 返回所有键
+// Keys returns all keys.
 func (ts *TypedState) Keys() []string {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
@@ -440,7 +441,7 @@ func (ts *TypedState) Keys() []string {
 	return keys
 }
 
-// ToMap 导出为普通 map（用于序列化）
+// ToMap exports the state as a plain map (for serialization).
 func (ts *TypedState) ToMap() map[string]interface{} {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
@@ -452,7 +453,7 @@ func (ts *TypedState) ToMap() map[string]interface{} {
 	return result
 }
 
-// FromMap 从 map 导入（带验证）
+// FromMap imports from a map (with validation).
 func (ts *TypedState) FromMap(data map[string]interface{}) error {
 	if ts.schema != nil {
 		if err := ts.schema.Validate(data); err != nil {
@@ -472,7 +473,7 @@ func (ts *TypedState) FromMap(data map[string]interface{}) error {
 	return nil
 }
 
-// Clone 克隆状态
+// Clone clones the state.
 func (ts *TypedState) Clone() *TypedState {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
@@ -490,21 +491,21 @@ func (ts *TypedState) Clone() *TypedState {
 	return clone
 }
 
-// IsDirty 检查是否有未保存的更改
+// IsDirty reports whether there are unsaved changes.
 func (ts *TypedState) IsDirty() bool {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	return ts.dirty
 }
 
-// MarkClean 标记为已保存
+// MarkClean marks the state as saved.
 func (ts *TypedState) MarkClean() {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.dirty = false
 }
 
-// Schema 返回关联的 Schema
+// Schema returns the associated schema.
 func (ts *TypedState) Schema() *StateSchema {
 	return ts.schema
 }
@@ -513,24 +514,24 @@ func (ts *TypedState) Schema() *StateSchema {
 // Serialization Support
 // =============================================================================
 
-// StateEnvelope 用于序列化的状态信封
+// StateEnvelope is the state envelope used for serialization.
 //
-// 包含元数据以支持版本兼容性和 Schema 验证
+// It contains metadata to support version compatibility and schema validation.
 type StateEnvelope struct {
-	// SchemaName Schema 名称
+	// SchemaName is the schema name.
 	SchemaName string `json:"schema_name,omitempty"`
 
-	// SchemaVersion Schema 版本
+	// SchemaVersion is the schema version.
 	SchemaVersion string `json:"schema_version,omitempty"`
 
-	// Data 实际状态数据
+	// Data is the actual state data.
 	Data map[string]interface{} `json:"data"`
 
-	// Checksum 数据校验和（可选）
+	// Checksum is the data checksum (optional).
 	Checksum string `json:"checksum,omitempty"`
 }
 
-// MarshalJSON 实现 json.Marshaler
+// MarshalJSON implements json.Marshaler.
 func (ts *TypedState) MarshalJSON() ([]byte, error) {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
@@ -597,7 +598,7 @@ func encodeStateJSONField(field *FieldSchema, value interface{}) interface{} {
 	return value
 }
 
-// UnmarshalJSON 实现 json.Unmarshaler
+// UnmarshalJSON implements json.Unmarshaler.
 func (ts *TypedState) UnmarshalJSON(data []byte) error {
 	// 先保留字段原文；整数不能先经过 float64，字节与时间只能在 JSON 边界恢复。
 	var envelope struct {
@@ -737,20 +738,20 @@ func decodeStateJSONInteger(number json.Number) (int64, error) {
 // Schema Registry
 // =============================================================================
 
-// SchemaRegistry 管理状态 Schema 定义
+// SchemaRegistry manages state schema definitions.
 type SchemaRegistry struct {
 	mu      sync.RWMutex
 	schemas map[string]*StateSchema
 }
 
-// NewSchemaRegistry 创建 Schema 注册中心
+// NewSchemaRegistry creates a schema registry.
 func NewSchemaRegistry() *SchemaRegistry {
 	return &SchemaRegistry{
 		schemas: make(map[string]*StateSchema),
 	}
 }
 
-// Register 注册 Schema
+// Register registers a schema.
 func (r *SchemaRegistry) Register(schema *StateSchema) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -766,7 +767,7 @@ func (r *SchemaRegistry) Register(schema *StateSchema) error {
 	return nil
 }
 
-// Get 获取 Schema
+// Get returns a schema.
 func (r *SchemaRegistry) Get(name, version string) (*StateSchema, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -782,7 +783,7 @@ func (r *SchemaRegistry) Get(name, version string) (*StateSchema, error) {
 	return schema, nil
 }
 
-// CreateState 使用注册的 Schema 创建状态
+// CreateState creates a state using a registered schema.
 func (r *SchemaRegistry) CreateState(schemaName, version string) (*TypedState, error) {
 	schema, err := r.Get(schemaName, version)
 	if err != nil {
@@ -797,7 +798,7 @@ var (
 	globalSchemaRegistryOnce sync.Once
 )
 
-// GlobalSchemaRegistry 获取全局 Schema 注册中心
+// GlobalSchemaRegistry returns the global schema registry.
 func GlobalSchemaRegistry() *SchemaRegistry {
 	globalSchemaRegistryOnce.Do(func() {
 		globalSchemaRegistry = NewSchemaRegistry()

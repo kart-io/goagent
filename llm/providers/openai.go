@@ -189,7 +189,8 @@ func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
 	return result
 }
 
-// Embed 使用 llm.WithEmbeddingModel 指定的模型，未指定时为 text-embedding-ada-002。
+// Embed uses the model set by llm.WithEmbeddingModel, defaulting to
+// text-embedding-ada-002.
 func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, error) {
 	textPreview := text
 	if len(text) > 100 {

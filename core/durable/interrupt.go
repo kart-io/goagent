@@ -15,8 +15,9 @@ const (
 	interruptPrefix = "interrupt/"
 )
 
-// InterruptContinuation 是 AwaitInput 等待时放进 WaitError.Continuation 的内容。
-// Info 会经快照暴露给宿主，不得包含凭证。
+// InterruptContinuation is what AwaitInput places in WaitError.Continuation
+// while waiting. Info is exposed to the host through snapshots and must not
+// contain credentials.
 type InterruptContinuation struct {
 	Kind     string          `json:"kind"`
 	ID       string          `json:"id"`
@@ -27,8 +28,9 @@ type InterruptContinuation struct {
 
 type interruptHostContext struct{}
 
-// AllowInterrupt 标记 ctx 可以直接承载 AwaitInput 的等待，如工作流节点。承载方必须把收到的
-// 等待当作暂停，并在恢复时重新进入；Do 会为子操作清除此标记。
+// AllowInterrupt marks ctx as able to host an AwaitInput wait directly, such as
+// a workflow node. The host must treat a received wait as a pause and re-enter
+// on resume; Do clears this mark for child operations.
 func AllowInterrupt(ctx context.Context) context.Context {
 	return context.WithValue(ctx, interruptHostContext{}, true)
 }
@@ -38,12 +40,18 @@ func interruptHost(ctx context.Context) bool {
 	return ok
 }
 
-// AwaitInput 在当前持久操作中暂停，等待宿主回应。首次成功持久化的输入就此固定，之后的重放都返回它；
-// 这不保证调用前的业务副作用只执行一次。id 在同一父执行键下必须唯一，循环中须带序号。
-// 输入不是合法 JSON 或 validate 失败时保持等待，并在 Continuation 中标记 Rejected。
-// JSON null 是合法的显式输入；需要非空输入时由 validate 拒绝。validate 的 panic 按拒绝处理（原因 validate_panic），
-// panic 值与调用栈在 WaitError.Cause 中。
-// validate 的错误文本会持久化并经 Snapshot 与 ResumeRejectedError 暴露，不得包含凭证等敏感信息。
+// AwaitInput pauses the current durable operation and waits for the host to
+// respond. The first successfully persisted input is fixed, and every later
+// replay returns it; this does not guarantee that business side effects before
+// the call run only once. id must be unique under the same parent execution
+// key; include a sequence number in loops. If the input is not valid JSON or
+// validate fails, it keeps waiting and marks Rejected in the Continuation. JSON
+// null is a valid explicit input; use validate to reject it when a non-null
+// input is required. A panic in validate is treated as a rejection (reason
+// validate_panic), with the panic value and stack trace in WaitError.Cause. The
+// error text from validate is persisted and exposed through Snapshot and
+// ResumeRejectedError, so it must not contain credentials or other sensitive
+// information.
 func AwaitInput(ctx context.Context, id string, info json.RawMessage, validate func(json.RawMessage) error) (json.RawMessage, error) {
 	if id == "" || !json.Valid(info) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "中断需要 ID 与 JSON 格式的 info").WithComponent("durable_interrupt").WithOperation("await_input")
@@ -110,8 +118,9 @@ func rejectReason(err error) string {
 	return string(r)
 }
 
-// InterruptAnswer 只读查询 key 处的中断是否已回应，已回应时返回固定的输入。
-// key 是 WaitError.Path 最后一项的 Key，id 是 AwaitInput 的 id。
+// InterruptAnswer checks, read-only, whether the interrupt at key has been
+// answered and returns the fixed input if so. key is the Key of the last
+// element of WaitError.Path, and id is the AwaitInput id.
 func InterruptAnswer(ctx context.Context, store Store, key, id string) (answer json.RawMessage, ok bool, err error) {
 	if store == nil || key == "" || id == "" {
 		return nil, false, agentErrors.Newf(agentErrors.CodeInvalidInput, "查询中断需要 Store、键和 ID").WithComponent("durable_interrupt").WithOperation("interrupt_answer")

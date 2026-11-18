@@ -30,44 +30,73 @@ import (
 type DispatchConfig struct {
 	// MaxAttempts bounds explicit resume attempts for a journaled CallID.
 	// Default 3. No retries occur inside a single Invoke.
-	// 未声明 DurableOperationPolicy 的工具在恢复时会重跑失败与中断的调用；中断时副作用可能已生效，
-	// 非幂等工具（发邮件、下单等）应声明 Reconcile 核对，或不设 RetryInterrupted 交由宿主处理。
+	// Tools that do not declare a DurableOperationPolicy rerun failed and
+	// interrupted calls on resume; an interrupted call may already have taken
+	// effect, so non-idempotent tools (sending email, placing orders, etc.)
+	// should declare Reconcile, or leave RetryInterrupted unset and let the
+	// host handle them.
 	MaxAttempts    int `json:"max_attempts"`
-	MaxConcurrency int `json:"max_concurrency"` // 默认 4，限制执行并发，审批等待不占执行槽位
-	// MaxAdmissionConcurrency 独立限制校验与管线准入并发。
-	// 零值不限准入；审批等待不占执行槽位。
+	MaxConcurrency int `json:"max_concurrency"` // defaults to 4; limits execution concurrency; waiting for approval does not hold an execution slot
+	// MaxAdmissionConcurrency independently limits validation and pipeline
+	// admission concurrency. Zero means unlimited admission; waiting for
+	// approval does not occupy an execution slot.
 	MaxAdmissionConcurrency int `json:"max_admission_concurrency"`
-	// MaxQueued 限制两个阶段合计阻塞等待的调用数，零值不限。
-	// 立即取得空闲槽位的调用不消耗排队额度。
+	// MaxQueued limits the total number of calls blocked waiting across both
+	// stages; zero means unlimited. Calls that immediately obtain a free slot
+	// do not consume queue quota.
 	MaxQueued int `json:"max_queued"`
-	// Timeout 是单次调用的默认超时，默认 30 秒；实现 DispatchTimeoutProvider 的工具以自己声明的值替代它，可长可短。
-	// 校验、授权、日志和执行累计计时；准入与两段排队暂停计时，等待只受宿主及根预算 ctx 约束。
+	// Timeout is the default per-call timeout, 30 seconds by default; tools
+	// that implement DispatchTimeoutProvider replace it with their own value,
+	// longer or shorter. Validation, authorization, journaling and execution
+	// share the clock; admission and both queueing stages pause it, and waiting
+	// is bounded only by the host and root budget ctx.
 	Timeout time.Duration `json:"timeout"`
-	// Authorize 在开启 ReturnArgumentErrors 时也会对参数不合法的模型调用执行，可能收到不满足 Schema 的参数。
+	// Authorize also runs for model calls with invalid arguments when
+	// ReturnArgumentErrors is enabled, so it may receive arguments that do not
+	// satisfy the schema.
 	Authorize func(context.Context, string, *interfaces.ToolInput) error `json:"-"`
-	// OnResult 在每次得到结果后、tool_end 之前同步调用：首次执行、日志回放和交还模型的参数错误结果都会触发，
-	// 宿主据此在崩溃恢复后重建自身状态（如证据编号）。返回错误或 panic 时本次调用失败，
-	// 但已写入的日志不变，恢复时回放会再次触发。回调不受 Timeout 约束。
+	// OnResult is called synchronously after each result is obtained and
+	// before tool_end: first executions, journal replays and argument error
+	// results returned to the model all trigger it, so the host can rebuild its
+	// own state (such as evidence numbering) after crash recovery. If it returns
+	// an error or panics, the call fails, but the journal already written is
+	// unchanged and replay triggers it again on resume. The callback is not
+	// bound by Timeout.
 	//
-	// 顺序：顺序执行的调用按调用顺序触发。Builder 同一轮并发执行的调用经 DeferResults 推迟到整轮结束后，
-	// 按模型给出的顺序逐个触发，首次执行与恢复回放顺序一致。宿主自行并发调用 Invoke 时触发顺序不确定，
-	// 且会并发触发，需自行加锁；此时按到达顺序编号不可重建，应从 ExecutionKey 派生编号。
+	// Ordering: sequentially executed calls trigger in call order. Calls run
+	// concurrently in the same Builder round are deferred via DeferResults
+	// until the whole round ends, then triggered one by one in the order the
+	// model gave them, so first execution and resume replay share the same
+	// order. When the host calls Invoke concurrently itself, the trigger order
+	// is undefined and triggers are concurrent, so the callback must lock; in
+	// that case numbering by arrival order cannot be rebuilt, and numbers
+	// should be derived from ExecutionKey.
 	OnResult func(context.Context, DispatchResult) error `json:"-"`
-	// ReturnArgumentErrors 只作用于 Tools() 返回的模型调用路径：参数校验失败和工具返回的 *ArgumentError
-	// 不再中止，而是返回 Success=false、Error 为空的结果交给模型改正，并按已完成写入日志。
-	// Invoke 与 AsRunnable 不受影响，仍以 error 报告参数错误。授权、超时、深度和重入错误仍然中止。
+	// ReturnArgumentErrors only affects the model call path returned by
+	// Tools(): argument validation failures and *ArgumentError returned by
+	// tools no longer abort, but yield a result with Success=false and an empty
+	// Error for the model to correct, journaled as completed. Invoke and
+	// AsRunnable are unaffected and still report argument errors as errors.
+	// Authorization, timeout, depth and reentrancy errors still abort.
 	ReturnArgumentErrors bool `json:"return_argument_errors"`
-	// Pipeline 对参数合法的调用执行调用前钩子、审批、守卫、执行包装与调用后钩子，nil 表示直接执行。
-	// 它面向模型行为（拒绝时交还模型修订）；Authorize 面向宿主授权（拒绝即中止），两者互补。
+	// Pipeline runs pre-call hooks, approval, guards, execution wrappers and
+	// post-call hooks for calls with valid arguments; nil means execute
+	// directly. It targets model behavior (rejections go back to the model for
+	// revision); Authorize targets host authorization (rejection aborts). The
+	// two are complementary.
 	Pipeline *Pipeline `json:"-"`
 }
 
-// DispatchResult 是交给 OnResult 的一次调用结果。Args 与 Output 归调用方所有，回调不得修改。
-// ExecutionKey 在带 CallID 的持久调用中是由父键和 CallID 派生的子键，重启后保持不变，可作为宿主侧去重键。
+// DispatchResult is the result of one call passed to OnResult. Args and Output
+// are owned by the caller and must not be modified by the callback.
+// ExecutionKey, for durable calls with a CallID, is the child key derived from
+// the parent key and CallID; it is stable across restarts and can serve as a
+// host-side deduplication key.
 type DispatchResult struct {
 	Name, CallID, ExecutionKey string
 	Args                       map[string]any
-	// Output 在持久调用中总是从日志解码（数字为 json.Number），首次执行与回放得到相同的值。
+	// Output is always decoded from the journal for durable calls (numbers as
+	// json.Number), so first execution and replay yield the same value.
 	Output   *interfaces.ToolOutput
 	Replayed bool
 }
@@ -774,15 +803,28 @@ func (p *deferredResult) abandon() {
 	}
 }
 
-// DeferResults 让经 ctx 发起的 Dispatcher 调用推迟 OnResult 与 tool_end：调用成功时只返回结果，
-// 回调在调用方执行 deliver 时才触发。调用失败或未经 Dispatcher 时不追加回调。
-// 只对 Invoke 与 Tools() 返回的工具生效；AsRunnable 的事件随 runnable 的流结束，照常即时交付。
-// 推迟的调用的观测由 deliver 结束，回调失败时以错误结束。deliver 前 ctx 结束时，未交付的调用放弃交付：
-// 观测以 ctx 的错误结束，回调不再触发（日志不变，恢复时回放会再次触发），下一次 deliver 返回该错误。
-// 用于同一轮并发调用：全部结束后按调用顺序依次 deliver，回调顺序因此与执行先后无关。
-// 同一 ctx 下的多次调用按成功的先后各追加一个回调，并发调用时先后不确定；需要确定顺序时每个调用使用各自的 ctx。
-// deliver 须在调用返回后执行，依次触发尚未触发的全部回调，每个回调只触发一次；
-// 与 Builder 同轮并发语义一致，某个回调失败不跳过其余回调（失败的那个不发 tool_end），全部触发后返回最靠前的错误。
+// DeferResults makes Dispatcher calls issued through ctx defer OnResult and
+// tool_end: a successful call only returns its result, and the callback fires
+// when the caller runs deliver. Failed calls, or calls not made through the
+// Dispatcher, add no callback. It only applies to Invoke and tools returned by
+// Tools(); AsRunnable events end with the runnable's stream and are delivered
+// immediately as usual.
+//
+// Observation of a deferred call ends in deliver, ending with an error if the
+// callback fails. If ctx ends before deliver, undelivered calls are abandoned:
+// their observation ends with ctx's error, the callback no longer fires (the
+// journal is unchanged and replay triggers it again on resume), and the next
+// deliver returns that error.
+//
+// It is meant for concurrent calls in one round: after all finish, deliver in
+// call order, so callback order does not depend on execution order. Multiple
+// calls under the same ctx each append a callback in order of success, which
+// is undefined for concurrent calls; use a separate ctx per call when a
+// deterministic order is needed. deliver must run after the calls return; it
+// fires all callbacks not yet fired, in order, each exactly once. Consistent
+// with Builder's same-round concurrency semantics, a failing callback does not
+// skip the others (the failed one emits no tool_end), and after all fire it
+// returns the earliest error.
 func DeferResults(ctx context.Context) (context.Context, func() error) {
 	pending := &deferredResult{ctx: ctx}
 	return context.WithValue(ctx, deferredResultKey{}, pending), func() error {
@@ -830,7 +872,8 @@ func argumentResultMessage(out *interfaces.ToolOutput) (string, bool) {
 	return message, !out.Success && out.Error == "" && m["error"] == "invalid_arguments"
 }
 
-// ReturnsArgumentErrors 实现 interfaces.ArgumentErrorTool：Builder 不在提交模型回合前拒绝不合法的参数。
+// ReturnsArgumentErrors implements interfaces.ArgumentErrorTool: the Builder
+// does not reject invalid arguments before committing the model turn.
 func (t *dispatchedTool) ReturnsArgumentErrors() bool { return t.d.config.ReturnArgumentErrors }
 
 func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.ToolOutput] {
@@ -873,7 +916,9 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 	return t.d.invoke(ctx, ToolRequest{Name: t.entry.name, Input: in}, func(*core.StreamEvent) error { return nil }, t.d.config.ReturnArgumentErrors)
 }
 
-// SupportsConcurrentCalls 实现 interfaces.ConcurrentCallTool：同一轮的多个调用共享 MaxConcurrency 限流，可并发执行。
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: multiple
+// calls in the same round share the MaxConcurrency limit and may run
+// concurrently.
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
 
 // acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，

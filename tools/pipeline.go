@@ -15,8 +15,10 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Call 是交给管线各阶段的一次工具调用。Args 只读：参数已展示给模型和人，管线不改写参数，
-// 需要换一种做法时用 PreSubstitute 声明替代调用。
+// Call is one tool call handed to the pipeline stages. Args is read-only: the
+// arguments have already been shown to the model and humans, so the pipeline
+// does not rewrite them; to take a different approach, declare a replacement
+// call with PreSubstitute.
 type Call struct {
 	Tool         string
 	CallID       string
@@ -26,69 +28,89 @@ type Call struct {
 	Args         map[string]any
 }
 
-// PreKind 是调用前阶段的裁决。零值为 PreAllow。
+// PreKind is the verdict of the pre-call stage. The zero value is PreAllow.
 type PreKind int
 
 const (
-	// PreAllow 不提出异议；全部 PreHook 都放行时进入 Guard。
+	// PreAllow raises no objection; when every PreHook allows, the call
+	// proceeds to Guard.
 	PreAllow PreKind = iota
-	// PreDeny 不执行工具，以 Rejected(Feedback) 交给模型修订。
+	// PreDeny does not execute the tool and returns Rejected(Feedback) to the
+	// model for revision.
 	PreDeny
-	// PreAsk 交给 Approver 由人确认。
+	// PreAsk hands the call to the Approver for human confirmation.
 	PreAsk
-	// PreStop 终止整个运行，返回 *StopError。
+	// PreStop terminates the whole run and returns *StopError.
 	PreStop
-	// PreSubstitute 执行 Substitute 声明的另一个工具代替本次调用，结果元数据记录替代关系。
+	// PreSubstitute executes the other tool declared by Substitute in place of
+	// this call; the result metadata records the substitution.
 	PreSubstitute
 )
 
-// PreDecision 是 PreHook 的裁决。
+// PreDecision is the verdict of a PreHook.
 type PreDecision struct {
 	Kind PreKind
-	// Feedback 在 Deny 时交给模型，在 Ask 时展示给审批人，在 Stop 时作为终止原因。
+	// Feedback is passed to the model on Deny, shown to the approver on Ask,
+	// and used as the termination reason on Stop.
 	Feedback string
-	// Grant 只用于 Ask：审批人选择"本会话允许"时，按它放行同会话中后续匹配的调用。
-	// 为 nil 或调用没有会话 ID 时不提供会话级批准，AllowedSession 按 AllowedOnce 处理。
+	// Grant is only used with Ask: when the approver chooses "allow for this
+	// session", it allows subsequent matching calls in the same session. When
+	// nil, or when the call has no session ID, no session-level approval is
+	// offered and AllowedSession is treated as AllowedOnce.
 	Grant SessionGrant
-	// Substitute 只用于 PreSubstitute。
+	// Substitute is only used with PreSubstitute.
 	Substitute *Substitution
 }
 
-// Substitution 声明替代调用。替代调用按目标工具的 Schema 校验并重新经过完整管线，但不能再被替代。
+// Substitution declares a replacement call. The replacement is validated
+// against the target tool's schema and goes through the full pipeline again,
+// but cannot itself be substituted.
 type Substitution struct {
 	Tool string
 	Args map[string]any
 }
 
-// SessionGrant 是会话级批准放行的调用范围，应尽量收窄到参数级（如命令前缀、路径前缀），
-// 而不是整个工具。Describe 以人可读的形式展示给审批人。
+// SessionGrant is the scope of calls allowed by a session-level approval. It
+// should be narrowed to the argument level where possible (such as a command
+// prefix or path prefix) rather than the whole tool. Describe presents it to
+// the approver in human-readable form.
 type SessionGrant interface {
 	Describe() string
 	Matches(call *Call) bool
 }
 
-// PreHook 全部依次执行，裁决按 Stop > Deny > Substitute > Ask > Allow 聚合，与钩子顺序无关：
-// 多个 Deny 的反馈合并交给模型；多个 Ask 合并为一次审批；多个 Substitute 视为错误。返回 error 中止运行。
+// PreHook hooks all run in order, and verdicts are aggregated as Stop > Deny >
+// Substitute > Ask > Allow regardless of hook order: feedback from multiple
+// Denys is merged and passed to the model; multiple Asks are merged into one
+// approval; multiple Substitutes are an error. Returning an error aborts the
+// run.
 type PreHook func(ctx context.Context, call *Call) (PreDecision, error)
 
-// Guard 只能拒绝不能放行，用于不可绕过的硬性约束；返回非空串即拒绝，以 Rejected 交给模型。
-// 它在 PreHook 与审批之后执行，人的批准也无法越过它。
+// Guard can only deny, never allow, and is meant for non-bypassable hard
+// constraints; returning a non-empty string denies the call, which is passed
+// to the model as Rejected. It runs after PreHook and approval, so even human
+// approval cannot override it.
 type Guard func(ctx context.Context, call *Call) (denyReason string)
 
-// Around 包住工具执行（单次超时之内），洋葱式组合，必须调用 next 或自行返回结果。
+// Around wraps tool execution (within the per-call timeout) and composes like
+// an onion; it must call next or return a result itself.
 type Around func(ctx context.Context, call *Call, next func(context.Context) (*interfaces.ToolOutput, error)) (*interfaces.ToolOutput, error)
 
-// PostDecision 是 PostHook 的裁决。Replace 为 nil 表示接受结果。
+// PostDecision is the verdict of a PostHook. A nil Replace accepts the result.
 type PostDecision struct {
 	Replace *interfaces.ToolOutput
-	// AdditionalContext 追加到结果的 AdditionalContext，Builder 在本批工具结果之后作为 user 消息注入。
+	// AdditionalContext is appended to the result's AdditionalContext; the
+	// Builder injects it as a user message after this batch of tool results.
 	AdditionalContext []string
 }
 
-// PostHook 依次处理成功结果和 Rejected 结果（含被拒绝的调用），可替换结果或追加上下文。返回 error 中止运行。
+// PostHook hooks process successful results and Rejected results (including
+// denied calls) in order, and may replace the result or append context.
+// Returning an error aborts the run.
 type PostHook func(ctx context.Context, call *Call, out *interfaces.ToolOutput) (PostDecision, error)
 
-// ApprovalOutcome 是审批结果。零值为 ApprovalUnavailable：没有人能作答时按拒绝处理。
+// ApprovalOutcome is the outcome of an approval. The zero value is
+// ApprovalUnavailable: when no one can answer, the call is treated as denied.
 type ApprovalOutcome int
 
 const (
@@ -99,43 +121,54 @@ const (
 	ApprovalCancelled
 )
 
-// ApprovalRequest 是交给 Approver 的待确认调用。
+// ApprovalRequest is a call awaiting confirmation, passed to the Approver.
 type ApprovalRequest struct {
 	Call   *Call
 	Reason string
-	// Grant 非 nil 时审批界面可提供"本会话允许"，并展示 Grant.Describe()。
+	// Grant, when non-nil, lets the approval UI offer "allow for this session"
+	// and show Grant.Describe().
 	Grant SessionGrant
 }
 
-// ApprovalResult 是审批人的答复；Feedback 在拒绝时交给模型。
+// ApprovalResult is the approver's answer; Feedback is passed to the model on
+// denial.
 type ApprovalResult struct {
 	Outcome  ApprovalOutcome
 	Feedback string
 }
 
-// Approver 由宿主实现（命令行提示、IM 卡片等）。返回 error 中止运行。
+// Approver is implemented by the host (command-line prompt, IM card, etc.).
+// Returning an error aborts the run.
 type Approver interface {
 	Approve(ctx context.Context, req ApprovalRequest) (ApprovalResult, error)
 }
 
-// ApproverFunc 把函数适配为 Approver。
+// ApproverFunc adapts a function to an Approver.
 type ApproverFunc func(ctx context.Context, req ApprovalRequest) (ApprovalResult, error)
 
-// Approve 实现 Approver。
+// Approve implements Approver.
 func (f ApproverFunc) Approve(ctx context.Context, req ApprovalRequest) (ApprovalResult, error) {
 	return f(ctx, req)
 }
 
-// Pipeline 是 Dispatcher 对每次模型可见调用执行的管线：PreHook → 审批 → Guard → Around（含超时）→ 工具 → PostHook。
-// 参数不合法的调用不进入管线。准入阶段（PreHook、审批、Guard）在操作日志之外执行：终止、取消和出错不留记录、
-// 不消耗尝试次数；拒绝结果与执行结果一样写入日志，回放已完成的调用不再经过准入阶段。
-// 准入阶段使用可配置的独立准入槽位，不占工具执行槽位，也不计入 DispatchConfig.Timeout；Around、工具与 PostHook 在超时之内。
+// Pipeline is the pipeline the Dispatcher runs for each model-visible call:
+// PreHook → approval → Guard → Around (including timeout) → tool → PostHook.
+// Calls with invalid arguments do not enter the pipeline. The admission stages
+// (PreHook, approval, Guard) run outside the operation journal: termination,
+// cancellation and errors leave no record and consume no attempts; rejection
+// results are journaled like execution results, and replayed completed calls
+// do not pass through admission again. Admission uses separately configurable
+// admission slots, occupies no tool execution slot, and does not count toward
+// DispatchConfig.Timeout; Around, the tool and PostHook run within the
+// timeout.
 type Pipeline struct {
 	Pre      []PreHook
 	Approver Approver
-	// ApprovalTimeout 是单次等待审批的上限，默认 10 分钟，超时后迟到的批准也按拒绝处理。
+	// ApprovalTimeout bounds a single wait for approval, 10 minutes by
+	// default; after it expires, a late approval is still treated as denied.
 	ApprovalTimeout time.Duration
-	// GrantTTL 从批准时起限制新会话授权的有效期；小于等于零表示不过期。
+	// GrantTTL bounds the validity of new session grants from the time of
+	// approval; zero or less means they never expire.
 	GrantTTL time.Duration
 	Guards   []Guard
 	Around   []Around
@@ -146,7 +179,7 @@ type Pipeline struct {
 	inflight sync.Map   // 审批合并键 -> *pendingApproval
 }
 
-// StopError 表示 PreStop 终止了运行。
+// StopError reports that PreStop terminated the run.
 type StopError struct {
 	Tool   string
 	Reason string
@@ -213,7 +246,8 @@ func (p *Pipeline) addGrants(sessionID string, asks []hookAsk) {
 	}
 }
 
-// Grants 返回会话中已批准的会话级授权说明，供宿主展示或撤销前核对。
+// Grants returns descriptions of the session-level grants approved in the
+// session, for the host to display or check before revoking.
 func (p *Pipeline) Grants(sessionID string) []string {
 	grants := p.grantSnapshot(sessionID)
 	if grants == nil {
@@ -229,7 +263,7 @@ func (p *Pipeline) Grants(sessionID string) []string {
 	return out
 }
 
-// RevokeGrants 清除会话的全部会话级授权。
+// RevokeGrants clears all session-level grants of the session.
 func (p *Pipeline) RevokeGrants(sessionID string) {
 	p.grantsMu.Lock()
 	defer p.grantsMu.Unlock()
@@ -240,8 +274,9 @@ func (g hookGrant) expired(now time.Time) bool {
 	return !g.expiresAt.IsZero() && !now.Before(g.expiresAt)
 }
 
-// PruneGrants 删除过期授权和空会话条目，返回删除的授权条目数。
-// 此方法不修改或取消在途审批；过期授权即使尚未清理，也不能继续放行调用。
+// PruneGrants removes expired grants and empty session entries and returns the
+// number of grant entries removed. It does not modify or cancel in-flight
+// approvals; expired grants cannot allow calls even before they are pruned.
 func (p *Pipeline) PruneGrants() int {
 	p.grantsMu.Lock()
 	defer p.grantsMu.Unlock()
@@ -561,12 +596,14 @@ func nonEmpty(s, fallback string) string {
 // sessionKey 承载 Pipeline 会话级授权使用的会话 ID。
 type sessionKey struct{}
 
-// WithSessionID 声明 ctx 中调用所属的会话，会话级批准只在同一会话内生效。Builder 以 SessionID 设置它。
+// WithSessionID declares the session that calls in ctx belong to; session-level
+// approvals only apply within the same session. The Builder sets it via
+// SessionID.
 func WithSessionID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, sessionKey{}, id)
 }
 
-// SessionIDFrom 返回 WithSessionID 设置的会话 ID。
+// SessionIDFrom returns the session ID set by WithSessionID.
 func SessionIDFrom(ctx context.Context) string {
 	id, _ := ctx.Value(sessionKey{}).(string)
 	return id

@@ -34,7 +34,8 @@ const (
 type inboxItem struct {
 	Kind inboxKind `json:"kind"`
 	Text string    `json:"text"`
-	// Seq 是持久收件箱中的序号，非持久运行为 0。领取记录带上它，恢复时才能确认同一条输入。
+	// Seq is the sequence number in the durable inbox; it is 0 for non-durable
+	// runs. Claim records carry it so that resume can identify the same input.
 	Seq uint64 `json:"seq,omitzero"`
 }
 
@@ -219,7 +220,7 @@ func (b *inbox) endModel() []string {
 	return redirects
 }
 
-// Handle 是运行中的 Agent 句柄，由 ConfigurableAgent.Start 创建。
+// Handle is a handle to a running agent, created by ConfigurableAgent.Start.
 type Handle struct {
 	inbox  *inbox
 	cancel context.CancelCauseFunc
@@ -228,9 +229,13 @@ type Handle struct {
 	err    error
 }
 
-// Start 在后台运行 Agent 并返回句柄，宿主可在运行中追加输入。只支持原生工具流（llm.ToolStreamClient 且配置了工具）。
-// 持久运行中输入写入持久收件箱后才算接受，写入失败时输入方法返回错误。用同一执行键再次 Start 时恢复未领取的输入，
-// 并按记录的批次继续 Followup 轮次，宿主不需要重建也不应重复提交。
+// Start runs the agent in the background and returns a handle through which the
+// host can add input while it runs. It supports only the native tool stream
+// (llm.ToolStreamClient with tools configured). In a durable run, input counts
+// as accepted only after it is written to the durable inbox; if the write
+// fails, the input method returns an error. Calling Start again with the same
+// execution key restores unclaimed input and continues Followup rounds by the
+// recorded batches; the host need not rebuild it and should not resubmit.
 func (a *ConfigurableAgent[S]) Start(ctx context.Context, input string) *Handle {
 	ctx, cancel := context.WithCancelCause(ctx)
 	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
@@ -366,14 +371,21 @@ func (h *Handle) PendingInputs() []PendingInput {
 	return pending
 }
 
-// Steer 排到下一步：当前工具批次结束后作为 user 消息追加；模型即将结束本轮时唤醒续跑。
-// 入队成功不保证已处理；结束时未领取的输入可通过 PendingInputs 查询。持久运行中入队成功表示已落盘。
+// Steer queues msg for the next step: it is appended as a user message after
+// the current tool batch finishes, and it wakes a round that is about to end so
+// it continues. Successful enqueueing does not guarantee processing; input
+// still unclaimed at the end can be queried with PendingInputs. In a durable
+// run, successful enqueueing means it has been persisted.
 func (h *Handle) Steer(ctx context.Context, msg string) error {
 	return h.inbox.push(ctx, inboxSteer, msg)
 }
 
-// SteerOnce 与 Steer 相同，但同一 key 只接受一次，重复调用返回 nil。持久运行中键与输入原子落盘，投递方崩溃后重投、
-// 输入已被领取或进程已重启都不会产生第二条（同一执行键内，记住最近 256 个键）；非持久运行只在本 Handle 内去重。
+// SteerOnce is like Steer, but accepts a given key only once; repeated calls
+// return nil. In a durable run, the key and input are persisted atomically, so
+// redelivery after the sender crashes, after the input has been claimed, or
+// after a process restart never produces a second entry (within the same
+// execution key, the most recent 256 keys are remembered); non-durable runs
+// deduplicate only within this Handle.
 func (h *Handle) SteerOnce(ctx context.Context, key, msg string) error {
 	b := h.inbox
 	b.mu.Lock()
@@ -403,12 +415,14 @@ func (h *Handle) SteerOnce(ctx context.Context, key, msg string) error {
 	return nil
 }
 
-// Inject 排到下一步，随下一次模型请求发送，但不唤醒即将结束的轮次。
+// Inject queues msg for the next step and sends it with the next model request,
+// but does not wake a round that is about to end.
 func (h *Handle) Inject(ctx context.Context, msg string) error {
 	return h.inbox.push(ctx, inboxInject, msg)
 }
 
-// Followup 排到本轮结束之后，作为新一轮的用户输入，续接本轮的对话。
+// Followup queues msg after the current round ends, as the user input of a new
+// round that continues this round's conversation.
 func (h *Handle) Followup(ctx context.Context, msg string) error {
 	h.inbox.mu.Lock()
 	defer h.inbox.mu.Unlock()
@@ -423,8 +437,10 @@ func (h *Handle) Followup(ctx context.Context, msg string) error {
 	return nil
 }
 
-// Redirect 取消进行中的模型请求，保留已流出的文本，追加 msg 后重新请求；没有进行中的模型请求（如工具执行中）
-// 或持久运行中降级为 Steer。
+// Redirect cancels the in-flight model request, keeps the text already
+// streamed, appends msg, and requests again; when no model request is in flight
+// (for example, during tool execution) or in a durable run, it degrades to
+// Steer.
 func (h *Handle) Redirect(ctx context.Context, msg string) error {
 	h.inbox.mu.Lock()
 	if h.inbox.done {
@@ -445,12 +461,15 @@ func (h *Handle) Redirect(ctx context.Context, msg string) error {
 	return err
 }
 
-// Interrupt 中止运行，Wait 返回 cause（为 nil 时为 context.Canceled）。
+// Interrupt aborts the run; Wait returns cause (context.Canceled when cause is
+// nil).
 func (h *Handle) Interrupt(cause error) { h.cancel(cause) }
 
-// Wait 等待全部轮次结束，返回最后一轮的结果。
-// ctx 只控制等待，不取消 Handle。返回运行结果后可用 PendingInputs 查询未领取输入。
-// Interrupt 后仍等待本轮 ExecuteStream 退出，包括工具和清理；宿主扩展必须合作返回。
+// Wait waits for all rounds to finish and returns the result of the last round.
+// ctx only bounds the wait and does not cancel the Handle. After the run result
+// is returned, unclaimed input can be queried with PendingInputs. After
+// Interrupt, it still waits for the current round's ExecuteStream to exit,
+// including tools and cleanup; host extensions must cooperate and return.
 func (h *Handle) Wait(ctx context.Context) (*AgentOutput, error) {
 	select {
 	case <-h.done:

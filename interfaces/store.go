@@ -13,7 +13,7 @@ import (
 //   - retrieval/vector_store.go (Document-based vector search)
 //   - memory/manager.go (Embedding-based vector search)
 //
-// Implementations: goagent-contrib/retrieval 的各向量库适配。
+// Implementations: the vector store adapters in goagent-contrib/retrieval.
 //
 // The interface provides document-oriented vector operations, which is the most
 // common use case for RAG and retrieval systems.

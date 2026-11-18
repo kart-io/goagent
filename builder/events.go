@@ -21,9 +21,11 @@ import (
 
 // AgentEvent is one event in ExecuteStream. Type is sources, step, text, usage,
 // error, or done. Only done contains the final, middleware-processed Output.
-// 支持 ToolStreamClient 时，模型在同一轮选择工具或直接回答。
-// 中间文本可能包含工具调用前的说明，只有 done.Output 是最终答案。
-// 失败发生在工具 tool_start 之后、tool_end 之前时，error 事件的 Tool 为该工具名，否则为空。
+// With a ToolStreamClient, the model chooses tools or answers directly in the
+// same round. Intermediate text may contain explanations before tool calls;
+// only done.Output is the final answer. When a failure occurs after a tool's
+// tool_start and before its tool_end, the error event's Tool is that tool's
+// name; otherwise it is empty.
 type AgentEvent struct {
 	Type    string                 `json:"type"`
 	Sources []RetrievalSource      `json:"sources,omitempty"`

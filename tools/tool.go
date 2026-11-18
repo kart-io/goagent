@@ -6,10 +6,10 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// BaseTool 提供 Tool 的基础实现
+// BaseTool provides a base implementation of Tool.
 //
-// 实现了 interfaces.Tool 接口的通用功能
-// 具体的执行逻辑通过 RunFunc 函数提供
+// It implements the common functionality of the interfaces.Tool interface;
+// the concrete execution logic is supplied by the RunFunc function.
 type BaseTool struct {
 	name        string
 	description string
@@ -17,7 +17,7 @@ type BaseTool struct {
 	runFunc     func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error)
 }
 
-// NewBaseTool 创建基础工具
+// NewBaseTool creates a base tool.
 func NewBaseTool(
 	name string,
 	description string,
@@ -32,35 +32,35 @@ func NewBaseTool(
 	}
 }
 
-// Name 返回工具名称
+// Name returns the tool name.
 func (t *BaseTool) Name() string {
 	return t.name
 }
 
-// Description 返回工具描述
+// Description returns the tool description.
 func (t *BaseTool) Description() string {
 	return t.description
 }
 
-// ArgsSchema 返回参数 JSON Schema
+// ArgsSchema returns the argument JSON Schema.
 func (t *BaseTool) ArgsSchema() string {
 	return t.argsSchema
 }
 
-// Invoke 执行工具
+// Invoke executes the tool.
 func (t *BaseTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	// 执行工具函数
 	return t.runFunc(ctx, input)
 }
 
-// ToolError 工具执行错误
+// ToolError is a tool execution error.
 type ToolError struct {
 	ToolName string
 	Message  string
 	Err      error
 }
 
-// Error 实现 error 接口
+// Error implements the error interface.
 func (e *ToolError) Error() string {
 	if e.Err != nil {
 		return e.ToolName + ": " + e.Message + ": " + e.Err.Error()
@@ -68,12 +68,12 @@ func (e *ToolError) Error() string {
 	return e.ToolName + ": " + e.Message
 }
 
-// Unwrap 支持 errors.Unwrap
+// Unwrap supports errors.Unwrap.
 func (e *ToolError) Unwrap() error {
 	return e.Err
 }
 
-// NewToolError 创建工具错误
+// NewToolError creates a tool error.
 func NewToolError(toolName, message string, err error) *ToolError {
 	return &ToolError{
 		ToolName: toolName,

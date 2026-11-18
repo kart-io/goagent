@@ -30,7 +30,8 @@ type Event struct {
 	At                                          time.Time
 	Duration                                    time.Duration
 	Replayed                                    bool
-	// Cached 表示结果来自缓存而非真实调用，见 MarkCached。
+	// Cached reports that the result came from a cache rather than a real call;
+	// see MarkCached.
 	Cached  bool   `json:",omitzero"`
 	Dropped uint64 `json:",omitzero"`
 }
@@ -137,7 +138,8 @@ func Emit(ctx context.Context, e Event) {
 }
 
 // ErrorKind returns a bounded category, never the original error text.
-// panic 只记类别，panic 值与调用栈不进入 Event 或 span。
+// For panics only the category is recorded; the panic value and call stack
+// never enter the Event or span.
 func ErrorKind(err error) string {
 	var panicErr *agentErrors.PanicError
 	switch {
@@ -159,7 +161,8 @@ func ErrorKind(err error) string {
 }
 func disabledEnd(error, bool) {}
 
-// MarkCached 标记 ctx 所属的、最近一次 Start 的生命周期：其结束事件带 Cached。未启用观测时什么也不做。
+// MarkCached marks the most recently started lifecycle that ctx belongs to, so
+// its end event carries Cached. It does nothing when observation is disabled.
 func MarkCached(ctx context.Context) {
 	if cached, ok := ctx.Value(cachedKey{}).(*atomic.Bool); ok {
 		cached.Store(true)

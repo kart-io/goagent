@@ -15,30 +15,47 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
-// CompactionConfig 配置对话压缩。估算长度超过 MaxTokens 时，把 system 之后、最近约 KeepTokens 之前的消息换成一条摘要。
+// CompactionConfig configures conversation compaction. When the estimated
+// length exceeds MaxTokens, the messages after system and before roughly the
+// last KeepTokens are replaced with one summary.
 type CompactionConfig struct {
-	// ID 与 Version 标识配置；Keep、Annotate 等函数无法比较，改变其行为时须修改 Version。
+	// ID and Version identify the configuration; functions such as Keep and
+	// Annotate cannot be compared, so Version must change when their behavior
+	// changes.
 	ID      string `json:"id"`
 	Version string `json:"version"`
-	// MaxTokens 是触发压缩的估算 token 数，默认 100000。
+	// MaxTokens is the estimated token count that triggers compaction; default
+	// 100000.
 	MaxTokens int `json:"max_tokens"`
-	// KeepTokens 是原样保留的最近消息的估算 token 数，默认 MaxTokens/4，须小于 MaxTokens。
+	// KeepTokens is the estimated token count of recent messages kept verbatim;
+	// default MaxTokens/4, and it must be less than MaxTokens.
 	KeepTokens int `json:"keep_tokens"`
-	// Instructions 是对摘要的补充要求，如必须保留的信息。
+	// Instructions are additional requirements for the summary, such as
+	// information that must be preserved.
 	Instructions string `json:"instructions"`
-	// Model 生成摘要；为 nil 时不请求模型，只省略旧消息并说明省略了什么。
+	// Model generates the summary; when nil, no model is requested and old
+	// messages are only omitted with a note of what was omitted.
 	Model llm.Client `json:"-"`
-	// Estimate 估算一条消息的 token 数；默认按 UTF-8 字节数的三分之一，对英文偏保守。
+	// Estimate estimates the token count of one message; by default it is one
+	// third of the UTF-8 byte count, which is conservative for English.
 	Estimate func(llm.Message) int `json:"-"`
-	// Keep 从被压缩的区间挑出原样保留的消息（按原顺序），limit 是可用的估算 token 数（KeepTokens/2）；
-	// 默认保留第一条与最近的用户原话。
+	// Keep selects messages to keep verbatim from the compacted span (in
+	// original order); limit is the available estimated token count
+	// (KeepTokens/2). By default it keeps the first and the most recent
+	// original user messages.
 	Keep func(span []llm.Message, limit int) []llm.Message `json:"-"`
-	// Annotate 返回附在摘要后的附注（如待办），空串表示不附加；再次压缩时附注不交给摘要模型。
+	// Annotate returns a note appended after the summary (such as to-dos); an
+	// empty string means none. On later compactions the note is not passed to
+	// the summary model.
 	Annotate func(span []llm.Message) string `json:"-"`
 }
 
-// Compaction 压缩过长的对话。Builder 经 WithCompaction 把它装为带身份的 PreStep，并在请求因超出上下文失败时强制压缩一次后重试。
-// 改写后的对话由会话日志记为 history/rewrite：原文留在日志中，可经 RecallTool 取回，Rewind 撤销摘要，持久回放不再请求摘要模型。
+// Compaction compacts overly long conversations. The Builder installs it via
+// WithCompaction as a PreStep with an identity, and when a request fails
+// because it exceeds the context, forces one compaction and retries. The
+// rewritten conversation is recorded by the session log as history/rewrite: the
+// originals stay in the log and can be retrieved via RecallTool, Rewind undoes
+// the summary, and durable replay does not request the summary model again.
 type Compaction struct {
 	config   CompactionConfig
 	identity string
@@ -68,7 +85,7 @@ const (
 	maxRenderedRunes = 4000
 )
 
-// NewCompaction 校验并补齐配置。
+// NewCompaction validates the configuration and fills in defaults.
 func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 	if cfg.ID == "" {
 		cfg.ID = "compaction"
@@ -101,10 +118,14 @@ func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 	return &Compaction{config: cfg, identity: cfg.ID + ":" + cfg.Version + ":" + digest(fingerprint)}, nil
 }
 
-// Identity 标识配置；作为 PreStep 的身份进入持久日志，配置改变后旧日志不被复用。
+// Identity identifies the configuration; it enters the durable journal as the
+// PreStep identity, so old journals are not reused after the configuration
+// changes.
 func (c *Compaction) Identity() string { return c.identity }
 
-// Reduce 在对话超过 MaxTokens 时压缩；inputs 是末尾本步新收到的输入条数，这些消息总是原样保留。
+// Reduce compacts the conversation when it exceeds MaxTokens; inputs is the
+// number of inputs newly received this step at the end, and those messages are
+// always kept verbatim.
 func (c *Compaction) Reduce(ctx context.Context, messages []llm.Message, inputs int) ([]llm.Message, error) {
 	if c.estimate(messages) <= c.config.MaxTokens {
 		return messages, nil
@@ -113,7 +134,9 @@ func (c *Compaction) Reduce(ctx context.Context, messages []llm.Message, inputs 
 	return out, err
 }
 
-// Recover 在请求已超出上下文时只保留最近一次交互压缩；changed 为假表示没有可压缩的部分。
+// Recover compacts, keeping only the most recent exchange, when a request has
+// already exceeded the context; changed is false when there is nothing to
+// compact.
 func (c *Compaction) Recover(ctx context.Context, messages []llm.Message) (out []llm.Message, changed bool, err error) {
 	return c.compact(ctx, messages, 0, 0)
 }
@@ -254,12 +277,13 @@ func omitted(span []llm.Message, cause error) string {
 	return text
 }
 
-// IsSummary 报告 m 是否为压缩生成的摘要消息。
+// IsSummary reports whether m is a summary message produced by compaction.
 func IsSummary(m llm.Message) bool {
 	return m.Role == "user" && strings.HasPrefix(m.Content, SummaryPrefix)
 }
 
-// SummaryBody 返回摘要消息的正文，去掉前缀与附注。
+// SummaryBody returns the body of a summary message, without the prefix and
+// note.
 func SummaryBody(content string) string {
 	content = strings.TrimPrefix(content, SummaryPrefix)
 	if i := strings.Index(content, annotationMark); i >= 0 {
@@ -268,8 +292,10 @@ func SummaryBody(content string) string {
 	return content
 }
 
-// KeepUserMessages 从 span 中挑出用户原话：先保留第一条（通常是任务原文），再从最近往前，合计不超过 limit 估算 token。
-// 摘要与 skip 返回真的消息不算用户原话。
+// KeepUserMessages selects original user messages from span: it keeps the first
+// one (usually the original task) and then works backward from the most recent,
+// with a total of at most limit estimated tokens. Summaries and messages for
+// which skip returns true do not count as original user messages.
 func KeepUserMessages(span []llm.Message, limit int, estimate func(llm.Message) int, skip func(llm.Message) bool) []llm.Message {
 	var users []int
 	for i, m := range span {
@@ -326,7 +352,9 @@ func truncateRunes(s string, n int) string {
 	return s
 }
 
-// EstimateTokens 按 UTF-8 字节数的三分之一估算：中文约一字一 token，英文约四字符一 token，因此偏保守。
+// EstimateTokens estimates one third of the UTF-8 byte count: about one token
+// per Chinese character and about one token per four English characters, so it
+// is conservative.
 func EstimateTokens(m llm.Message) int {
 	n := len(m.Content) + len(m.ReasoningContent)
 	for _, tc := range m.ToolCalls {

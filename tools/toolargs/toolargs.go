@@ -1,5 +1,7 @@
-// Package toolargs 解析模型给出的工具参数：float64 表示不了的数字保留为 json.Number，
-// 使校验、授权、审批、durable 意图、缓存与执行看到同一个值。
+// Package toolargs parses tool arguments produced by the model: numbers that
+// float64 cannot represent are kept as json.Number, so validation,
+// authorization, approval, durable intents, caching and execution all see the
+// same value.
 package toolargs
 
 import (
@@ -16,9 +18,12 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// Parse 解析参数 JSON 文本，只接受对象（null 不算）。float64 能精确表示的数字解为 float64；
-// 大整数、高精度小数等会丢精度的数字保留为 json.Number，避免舍入后操作错误的对象。
-// 超出 float64 范围的数字（如 1e400）与默认解码一样视为无效参数。
+// Parse parses JSON argument text and only accepts objects (null does not
+// count). Numbers that float64 represents exactly are decoded as float64;
+// numbers that would lose precision, such as large integers and
+// high-precision decimals, are kept as json.Number to avoid acting on the
+// wrong object after rounding. Numbers outside the float64 range (such as
+// 1e400) are treated as invalid arguments, as with default decoding.
 func Parse(raw string) (map[string]any, bool) {
 	var args map[string]any
 	if json.Unmarshal([]byte(raw), &args, json.UseNumber) != nil || args == nil {
@@ -51,7 +56,8 @@ func floatView(args map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
-// Float64 取 JSON 数字参数的值，接受 float64 与 json.Number；json.Number 会舍入到最近的 float64。
+// Float64 returns the value of a JSON number argument, accepting float64 and
+// json.Number; a json.Number is rounded to the nearest float64.
 func Float64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -63,7 +69,8 @@ func Float64(v any) (float64, bool) {
 	return 0, false
 }
 
-// Compare 按原文比较 n 与 schema 中的十进制界限 f，返回 -1、0 或 1；n 不是合法数字时返回 0。
+// Compare compares n with the decimal bound f from the schema by its literal
+// text and returns -1, 0 or 1; it returns 0 when n is not a valid number.
 func Compare(n json.Number, f float64) int {
 	x, ok := new(big.Rat).SetString(string(n))
 	if !ok {
@@ -72,18 +79,26 @@ func Compare(n json.Number, f float64) int {
 	return x.Cmp(schemaRat(f))
 }
 
-// IsInteger 按原文报告 n 是否为整数：1.0000000000000001 舍入成 float64 是 1，但不是整数。
+// IsInteger reports, by its literal text, whether n is an integer:
+// 1.0000000000000001 rounds to 1 as a float64 but is not an integer.
 func IsInteger(n json.Number) bool {
 	x, ok := new(big.Rat).SetString(string(n))
 	return ok && x.IsInt()
 }
 
-// Validate 按 schema 校验参数。jsonschema 只认 float64，json.Number 先转为 float64 校验结构，
-// 再按原文精确检查 type integer、minimum、maximum、exclusiveMinimum、exclusiveMaximum 与 multipleOf，
-// 避免 1.0000000000000001 舍入成 1 后绕过约束。json.Number 所在路径上的 schema 只要用到 exactKeywords
-// 以外的关键字（anyOf、patternProperties、元组 items、非本地 $ref 等）就无法精确判断，直接报错，
-// 由调用方交还模型改正。结构校验先看舍入值，舍入后才越界的合法值（如 9007199254740993 对 multipleOf 3、
-// 1.0000000000000001 对 exclusiveMinimum 1）会被保守拒绝；这类误拒只会交还模型，不会执行越界的值。
+// Validate validates args against the schema. jsonschema only understands
+// float64, so a json.Number is first converted to float64 to validate the
+// structure, then checked exactly by its literal text for type integer,
+// minimum, maximum, exclusiveMinimum, exclusiveMaximum and multipleOf, so that
+// 1.0000000000000001 cannot bypass a constraint by rounding to 1. If a schema
+// on the path of a json.Number uses any keyword outside exactKeywords (anyOf,
+// patternProperties, tuple items, non-local $ref, etc.), it cannot be judged
+// exactly and an error is returned directly, for the caller to hand back to
+// the model for correction. Structural validation looks at the rounded value
+// first, so valid values that only go out of bounds after rounding (such as
+// 9007199254740993 against multipleOf 3, or 1.0000000000000001 against
+// exclusiveMinimum 1) are conservatively rejected; such false rejections are
+// only handed back to the model and never execute an out-of-bounds value.
 func Validate(r *jsonschema.Resolved, args map[string]any) error {
 	view, err := floatView(args)
 	if err != nil {

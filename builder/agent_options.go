@@ -10,34 +10,36 @@ import "github.com/kart-io/goagent/core"
 // - [Core]: 标准 API，覆盖 95% 使用场景（15-20 个方法）
 // - [Advanced]: 完整 API，覆盖所有场景（30+ 个方法）
 
-// WithSystemPrompt 设置系统提示词
+// WithSystemPrompt sets the system prompt.
 //
-// [Simple] 最常用的配置方法，定义 Agent 的角色和行为。
+// [Simple] The most commonly used option; it defines the agent's role and
+// behavior.
 //
-// 示例：
+// Example:
 //
 //	agent, _ := builder.NewSimpleBuilder(llm).
-//	    WithSystemPrompt("你是一个友好的助手").
+//	    WithSystemPrompt("You are a friendly assistant").
 //	    Build()
 func (b *AgentBuilder[S]) WithSystemPrompt(prompt string) *AgentBuilder[S] {
 	b.systemPrompt = prompt
 	return b
 }
 
-// WithState 设置 Agent 状态
+// WithState sets the agent state.
 //
-// [Advanced] 高级配置，用于自定义状态类型（需要泛型知识）。
-// 大多数情况下使用默认的 *core.AgentState 即可。
+// [Advanced] Used for custom state types (requires familiarity with generics).
+// In most cases the default *core.AgentState is sufficient.
 func (b *AgentBuilder[S]) WithState(state S) *AgentBuilder[S] {
 	b.state = state
 	return b
 }
 
-// WithCallbacks 添加回调函数用于监控
+// WithCallbacks adds callbacks for monitoring.
 //
-// [Core] 标准配置，用于监控 Agent 执行过程（日志、指标、调试）。
+// [Core] Standard option for observing agent execution (logging, metrics,
+// debugging).
 //
-// 示例：
+// Example:
 //
 //	agent, _ := builder.NewSimpleBuilder(llm).
 //	    WithSystemPrompt("...").
@@ -48,17 +50,18 @@ func (b *AgentBuilder[S]) WithCallbacks(callbacks ...core.Callback) *AgentBuilde
 	return b
 }
 
-// WithErrorHandler 设置自定义错误处理函数
+// WithErrorHandler sets a custom error handler.
 //
-// [Core] 标准配置，用于自定义错误处理逻辑（例如重试、降级）。
+// [Core] Standard option for custom error handling logic (for example, retry or
+// fallback).
 func (b *AgentBuilder[S]) WithErrorHandler(handler func(error) error) *AgentBuilder[S] {
 	b.errorHandler = handler
 	return b
 }
 
-// WithMetadata 添加元数据到 Agent
+// WithMetadata adds metadata to the agent.
 //
-// [Advanced] 高级配置，用于存储自定义键值对数据。
+// [Advanced] Used to store custom key-value data.
 func (b *AgentBuilder[S]) WithMetadata(key string, value interface{}) *AgentBuilder[S] {
 	b.metadata[key] = value
 	return b

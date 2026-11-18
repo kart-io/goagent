@@ -11,8 +11,10 @@ import (
 
 type InputHandler func(context.Context, *InputRequiredError) (mcp.InputResponseMap, error)
 
-// InputRequiredError 是可序列化的续接检查点；宿主可保存后用重新连接的会话继续。
-// 远端是否允许跨 Session 续接仍由远端服务约定；这里不重发不带状态的初始调用。
+// InputRequiredError is a serializable continuation checkpoint; the host can
+// save it and continue with a reconnected session. Whether continuation across
+// sessions is allowed is still up to the remote service; the initial
+// stateless call is not resent here.
 type InputRequiredError struct {
 	Name         string              `json:"name"`
 	Arguments    json.RawMessage     `json:"arguments"`

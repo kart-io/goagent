@@ -7,11 +7,15 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-// OutputValidator 验收最终业务输出；实现必须只读并可重复调用。
+// OutputValidator validates the final business output; implementations must be
+// read-only and safe to call repeatedly.
 type OutputValidator func(context.Context, *AgentOutput) error
 
-// WithOutputValidator 追加最终输出验收器。所有输出来源均在中间件之后、完成回调前后以及最终投递前验收。
-// 验收不会追加模型请求或回滚已发生的工具、会话、状态与回调效果；错误不能被错误处理器清除。
+// WithOutputValidator appends final output validators. Output from every source
+// is validated after middleware, before and after completion callbacks, and
+// before final delivery. Validation does not add model requests or roll back
+// effects already made by tools, sessions, state, or callbacks; its errors
+// cannot be cleared by the error handler.
 func (b *AgentBuilder[S]) WithOutputValidator(validators ...OutputValidator) *AgentBuilder[S] {
 	b.config.OutputValidators = append(b.config.OutputValidators, validators...)
 	return b

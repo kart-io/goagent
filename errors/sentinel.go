@@ -1,13 +1,15 @@
 package errors
 
-// CodedError 让领域错误显式提供分类，避免把控制信号混入 Unwrap。
+// CodedError lets domain errors provide their category explicitly, avoiding
+// mixing control signals into Unwrap.
 type CodedError interface {
 	error
 	ErrorCode() ErrorCode
 }
 
-// SentinelError 是带分类的固定控制信号，文本和分类不可修改。
-// 不实现按类别比较的 Is，保持每个对象独立的哨兵身份。
+// SentinelError is a fixed, categorized control signal whose text and category
+// cannot be modified. It does not implement a category-based Is, so each
+// object keeps its own sentinel identity.
 type SentinelError struct {
 	code    ErrorCode
 	message string
@@ -24,7 +26,8 @@ func (e *SentinelError) Error() string {
 	return e.message
 }
 
-// ErrorCode 返回信号所属类别；同类别的不同信号仍须通过 errors.Is 分别判断。
+// ErrorCode returns the category of the signal; different signals of the same
+// category must still be checked individually with errors.Is.
 func (e *SentinelError) ErrorCode() ErrorCode {
 	if e == nil {
 		return CodeInternal
@@ -32,7 +35,8 @@ func (e *SentinelError) ErrorCode() ErrorCode {
 	return e.code
 }
 
-// ErrorCode 使业务错误参与统一分类提取；Code 字段保留原有公开形态。
+// ErrorCode lets business errors take part in unified category extraction; the
+// Code field keeps its existing public form.
 func (e *AgentError) ErrorCode() ErrorCode {
 	if e == nil {
 		return CodeInternal

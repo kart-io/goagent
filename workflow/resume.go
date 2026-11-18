@@ -18,8 +18,12 @@ type ResumeRequest struct {
 	Input json.RawMessage `json:"input,omitempty"`
 }
 
-// ResumeRejectedError 表示人工输入未被采纳，节点没有推进；宿主可以改正输入后用同一等待键重试。
-// 中断的 validate 拒绝时，检查点里只更新该中断的 Rejected/Reason。validate 的 panic 按拒绝处理，panic 值经 Unwrap 可取；存储失败、取消和其他 panic 不属于输入拒绝。
+// ResumeRejectedError reports that the human input was not accepted and the
+// node did not advance; the host can correct the input and retry with the same
+// wait key. When an interrupt's validate rejects, only that interrupt's
+// Rejected/Reason are updated in the checkpoint. A panic in validate is treated
+// as a rejection and the panic value is available via Unwrap; storage failures,
+// cancellation, and other panics are not input rejections.
 type ResumeRejectedError struct{ Err error }
 
 func (e *ResumeRejectedError) Error() string { return "resume input rejected: " + e.Err.Error() }
@@ -57,8 +61,9 @@ func (d *DurableGraph[T]) Resume(ctx context.Context, id string, req ResumeReque
 // WithResume supplies structured human input to an AsChildRunnable wait inside
 // a resumable tool/operation. operationKey is the last WaitError.Path key;
 // req.Key is ChildContinuation.ApprovalKey. They identify different boundaries.
-// req.Key 也可以是 ChildContinuation.Interrupts 中的中断键。
-// 子图审批必须使用本函数生成结构化请求；叶子中断仍可使用 durable.WithResume 传入原始输入。
+// req.Key may also be an interrupt key from ChildContinuation.Interrupts.
+// Subgraph approvals must use this function to build a structured request;
+// leaf interrupts may still pass raw input via durable.WithResume.
 func WithResume(ctx context.Context, operationKey string, req ResumeRequest) (context.Context, error) {
 	if operationKey == "" || req.Key == "" {
 		return nil, &ResumeRejectedError{Err: agentErrors.Newf(agentErrors.CodeInvalidInput, "operation and checkpoint keys are required").WithComponent("workflow").WithOperation("with_resume")}

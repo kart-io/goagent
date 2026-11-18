@@ -31,9 +31,13 @@ type fileHeader struct {
 	Version string `json:"version"`
 }
 
-// FileStore 把每个会话存为一个 JSONL 文件：第一行是文件头，之后每行是一次 Append 的全部事件（JSON 数组），
-// 因此一次 Append 要么整行可读、要么整行不存在。末尾不完整的一行（写入中崩溃）在读取时忽略，下次 Append 前截掉。
-// 追加在会话级 flock 内完成并 fsync；Read 不加锁。同 durable.FileStore，须使用锁与 rename 语义可靠的本地文件系统。
+// FileStore stores each session as a JSONL file: the first line is the file
+// header, and each later line holds all events of one Append (a JSON array), so
+// an Append is either fully readable as a line or absent. An incomplete
+// trailing line (a crash during a write) is ignored on read and truncated
+// before the next Append. Appends happen under a session-level flock and are
+// fsynced; Read takes no lock. As with durable.FileStore, use a local file
+// system with reliable lock and rename semantics.
 type FileStore struct {
 	dir string
 
@@ -47,7 +51,8 @@ type readPos struct {
 	seq    int64
 }
 
-// NewFileStore 在 dir 下保存会话，目录不存在时创建。
+// NewFileStore stores sessions under dir, creating the directory if it does not
+// exist.
 func NewFileStore(dir string) (*FileStore, error) {
 	path, err := filepath.Abs(dir)
 	if err != nil {
@@ -81,7 +86,7 @@ func lockFile(ctx context.Context, path string) (func() error, error) {
 	return lock.Close, nil
 }
 
-// Lock 实现 Store。
+// Lock implements Store.
 func (s *FileStore) Lock(ctx context.Context, id, name string) (func() error, error) {
 	return lockFile(ctx, filepath.Join(s.dir, digest(id)+"."+digest(name)+".lock"))
 }
@@ -167,7 +172,7 @@ func validBoundary(f *os.File, offset int64) bool {
 	return err == nil && b[0] == '\n'
 }
 
-// Read 实现 Store。
+// Read implements Store.
 func (s *FileStore) Read(ctx context.Context, id string, after int64) ([]Event, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -179,7 +184,7 @@ func (s *FileStore) Read(ctx context.Context, id string, after int64) ([]Event, 
 	return events, err
 }
 
-// Append 实现 Store。
+// Append implements Store.
 func (s *FileStore) Append(ctx context.Context, id string, expected int64, events ...Event) (last int64, err error) {
 	if err := validID(id); err != nil {
 		return 0, err
@@ -280,7 +285,9 @@ func (s *FileStore) applyTxn(payload []byte) error {
 	return nil
 }
 
-// AppendAll 实现 Store：按字节序取会话锁后比较全部序号，提交文件 rename 到位即提交。
+// AppendAll implements Store: it takes the session locks in byte order and
+// compares all sequence numbers; the batch commits once the commit file is
+// renamed into place.
 func (s *FileStore) AppendAll(ctx context.Context, batches ...AppendBatch) (lasts []int64, err error) {
 	if err := ValidateBatches(batches); err != nil {
 		return nil, err
@@ -335,7 +342,7 @@ func syncDir(dir string) error {
 	return d.Sync()
 }
 
-// List 实现 Store。
+// List implements Store.
 func (s *FileStore) List(ctx context.Context) ([]string, error) {
 	if err := s.recover(ctx); err != nil {
 		return nil, err
@@ -368,7 +375,8 @@ func (s *FileStore) List(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-// Fork 实现 Store：在 dst 的会话锁内写临时文件后 rename，dst 要么完整出现、要么不存在。
+// Fork implements Store: it writes a temporary file under dst's session lock
+// and then renames it, so dst either appears complete or does not exist.
 func (s *FileStore) Fork(ctx context.Context, src, dst string, upTo int64) (err error) {
 	if err := validID(dst); err != nil {
 		return err

@@ -16,22 +16,32 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
-// WithSessionLog 把会话记入 store（会话 ID 同工具调用看到的会话 ID）：模型历史从日志推导，不再读取记忆；
-// 每次模型请求前记录与日志不同的对话（新增消息逐条记录，被 PreStep 等改写的历史记为 history/rewrite），
-// 每轮记录开始与结束。支持普通流式聊天与原生工具循环。
+// WithSessionLog records the session in store (the session ID is the same one
+// tool calls see): model history is derived from the log and memory is no
+// longer read. Before each model request, conversation that differs from the
+// log is recorded (new messages one by one; history rewritten by PreStep and
+// similar is recorded as history/rewrite), and the start and end of each turn
+// are recorded. It supports both plain streaming chat and the native tool loop.
 //
-// 上一轮未结束（进程中断）时：持久运行以同一执行键恢复则续写该轮，否则该轮记为中止，其消息不进入历史。
-// 持久运行可用 session.DurableStore(store, id) 作为 durable 日志，操作快照与对话位于同一份日志。
+// When the previous turn did not end (the process was interrupted): if a
+// durable run resumes with the same execution key, it continues writing that
+// turn; otherwise the turn is recorded as aborted and its messages do not enter
+// history. Durable runs can use session.DurableStore(store, id) as the durable
+// journal, so operation snapshots and the conversation live in the same log.
 func (b *AgentBuilder[S]) WithSessionLog(store session.Store) *AgentBuilder[S] {
 	b.config.SessionLog = store
 	return b
 }
 
-// WithSessionState 让状态随会话日志跨进程恢复，需要 WithSessionLog。
-// 每轮结束时状态以 JSON 记入该轮的 turn/end；开始一轮时若日志中的状态不是当前状态对应的那条，
-// 先用它替换当前状态，没有记录的会话从构建时的状态开始。退回会话后状态随之退回。
-// 状态类型必须实现 MarshalJSON 与 UnmarshalJSON，编码格式由状态类型自己决定；
-// *core.AgentState 编码为 JSON 对象，恢复后的值为 JSON 通用类型。
+// WithSessionState makes state recoverable across processes along with the
+// session log; it requires WithSessionLog. At the end of each turn the state is
+// recorded as JSON in that turn's turn/end; when a turn starts, if the state in
+// the log is not the entry corresponding to the current state, it replaces the
+// current state first; sessions with no record start from the state at build
+// time. Rewinding the session rewinds the state with it. The state type must
+// implement MarshalJSON and UnmarshalJSON, and the encoding is up to the state
+// type; *core.AgentState encodes as a JSON object, and restored values are
+// generic JSON types.
 func (b *AgentBuilder[S]) WithSessionState() *AgentBuilder[S] {
 	b.config.SessionState = true
 	return b

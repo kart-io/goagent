@@ -11,19 +11,22 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-// Client 是 LLM 客户端的唯一必需接口：流式补全加提供商标识。
-// 需要完整响应时用 Complete 收集流；调用方停止读取时必须取消 ctx。
+// Client is the only required interface for an LLM client: streaming
+// completion plus the provider identity. Use Complete to collect the stream
+// when a full response is needed; callers must cancel ctx when they stop
+// reading.
 type Client interface {
 	CompleteStream(ctx context.Context, req *CompletionRequest) (<-chan *StreamChunk, error)
 	Provider() shared.Provider
 }
 
-// Message 定义聊天消息
+// Message defines a chat message.
 type Message struct {
 	Role    string `json:"role"`           // "system", "user", "assistant"
-	Content string `json:"content"`        // 消息内容
-	Name    string `json:"name,omitempty"` // 可选的消息名称
-	// ToolCalls 与 ToolCallID 用于保留 assistant/tool 的原生对话关系。
+	Content string `json:"content"`        // message content
+	Name    string `json:"name,omitempty"` // optional message name
+	// ToolCalls and ToolCallID preserve the native assistant/tool conversation
+	// relationship.
 	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	ReasoningContent string     `json:"reasoning_content,omitempty"`
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
@@ -37,75 +40,80 @@ type ProviderState struct {
 	Data     json.RawMessage `json:"data"`
 }
 
-// CompletionRequest 定义补全请求
+// CompletionRequest defines a completion request.
 type CompletionRequest struct {
 	Reasoning *usage.ReasoningConfig `json:"reasoning,omitzero"`
-	// TemperatureSet 使 Temperature=0 显式覆盖客户端默认值；JSON 根据字段是否存在自动维护。
+	// TemperatureSet makes Temperature=0 explicitly override the client default;
+	// JSON maintains it automatically based on whether the field is present.
 	TemperatureSet bool      `json:"-"`
-	Messages       []Message `json:"messages"`             // 消息列表
-	Temperature    float64   `json:"temperature,omitzero"` // 温度参数 (0.0-2.0)
-	MaxTokens      int       `json:"max_tokens,omitzero"`  // 最大 token 数
-	Model          string    `json:"model,omitempty"`      // 模型名称
-	Stop           []string  `json:"stop,omitempty"`       // 停止序列
-	TopP           float64   `json:"top_p,omitzero"`       // Top-p 采样
+	Messages       []Message `json:"messages"`             // message list
+	Temperature    float64   `json:"temperature,omitzero"` // temperature (0.0-2.0)
+	MaxTokens      int       `json:"max_tokens,omitzero"`  // maximum tokens
+	Model          string    `json:"model,omitempty"`      // model name
+	Stop           []string  `json:"stop,omitempty"`       // stop sequences
+	TopP           float64   `json:"top_p,omitzero"`       // top-p sampling
 }
 
-// CompletionResponse 定义补全响应
+// CompletionResponse defines a completion response.
 type CompletionResponse struct {
 	ResponseModel string `json:"response_model,omitempty"`
-	Content       string `json:"content"` // 生成的内容
-	Model         string `json:"model"`   // 使用的模型
+	Content       string `json:"content"` // generated content
+	Model         string `json:"model"`   // model used
 
-	TokensUsed   int                    `json:"tokens_used,omitzero"`    // 使用的 token 数
-	FinishReason string                 `json:"finish_reason,omitempty"` // 结束原因
-	Provider     string                 `json:"provider,omitempty"`      // 提供商
-	Usage        *interfaces.TokenUsage `json:"usage,omitzero"`          // 详细的 Token 使用统计
+	TokensUsed   int                    `json:"tokens_used,omitzero"`    // tokens used
+	FinishReason string                 `json:"finish_reason,omitempty"` // finish reason
+	Provider     string                 `json:"provider,omitempty"`      // provider
+	Usage        *interfaces.TokenUsage `json:"usage,omitzero"`          // detailed token usage
 }
 
-// ResponseFormat 定义响应格式类型
+// ResponseFormat defines the response format type.
 type ResponseFormat struct {
-	Type string `json:"type"` // "text" 或 "json_object"
+	Type string `json:"type"` // "text" or "json_object"
 }
 
-// 预定义的响应格式常量
+// Predefined response format constants.
 var (
-	// ResponseFormatText 普通文本格式
+	// ResponseFormatText is the plain text format.
 	ResponseFormatText = &ResponseFormat{Type: "text"}
-	// ResponseFormatJSON JSON 对象格式
+	// ResponseFormatJSON is the JSON object format.
 	ResponseFormatJSON = &ResponseFormat{Type: "json_object"}
 )
 
-// Config 定义 LLM 配置
+// LLMOptions defines the LLM configuration.
 type LLMOptions struct {
 	Reasoning *usage.ReasoningConfig `json:"reasoning,omitzero"`
-	// TemperatureSet 区分显式零与零值配置；WithTemperature 和 JSON 解码自动维护。
+	// TemperatureSet distinguishes an explicit zero from an unset value;
+	// WithTemperature and JSON decoding maintain it automatically.
 	TemperatureSet bool `json:"-"`
-	// 基础配置
-	Provider       shared.Provider `json:"provider"`                  // 提供商
-	APIKey         string          `json:"api_key"`                   // API 密钥
-	BaseURL        string          `json:"base_url,omitempty"`        // 自定义 API 端点
-	Model          string          `json:"model"`                     // 默认模型
+	// Basic settings.
+	Provider       shared.Provider `json:"provider"`                  // provider
+	APIKey         string          `json:"api_key"`                   // API key
+	BaseURL        string          `json:"base_url,omitempty"`        // custom API endpoint
+	Model          string          `json:"model"`                     // default model
 	EmbeddingModel string          `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
 
-	// 生成参数
-	MaxTokens      int             `json:"max_tokens"`               // 默认最大 token 数
-	Temperature    float64         `json:"temperature"`              // 默认温度 (0.0-2.0)
-	TopP           float64         `json:"top_p,omitzero"`           // Top-P 采样参数 (0.0-1.0)
-	ResponseFormat *ResponseFormat `json:"response_format,omitzero"` // 响应格式 (json_object 或 text)
+	// Generation parameters.
+	MaxTokens      int             `json:"max_tokens"`               // default maximum tokens
+	Temperature    float64         `json:"temperature"`              // default temperature (0.0-2.0)
+	TopP           float64         `json:"top_p,omitzero"`           // top-p sampling (0.0-1.0)
+	ResponseFormat *ResponseFormat `json:"response_format,omitzero"` // response format (json_object or text)
 
-	// 网络配置
-	Timeout int `json:"timeout"` // 请求超时（秒）
-	// StreamIdleTimeout 是流式响应两次收到数据之间的最长间隔，StreamTimeout 是一次流式请求的总时长上限；
-	// 超过时中断并报告可重试的超时错误。0 表示不限制。目前作用于 OpenAI 兼容的工具流（含 DeepSeek）。
+	// Network settings.
+	Timeout int `json:"timeout"` // request timeout in seconds
+	// StreamIdleTimeout is the maximum gap between two data receipts in a streaming
+	// response, and StreamTimeout is the upper bound on the total duration of one
+	// streaming request; when exceeded, the stream is aborted with a retryable
+	// timeout error. 0 means no limit. They currently apply to OpenAI-compatible
+	// tool streams (including DeepSeek).
 	StreamIdleTimeout time.Duration `json:"stream_idle_timeout,omitzero"`
 	StreamTimeout     time.Duration `json:"stream_timeout,omitzero"`
 
-	// 其他配置
-	SystemPrompt  string            `json:"system_prompt,omitempty"`  // 默认系统提示
-	CustomHeaders map[string]string `json:"custom_headers,omitempty"` // 自定义 HTTP 头
+	// Other settings.
+	SystemPrompt  string            `json:"system_prompt,omitempty"`  // default system prompt
+	CustomHeaders map[string]string `json:"custom_headers,omitempty"` // custom HTTP headers
 }
 
-// DefaultConfig 返回默认配置
+// DefaultLLMOptions returns the default configuration.
 func DefaultLLMOptions() *LLMOptions {
 	return &LLMOptions{
 		Provider:    shared.ProviderOpenAI,
@@ -116,7 +124,7 @@ func DefaultLLMOptions() *LLMOptions {
 	}
 }
 
-// NewMessage 创建新消息
+// NewMessage creates a new message.
 func NewMessage(role, content string) Message {
 	return Message{
 		Role:    role,
@@ -124,17 +132,17 @@ func NewMessage(role, content string) Message {
 	}
 }
 
-// SystemMessage 创建系统消息
+// SystemMessage creates a system message.
 func SystemMessage(content string) Message {
 	return NewMessage(shared.RoleSystem, content)
 }
 
-// UserMessage 创建用户消息
+// UserMessage creates a user message.
 func UserMessage(content string) Message {
 	return NewMessage(shared.RoleUser, content)
 }
 
-// AssistantMessage 创建助手消息
+// AssistantMessage creates an assistant message.
 func AssistantMessage(content string) Message {
 	return NewMessage(shared.RoleAssistant, content)
 }
