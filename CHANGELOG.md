@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 
+- `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
+- `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
+- `llm/providers`：新增 MiniMax 预设 `NewMiniMaxWithOptions`（`constants.ProviderMiniMax`，环境变量 `MINIMAX_API_KEY`/`MINIMAX_BASE_URL`/`MINIMAX_MODEL`，默认模型 `minimax-m2.7`），走 OpenAI 兼容协议，支持视觉与原生工具流。推理强度为 `none` 时，M3 系列改发 `thinking: {"type":"disabled"}`，M2.x 不接受该开关，`none` 被忽略（两者都不再发送 `reasoning_effort`）。
+- `llm`：新增批量 embedding：`BatchEmbeddingClient.EmbedBatch(ctx, texts)` 一次请求返回按输入顺序排列的向量，`AsBatchEmbedder(client)` 在客户端无 embedding 能力或未实现时返回 nil；OpenAI 兼容族与 Gemini 已实现，`Embed` 改为经 `EmbedBatch` 处理单条。空列表、空文本、返回数量或索引不符均返回错误。新增 `WithEmbeddingDimensions(n)`（OpenAI 兼容族与 Gemini 的输出维度，0 不发送，负数在构造时报错），`ConfigToOptions` 同步透传 `EmbeddingDimensions`。
 - API 稳定性政策：`scripts/stable-packages.txt` 列出承诺兼容的稳定包（builder、core 执行子包、workflow、llm、tools 治理子包、interfaces、errors、execution、mcp/remote），其余为实验性。稳定包的破坏性变更须先弃用并至少保留一个次版本；`scripts/check_api_compat.sh` 用 apidiff 与最近 tag 比较，PR 流水线中稳定包出现不兼容变更即失败，`breaking-change` 标签可放行。见 [API 稳定性政策](docs/API_STABILITY_CN.md)。
 - 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
 - `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
