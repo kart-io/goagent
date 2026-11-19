@@ -102,11 +102,13 @@ func TestDiagnosticParallelInterruptDoesNotDecodeBusinessState(t *testing.T) {
 	for _, name := range []string{"a", "b"} {
 		branches = append(branches, workflow.Branch[manifestPanicState]{Name: name, Run: func(context.Context, manifestPanicState) (manifestPanicState, error) { panic("不得执行分支") }})
 	}
-	require.NoError(t, g.AddParallel("fork", workflow.ParallelConfig[manifestPanicState]{Branches: branches,
-		Clone: func(manifestPanicState) manifestPanicState { panic("不得复制业务状态") },
+	require.NoError(t, g.AddParallel("fork", workflow.ParallelConfig[manifestPanicState]{
+		Branches: branches,
+		Clone:    func(manifestPanicState) manifestPanicState { panic("不得复制业务状态") },
 		Merge: func(context.Context, manifestPanicState, []manifestPanicState) (manifestPanicState, error) {
 			panic("不得合并")
-		}}))
+		},
+	}))
 	require.NoError(t, g.AddEdge(constants.WorkflowStart, "fork"))
 	require.NoError(t, g.AddEdge("fork", constants.WorkflowEnd))
 	reader, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: graphDiagnosticReadOnly{store}, Version: "par-v1"})

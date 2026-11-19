@@ -164,7 +164,7 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 			chunk := &StreamChunk{
 				Content:   accumulated,
 				Delta:     delta,
-				Role:      "assistant",
+				Role:      shared2.RoleAssistant,
 				Index:     i,
 				Timestamp: time.Now(),
 				Done:      false,
@@ -214,7 +214,7 @@ func (m *MockStreamClient) CompleteStream(ctx context.Context, req *CompletionRe
 		finalChunk := &StreamChunk{
 			Content:      accumulated,
 			Delta:        "",
-			Role:         "assistant",
+			Role:         shared2.RoleAssistant,
 			FinishReason: "stop",
 			Usage: &Usage{
 				PromptTokens:     10,

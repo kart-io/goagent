@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // 固定错误应在保持身份匹配的同时，向统一分类入口提供错误码。
@@ -64,6 +65,7 @@ func (projectedBusinessError) As(target any) bool {
 	}
 	return false
 }
+
 func TestErrorCodeSupportsCustomAsProjection(t *testing.T) {
 	projected := projectedBusinessError{}
 	require.True(t, agentErrors.IsAgentError(projected))

@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	loggercore "github.com/kart-io/logger/core"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/logging"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/snapshot"
@@ -26,7 +26,13 @@ type CachingConfig struct {
 	Cache   cache.Cache                                 `json:"-"`
 	TTL     time.Duration                               `json:"ttl"`
 	KeyFunc func(string, map[string]interface{}) string `json:"-"`
-	Logger  loggercore.Logger                           `json:"-"`
+	// Logger is a kart-io/logger logger.
+	//
+	// Deprecated: use ContextLogger; Logger is used only when ContextLogger is nil.
+	Logger loggercore.Logger `json:"-"`
+	// ContextLogger receives cache hits, misses and write failures; nil
+	// disables logging.
+	ContextLogger logging.Logger `json:"-"`
 }
 
 // CachingOption is a caching middleware option.
@@ -53,7 +59,17 @@ func WithCacheKeyFunc(f func(string, map[string]interface{}) string) CachingOpti
 	}
 }
 
-// WithCacheLogger sets the logger.
+// WithCacheContextLogger sets the logger, typically a *slog.Logger or a
+// *slogx.Logger.
+func WithCacheContextLogger(logger logging.Logger) CachingOption {
+	return func(cfg *CachingConfig) {
+		cfg.ContextLogger = logger
+	}
+}
+
+// WithCacheLogger sets a kart-io/logger logger.
+//
+// Deprecated: use WithCacheContextLogger.
 func WithCacheLogger(logger loggercore.Logger) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Logger = logger
@@ -127,8 +143,10 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 缓存命中
 			m.stats.Hits.Add(1)
 
-			if m.config.Logger != nil {
-				m.config.Logger.Debug("工具缓存命中",
+			if l := m.log(); l != nil {
+				l.DebugContext(
+					ctx,
+					"工具缓存命中",
 					"tool", tool.Name(),
 					"cacheKey", cacheKey,
 					"hits", m.stats.Hits.Load(),
@@ -145,8 +163,10 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 
 		// 缓存未命中
 		m.stats.Misses.Add(1)
-		if m.config.Logger != nil {
-			m.config.Logger.Debug("工具缓存未命中",
+		if l := m.log(); l != nil {
+			l.DebugContext(
+				ctx,
+				"工具缓存未命中",
 				"tool", tool.Name(),
 				"cacheKey", cacheKey,
 			)
@@ -177,8 +197,10 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 存储到缓存
 			stored := false
 			if err := m.config.Cache.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
-				if m.config.Logger != nil {
-					m.config.Logger.Warn("缓存设置失败",
+				if l := m.log(); l != nil {
+					l.WarnContext(
+						ctx,
+						"缓存设置失败",
 						"tool", tool.Name(),
 						"error", err,
 					)

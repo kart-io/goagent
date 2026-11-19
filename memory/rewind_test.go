@@ -131,8 +131,10 @@ func TestRewoundCutTurnAfterDone(t *testing.T) {
 	require.Empty(t, f.facts(), "切开的轮次整轮回退")
 	patch := f.job(cutJobKey("s", from, seqs[0]))
 	require.Equal(t, JobPending, patch.Status)
-	require.Equal(t, Job{Key: patch.Key, Namespace: []string{"u"}, Session: "s", From: from, To: seqs[0], Scope: "0", TurnSeq: s.Seq,
-		Status: JobPending, CreatedAt: patch.CreatedAt}, patch)
+	require.Equal(t, Job{
+		Key: patch.Key, Namespace: []string{"u"}, Session: "s", From: from, To: seqs[0], Scope: "0", TurnSeq: s.Seq,
+		Status: JobPending, CreatedAt: patch.CreatedAt,
+	}, patch)
 	require.Len(t, s.Markers, 1)
 
 	f.process()
@@ -217,10 +219,14 @@ func TestEnqueueAfterRewind(t *testing.T) {
 		// want 是登记后应存在的任务键与状态。
 		want func(from int64, seqs []int64) (string, JobStatus)
 	}{
-		{"切开截断", func(_ int64, seqs []int64) int64 { return seqs[0] },
-			func(from int64, seqs []int64) (string, JobStatus) { return cutJobKey("s", from, seqs[0]), JobPending }},
-		{"整轮遮蔽", func(from int64, _ []int64) int64 { return from - 1 },
-			func(int64, []int64) (string, JobStatus) { return "s/1", JobDropped }},
+		{
+			"切开截断", func(_ int64, seqs []int64) int64 { return seqs[0] },
+			func(from int64, seqs []int64) (string, JobStatus) { return cutJobKey("s", from, seqs[0]), JobPending },
+		},
+		{
+			"整轮遮蔽", func(from int64, _ []int64) int64 { return from - 1 },
+			func(int64, []int64) (string, JobStatus) { return "s/1", JobDropped },
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

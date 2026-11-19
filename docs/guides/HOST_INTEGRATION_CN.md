@@ -56,3 +56,23 @@ go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,m
 ## 受治理工具流
 
 需要显式授权和有限根预算、准入与排队时，使用 `execution.NewGovernedBuilder`，并以同一个Scope.Bind执行；工具通过WithDispatcher统一提供，禁止混入WithTools。它返回常规Builder和静态治理报告，不建立新运行引擎或接管资源。见[完整指南](EXECUTION_ACCEPTANCE.md#标准治理装配)与[离线示例](../../examples/execution-governed/main.go)。
+
+## 日志
+
+goagent 通过 `logging.Logger`（`core/logging`）写日志，方法与 `*slog.Logger` 的带 ctx 方法一致。`*slog.Logger` 以及内嵌它的日志器（如 [kart-io/slogx](https://github.com/kart-io/slogx) 的 `*slogx.Logger`）都可以直接传入。库本身不依赖 slogx，由宿主在入口处初始化：
+
+```go
+logger, cleanup, err := slogx.Init(os.Stdout, slogx.Config{ /* 级别、格式、OTLP 地址 */ })
+if err != nil {
+	return err
+}
+defer cleanup()
+
+agent, err := b.WithLogger(logger).BuildContext(runCtx)
+```
+
+建议使用 slogx v0.2.2 及以上：v0.2.0 固定的 OpenTelemetry 日志 SDK 与 goagent 无法一起编译，v0.2.1 仍会给运行事件的 ERROR 记录附加 goagent 内部调用栈。
+
+- `WithLogger` 把一次执行的每个 observe 事件（Agent、模型调用、重试、工具调用、缓存、用量）写成一条结构化日志，`execution.Scope` 已绑定的观察者照常收到事件。日志只含身份、耗时和错误类别，不含输入、输出和提供方错误原文。执行失败记为 Error，取消和重试记为 Warn，生命周期结束记为 Info，开始、用量和缓存命中记为 Debug。嵌套 Agent 由最外层带 Logger 的 Agent 记录整次执行。
+- 没拿到日志器的代码写入 `logging.Default()`，它每次调用时读取 `slog.Default()`；`slogx.Init` 会设置它，因此 Builder 的告警，以及 `core/middleware.NewLoggingMiddleware(nil)` 与 `tools/middleware.NewLoggingMiddleware()` 的默认输出都跟随宿主配置。
+- Builder 之外，用 `observe.NewLogObserver(logger)` 配合 `observe.AddObserver(ctx, ...)` 以同样方式记录工作流等其他事件来源。工具中间件使用 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`；接收 `kart-io/logger` 日志器的旧选项已弃用。

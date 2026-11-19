@@ -254,6 +254,7 @@ func (s *Service) Describe(ctx context.Context, a mg.Actor, t mg.Task) (TaskView
 		q.Cursor = page.NextCursor
 	}
 }
+
 func View(t mg.Task) TaskView {
 	v := TaskView{ID: t.ID, SessionID: t.SessionID, AgentID: t.AgentID, Revision: t.Revision, State: t.State, Input: t.Input, Result: t.Result, ErrorKind: t.ErrorKind}
 	for _, w := range t.Waits {

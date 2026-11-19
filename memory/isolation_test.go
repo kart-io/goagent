@@ -16,20 +16,26 @@ import (
 // 期间每次读取都留存 state 与它的哈希，结束后逐个比对；-race 下同时检查没有对共享 state 的写。
 // 召回结果被调用方修改，也不得影响 state。
 func TestReturnedStatesAreImmutable(t *testing.T) {
-	m := newMemory(t, Config{Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v1", Graph: true, Communities: true,
+	m := newMemory(t, Config{
+		Index: NewMemoryIndex(), Embedder: bigramEmbedder{}, EmbedModel: "v1", Graph: true, Communities: true,
 		Model:       &scriptedModel{reply: func(string, string) (string, error) { return `{"name":"主题","summary":"摘要"}`, nil }},
-		TrackAccess: true, Retention: Retention{InvalidRetention: time.Nanosecond, MaxRecords: 12}})
+		TrackAccess: true, Retention: Retention{InvalidRetention: time.Nanosecond, MaxRecords: 12},
+	})
 	ctx := WithNamespace(context.Background(), testNS...)
 	g := graphOf(m)
 	for i := range 16 {
-		_, err := m.Remember(ctx, Record{ID: fmt.Sprintf("r%02d", i), Content: fmt.Sprintf("用户第 %d 次提到咖啡与深圳", i),
-			Keywords: []string{"咖啡"}, Entities: []string{"用户"}, Importance: 0.5, Sources: []Source{{Session: "s", From: int64(i)}}})
+		_, err := m.Remember(ctx, Record{
+			ID: fmt.Sprintf("r%02d", i), Content: fmt.Sprintf("用户第 %d 次提到咖啡与深圳", i),
+			Keywords: []string{"咖啡"}, Entities: []string{"用户"}, Importance: 0.5, Sources: []Source{{Session: "s", From: int64(i)}},
+		})
 		require.NoError(t, err)
 		require.NoError(t, g.PutEntity(ctx, Entity{ID: fmt.Sprintf("e%02d", i), Namespace: testNS, Name: fmt.Sprintf("实体%d", i), Type: "x", Aliases: []string{"别名"}}))
 	}
 	for i := range 15 {
-		require.NoError(t, g.PutEdge(ctx, Edge{ID: fmt.Sprintf("d%02d", i), Namespace: testNS, Subject: fmt.Sprintf("e%02d", i), Predicate: "关联",
-			Object: fmt.Sprintf("e%02d", i+1), Fact: "关系", Sources: []Source{{Session: "s", From: int64(i)}}}))
+		require.NoError(t, g.PutEdge(ctx, Edge{
+			ID: fmt.Sprintf("d%02d", i), Namespace: testNS, Subject: fmt.Sprintf("e%02d", i), Predicate: "关联",
+			Object: fmt.Sprintf("e%02d", i+1), Fact: "关系", Sources: []Source{{Session: "s", From: int64(i)}},
+		}))
 	}
 
 	var mu sync.Mutex

@@ -14,10 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/panictest"
-	"github.com/stretchr/testify/require"
 )
 
 // 子进程角色：put 等父进程放行后依次写入 RUNS 个运行、每个运行 childRefs 条证据并逐条报告结果；
@@ -57,7 +58,7 @@ func (h holdScope) Save(ctx context.Context, id string, snapshot *durable.Snapsh
 	if err := h.Store.Save(ctx, id, snapshot); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(h.dir, ".checkpoint-partial"), []byte("{\"ha"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(h.dir, ".checkpoint-partial"), []byte("{\"ha"), 0o600); err != nil {
 		return err
 	}
 	fmt.Println(childLine + "ready")

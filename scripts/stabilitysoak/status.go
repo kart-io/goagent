@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kart-io/goagent/codec/json"
 	"io"
 	"net"
 	"net/http"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // execute 的可选状态接口仅监听本机，不持久化运行报告。完成后保持结果，供下一轮检查。

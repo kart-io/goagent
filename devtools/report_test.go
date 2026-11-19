@@ -2,10 +2,12 @@ package devtools
 
 import (
 	"bytes"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestOfflineReportEscapesContent(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	"github.com/kart-io/goagent/core/internal/txnlog"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/internal/txnlog"
 )
 
 const saveAllCrashExit = 88

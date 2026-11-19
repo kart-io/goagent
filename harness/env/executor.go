@@ -83,10 +83,12 @@ func (e DockerExecutor) Run(ctx context.Context, cmd Command) (Result, error) {
 	if e.ReadOnly {
 		mount += ":ro"
 	}
-	args := []string{"--rm", "--name", name, "--network", network,
+	args := []string{
+		"--rm", "--name", name, "--network", network,
 		"-v", mount, "-w", path.Join("/workspace", cmd.Dir),
 		// 以宿主机 uid 运行时镜像里没有对应用户，HOME 默认为不可写的 /，工具链缓存会写失败。
-		"-e", "HOME=/tmp"}
+		"-e", "HOME=/tmp",
+	}
 	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {
 		args = append(args, "--user", strconv.Itoa(uid)+":"+strconv.Itoa(gid))
 	}

@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOwnedRunnableCleanup(t *testing.T) {
@@ -55,6 +56,7 @@ func TestOwnedRunnableCleanup(t *testing.T) {
 		})
 	}
 }
+
 func TestModelToolRequiresRootBudget(t *testing.T) {
 	var created atomic.Int64
 	cfg := runnableConfig()
@@ -80,6 +82,7 @@ func TestModelToolRequiresRootBudget(t *testing.T) {
 	require.ErrorContains(t, err, "durable")
 	require.Equal(t, int64(1), created.Load())
 }
+
 func TestNestedDispatcherScope(t *testing.T) {
 	var dispatcher *Dispatcher
 	reg := NewRegistry()
@@ -92,6 +95,7 @@ func TestNestedDispatcherScope(t *testing.T) {
 	_, err = dispatcher.Invoke(context.Background(), ToolRequest{Name: "recursive", Input: &interfaces.ToolInput{Args: map[string]any{}}})
 	require.ErrorIs(t, err, agentErrors.ErrDispatcherReentry)
 }
+
 func TestOwnedAgentIsolation(t *testing.T) {
 	calls := 0
 	closed := 0
@@ -111,6 +115,7 @@ func TestOwnedAgentIsolation(t *testing.T) {
 	}
 	require.Equal(t, 2, closed)
 }
+
 func TestNestedDepthBoundary(t *testing.T) {
 	var tool interfaces.Tool
 	cfg := runnableConfig()

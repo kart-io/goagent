@@ -111,6 +111,9 @@ func read(t *testing.T, s session.Store, id string, after int64) []session.Event
 	t.Helper()
 	events, err := s.Read(context.Background(), id, after)
 	require.NoError(t, err)
+	if after == 0 {
+		require.NoError(t, session.Validate(events), "读回的完整日志须满足结构不变式")
+	}
 	return events
 }
 
@@ -319,7 +322,8 @@ func testAppendAll(t *testing.T, a, b session.Store) {
 	require.Empty(t, lasts)
 	_, err = a.Append(ctx, "s1", 0, user(t, "existing"))
 	require.NoError(t, err)
-	lasts, err = a.AppendAll(ctx,
+	lasts, err = a.AppendAll(
+		ctx,
 		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "two-a"), user(t, "two-b")}},
 		session.AppendBatch{ID: "s1", Expected: 1, Events: []session.Event{user(t, "one")}},
 		session.AppendBatch{ID: "s3"},
@@ -340,7 +344,8 @@ func testAppendAllConflict(t *testing.T, a, b session.Store) {
 	ctx := context.Background()
 	_, err := a.Append(ctx, "s1", 0, user(t, "existing"))
 	require.NoError(t, err)
-	_, err = a.AppendAll(ctx,
+	_, err = a.AppendAll(
+		ctx,
 		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
 		session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "stale")}},
 	)
@@ -349,7 +354,8 @@ func testAppendAllConflict(t *testing.T, a, b session.Store) {
 	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound)
 	require.Len(t, read(t, b, "s1", 0), 1)
 	// 只比较的空批次同样参与判定。
-	_, err = a.AppendAll(ctx,
+	_, err = a.AppendAll(
+		ctx,
 		session.AppendBatch{ID: "s2", Events: []session.Event{user(t, "new")}},
 		session.AppendBatch{ID: "s1", Expected: 9},
 	)
@@ -360,7 +366,8 @@ func testAppendAllConflict(t *testing.T, a, b session.Store) {
 
 func testAppendAllRejected(t *testing.T, a, b session.Store) {
 	ctx := context.Background()
-	_, err := a.AppendAll(ctx,
+	_, err := a.AppendAll(
+		ctx,
 		session.AppendBatch{ID: "s1", Events: []session.Event{user(t, "x")}},
 		session.AppendBatch{ID: "s1", Expected: 1, Events: []session.Event{user(t, "y")}},
 	)

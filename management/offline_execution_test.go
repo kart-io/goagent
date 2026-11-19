@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 // 只轮询持久状态；断言与结果读取留在测试协程，避免异步回调调用 FailNow。

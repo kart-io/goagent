@@ -9,15 +9,16 @@ import (
 	"time"
 
 	api "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/internal/managementtest"
 	"github.com/kart-io/goagent/management/mcpserver"
 	"github.com/kart-io/goagent/management/protocol"
 	mcpremote "github.com/kart-io/goagent/mcp/remote"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/stretchr/testify/require"
 )
 
 func TestA2APreservesNumericIdentityAndRejectsUnsupportedMedia(t *testing.T) {

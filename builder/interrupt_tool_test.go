@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func confirmRefundTool(t *testing.T, calls *int) interfaces.Tool {
@@ -110,7 +110,8 @@ func TestParallelToolCallsOneInterruptsOthersComplete(t *testing.T) {
 	require.NoError(t, err)
 	model := nativeModel(
 		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{
-			nativeCall("c1", "confirm_refund", `{}`), nativeCall("c2", "lookup", `{}`)}, Usage: &llm.Usage{TotalTokens: 3}}},
+			nativeCall("c1", "confirm_refund", `{}`), nativeCall("c2", "lookup", `{}`),
+		}, Usage: &llm.Usage{TotalTokens: 3}}},
 		answerTurn("完成", 4),
 	)
 	agent, err := NewSimpleBuilder(model).WithDurableScope("support").WithParallelToolCalls(2).

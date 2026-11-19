@@ -85,14 +85,18 @@ func benchState(n int, gen textGen) func(*tx) error {
 			origin := func() []Origin {
 				return []Origin{{Record: RecordRef{ID: fmt.Sprintf("rec-%06d", rng.IntN(n))}, Source: Source{Session: uuid.NewString(), From: rng.Int64N(1e5)}}}
 			}
-			t.Entities.Put(ents[i], Entity{ID: ents[i], Name: names[i], Type: gen(rng, 2), Aliases: []string{alias}, CreatedAt: at(), Live: true,
-				Names: []EntityName{{Name: names[i], Origins: origin(), Live: true}, {Name: alias, Origins: origin(), Live: true}}})
+			t.Entities.Put(ents[i], Entity{
+				ID: ents[i], Name: names[i], Type: gen(rng, 2), Aliases: []string{alias}, CreatedAt: at(), Live: true,
+				Names: []EntityName{{Name: names[i], Origins: origin(), Live: true}, {Name: alias, Origins: origin(), Live: true}},
+			})
 		}
 		for i := range n {
-			r := Record{ID: fmt.Sprintf("rec-%06d", i), Kind: KindFact, Content: gen(rng, 40+rng.IntN(120)),
+			r := Record{
+				ID: fmt.Sprintf("rec-%06d", i), Kind: KindFact, Content: gen(rng, 40+rng.IntN(120)),
 				Keywords: []string{gen(rng, 2), gen(rng, 3), gen(rng, 2), gen(rng, 4)}, Entities: []string{names[rng.IntN(n)], names[rng.IntN(n)]},
 				Importance: rng.Float64(), ValidFrom: at(), CreatedAt: at(),
-				Sources: []Source{{Session: uuid.NewString(), From: rng.Int64N(1e5), To: rng.Int64N(1e5), Job: uuid.NewString()}}}
+				Sources: []Source{{Session: uuid.NewString(), From: rng.Int64N(1e5), To: rng.Int64N(1e5), Job: uuid.NewString()}},
+			}
 			if i%10 < 3 {
 				r.InvalidAt, r.InvalidReason = at(), ReasonExpired
 			}
@@ -100,8 +104,10 @@ func benchState(n int, gen textGen) func(*tx) error {
 		}
 		for range 2 * n {
 			id := uuid.NewString()
-			e := Edge{ID: id, Subject: ents[rng.IntN(n)], Predicate: gen(rng, 2), Object: ents[rng.IntN(n)],
-				Fact: gen(rng, 15+rng.IntN(30)), ValidFrom: at(), CreatedAt: at()}
+			e := Edge{
+				ID: id, Subject: ents[rng.IntN(n)], Predicate: gen(rng, 2), Object: ents[rng.IntN(n)],
+				Fact: gen(rng, 15+rng.IntN(30)), ValidFrom: at(), CreatedAt: at(),
+			}
 			src := Source{Session: uuid.NewString(), From: rng.Int64N(1e5)}
 			e.Sources = []Source{src}
 			e.Derivations = []Derivation{{Origin: Origin{Record: RecordRef{ID: fmt.Sprintf("rec-%06d", rng.IntN(n))}, Source: src}, Fact: e.Fact, At: e.ValidFrom}}
@@ -109,8 +115,10 @@ func benchState(n int, gen textGen) func(*tx) error {
 		}
 		for range n / 20 {
 			id := uuid.NewString()
-			t.Communities.Put(id, Community{ID: id, Members: []string{ents[rng.IntN(n)], ents[rng.IntN(n)], ents[rng.IntN(n)]},
-				Name: gen(rng, 6), Summary: gen(rng, 200), UpdatedAt: now})
+			t.Communities.Put(id, Community{
+				ID: id, Members: []string{ents[rng.IntN(n)], ents[rng.IntN(n)], ents[rng.IntN(n)]},
+				Name: gen(rng, 6), Summary: gen(rng, 200), UpdatedAt: now,
+			})
 		}
 		for i := range 3000 {
 			t.DoneJobs.Put(fmt.Sprintf("%s/%d", uuid.NewString(), i), now)
@@ -423,8 +431,10 @@ func TestStateStress10k(t *testing.T) {
 		}
 		return nil
 	}
-	ms2 := []*Memory{durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true}),
-		durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true})}
+	ms2 := []*Memory{
+		durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true}),
+		durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, StateCacheBytes: capacity, Graph: true}),
+	}
 
 	var (
 		mu      sync.Mutex

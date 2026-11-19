@@ -37,7 +37,7 @@ func newTestMemory(t *testing.T, ctx context.Context, contents ...string) (*memo
 
 func recallIn(msgs []llm.Message) (llm.Message, bool) {
 	for _, msg := range msgs {
-		if msg.Role == "user" && strings.HasPrefix(msg.Content, memory.RecallPrefix) {
+		if msg.Role == constants.RoleUser && strings.HasPrefix(msg.Content, memory.RecallPrefix) {
 			return msg, true
 		}
 	}
@@ -62,7 +62,7 @@ func TestLongTermMemoryRecallsAndEnqueues(t *testing.T) {
 		msgs := model.request(i).Messages
 		recall := msgs[len(msgs)-1]
 		require.True(t, strings.HasPrefix(recall.Content, memory.RecallPrefix), "第 %d 步的召回块在请求末尾（没有运行上下文）", i)
-		require.Equal(t, "user", recall.Role, "召回内容不作为 system 指令")
+		require.Equal(t, constants.RoleUser, recall.Role, "召回内容不作为 system 指令")
 		require.Contains(t, recall.Content, "美式咖啡")
 	}
 	require.Equal(t, "推荐一杯咖啡", model.request(0).Messages[len(model.request(0).Messages)-2].Content, "召回块在本轮输入之后")
@@ -245,7 +245,7 @@ func TestLongTermMemoryDurableResumeDropsForgotten(t *testing.T) {
 // 与 TestLongTermMemoryDurableResumeDropsForgotten 相同的场景，只多一个钩子。
 func TestLongTermMemoryRequestHookChangingRecallBreaksResume(t *testing.T) {
 	isRecall := func(msg llm.Message) bool {
-		return msg.Role == "user" && strings.HasPrefix(msg.Content, memory.RecallPrefix)
+		return msg.Role == constants.RoleUser && strings.HasPrefix(msg.Content, memory.RecallPrefix)
 	}
 	for _, c := range []struct {
 		name string

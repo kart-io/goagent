@@ -18,7 +18,7 @@ import (
 func TestCatalogRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
 	base := t.TempDir()
 	dir := writeSkill(t, base, "demo", "demo", "body")
-	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "fifo"), 0600))
+	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "fifo"), 0o600))
 	c := discover(t, openRoot(t, base))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -36,7 +36,7 @@ func TestCatalogRejectsFIFOWithoutWaitingForWriter(t *testing.T) {
 		t.Fatal("reference read waited for a FIFO writer")
 	}
 	require.NoError(t, os.Remove(filepath.Join(dir, "SKILL.md")))
-	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "SKILL.md"), 0600))
+	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "SKILL.md"), 0o600))
 	_, err := skills.Discover(context.Background(), openRoot(t, base))
 	require.ErrorContains(t, err, "regular file")
 }
@@ -45,7 +45,7 @@ func TestDiscoveryFailureDoesNotLeakHandles(t *testing.T) {
 	base := t.TempDir()
 	writeSkill(t, base, "a-valid", "valid", "body")
 	broken := writeSkill(t, base, "z-invalid", "valid", "body")
-	require.NoError(t, os.WriteFile(filepath.Join(broken, "SKILL.md"), []byte("invalid"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(broken, "SKILL.md"), []byte("invalid"), 0o600))
 	root := openRoot(t, base)
 	before, err := os.ReadDir("/proc/self/fd")
 	require.NoError(t, err)

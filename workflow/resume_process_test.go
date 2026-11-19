@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 // Stop after human input and approval are durable but before the node executes.
@@ -40,7 +40,7 @@ func TestHumanResumeSurvivesProcessExitAfterAcceptance(t *testing.T) {
 			store = crashOnHumanAcceptance{base}
 		}
 		g := oneNode(t, func(_ context.Context, n int) (int, error) {
-			f, e := os.OpenFile(filepath.Join(dir, "effect"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			f, e := os.OpenFile(filepath.Join(dir, "effect"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 			if e != nil {
 				return 0, e
 			}
@@ -49,7 +49,7 @@ func TestHumanResumeSurvivesProcessExitAfterAcceptance(t *testing.T) {
 		run, err := g.CompileDurable(ctx, workflow.DurableConfig{Store: store, Version: "human-v1", ApprovalNodes: []string{"effect"}},
 			workflow.WithResumeHandler(func(ctx context.Context, id string, snap *workflow.GraphSnapshot[int], input json.RawMessage) (int, error) {
 				// Test instrumentation: fail if the accepted edit is ever reapplied.
-				f, e := os.OpenFile(filepath.Join(dir, "accepted"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				f, e := os.OpenFile(filepath.Join(dir, "accepted"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 				require.NoError(t, e)
 				require.NoError(t, f.Close())
 				return addHumanNumber(ctx, id, snap, input)

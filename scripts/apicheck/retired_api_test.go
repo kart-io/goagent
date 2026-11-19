@@ -89,8 +89,8 @@ func TestRetiredConfigBindingsAcrossFiles(t *testing.T) {
 			root := t.TempDir()
 			for name, source := range tc.files {
 				file := filepath.Join(root, name)
-				require.NoError(t, os.MkdirAll(filepath.Dir(file), 0755))
-				require.NoError(t, os.WriteFile(file, []byte(source), 0644))
+				require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+				require.NoError(t, os.WriteFile(file, []byte(source), 0o644))
 			}
 			count, err := scan(root)
 			require.NoError(t, err)

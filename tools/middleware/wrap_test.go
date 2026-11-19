@@ -205,7 +205,8 @@ func TestWrap_MultipleFunctionalMiddleware(t *testing.T) {
 		middleware.WithBurst(5),
 	)
 
-	wrapped := middleware.Wrap(tool,
+	wrapped := middleware.Wrap(
+		tool,
 		cachingMW,   // 外层
 		rateLimitMW, // 内层
 	)
@@ -289,7 +290,8 @@ func TestWrap_CachingEffectiveness(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
-	wrapped := middleware.Wrap(tool,
+	wrapped := middleware.Wrap(
+		tool,
 		middleware.Caching(
 			middleware.WithTTL(1*time.Second),
 		),
@@ -315,7 +317,8 @@ func TestWrap_RateLimitEffectiveness(t *testing.T) {
 	ctx := context.Background()
 	tool := &mockToolForWrapper{name: "test_tool"}
 
-	wrapped := middleware.Wrap(tool,
+	wrapped := middleware.Wrap(
+		tool,
 		middleware.RateLimit(
 			middleware.WithQPS(10),
 			middleware.WithBurst(3),
@@ -349,7 +352,8 @@ func TestWrap_Concurrent(t *testing.T) {
 	ctx := context.Background()
 
 	tool := &mockToolForWrapper{name: "test_tool"}
-	wrapped := middleware.Wrap(tool,
+	wrapped := middleware.Wrap(
+		tool,
 		middleware.Caching( // LRU cache is thread-safe
 			middleware.WithTTL(1*time.Minute),
 		),
@@ -409,7 +413,8 @@ func TestWrap_MixedTypes(t *testing.T) {
 	cachingMW := middleware.NewCachingMiddleware()
 	rateLimitMW := middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5))
 
-	wrapped := middleware.Wrap(tool,
+	wrapped := middleware.Wrap(
+		tool,
 		cachingMW.Wrap, // 使用 Wrap 方法
 		rateLimitMW,    // 函数式中间件
 	)

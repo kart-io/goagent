@@ -242,36 +242,74 @@ func Active(events []Event) []Event { return activeEvents(events) }
 
 // activeEvents 去掉被 session/rewind 与中止的 turn/end 撤销的事件。
 // 退回恢复到序号 Start-1 时的视图，因此退回到更早的退回之前会让那次退回失效；中止的轮次只删去本轮事件。
+// 视图按序号递增，记为保留序号的闭区间列表；每次撤销最多多出一个区间，检查点只克隆区间而不克隆事件。
 func activeEvents(events []Event) []Event {
 	type checkpoint struct {
-		seq    int64
-		active []Event
+		seq   int64
+		spans []span
 	}
-	var active []Event
+	var spans []span
 	marks := []checkpoint{{}}
-	for i, ev := range events {
+	for _, ev := range events {
 		if !undoes(ev) {
-			active = append(active, ev)
+			spans = appendSpan(spans, span{ev.Seq, ev.Seq})
 			continue
 		}
 		if ev.Type == constants.SessionEventRewind {
-			// 视图在两次撤销之间只追加，取 Start 之前最近的检查点再补上其后的事件即可。
+			// 视图在两次撤销之间只追加，取 Start 之前最近的检查点再补上其后直到 Start-1 的事件即可。
 			j := len(marks) - 1
-			for marks[j].seq >= ev.Surface.Start {
+			for j > 0 && marks[j].seq >= ev.Surface.Start {
 				j--
 			}
-			active = slices.Clone(marks[j].active)
-			for _, e := range events[:i] {
-				if e.Seq > marks[j].seq && e.Seq < ev.Surface.Start {
-					active = append(active, e)
-				}
+			spans = slices.Clone(marks[j].spans)
+			if to := min(ev.Surface.Start, ev.Seq) - 1; to > marks[j].seq {
+				spans = appendSpan(spans, span{marks[j].seq + 1, to})
 			}
 		} else {
-			active = slices.DeleteFunc(active, func(e Event) bool { return ev.Surface.covers(e.Seq) })
+			spans = removeSpan(spans, *ev.Surface)
 		}
-		marks = append(marks, checkpoint{ev.Seq, slices.Clone(active)})
+		marks = append(marks, checkpoint{ev.Seq, slices.Clone(spans)})
+	}
+	active := make([]Event, 0, len(events))
+	k := 0
+	for _, ev := range events {
+		for k < len(spans) && spans[k].to < ev.Seq {
+			k++
+		}
+		if k < len(spans) && spans[k].from <= ev.Seq {
+			active = append(active, ev)
+		}
 	}
 	return active
+}
+
+// span 是视图中保留的序号闭区间。
+type span struct{ from, to int64 }
+
+func appendSpan(spans []span, s span) []span {
+	if n := len(spans); n > 0 && spans[n-1].to+1 >= s.from {
+		spans[n-1].to = max(spans[n-1].to, s.to)
+		return spans
+	}
+	return append(spans, s)
+}
+
+// removeSpan 从区间列表中删去 cut 覆盖的序号，结果是新切片，不修改检查点持有的底层数组。
+func removeSpan(spans []span, cut Surface) []span {
+	out := make([]span, 0, len(spans)+1)
+	for _, s := range spans {
+		if s.to < cut.Start || s.from > cut.End {
+			out = append(out, s)
+			continue
+		}
+		if s.from < cut.Start {
+			out = append(out, span{s.from, cut.Start - 1})
+		}
+		if s.to > cut.End {
+			out = append(out, span{cut.End + 1, s.to})
+		}
+	}
+	return out
 }
 
 // undoes 报告 ev 是否撤销其 Surface 区间内的事件。

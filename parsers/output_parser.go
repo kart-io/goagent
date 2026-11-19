@@ -2,7 +2,6 @@ package parsers
 
 import (
 	"context"
-
 	"fmt"
 	"reflect"
 	"regexp"
@@ -12,7 +11,6 @@ import (
 	"unicode"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 

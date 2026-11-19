@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
@@ -95,6 +96,7 @@ func (a *ConfigurableAgent[S]) executeStream(ctx context.Context, input interfac
 	if err != nil {
 		return nil, err
 	}
+	ctx = a.bindLogger(ctx)
 	ctx, err = a.prepareAgentUsage(ctx)
 	if err != nil {
 		return nil, err
@@ -247,7 +249,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 
 	recordAnswer(request, turn.Content)
 	if slog != nil {
-		final := llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
+		final := llm.Message{Role: constants.RoleAssistant, Content: turn.Content, ReasoningContent: turn.ReasoningContent, ProviderState: turn.ProviderState}
 		if err := slog.end(ctx, append(slices.Clone(messages), final), turn.Content, usage); err != nil {
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}

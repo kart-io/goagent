@@ -2,9 +2,11 @@ package durable
 
 import (
 	"errors"
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestDurableWaitingCodeKeepsDiagnosticCausePrivate(t *testing.T) {

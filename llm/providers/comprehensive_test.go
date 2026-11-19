@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -246,7 +245,6 @@ func TestDeepSeekStreamingProvider_Creation(t *testing.T) {
 // TestDeepSeekStreamingProvider_StreamWithMetadata tests streaming with metadata
 func TestDeepSeekStreamingProvider_StreamWithMetadata(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		streamResponses := []json.RawMessage{
 			json.RawMessage(`{"id":"stream-1","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Token1 "}}]}`),
 			json.RawMessage(`{"id":"stream-2","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Token2"}}]}`),

@@ -21,7 +21,8 @@ const (
 )
 
 func extraction(ctx context.Context, w io.Writer, root string) error {
-	return runSteps(w,
+	return runSteps(
+		w,
 		step{"跨会话召回，召回正文不进会话日志", func() error { return crossSessionRecall(ctx, w, root) }},
 		step{"重复登记幂等，失败后重试同一任务", func() error { return enqueueIdempotent(ctx, w, root) }},
 		step{"新事实取代旧事实，重复事实不写入", func() error { return supersede(ctx, w, root) }},
@@ -254,7 +255,8 @@ func extractionFailures(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	// 任务处理顺序不固定，按请求内容路由；整理请求的标记放在前面，避免被抽取标记抢先匹配。
-	ext := routedClient(12,
+	ext := routedClient(
+		12,
 		route{marker: "新信息：用户养了一只猫", reply: `{"op":"add"}`},
 		route{marker: "新信息：用户住在广州", reply: `{"op":"update","target":"home","content":"用户住在广州"}`, before: concurrentEdit},
 		route{marker: "新信息：用户把猫送给了朋友", reply: `{"op":"invalidate","target":"no-such-record"}`},
@@ -307,7 +309,8 @@ func extractionFailures(ctx context.Context, w io.Writer, root string) error {
 			return err
 		}
 		_, _ = fmt.Fprintf(w, "    %s：%s，Attempts=%d，Stats=%+v，Error=%q\n", c.session, j.Status, j.Attempts, j.Stats, j.Error)
-		checks = append(checks,
+		checks = append(
+			checks,
 			check{c.session + " 状态", j.Status, c.status},
 			check{c.session + " 写入记录", j.Stats.Records, c.records},
 			check{c.session + " 复核不成立而降级的整理决定", j.Stats.Conflicts, c.conflicts},
@@ -321,14 +324,16 @@ func extractionFailures(ctx context.Context, w io.Writer, root string) error {
 	}
 	got := contents(all)
 	slices.Sort(got)
-	return verify(append(checks,
+	return verify(append(
+		checks,
 		check{"有效记录（非法候选丢弃，降级与未知目标都按新增）", got, []string{"用户住在广州", "用户住在杭州", "用户养了一只猫", "用户把猫送给了朋友"}},
 		check{"模型请求数（失败 2 + 非 JSON 4 + 三个任务各抽取与整理 1 次）", ext.Calls(), 12},
 	)...)
 }
 
 func abortedAndToolSkipping(ctx context.Context, w io.Writer, root string) error {
-	ext := routedClient(2,
+	ext := routedClient(
+		2,
 		route{marker: markLesson, reply: `{"lesson":"订票前先确认出发日期，避免请求超时被中止","keywords":["订票"],"importance":0.6}`},
 		route{marker: markExtract, reply: `{"memories":[]}`},
 	)

@@ -322,8 +322,15 @@ func TestRelatedPageRankRanking(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for _, e := range []Entity{{ID: "user", Name: "用户"}, {ID: "acme", Name: "Acme"}, {ID: "sz", Name: "深圳"}, {ID: "zs", Name: "张三"},
-		{ID: "coffee", Name: "咖啡"}, {ID: "tea", Name: "茶"}, {ID: "cat", Name: "猫"}} {
+	for _, e := range []Entity{
+		{ID: "user", Name: "用户"},
+		{ID: "acme", Name: "Acme"},
+		{ID: "sz", Name: "深圳"},
+		{ID: "zs", Name: "张三"},
+		{ID: "coffee", Name: "咖啡"},
+		{ID: "tea", Name: "茶"},
+		{ID: "cat", Name: "猫"},
+	} {
 		e.Namespace, e.Type = ns, "x"
 		require.NoError(t, g.PutEntity(ctx, e))
 	}
@@ -394,8 +401,10 @@ func TestRetrieveReportsSources(t *testing.T) {
 		require.NoError(t, g.PutEntity(ctx, e))
 	}
 	require.NoError(t, g.PutEdge(ctx, Edge{ID: "e", Namespace: ns, Subject: "user", Predicate: "就职于", Object: "acme", Fact: "用户就职于 Acme", Sources: []Source{{Session: "s3", From: 1}}}))
-	_, err := m.Remember(ctx, Record{ID: "r", Content: "用户在 Acme 负责支付", Entities: []string{"Acme"}, Importance: 0.5,
-		Sources: []Source{{Session: "s1", From: 1}, {Session: "s2", From: 1}}})
+	_, err := m.Remember(ctx, Record{
+		ID: "r", Content: "用户在 Acme 负责支付", Entities: []string{"Acme"}, Importance: 0.5,
+		Sources: []Source{{Session: "s1", From: 1}, {Session: "s2", From: 1}},
+	})
 	require.NoError(t, err)
 
 	got, err := m.Retrieve(ctx, "Acme 的工作")

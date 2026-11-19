@@ -2,8 +2,9 @@ package management
 
 import (
 	"context"
-	"github.com/kart-io/goagent/codec/json"
 	"strings"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // Prune 显式回收过期且无未确认依赖的管理记录；会话日志与版本仍由宿主单独保留。

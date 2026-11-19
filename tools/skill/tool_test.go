@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -15,7 +17,6 @@ import (
 	"github.com/kart-io/goagent/skills"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/tools/skill"
-	"github.com/stretchr/testify/require"
 )
 
 func fixture(t *testing.T) (*skills.Catalog, string) {
@@ -185,7 +186,7 @@ func TestReferenceContentAndLimitRejections(t *testing.T) {
 	catalog, dir := fixture(t)
 	tool := skill.New(catalog)
 	raw := []byte{0x89, 'P', 'N', 'G', 0xff, 0x00}
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "example", "image.png"), raw, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "example", "image.png"), raw, 0o600))
 	data, err := catalog.ReadReference(context.Background(), "example", "image.png")
 	require.NoError(t, err)
 	require.Equal(t, raw, data, "raw Catalog reads preserve binary assets")

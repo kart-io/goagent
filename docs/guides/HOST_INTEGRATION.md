@@ -56,3 +56,23 @@ This is a synthetic load on a single machine; file mode only covers budget persi
 ## Governed Tool Flow
 
 When you need explicit authorization plus a bounded root budget, admission, and queuing, use `execution.NewGovernedBuilder` and run it under the same Scope.Bind; tools are supplied uniformly through WithDispatcher and must not be mixed with WithTools. It returns a regular Builder and a static governance report, without creating a new run engine or taking ownership of resources. See the [full guide](EXECUTION_ACCEPTANCE.md#标准治理装配) and the [offline example](../../examples/execution-governed/main.go).
+
+## Logging
+
+goagent writes through `logging.Logger` (`core/logging`), whose methods are the context-aware methods of `*slog.Logger`. Any `*slog.Logger`, or a logger that embeds one such as `*slogx.Logger` from [kart-io/slogx](https://github.com/kart-io/slogx), is passed in directly. The library itself does not depend on slogx; configure it in the host's entry point:
+
+```go
+logger, cleanup, err := slogx.Init(os.Stdout, slogx.Config{ /* level, format, OTLP endpoint */ })
+if err != nil {
+	return err
+}
+defer cleanup()
+
+agent, err := b.WithLogger(logger).BuildContext(runCtx)
+```
+
+Use slogx v0.2.2 or later: v0.2.0 pins an OpenTelemetry log SDK that does not compile alongside goagent, and v0.2.1 still attaches goagent's internal call stack to error records of run events.
+
+- `WithLogger` turns every observe event of a run (agent, model call, retry, tool call, cache, usage) into one structured record, in addition to any observer already bound by `execution.Scope`. Records carry identities, durations and error kinds only, never inputs, outputs or provider error text. Failed executions are Error, cancellations and retries are Warn, finished lifecycles are Info, and starts, usage and cache hits are Debug. In nested Agents the outermost Agent with a Logger records the whole run.
+- Code that receives no logger writes through `logging.Default()`, which reads `slog.Default()` on each call; `slogx.Init` installs it, so the Builder's warnings and the default output of `core/middleware.NewLoggingMiddleware(nil)` and `tools/middleware.NewLoggingMiddleware()` follow the host's configuration.
+- Outside the Builder, `observe.NewLogObserver(logger)` with `observe.AddObserver(ctx, ...)` logs workflows and other producers the same way. Tool middleware takes `WithContextLogger`, `WithCacheContextLogger` and `WithRateLimitContextLogger`; the options taking a `kart-io/logger` logger are deprecated.

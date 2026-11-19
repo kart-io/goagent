@@ -2,9 +2,10 @@ package budget
 
 import (
 	"context"
+	"testing"
+
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-	"testing"
 )
 
 func TestDetailAggregation(t *testing.T) {

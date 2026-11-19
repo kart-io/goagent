@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/goagent/core/logging"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -195,11 +196,14 @@ func (m *CallbackManager) NotifyError(ctx context.Context, err error) error {
 // It writes every event to the log.
 type LoggingCallback struct {
 	*BaseCallback
-	logger  Logger // 日志接口
+	logger  logging.Logger
 	verbose bool
 }
 
-// Logger is the logging interface.
+// Logger is the logging interface used by NewLoggingCallback.
+//
+// Deprecated: use logging.Logger with NewContextLoggingCallback; a
+// *slog.Logger satisfies it directly.
 type Logger interface {
 	Info(msg string, fields ...interface{})
 	Error(msg string, fields ...interface{})
@@ -207,56 +211,82 @@ type Logger interface {
 }
 
 // NewLoggingCallback creates a logging callback.
+//
+// Deprecated: use NewContextLoggingCallback.
 func NewLoggingCallback(logger Logger, verbose bool) *LoggingCallback {
+	return NewContextLoggingCallback(legacyLogger{logger}, verbose)
+}
+
+// NewContextLoggingCallback creates a callback that writes every event to
+// logger, typically a *slog.Logger or a *slogx.Logger; nil writes through
+// logging.Default(). Inputs, outputs and tool arguments are logged as given,
+// so do not use it when they may carry credentials or personal data. verbose
+// also logs run inputs and outputs, prompts and model output at debug level.
+func NewContextLoggingCallback(logger logging.Logger, verbose bool) *LoggingCallback {
 	return &LoggingCallback{
 		BaseCallback: NewBaseCallback(),
-		logger:       logger,
+		logger:       logging.OrDefault(logger),
 		verbose:      verbose,
 	}
 }
 
+// legacyLogger 把已弃用的 Logger 适配为 logging.Logger；旧接口没有 Warn，告警按 Info 记录。
+type legacyLogger struct{ l Logger }
+
+func (a legacyLogger) DebugContext(_ context.Context, msg string, args ...any) {
+	a.l.Debug(msg, args...)
+}
+
+func (a legacyLogger) InfoContext(_ context.Context, msg string, args ...any) { a.l.Info(msg, args...) }
+
+func (a legacyLogger) WarnContext(_ context.Context, msg string, args ...any) { a.l.Info(msg, args...) }
+
+func (a legacyLogger) ErrorContext(_ context.Context, msg string, args ...any) {
+	a.l.Error(msg, args...)
+}
+
 func (l *LoggingCallback) OnStart(ctx context.Context, input interface{}) error {
 	if l.verbose {
-		l.logger.Info("Execution started", "input", input)
+		l.logger.InfoContext(ctx, "Execution started", "input", input)
 	}
 	return nil
 }
 
 func (l *LoggingCallback) OnEnd(ctx context.Context, output interface{}) error {
 	if l.verbose {
-		l.logger.Info("Execution completed", "output", output)
+		l.logger.InfoContext(ctx, "Execution completed", "output", output)
 	}
 	return nil
 }
 
 func (l *LoggingCallback) OnError(ctx context.Context, err error) error {
-	l.logger.Error("Execution error", "error", err)
+	l.logger.ErrorContext(ctx, "Execution error", "error", err)
 	return nil
 }
 
 func (l *LoggingCallback) OnLLMStart(ctx context.Context, prompts []string, model string) error {
-	l.logger.Info("LLM call started", "model", model, "num_prompts", len(prompts))
+	l.logger.InfoContext(ctx, "LLM call started", "model", model, "num_prompts", len(prompts))
 	if l.verbose {
-		l.logger.Debug("LLM prompts", "prompts", prompts)
+		l.logger.DebugContext(ctx, "LLM prompts", "prompts", prompts)
 	}
 	return nil
 }
 
 func (l *LoggingCallback) OnLLMEnd(ctx context.Context, output string, tokenUsage int) error {
-	l.logger.Info("LLM call completed", "token_usage", tokenUsage)
+	l.logger.InfoContext(ctx, "LLM call completed", "token_usage", tokenUsage)
 	if l.verbose {
-		l.logger.Debug("LLM output", "output", output)
+		l.logger.DebugContext(ctx, "LLM output", "output", output)
 	}
 	return nil
 }
 
 func (l *LoggingCallback) OnToolStart(ctx context.Context, toolName string, input interface{}) error {
-	l.logger.Info("Tool execution started", "tool", toolName, "input", input)
+	l.logger.InfoContext(ctx, "Tool execution started", "tool", toolName, "input", input)
 	return nil
 }
 
 func (l *LoggingCallback) OnToolEnd(ctx context.Context, toolName string, output interface{}) error {
-	l.logger.Info("Tool execution completed", "tool", toolName, "output", output)
+	l.logger.InfoContext(ctx, "Tool execution completed", "tool", toolName, "output", output)
 	return nil
 }
 

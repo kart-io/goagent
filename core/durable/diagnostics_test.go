@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // 诊断不能把未完成检查点当成失败证据，也不能执行步骤、审批钩子、加锁或写入。
@@ -61,6 +61,7 @@ type diagnosticReadOnlyStore struct{ Store }
 func (diagnosticReadOnlyStore) Lock(context.Context, string) (func() error, error) {
 	panic("diagnosis attempted lock")
 }
+
 func (diagnosticReadOnlyStore) Save(context.Context, string, *Snapshot) error {
 	panic("diagnosis attempted write")
 }

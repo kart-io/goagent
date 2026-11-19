@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDispatcherRootToolBudgetDoesNotChargeReplay(t *testing.T) {
@@ -40,6 +41,63 @@ func TestDispatcherRootToolBudgetDoesNotChargeReplay(t *testing.T) {
 	snap, err := controller.Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, 1, snap.ReservedToolCalls)
+}
+
+// 中断后的重跑是新的执行，同样消耗额度；任何中断与重启组合下，工具体的执行次数都不超过 MaxToolCalls。
+func TestDispatcherToolBudgetBoundsExecutionsAcrossRestart(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		max       int
+		wantErr   error
+		wantCalls int
+	}{
+		{"额度只够首次执行", 1, agentErrors.ErrModelBudgetExceeded, 1},
+		{"额度允许重跑", 2, nil, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := durable.NewFileStore(t.TempDir())
+			require.NoError(t, err)
+			calls := 0
+			started := make(chan struct{})
+			reg := NewRegistry()
+			require.NoError(t, reg.Register(NewBaseTool("send", "发送", `{"type":"object"}`, func(ctx context.Context, _ *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				calls++
+				if calls == 1 {
+					close(started)
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				return &interfaces.ToolOutput{Success: true, Result: "已发送"}, nil
+			})))
+			// 每次运行新建控制器与调度器，模拟进程重启后只剩持久存储。
+			run := func(ctx context.Context) error {
+				controller, err := budget.NewDurable(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 1, MaxToolCalls: tc.max}, store)
+				require.NoError(t, err)
+				dispatcher, err := NewDispatcher(reg, DispatchConfig{})
+				require.NoError(t, err)
+				ctx = durable.WithJournal(durable.WithExecutionKey(budget.WithController(ctx, controller), "parent"), store)
+				_, err = dispatcher.Invoke(ctx, ToolRequest{Name: "send", Input: &interfaces.ToolInput{CallID: "one", Args: map[string]any{}}})
+				return err
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() { <-started; cancel() }()
+			require.ErrorIs(t, run(ctx), context.Canceled)
+
+			err = run(context.Background())
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.wantCalls, calls)
+			controller, err := budget.NewDurable(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 1, MaxToolCalls: tc.max}, store)
+			require.NoError(t, err)
+			snap, err := controller.Snapshot(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, tc.wantCalls, snap.ReservedToolCalls)
+		})
+	}
 }
 
 func TestDispatcherHonorsRootDeadlineWithoutHostBind(t *testing.T) {

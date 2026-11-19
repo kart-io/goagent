@@ -5,16 +5,18 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func runnableConfig() RunnableToolConfig[int, int] {
 	return RunnableToolConfig[int, int]{Name: "increment", Description: "Increment a number", ArgsSchema: `{"type":"object","properties":{"n":{"type":"number"}},"required":["n"],"additionalProperties":false}`, Version: "v1", Decode: func(args map[string]any) (int, error) { return int(args["n"].(float64)), nil }, Encode: func(n int) (any, error) { return n, nil }}
 }
+
 func numberRun(calls *int, fail bool) *core.StreamRunnable[int, int] {
 	return core.NewStreamRunnable(core.StreamModeFinal, func(_ context.Context, n int, emit func(core.StreamChunk[int]) error) error {
 		*calls++
@@ -24,6 +26,7 @@ func numberRun(calls *int, fail bool) *core.StreamRunnable[int, int] {
 		return emit(core.StreamChunk[int]{Done: true, Data: n + 1})
 	})
 }
+
 func TestRunnableToolCodecAndVersion(t *testing.T) {
 	calls := 0
 	cfg := runnableConfig()
@@ -46,6 +49,7 @@ func TestRunnableToolCodecAndVersion(t *testing.T) {
 	require.ErrorContains(t, err, "decode failed")
 	require.Equal(t, 1, calls)
 }
+
 func TestOpaqueToolReplayAndPending(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "completed", true: "failed"}[fail], func(t *testing.T) {
@@ -83,6 +87,7 @@ func TestOpaqueToolReplayAndPending(t *testing.T) {
 		})
 	}
 }
+
 func TestWaitingOutputIsNotSuccess(t *testing.T) {
 	calls := 0
 	cfg := runnableConfig()

@@ -31,10 +31,12 @@ func legacyFixture(t *testing.T) (*storemem.Store, *MemoryIndex) {
 	}
 	u := []string{"u"}
 	record := func(id, content string, extra map[string]any) map[string]any {
-		r := map[string]any{"id": id, "namespace": u, "kind": "fact", "content": content, "keywords": []string{"咖啡"},
+		r := map[string]any{
+			"id": id, "namespace": u, "kind": "fact", "content": content, "keywords": []string{"咖啡"},
 			"entities": []string{"coffee"}, "importance": 0.6, "valid_from": legacyDay, "created_at": legacyDay,
 			"last_access": legacyDay.Add(time.Hour), "access_count": 3, "embed_model": "old-model",
-			"sources": []map[string]any{{"session": "s", "from": 1, "to": 2, "job": "s/turn/1"}}}
+			"sources": []map[string]any{{"session": "s", "from": 1, "to": 2, "job": "s/turn/1"}},
+		}
 		for k, v := range extra {
 			r[k] = v
 		}
@@ -89,8 +91,10 @@ func TestMigrateFromStore(t *testing.T) {
 	require.Equal(t, s.Seq, s.LastForgetSeq, "迁移之前登记的任务一律视为过期")
 	require.NotEmpty(t, s.MigrationID)
 	sources := []Source{{Session: "s", From: 1, To: 2, Job: "s/turn/1"}}
-	want := Record{ID: "a", Namespace: ns, Kind: KindFact, Content: "用户喜欢拿铁", Keywords: []string{"咖啡"}, Entities: []string{"coffee"},
-		Importance: 0.6, Pinned: true, ValidFrom: legacyDay, Sources: sources, CreatedAt: legacyDay, Revision: 1, ContentRev: 1, Reflected: true}
+	want := Record{
+		ID: "a", Namespace: ns, Kind: KindFact, Content: "用户喜欢拿铁", Keywords: []string{"咖啡"}, Entities: []string{"coffee"},
+		Importance: 0.6, Pinned: true, ValidFrom: legacyDay, Sources: sources, CreatedAt: legacyDay, Revision: 1, ContentRev: 1, Reflected: true,
+	}
 	got := s.Records["a"]
 	want.Incarnation = got.Incarnation
 	require.Equal(t, want, got)

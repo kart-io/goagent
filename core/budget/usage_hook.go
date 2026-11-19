@@ -20,8 +20,10 @@ type UsageEvent struct {
 
 // UsageHook is a read-only notification, including failures and replay. It must
 // support concurrent calls and return promptly. Panics cannot fail execution.
-type UsageHook func(context.Context, UsageEvent)
-type usageHookKey struct{}
+type (
+	UsageHook    func(context.Context, UsageEvent)
+	usageHookKey struct{}
+)
 
 // WithUsageHook binds the single inherited usage sink. A child may replace it;
 // nil explicitly clears it. It does not replace an Observer or create a ledger.

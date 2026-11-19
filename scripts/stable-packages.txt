@@ -7,6 +7,7 @@ core
 core/budget
 core/durable
 core/durable/migrate
+core/logging
 core/middleware
 core/observe
 core/session

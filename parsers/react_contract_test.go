@@ -2,8 +2,9 @@ package parsers
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestReActFinalAnswerFormats(t *testing.T) {
@@ -19,6 +20,7 @@ func TestReActFinalAnswerFormats(t *testing.T) {
 		require.Equal(t, tt.want, got.FinalAnswer)
 	}
 }
+
 func TestReActDoesNotTreatQuotedMarkerAsAnswer(t *testing.T) {
 	p := NewReActOutputParser()
 	out, err := p.Parse(context.Background(), `Thought: search for Final Answer: example

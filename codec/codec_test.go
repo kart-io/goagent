@@ -3,9 +3,10 @@ package codec
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/codec/yaml"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLookupCodec(t *testing.T) {

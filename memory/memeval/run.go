@@ -132,8 +132,10 @@ func (r Runner) ask(ctx context.Context, system string, retriever Retriever, c C
 		return Result{}, err
 	}
 	hyp := strings.TrimSpace(resp.Content)
-	res := Result{System: system, CaseID: c.ID, QuestionID: q.ID, Type: q.Type, Abstain: q.Abstain, Question: q.Text, Answer: q.Answer,
-		Hypothesis: hyp, Evidence: q.Evidence, Retrieved: got.Sessions, ContextRunes: len([]rune(got.Text)), F1: AnswerF1(q, hyp)}
+	res := Result{
+		System: system, CaseID: c.ID, QuestionID: q.ID, Type: q.Type, Abstain: q.Abstain, Question: q.Text, Answer: q.Answer,
+		Hypothesis: hyp, Evidence: q.Evidence, Retrieved: got.Sessions, ContextRunes: len([]rune(got.Text)), F1: AnswerF1(q, hyp),
+	}
 	res.EvidenceHit = slices.ContainsFunc(got.Sessions, func(s string) bool { return slices.Contains(q.Evidence, s) })
 	verdict, err := chat(ctx, r.Judge, []llm.Message{llm.UserMessage(JudgePrompt(q, hyp))})
 	if err != nil {

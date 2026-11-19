@@ -3,11 +3,13 @@ package middleware
 import (
 	"context"
 	"errors"
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestRuntimeErrorGateMiddlewareClassification(t *testing.T) {

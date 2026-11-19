@@ -11,11 +11,12 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/revision"
-	"github.com/stretchr/testify/require"
 )
 
 var _ mg.RevisionFactory = (*ArchivedFactory)(nil)

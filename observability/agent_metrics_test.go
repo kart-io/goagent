@@ -54,12 +54,14 @@ func TestAgentMetrics_RecordRequest(t *testing.T) {
 	ctx := context.Background()
 
 	// 记录成功请求
-	metrics.RecordRequest(ctx, 1.5, true,
+	metrics.RecordRequest(
+		ctx, 1.5, true,
 		attribute.String("agent.name", "test-agent"),
 	)
 
 	// 记录失败请求
-	metrics.RecordRequest(ctx, 0.5, false,
+	metrics.RecordRequest(
+		ctx, 0.5, false,
 		attribute.String("agent.name", "test-agent"),
 	)
 }
@@ -83,7 +85,8 @@ func TestAgentMetrics_RecordError(t *testing.T) {
 	ctx := context.Background()
 
 	// 记录错误
-	metrics.RecordError(ctx, "RuntimeError",
+	metrics.RecordError(
+		ctx, "RuntimeError",
 		attribute.String("agent.name", "test-agent"),
 	)
 }
@@ -251,7 +254,8 @@ func BenchmarkAgentMetrics_RecordRequest(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		metrics.RecordRequest(ctx, 1.5, true,
+		metrics.RecordRequest(
+			ctx, 1.5, true,
 			attribute.String("agent.name", "test-agent"),
 		)
 	}

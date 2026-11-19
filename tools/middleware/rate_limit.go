@@ -9,6 +9,7 @@ import (
 	loggercore "github.com/kart-io/logger/core"
 	"golang.org/x/time/rate"
 
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -22,8 +23,12 @@ type RateLimitConfig struct {
 	// PerTool controls whether limits apply per tool name (false means a
 	// global limit).
 	PerTool bool `json:"per_tool"`
-	// Logger is the logger.
+	// Logger is a kart-io/logger logger.
+	//
+	// Deprecated: use ContextLogger; Logger is used only when ContextLogger is nil.
 	Logger loggercore.Logger `json:"-"`
+	// ContextLogger receives rejected calls; nil disables logging.
+	ContextLogger logging.Logger `json:"-"`
 	// WaitTimeout is the timeout for waiting for a token (0 means do not wait;
 	// reject immediately).
 	WaitTimeout time.Duration `json:"wait_timeout"`
@@ -53,7 +58,17 @@ func WithPerToolRateLimit() RateLimitOption {
 	}
 }
 
-// WithRateLimitLogger sets the logger.
+// WithRateLimitContextLogger sets the logger, typically a *slog.Logger or a
+// *slogx.Logger.
+func WithRateLimitContextLogger(logger logging.Logger) RateLimitOption {
+	return func(cfg *RateLimitConfig) {
+		cfg.ContextLogger = logger
+	}
+}
+
+// WithRateLimitLogger sets a kart-io/logger logger.
+//
+// Deprecated: use WithRateLimitContextLogger.
 func WithRateLimitLogger(logger loggercore.Logger) RateLimitOption {
 	return func(cfg *RateLimitConfig) {
 		cfg.Logger = logger
@@ -183,8 +198,10 @@ func (m *RateLimitMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolI
 			// 限流拒绝
 			m.rejected.Add(1)
 
-			if m.config.Logger != nil {
-				m.config.Logger.Warn("工具调用被限流拒绝",
+			if l := m.log(); l != nil {
+				l.WarnContext(
+					ctx,
+					"工具调用被限流拒绝",
 					"tool", tool.Name(),
 					"qps", m.config.QPS,
 					"rejected", m.rejected.Load(),

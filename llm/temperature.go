@@ -43,6 +43,7 @@ func (r CompletionRequest) MarshalJSON() ([]byte, error) {
 		Temperature *float64 `json:"temperature,omitzero"`
 	}{(*plain)(&r), temperatureField(r.Temperature, r.TemperatureSet)})
 }
+
 func (r *CompletionRequest) UnmarshalJSON(data []byte) error {
 	type plain CompletionRequest
 	next := plain(*r)
@@ -72,6 +73,7 @@ func (c LLMOptions) MarshalJSON() ([]byte, error) {
 		Temperature *float64 `json:"temperature,omitzero"`
 	}{(*plain)(&c), temperatureField(c.Temperature, c.TemperatureSet)})
 }
+
 func (c *LLMOptions) UnmarshalJSON(data []byte) error {
 	return c.UnmarshalJSONFrom(json.NewDecoder(bytes.NewReader(data)))
 }

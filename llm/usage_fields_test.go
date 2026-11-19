@@ -3,10 +3,10 @@ package llm
 import (
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	"github.com/kart-io/goagent/core/usage"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/usage"
 )
 
 func TestUsageFieldCompatibility(t *testing.T) {

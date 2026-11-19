@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
@@ -150,8 +150,8 @@ func TestAnthropicNativeToolLoopReplaysState(t *testing.T) {
 	require.Equal(t, []any{"q"}, schema["required"])
 
 	// 续接：原生内容（含思考签名）原样回放，两个工具结果合并为一条 user 消息。
-	assistant := agentllm.Message{Role: "assistant", ToolCalls: final.ToolCalls, ProviderState: final.ProviderState}
-	next := []agentllm.Message{user, assistant, {Role: "tool", ToolCallID: "toolu_a", Content: "一"}, {Role: "tool", ToolCallID: "toolu_b", Content: "二"}}
+	assistant := agentllm.Message{Role: constants.RoleAssistant, ToolCalls: final.ToolCalls, ProviderState: final.ProviderState}
+	next := []agentllm.Message{user, assistant, {Role: constants.RoleTool, ToolCallID: "toolu_a", Content: "一"}, {Role: constants.RoleTool, ToolCallID: "toolu_b", Content: "二"}}
 	stream, err = p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Messages: next}, tools)
 	require.NoError(t, err)
 	drain(t, stream)
@@ -172,8 +172,8 @@ func TestAnthropicRejectsUnmatchedToolHistory(t *testing.T) {
 	call := agentllm.ToolCall{ID: "a", Type: "function"}
 	call.Function.Name, call.Function.Arguments = "lookup", "{}"
 	for name, messages := range map[string][]agentllm.Message{
-		"缺少工具结果": {{Role: "user", Content: "q"}, {Role: "assistant", ToolCalls: []agentllm.ToolCall{call}}, {Role: "user", Content: "again"}},
-		"多余工具结果": {{Role: "user", Content: "q"}, {Role: "tool", ToolCallID: "x", Content: "r"}},
+		"缺少工具结果": {{Role: constants.RoleUser, Content: "q"}, {Role: constants.RoleAssistant, ToolCalls: []agentllm.ToolCall{call}}, {Role: constants.RoleUser, Content: "again"}},
+		"多余工具结果": {{Role: constants.RoleUser, Content: "q"}, {Role: constants.RoleTool, ToolCallID: "x", Content: "r"}},
 	} {
 		_, err := p.CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: messages})
 		require.Error(t, err, name)
@@ -185,7 +185,7 @@ func TestAnthropicIncompleteResponseIsError(t *testing.T) {
 	events[5] = anthropicEvent{"message_delta", `{"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":6}}`}
 	server := anthropicServer(t, events, nil)
 	defer server.Close()
-	stream, err := newTestAnthropic(t, server.URL).CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}})
+	stream, err := newTestAnthropic(t, server.URL).CompleteStream(context.Background(), &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: constants.RoleUser, Content: "q"}}})
 	require.NoError(t, err)
 	_, final := drain(t, stream)
 	require.ErrorContains(t, final.Error, "max_tokens")
@@ -205,7 +205,7 @@ func TestAnthropicProviderErrorWithoutSDKRetry(t *testing.T) {
 	}))
 	defer server.Close()
 	p := newTestAnthropic(t, server.URL)
-	req := &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: "user", Content: "q"}}}
+	req := &agentllm.CompletionRequest{Messages: []agentllm.Message{{Role: constants.RoleUser, Content: "q"}}}
 	_, streamErr := p.CompleteStream(context.Background(), req)
 	_, completeErr := agentllm.Complete(context.Background(), p, req)
 	for name, err := range map[string]error{"stream": streamErr, "complete": completeErr} {

@@ -27,6 +27,7 @@ func parallelGraph(t *testing.T, limit int, branches []workflow.Branch[int], mer
 	require.NoError(t, g.AddEdge("fork", constants.WorkflowEnd))
 	return g
 }
+
 func sumBranches(_ context.Context, _ int, out []int) (int, error) {
 	n := 0
 	for _, v := range out {
@@ -150,6 +151,7 @@ func (s *failBranchCheckpoint) Save(ctx context.Context, id string, cp *durable.
 	}
 	return s.Store.Save(ctx, id, cp)
 }
+
 func TestDurableParallelSaveFailureRetainsEffectKey(t *testing.T) {
 	ctx := context.Background()
 	store := &failBranchCheckpoint{Store: newStore(t), fail: true}
@@ -176,14 +178,14 @@ func TestDurableParallelProcessCrash(t *testing.T) {
 		require.NoError(t, err)
 		g := parallelGraph(t, 1, []workflow.Branch[int]{
 			{Name: "saved", Run: func(_ context.Context, n int) (int, error) {
-				f, e := os.OpenFile(filepath.Join(dir, "saved-once"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				f, e := os.OpenFile(filepath.Join(dir, "saved-once"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 				if e != nil {
 					return n, errors.New("committed sibling reran")
 				}
 				return n + 1, f.Close()
 			}},
 			{Name: "ambiguous", Run: func(ctx context.Context, n int) (int, error) {
-				f, e := os.OpenFile(filepath.Join(dir, workflow.DurableKey(ctx)+".effect"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				f, e := os.OpenFile(filepath.Join(dir, workflow.DurableKey(ctx)+".effect"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 				if errors.Is(e, os.ErrExist) {
 					return n + 2, nil
 				}
@@ -309,6 +311,7 @@ func (p panicJSONState) MarshalJSON() ([]byte, error) {
 	}
 	return []byte(`{"Panic":false}`), nil
 }
+
 func TestDurableParallelSerializationPanicIsContained(t *testing.T) {
 	g := workflow.NewGraph[panicJSONState]()
 	require.NoError(t, g.AddParallel("fork", workflow.ParallelConfig[panicJSONState]{

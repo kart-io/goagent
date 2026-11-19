@@ -3,10 +3,11 @@ package llm
 import (
 	"context"
 	"errors"
-	shared2 "github.com/kart-io/goagent/constants"
 	"io"
 	"testing"
 	"time"
+
+	shared2 "github.com/kart-io/goagent/constants"
 )
 
 type scriptedStream struct {

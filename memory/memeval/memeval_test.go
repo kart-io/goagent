@@ -164,8 +164,10 @@ func TestRunnerEndToEnd(t *testing.T) {
 		return memory.Config{Sessions: sessions, Model: extractor}
 	}}
 	var progress []string
-	results, err := Runner{Systems: []System{Recent{Runes: 20}, mem}, Answerer: answerer, Judge: judge,
-		Progress: func(r Result) { progress = append(progress, r.System+"/"+r.QuestionID) }}.Run(context.Background(), cases)
+	results, err := Runner{
+		Systems: []System{Recent{Runes: 20}, mem}, Answerer: answerer, Judge: judge,
+		Progress: func(r Result) { progress = append(progress, r.System+"/"+r.QuestionID) },
+	}.Run(context.Background(), cases)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"recent/q1", "recent/q2_abs", "memory/q1", "memory/q2_abs"}, progress)
 	var order []string

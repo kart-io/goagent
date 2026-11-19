@@ -6,12 +6,13 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/testing/mocks"
-	"github.com/stretchr/testify/require"
 )
 
 // 隐藏可选工具接口，验证只有必需 Client 接口的模型也能保存会话。
@@ -124,7 +125,7 @@ func TestPlainSessionRecoversLogFailureWithoutRepeatingModel(t *testing.T) {
 			require.NoError(t, err)
 			messages, err := session.DeriveMessages(events)
 			require.NoError(t, err)
-			require.Equal(t, []llm.Message{llm.UserMessage("问题"), {Role: "assistant", Content: "已回答"}}, messages)
+			require.Equal(t, []llm.Message{llm.UserMessage("问题"), {Role: constants.RoleAssistant, Content: "已回答"}}, messages)
 			_, open := session.OpenTurn(events)
 			require.False(t, open)
 		})

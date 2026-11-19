@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestCloneErrorClassification(t *testing.T) {
@@ -23,16 +24,20 @@ func TestCloneErrorClassification(t *testing.T) {
 	}
 }
 
-type namedBytes []byte
-type namedMap map[string]namedBytes
-type cycleNode struct {
-	Value  namedMap
-	Next   *cycleNode
-	Shared *cycleNode
-}
-type opaqueValue struct{ data []byte }
-type namedMutex sync.Mutex
-type cloningValue struct{ data []byte }
+type (
+	namedBytes []byte
+	namedMap   map[string]namedBytes
+	cycleNode  struct {
+		Value  namedMap
+		Next   *cycleNode
+		Shared *cycleNode
+	}
+)
+type (
+	opaqueValue  struct{ data []byte }
+	namedMutex   sync.Mutex
+	cloningValue struct{ data []byte }
+)
 
 func (v *cloningValue) CloneSnapshot() (interface{}, error) {
 	return &cloningValue{data: append([]byte(nil), v.data...)}, nil
@@ -96,8 +101,19 @@ func TestCloneNilTimeAndArray(t *testing.T) {
 
 func TestCloneRejectsOpaqueResources(t *testing.T) {
 	for _, value := range []interface{}{
-		func() {}, make(chan int), opaqueValue{data: []byte{1}}, sync.Mutex{}, namedMutex{}, sync.RWMutex{}, sync.Once{}, sync.WaitGroup{}, sync.Map{}, atomic.Int64{},
-		struct{ Lock sync.Mutex }{}, struct{ private sync.Once }{}, invalidCloner{}, failingCloner{},
+		func() {}, make(chan int),
+		opaqueValue{data: []byte{1}},
+		sync.Mutex{},
+		namedMutex{},
+		sync.RWMutex{},
+		sync.Once{},
+		sync.WaitGroup{},
+		sync.Map{},
+		atomic.Int64{},
+		struct{ Lock sync.Mutex }{},
+		struct{ private sync.Once }{},
+		invalidCloner{},
+		failingCloner{},
 	} {
 		_, err := Clone(value)
 		require.Error(t, err, "%T 必须显式拒绝", value)

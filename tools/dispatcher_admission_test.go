@@ -6,20 +6,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func admissionRequest(name string) ToolRequest {
 	return ToolRequest{Name: name, Input: &interfaces.ToolInput{Args: map[string]any{}}}
 }
+
 func admissionStart(ctx context.Context, d *Dispatcher, name string) <-chan error {
 	done := make(chan error, 1)
 	go func() { _, err := d.Invoke(ctx, admissionRequest(name)); done <- err }()
 	return done
 }
+
 func admissionWait(t *testing.T, ctx context.Context, ch <-chan struct{}) {
 	t.Helper()
 	select {
@@ -28,6 +31,7 @@ func admissionWait(t *testing.T, ctx context.Context, ch <-chan struct{}) {
 		t.Fatal("phase not reached before host timeout")
 	}
 }
+
 func admissionQueued(t *testing.T, d *Dispatcher, n int) {
 	t.Helper()
 	require.Eventually(t, func() bool { d.queueMu.Lock(); defer d.queueMu.Unlock(); return d.queued == n }, time.Second, time.Millisecond)

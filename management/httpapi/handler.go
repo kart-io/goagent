@@ -4,15 +4,17 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/kart-io/goagent/codec/json"
-	agentErrors "github.com/kart-io/goagent/errors"
-	mg "github.com/kart-io/goagent/management"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
+	mg "github.com/kart-io/goagent/management"
 )
 
 type Config struct {
@@ -41,10 +43,12 @@ func New(s *mg.Service, c Config) (*Handler, error) {
 	h.register()
 	return h, nil
 }
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Request-ID", uuid.NewString())
 	h.mux.ServeHTTP(w, r)
 }
+
 func decode(w http.ResponseWriter, r *http.Request, limit int64, dst any) error {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
@@ -59,6 +63,7 @@ func decode(w http.ResponseWriter, r *http.Request, limit int64, dst any) error 
 	}
 	return nil
 }
+
 func public(v any) (any, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -90,6 +95,7 @@ func public(v any) (any, error) {
 	clean(value)
 	return value, nil
 }
+
 func (h *Handler) write(w http.ResponseWriter, status int, v any) {
 	value, err := public(v)
 	if err != nil {
@@ -105,6 +111,7 @@ func (h *Handler) write(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_, _ = w.Write(raw)
 }
+
 func (h *Handler) problem(w http.ResponseWriter, err error) {
 	status := 503
 	code := "unavailable"
@@ -152,6 +159,7 @@ func (h *Handler) problem(w http.ResponseWriter, err error) {
 	w.WriteHeader(status)
 	_ = json.Encode(w, map[string]any{"error": map[string]any{"code": code, "message": message, "request_id": w.Header().Get("X-Request-ID")}})
 }
+
 func post[T any](h *Handler, pattern string, status int, call func(context.Context, mg.Actor, *http.Request, T) (any, error)) {
 	h.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		a, err := h.cfg.ActorFromRequest(r)
@@ -199,6 +207,7 @@ func post[T any](h *Handler, pattern string, status int, call func(context.Conte
 		h.write(w, status, out)
 	})
 }
+
 func query(r *http.Request) (mg.Query, error) {
 	values := r.URL.Query()
 	q := mg.Query{AgentID: values.Get("agent_id"), SessionID: values.Get("session_id"), TaskID: values.Get("task_id"), Cursor: values.Get("cursor"), Statuses: values["status"]}
@@ -223,6 +232,7 @@ func query(r *http.Request) (mg.Query, error) {
 	}
 	return q, nil
 }
+
 func (h *Handler) get(pattern string, fn func(context.Context, mg.Actor, *http.Request, mg.Query) (any, error)) {
 	h.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		a, err := h.cfg.ActorFromRequest(r)
@@ -246,6 +256,7 @@ func (h *Handler) get(pattern string, fn func(context.Context, mg.Actor, *http.R
 		h.write(w, 200, out)
 	})
 }
+
 func (h *Handler) register() {
 	post(h, Routes[0], 201, func(c context.Context, a mg.Actor, r *http.Request, in mg.RegisterAgentRequest) (any, error) {
 		in.IdempotencyKey = r.Header.Get("Idempotency-Key")

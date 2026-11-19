@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestZeroTemperatureRedirectPreservesPayload(t *testing.T) {
@@ -41,6 +41,7 @@ func TestZeroTemperatureRedirectPreservesPayload(t *testing.T) {
 		require.Equal(t, `{"integer":9007199254740993}`, string(payload["metadata"]))
 	}
 }
+
 func TestZeroTemperatureDoesNotChangeOtherEndpoints(t *testing.T) {
 	received := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

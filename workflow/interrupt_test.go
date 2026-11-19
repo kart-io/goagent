@@ -126,8 +126,10 @@ func TestNodeInterruptRejectsInvalidInput(t *testing.T) {
 	require.True(t, snap.Interrupts[0].Rejected)
 	require.Equal(t, "需要正整数", snap.Interrupts[0].Reason)
 
-	stream, err := run.AsRunnable().Stream(ctx, workflow.RunRequest[int]{RunID: "ask",
-		Resume: &workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`-2`)}})
+	stream, err := run.AsRunnable().Stream(ctx, workflow.RunRequest[int]{
+		RunID:  "ask",
+		Resume: &workflow.ResumeRequest{Key: point.Key, Input: json.RawMessage(`-2`)},
+	})
 	require.NoError(t, err)
 	var streamErr error
 	for chunk := range stream {
@@ -270,8 +272,10 @@ func TestInterruptThroughRunnableEmitsEvent(t *testing.T) {
 	require.True(t, final.Waiting)
 	require.Len(t, final.Interrupts, 1)
 
-	out, err := run.AsRunnable().Invoke(ctx, workflow.RunRequest[int]{RunID: "ask",
-		Resume: &workflow.ResumeRequest{Key: final.Interrupts[0].Key, Input: json.RawMessage(`4`)}})
+	out, err := run.AsRunnable().Invoke(ctx, workflow.RunRequest[int]{
+		RunID:  "ask",
+		Resume: &workflow.ResumeRequest{Key: final.Interrupts[0].Key, Input: json.RawMessage(`4`)},
+	})
 	require.NoError(t, err)
 	require.Equal(t, 14, out.State)
 }

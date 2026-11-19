@@ -7,11 +7,10 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/middleware"
 	"github.com/kart-io/goagent/observability"
 )
@@ -114,7 +113,8 @@ func main() {
 	ctx := context.Background()
 
 	// 创建带追踪的上下文
-	ctx, span := tracer.StartAgentSpan(ctx, "example-agent",
+	ctx, span := tracer.StartAgentSpan(
+		ctx, "example-agent",
 		observability.AgentAttributes("example-agent", "demo")...,
 	)
 	defer span.End()
@@ -125,7 +125,8 @@ func main() {
 	// 执行一些操作并追踪
 	err = tracer.WithSpanContext(ctx, "process-request", func(ctx context.Context) error {
 		// 模拟 LLM 调用
-		llmCtx, llmSpan := tracer.StartLLMSpan(ctx, "mock-model",
+		llmCtx, llmSpan := tracer.StartLLMSpan(
+			ctx, "mock-model",
 			observability.LLMAttributes("mock-model", "mock-provider", 100)...,
 		)
 		defer llmSpan.End()

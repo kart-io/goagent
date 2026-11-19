@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 )
@@ -82,7 +83,7 @@ func recallIntent(msgs []llm.Message, slot recallSlot) []llm.Message {
 	out := slices.Clone(msgs)
 	at := min(slot.index, len(out))
 	if slot.text != "" {
-		if i := slices.IndexFunc(out, func(m llm.Message) bool { return m.Role == "user" && m.Content == slot.text }); i >= 0 {
+		if i := slices.IndexFunc(out, func(m llm.Message) bool { return m.Role == constants.RoleUser && m.Content == slot.text }); i >= 0 {
 			at, out = i, slices.Delete(out, i, i+1)
 		}
 	}

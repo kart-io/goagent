@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/toolargs"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDispatcherMultipleEffectsAndRecovery(t *testing.T) {

@@ -56,8 +56,10 @@ func TestPurgeFaults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			st := newHookStore(t)
 			x := NewMemoryIndex()
-			m := durableMemory(t, st, Config{Index: x, Embedder: bigramEmbedder{}, EmbedModel: "v1", RollbackWindow: 1 << 40,
-				Model: &scriptedModel{}, Sessions: session.NewMemoryStore()})
+			m := durableMemory(t, st, Config{
+				Index: x, Embedder: bigramEmbedder{}, EmbedModel: "v1", RollbackWindow: 1 << 40,
+				Model: &scriptedModel{}, Sessions: session.NewMemoryStore(),
+			})
 			ctx := WithNamespace(context.Background(), testNS...)
 			_, err := m.Remember(ctx, Record{ID: "a", Content: "机密：项目代号青鸟", Importance: 0.5})
 			require.NoError(t, err)
@@ -325,8 +327,10 @@ func TestPurgeConcurrentWithWrites(t *testing.T) {
 				}
 				sid := "s" + string(rune('a'+w))
 				from, to := appendTurn(t, sessions, sid, false, llm.UserMessage("我住在北京"))
-				record(m.Enqueue(ctx, Job{Key: sid + "/" + string(rune('a'+i)), Namespace: testNS, Session: sid,
-					Scope: turn.Scope, TurnSeq: turn.Seq, From: from, To: to}))
+				record(m.Enqueue(ctx, Job{
+					Key: sid + "/" + string(rune('a'+i)), Namespace: testNS, Session: sid,
+					Scope: turn.Scope, TurnSeq: turn.Seq, From: from, To: to,
+				}))
 			}
 		}()
 	}

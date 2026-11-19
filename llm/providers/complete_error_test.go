@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/require"
 )
 
 func completeProviders(t *testing.T, endpoint string) map[string]llm.Client {

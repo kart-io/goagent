@@ -6,11 +6,11 @@ import (
 
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	shared "github.com/kart-io/goagent/constants"
-	"github.com/kart-io/goagent/core/session"
-	"github.com/kart-io/goagent/memory"
-
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/logging"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/core/usage"
+	"github.com/kart-io/goagent/memory"
 )
 
 // Runtime 配置方法
@@ -57,6 +57,9 @@ type AgentConfig struct {
 	// TokenEstimator is the host's conservative token estimator; it is not
 	// written to the durable configuration.
 	TokenEstimator TokenEstimator `json:"-"`
+	// Logger receives run lifecycle records and the Builder's own warnings;
+	// see WithLogger. It is not written to the durable configuration.
+	Logger logging.Logger `json:"-"`
 
 	// DurableScope identifies one logical Agent invocation within a durable node.
 	// It must be unique among siblings and stable across restarts.

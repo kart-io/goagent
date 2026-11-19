@@ -30,6 +30,7 @@ func (g *Graph[T]) Describe() (GraphDescription, error) {
 	}
 	return describe(compiled), nil
 }
+
 func describe[T any](g *compiled[T]) GraphDescription {
 	out := GraphDescription{FormatVersion: "goagent-graph-v1"}
 	for _, id := range slices.Sorted(maps.Keys(g.nodes)) {

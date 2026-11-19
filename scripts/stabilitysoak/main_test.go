@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/kart-io/goagent/codec/json"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func testConfig() config {

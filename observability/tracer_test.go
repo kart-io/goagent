@@ -95,7 +95,8 @@ func TestAgentTracer_AddEvent(t *testing.T) {
 	defer span.End()
 
 	// 添加事件
-	tracer.AddEvent(ctx, "test-event",
+	tracer.AddEvent(
+		ctx, "test-event",
 		attribute.String("event.type", "test"),
 		attribute.Int("event.count", 1),
 	)
@@ -120,7 +121,8 @@ func TestAgentTracer_SetAttributes(t *testing.T) {
 	defer span.End()
 
 	// 设置属性
-	tracer.SetAttributes(ctx,
+	tracer.SetAttributes(
+		ctx,
 		attribute.String("attr.key1", "value1"),
 		attribute.Int("attr.key2", 42),
 	)
@@ -186,7 +188,8 @@ func TestAgentTracer_StartAgentSpan(t *testing.T) {
 	tracer := NewAgentTracer(provider, "test-tracer")
 	ctx := context.Background()
 
-	_, span := tracer.StartAgentSpan(ctx, "test-agent",
+	_, span := tracer.StartAgentSpan(
+		ctx, "test-agent",
 		attribute.String("agent.type", "test"),
 	)
 	assert.NotNil(t, span)
@@ -208,7 +211,8 @@ func TestAgentTracer_StartToolSpan(t *testing.T) {
 	tracer := NewAgentTracer(provider, "test-tracer")
 	ctx := context.Background()
 
-	_, span := tracer.StartToolSpan(ctx, "test-tool",
+	_, span := tracer.StartToolSpan(
+		ctx, "test-tool",
 		attribute.String("tool.version", "1.0"),
 	)
 	assert.NotNil(t, span)
@@ -230,7 +234,8 @@ func TestAgentTracer_StartLLMSpan(t *testing.T) {
 	tracer := NewAgentTracer(provider, "test-tracer")
 	ctx := context.Background()
 
-	_, span := tracer.StartLLMSpan(ctx, "gpt-4",
+	_, span := tracer.StartLLMSpan(
+		ctx, "gpt-4",
 		attribute.String("llm.provider", "openai"),
 	)
 	assert.NotNil(t, span)

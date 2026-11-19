@@ -2,8 +2,9 @@ package usage
 
 import (
 	"context"
-	"github.com/kart-io/goagent/interfaces"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestLineageCopiesAncestors(t *testing.T) {
@@ -20,6 +21,7 @@ func TestLineageCopiesAncestors(t *testing.T) {
 		t.Fatal("alias")
 	}
 }
+
 func TestEvidenceMerge(t *testing.T) {
 	a := Evidence{KnownFields: Total, Source: "provider"}
 	a.Tokens.TotalTokens = 5

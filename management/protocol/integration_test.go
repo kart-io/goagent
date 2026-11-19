@@ -12,6 +12,9 @@ import (
 
 	api "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2aclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/require"
+
 	a2aremote "github.com/kart-io/goagent/a2a/remote"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
@@ -22,8 +25,6 @@ import (
 	"github.com/kart-io/goagent/management/mcpserver"
 	"github.com/kart-io/goagent/management/protocol"
 	mcpremote "github.com/kart-io/goagent/mcp/remote"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/stretchr/testify/require"
 )
 
 type endpoints struct {
@@ -71,9 +72,11 @@ func serve(t *testing.T, ctx context.Context, f *managementtest.Fixture, agent s
 	t.Cleanup(hs.Close)
 	return endpoints{ac, mc, hs, ah.URL, mh.URL}
 }
+
 func message(id, session string, input any) *api.SendMessageRequest {
 	return &api.SendMessageRequest{Message: &api.Message{ID: id, Role: api.MessageRoleUser, ContextID: session, Parts: api.ContentParts{api.NewDataPart(input)}}}
 }
+
 func view(t *testing.T, v any) protocol.TaskView {
 	t.Helper()
 	raw, err := json.Marshal(v)
@@ -82,6 +85,7 @@ func view(t *testing.T, v any) protocol.TaskView {
 	require.NoError(t, json.Unmarshal(raw, &out))
 	return out
 }
+
 func call(t *testing.T, ctx context.Context, c *mcp.ClientSession, name string, args any) *mcp.CallToolResult {
 	t.Helper()
 	r, err := c.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
@@ -89,6 +93,7 @@ func call(t *testing.T, ctx context.Context, c *mcp.ClientSession, name string, 
 	require.False(t, r.IsError, fmt.Sprint(r.Content))
 	return r
 }
+
 func httpCall(t *testing.T, ctx context.Context, e endpoints, method, path, key string, body any, status int) []byte {
 	t.Helper()
 	raw, err := json.Marshal(body)
@@ -106,6 +111,7 @@ func httpCall(t *testing.T, ctx context.Context, e endpoints, method, path, key 
 	require.Equal(t, status, res.StatusCode, string(data))
 	return data
 }
+
 func testContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

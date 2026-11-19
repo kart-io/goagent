@@ -1,10 +1,10 @@
 package llm
 
 import (
-	"github.com/kart-io/goagent/core/usage"
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/usage"
 )
 
 // ClientOption defines an LLM client configuration option.

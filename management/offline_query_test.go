@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
@@ -19,7 +21,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 type offlineQueryPolicy struct {
@@ -31,6 +32,7 @@ type offlineQueryPolicy struct {
 func (p *offlineQueryPolicy) Scope(context.Context, mg.Actor, string, string) (mg.Visibility, error) {
 	return p.visibility, p.scopeErr
 }
+
 func (p *offlineQueryPolicy) Authorize(_ context.Context, a mg.Actor, action string, ref mg.ResourceRef) error {
 	if p.authorize != nil {
 		return p.authorize(a, action, ref)
@@ -301,18 +303,22 @@ func (s *offlineQueryLog) Read(ctx context.Context, id string, after int64) ([]s
 	}
 	return s.Store.Read(ctx, id, after)
 }
+
 func (s *offlineQueryLog) Append(context.Context, string, int64, ...session.Event) (int64, error) {
 	s.writes++
 	return 0, errors.New("查询禁止追加日志")
 }
+
 func (s *offlineQueryLog) AppendAll(context.Context, ...session.AppendBatch) ([]int64, error) {
 	s.writes++
 	return nil, errors.New("查询禁止批量追加日志")
 }
+
 func (s *offlineQueryLog) Fork(context.Context, string, string, int64) error {
 	s.writes++
 	return errors.New("查询禁止分叉日志")
 }
+
 func (s *offlineQueryLog) Lock(context.Context, string, string) (func() error, error) {
 	s.locks++
 	return nil, errors.New("查询禁止获取执行锁")

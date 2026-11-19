@@ -56,6 +56,10 @@ func (r *revisionRuntime) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResul
 	if err != nil {
 		return mg.RunResult{}, err
 	}
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{ExecutionKey: spec.Task.ExecutionKey})
+	if err != nil {
+		return mg.RunResult{}, err
+	}
 	end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{})
 	if err != nil {
 		return mg.RunResult{}, err
@@ -64,7 +68,7 @@ func (r *revisionRuntime) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResul
 	if len(events) > 0 {
 		seq = events[len(events)-1].Seq
 	}
-	if _, err = r.r.Sessions.Append(ctx, r.r.Session.LogID, seq, end); err != nil {
+	if _, err = r.r.Sessions.Append(ctx, r.r.Session.LogID, seq, start, end); err != nil {
 		return mg.RunResult{}, err
 	}
 	out, err := json.Marshal(r.values)

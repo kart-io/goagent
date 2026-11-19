@@ -85,12 +85,14 @@ func (a *ConfigurableAgent[S]) prepareAgentUsage(ctx context.Context) (context.C
 	return ctx, nil
 }
 
-type modelMetadataKey struct{}
-type modelMetadata struct {
-	Provider, Model     string
-	Reasoning           usage.ReasoningConfig `json:",omitzero"`
-	ReasoningConfigured bool                  `json:",omitzero"`
-}
+type (
+	modelMetadataKey struct{}
+	modelMetadata    struct {
+		Provider, Model     string
+		Reasoning           usage.ReasoningConfig `json:",omitzero"`
+		ReasoningConfigured bool                  `json:",omitzero"`
+	}
+)
 
 func withModelMetadata(ctx context.Context, client llm.Client, req *llm.CompletionRequest) context.Context {
 	c, _ := budget.FromContext(ctx)

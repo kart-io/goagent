@@ -11,13 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/testing/replay"
 	"github.com/kart-io/goagent/tools"
 )
@@ -51,9 +50,11 @@ func (m *model) CompleteToolsStream(context.Context, *llm.CompletionRequest, []i
 	close(ch)
 	return ch, nil
 }
+
 func (m *model) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return nil, errors.New("unused")
 }
+
 func (m *model) Chat(context.Context, []llm.Message) (*llm.CompletionResponse, error) {
 	return nil, errors.New("unused")
 }
@@ -62,6 +63,7 @@ func (*model) IsAvailable() bool         { return true }
 func (m *model) CompleteStream(context.Context, *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return nil, errors.New("unused")
 }
+
 func (m *model) ChatStream(context.Context, []llm.Message) (<-chan *llm.StreamChunk, error) {
 	return nil, errors.New("unused")
 }

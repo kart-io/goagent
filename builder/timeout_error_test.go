@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm"
 )
 
 // 运行超时须以超时错误报告。曾有两处随机丢失：终态事件与已结束的执行 ctx 竞争；提供方在 ctx 结束后不发终态关闭流，

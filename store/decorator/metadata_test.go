@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store"
 	"github.com/kart-io/goagent/store/decorator"
 	"github.com/kart-io/goagent/store/memory"
-	"github.com/stretchr/testify/require"
 )
 
 type legacyOnly struct{ store.Store }

@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kart-io/goagent/codec/json"
 	yamlv3 "go.yaml.in/yaml/v3"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // DecodeMapping decodes one untrusted YAML mapping with string keys at every

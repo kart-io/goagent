@@ -239,8 +239,10 @@ var annotationKeywords = map[string]bool{
 }
 
 // exactKeywords 是 checkExact 按原文检查或逐层下探的关键字。
-var exactKeywords = []string{"Type", "Types", "MultipleOf", "Minimum", "Maximum", "ExclusiveMinimum", "ExclusiveMaximum",
-	"Properties", "AdditionalProperties", "PrefixItems", "Items"}
+var exactKeywords = []string{
+	"Type", "Types", "MultipleOf", "Minimum", "Maximum", "ExclusiveMinimum", "ExclusiveMaximum",
+	"Properties", "AdditionalProperties", "PrefixItems", "Items",
+}
 
 // usesOnly 报告 s 是否只用了 allowed 与 extra 中的关键字；采用白名单，jsonschema 新增关键字时默认拒绝。
 func usesOnly(s *jsonschema.Schema, allowed map[string]bool, extra ...string) bool {

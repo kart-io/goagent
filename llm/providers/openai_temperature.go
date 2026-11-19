@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sashabaranov/go-openai"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
-
-	"github.com/sashabaranov/go-openai"
 )
 
 type zeroTemperatureKey struct{}

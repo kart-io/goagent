@@ -7,8 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -18,7 +19,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 type agentUsageSink struct {
@@ -38,6 +38,7 @@ func (m *panicRetryUsageModel) CompleteToolsStream(ctx context.Context, req *llm
 	}
 	return m.nativeEventModel.CompleteToolsStream(ctx, req, ts)
 }
+
 func TestAgentUsagePanicRetryDoesNotReusePreviousEvidence(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "panic-retry", Version: "v1", MaxModelRequests: 2, MaxAgentCalls: 2})
 	require.NoError(t, err)
@@ -160,6 +161,7 @@ func (s *evidenceFailureStore) Save(ctx context.Context, id string, snapshot *du
 	}
 	return s.Store.Save(ctx, id, snapshot)
 }
+
 func TestAgentUsageKnownModelReplayAfterEvidenceSaveFailure(t *testing.T) {
 	file, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -197,6 +199,7 @@ func (s *agentUsageSink) Observe(_ context.Context, e observe.Event) {
 	defer s.mu.Unlock()
 	s.events = append(s.events, e)
 }
+
 func (s *agentUsageSink) snapshot() []observe.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()

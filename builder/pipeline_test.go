@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func pipelineTools(t *testing.T, p *tools.Pipeline) []interfaces.Tool {
@@ -45,7 +47,7 @@ func TestPipelineAdditionalContextAndSession(t *testing.T) {
 	tool, injected := second[len(second)-2], second[len(second)-1]
 	require.Equal(t, "tool", tool.Role)
 	require.Equal(t, "found", tool.Content)
-	require.Equal(t, llm.Message{Role: "user", Content: "[工具附加上下文]\n- lint passed\n- 2 files changed"}, injected)
+	require.Equal(t, llm.Message{Role: constants.RoleUser, Content: "[工具附加上下文]\n- lint passed\n- 2 files changed"}, injected)
 }
 
 // PreStop 终止整个运行，不再请求模型。

@@ -79,6 +79,7 @@ func (c *BudgetClient) CompleteStream(ctx context.Context, req *llm.CompletionRe
 	}()
 	return out, nil
 }
+
 func (c *BudgetClient) Measurements() Measurements {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/middleware"
 	"github.com/kart-io/goagent/tools"
 )
@@ -32,7 +31,7 @@ func (s *SimpleLLMClient) Complete(ctx context.Context, req *llm.CompletionReque
 	content := "I have selected the most relevant tools."
 	if len(req.Messages) > 0 {
 		lastMsg := req.Messages[len(req.Messages)-1]
-		if lastMsg.Role == "user" {
+		if lastMsg.Role == shared.RoleUser {
 			// Simple pattern matching for tool selection
 			userContent := lastMsg.Content
 			if len(userContent) > 0 {

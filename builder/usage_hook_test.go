@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUsageHookWithoutObserverOrBudget(t *testing.T) {
@@ -51,6 +51,7 @@ func (s *hookEvidenceLoadFailure) Save(ctx context.Context, id string, snapshot 
 	}
 	return nil
 }
+
 func (s *hookEvidenceLoadFailure) Load(ctx context.Context, id string) (*durable.Snapshot, error) {
 	if s.fail && strings.HasPrefix(id, "goagent/budget/") {
 		s.fail = false
@@ -58,6 +59,7 @@ func (s *hookEvidenceLoadFailure) Load(ctx context.Context, id string) (*durable
 	}
 	return s.Store.Load(ctx, id)
 }
+
 func TestUsageHookKeepsKnownEvidenceWhenAccountingLoadFails(t *testing.T) {
 	file, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)

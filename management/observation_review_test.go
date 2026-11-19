@@ -1,9 +1,10 @@
 package management
 
 import (
-	"github.com/kart-io/goagent/codec/json"
 	"testing"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestReviewRecoveredDuration(t *testing.T) {

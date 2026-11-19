@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools/middleware"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDesignMiddlewareObjectUsesWrap(t *testing.T) {

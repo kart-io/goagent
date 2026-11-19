@@ -3,9 +3,9 @@ package llm
 import (
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestTemperatureZeroJSONRoundTrip(t *testing.T) {

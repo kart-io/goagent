@@ -18,17 +18,18 @@ import (
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
 )
 
-const Prompt = "Look up refund_days for order DEMO-1001. Return only the number."
-const ToolSchema = `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"],"additionalProperties":false}`
+const (
+	Prompt     = "Look up refund_days for order DEMO-1001. Return only the number."
+	ToolSchema = `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"],"additionalProperties":false}`
+)
 
 type Outcome struct {
 	Answer     string `json:"answer"`
@@ -171,15 +172,19 @@ func (m *goModel) IsAvailable() bool         { return true }
 func (m *goModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unexpected nonstream model path").WithComponent("evaluation/frameworkbench").WithOperation("complete")
 }
+
 func (m *goModel) Chat(context.Context, []llm.Message) (*llm.CompletionResponse, error) {
 	return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "unexpected chat path").WithComponent("evaluation/frameworkbench").WithOperation("chat")
 }
+
 func (m *goModel) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, r, nil)
 }
+
 func (m *goModel) ChatStream(ctx context.Context, msg []llm.Message) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteStream(ctx, &llm.CompletionRequest{Messages: msg})
 }
+
 func (m *goModel) CompleteToolsStream(_ context.Context, r *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	m.counts.model.Add(1)
 	if m.scenario == "stream_64" {
@@ -318,6 +323,7 @@ type einoModel struct {
 func (m *einoModel) WithTools(_ []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
 	return m, nil
 }
+
 func (m *einoModel) Generate(_ context.Context, msg []*schema.Message, _ ...model.Option) (*schema.Message, error) {
 	m.counts.model.Add(1)
 	if m.scenario == "stream_64" {
@@ -332,6 +338,7 @@ func (m *einoModel) Generate(_ context.Context, msg []*schema.Message, _ ...mode
 	}
 	return &schema.Message{Role: schema.Assistant, ResponseMeta: &schema.ResponseMeta{FinishReason: "tool_calls", Usage: &schema.TokenUsage{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2}}, ToolCalls: []schema.ToolCall{{ID: "call-1", Type: "function", Function: schema.FunctionCall{Name: "lookup", Arguments: `{"order_id":"DEMO-1001"}`}}}}, nil
 }
+
 func (m *einoModel) Stream(_ context.Context, _ []*schema.Message, _ ...model.Option) (*schema.StreamReader[*schema.Message], error) {
 	m.counts.model.Add(1)
 	if m.scenario != "stream_64" {
@@ -350,6 +357,7 @@ type einoTool struct{ counts *counts }
 func (t *einoTool) Info(context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{Name: "lookup", Desc: "Look up refund_days for an order", ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{"order_id": {Type: schema.String, Required: true}})}, nil
 }
+
 func (t *einoTool) InvokableRun(_ context.Context, args string, _ ...etool.Option) (string, error) {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(args), &obj); err != nil {

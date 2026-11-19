@@ -3,9 +3,13 @@ package constants
 
 // 消息角色。
 const (
-	RoleSystem    = "system"
-	RoleUser      = "user"
-	RoleAssistant = "assistant"
+	RoleSystem       = "system"
+	RoleUser         = "user"
+	RoleTool         = "tool"
+	RoleAssistant    = "assistant"
+	RoleObservation  = "observation"
+	RoleFunctionCall = "function_call"
+	RoleHuman        = "human"
 )
 
 // 上下文与配置键。

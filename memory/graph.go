@@ -405,8 +405,10 @@ func writeRelations(t *tx, j Job, at, now time.Time, rels []relation, refs map[i
 		if ok {
 			cur.Revision++
 		} else {
-			cur = Entity{ID: res.ID, Namespace: slices.Clone(t.ns), Name: strings.TrimSpace(res.Name), Type: res.Type, CreatedAt: now,
-				Incarnation: t.incarnation(), Revision: 1, ContentRev: 1}
+			cur = Entity{
+				ID: res.ID, Namespace: slices.Clone(t.ns), Name: strings.TrimSpace(res.Name), Type: res.Type, CreatedAt: now,
+				Incarnation: t.incarnation(), Revision: 1, ContentRev: 1,
+			}
 			fresh[res.ID] = true
 		}
 		touched[res.ID] = &cur
@@ -453,8 +455,10 @@ func writeRelations(t *tx, j Job, at, now time.Time, rels []relation, refs map[i
 			t.Edges.Put(k, e)
 			continue
 		}
-		edge := Edge{ID: id, Namespace: slices.Clone(t.ns), Subject: subj.ID, Predicate: pred, Object: obj.ID, Fact: fact, ValidFrom: at, CreatedAt: now,
-			Derivations: []Derivation{d}}
+		edge := Edge{
+			ID: id, Namespace: slices.Clone(t.ns), Subject: subj.ID, Predicate: pred, Object: obj.ID, Fact: fact, ValidFrom: at, CreatedAt: now,
+			Derivations: []Derivation{d},
+		}
 		var superseded []string
 		if r.Exclusive {
 			for k, old := range t.Edges.m {

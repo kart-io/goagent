@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/stretchr/testify/require"
 )
 
 func TestFormattedOperationErrorClassification(t *testing.T) {

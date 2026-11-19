@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	"github.com/kart-io/goagent/evaluation"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/evaluation"
 )
 
 func TestRunWithExecutorUsesSharedMeterAndScoring(t *testing.T) {

@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestDispatchGovernanceReturnsIndependentValues(t *testing.T) {

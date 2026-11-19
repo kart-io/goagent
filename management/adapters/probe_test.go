@@ -3,18 +3,19 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/codec/json"
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 type probe struct {
@@ -56,6 +57,7 @@ func (p *probe) CompleteToolsStream(_ context.Context, r *llm.CompletionRequest,
 	close(ch)
 	return ch, nil
 }
+
 func (p *probe) run(ctx context.Context, inputs map[string]string) (*builder.AgentOutput, error) {
 	ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "probe-run"), session.DurableStore(p.store, "probe-session"))
 	for key, input := range inputs {

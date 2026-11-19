@@ -6,10 +6,11 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/durable/migrate"
-	"github.com/stretchr/testify/require"
 )
 
 func fixture(t *testing.T) (*durable.FileStore, context.Context, migrate.OperationRef, *durable.Snapshot, *int) {
@@ -129,6 +130,7 @@ func (s *faultStore) Lock(ctx context.Context, id string) (func() error, error) 
 	s.locked = append(s.locked, id)
 	return func() error { s.released = append(s.released, id); return u() }, nil
 }
+
 func (s *faultStore) Load(ctx context.Context, id string) (*durable.Snapshot, error) {
 	if s.loadErr != nil {
 		return nil, s.loadErr
@@ -145,6 +147,7 @@ func (s *faultStore) Load(ctx context.Context, id string) (*durable.Snapshot, er
 	}
 	return snapshot, nil
 }
+
 func (s *faultStore) SaveAll(ctx context.Context, writes ...durable.Write) error {
 	s.writes++
 	s.seenWrites = append(s.seenWrites, writes...)

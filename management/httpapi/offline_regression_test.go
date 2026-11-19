@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
@@ -18,7 +20,6 @@ import (
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/httpapi"
 	"github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 // 所有请求都经过真实路由和服务；仅存储与执行器使用共享的离线替身。
@@ -164,8 +165,10 @@ func TestOfflineSessionHistoryAndForkRoutes(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"after_seq=非法", 400, "invalid_request"}, {"after_seq=-1", 400, "invalid_request"},
-		{"type=management/private", 403, "forbidden"}, {"type=" + url.QueryEscape(constants.SessionEventBoundarySnapshot), 403, "forbidden"},
+		{"after_seq=非法", 400, "invalid_request"},
+		{"after_seq=-1", 400, "invalid_request"},
+		{"type=management/private", 403, "forbidden"},
+		{"type=" + url.QueryEscape(constants.SessionEventBoundarySnapshot), 403, "forbidden"},
 	} {
 		t.Run(tc.query, func(t *testing.T) {
 			offlineProblem(t, offlineRequest(t, h, "GET", base+"/history?"+tc.query, "", "", tc.status), tc.code)

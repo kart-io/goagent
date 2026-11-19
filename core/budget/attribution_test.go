@@ -3,13 +3,15 @@ package budget
 import (
 	"context"
 	"fmt"
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"math"
-	"testing"
 )
 
 func TestAttributionTree(t *testing.T) {

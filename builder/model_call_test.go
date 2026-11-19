@@ -7,11 +7,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBudgetCoversParentChildAndSummary(t *testing.T) {
@@ -51,6 +52,7 @@ func TestBudgetCoversParentChildAndSummary(t *testing.T) {
 	require.Equal(t, 2, s.ReservedRequests)
 	require.Equal(t, 7, s.KnownTokens.TotalTokens)
 }
+
 func TestReplayUsageIsNotNewCost(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -69,6 +71,7 @@ func TestReplayUsageIsNotNewCost(t *testing.T) {
 	require.Equal(t, 1, s.ReservedRequests)
 	require.Equal(t, 8, s.KnownTokens.TotalTokens)
 }
+
 func TestFailedModelUsageReconciliation(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -85,6 +88,7 @@ func TestFailedModelUsageReconciliation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 19, s.KnownTokens.TotalTokens)
 }
+
 func TestDurableModelRejectsMemoryBudget(t *testing.T) {
 	store, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -111,6 +115,7 @@ func (s *usageSaveFailure) Save(ctx context.Context, id string, snapshot *durabl
 	}
 	return s.Store.Save(ctx, id, snapshot)
 }
+
 func TestUsageRegistrationFailureReplaysSavedModel(t *testing.T) {
 	file, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -128,6 +133,7 @@ func TestUsageRegistrationFailureReplaysSavedModel(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 8, s.KnownTokens.TotalTokens)
 }
+
 func TestMemoryBudgetDoesNotTreatHostKeyAsReplay(t *testing.T) {
 	c, err := budget.New(budget.Config{RootKey: "root", Version: "v1", MaxModelRequests: 2})
 	require.NoError(t, err)

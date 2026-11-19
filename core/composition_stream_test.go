@@ -19,12 +19,15 @@ type externalStreamRunnable struct {
 func (r externalStreamRunnable) Stream(ctx context.Context, in any) (<-chan StreamChunk[any], error) {
 	return r.stream(ctx, in)
 }
+
 func compositionIdentity() *RunnableFunc[any, any] {
 	return NewRunnableFunc(func(_ context.Context, in any) (any, error) { return in, nil })
 }
+
 func compositions(last Runnable[any, any]) map[string]Runnable[any, any] {
 	return map[string]Runnable[any, any]{"pipe": NewRunnablePipe[any, any, any](compositionIdentity(), last), "sequence": NewRunnableSequence(compositionIdentity(), last)}
 }
+
 func TestCompositionRejectsMalformedStreams(t *testing.T) {
 	failure := errors.New("late failure")
 	cases := map[string][]StreamChunk[any]{
@@ -71,6 +74,7 @@ func TestCompositionRejectsMalformedStreams(t *testing.T) {
 		})
 	}
 }
+
 func TestEmptySequenceStreamsIdentity(t *testing.T) {
 	stream, err := NewRunnableSequence().Stream(context.Background(), "identity")
 	require.NoError(t, err)
@@ -80,6 +84,7 @@ func TestEmptySequenceStreamsIdentity(t *testing.T) {
 	}
 	require.Equal(t, []StreamChunk[any]{{Data: "identity", Done: true}}, chunks)
 }
+
 func TestCompositionCallbacksRemainIndependent(t *testing.T) {
 	for name, r := range compositions(compositionIdentity()) {
 		t.Run(name, func(t *testing.T) {
@@ -100,6 +105,7 @@ func TestCompositionCallbacksRemainIndependent(t *testing.T) {
 		})
 	}
 }
+
 func TestCompositionCallbackClonesDoNotShareBackingSlice(t *testing.T) {
 	for name, r := range compositions(compositionIdentity()) {
 		t.Run(name, func(t *testing.T) {
@@ -120,6 +126,7 @@ func TestCompositionCallbackClonesDoNotShareBackingSlice(t *testing.T) {
 		})
 	}
 }
+
 func TestCompositionCancellationStopsDownstream(t *testing.T) {
 	for _, name := range []string{"pipe", "sequence"} {
 		t.Run(name, func(t *testing.T) {
@@ -186,6 +193,7 @@ func TestCompositionBatchUsesConfiguredConcurrencyAndPreservesPartialResults(t *
 		})
 	}
 }
+
 func TestCompositionAlreadyCanceledSkipsExecution(t *testing.T) {
 	var calls atomic.Int32
 	upstream := NewRunnableFunc(func(_ context.Context, in any) (any, error) { calls.Add(1); return in, nil })
@@ -205,6 +213,7 @@ func TestCompositionAlreadyCanceledSkipsExecution(t *testing.T) {
 	}
 	require.Zero(t, calls.Load())
 }
+
 func TestCompositionUpstreamFailureSkipsDownstream(t *testing.T) {
 	failure := errors.New("upstream")
 	upstream := NewRunnableFunc(func(context.Context, any) (any, error) { return nil, failure })
@@ -275,6 +284,7 @@ func TestCompositionStreamsOnlyLastStageAndRunsIndependentCallbacks(t *testing.T
 		})
 	}
 }
+
 func TestCompositionParentEndFailureSuppressesSuccess(t *testing.T) {
 	failure := errors.New("parent rejects end")
 	for name, r := range compositions(compositionIdentity()) {

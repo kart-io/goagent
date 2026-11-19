@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	bench "github.com/kart-io/goagent/evaluation/agentbench"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	bench "github.com/kart-io/goagent/evaluation/agentbench"
 )
 
 func TestPreviewKeepsConfiguredBudgetWithoutModelRequests(t *testing.T) {
@@ -131,7 +131,6 @@ func TestProviderCLIReportsParameterFailures(t *testing.T) {
 					}
 				})
 			}
-
 		})
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
@@ -87,8 +88,10 @@ func LoadLongMemEval(r io.Reader) ([]Case, error) {
 		if err != nil {
 			return nil, invalid("LongMemEval 题目 %s 的提问日期 %q 无法解析", item.QuestionID, item.QuestionDate)
 		}
-		c.Questions = []Question{{ID: item.QuestionID, Type: item.QuestionType, Text: item.Question, Answer: scalar(item.Answer),
-			Date: date, Evidence: item.AnswerSessionIDs, Abstain: strings.Contains(item.QuestionID, "_abs")}}
+		c.Questions = []Question{{
+			ID: item.QuestionID, Type: item.QuestionType, Text: item.Question, Answer: scalar(item.Answer),
+			Date: date, Evidence: item.AnswerSessionIDs, Abstain: strings.Contains(item.QuestionID, "_abs"),
+		}}
 		out = append(out, c)
 	}
 	return out, nil
@@ -145,9 +148,9 @@ func LoadLoCoMo(r io.Reader) ([]Case, error) {
 			last = date
 			s := Session{ID: key, Date: date}
 			for _, t := range turns {
-				role := "assistant"
+				role := constants.RoleAssistant
 				if t.Speaker == speakerA {
-					role = "user"
+					role = constants.RoleUser
 				}
 				s.Turns = append(s.Turns, llm.Message{Role: role, Content: t.Speaker + ": " + t.Text})
 			}
@@ -161,8 +164,10 @@ func LoadLoCoMo(r io.Reader) ([]Case, error) {
 					evidence = append(evidence, "session_"+d)
 				}
 			}
-			c.Questions = append(c.Questions, Question{ID: item.SampleID + "/" + strconv.Itoa(i), Type: cmp.Or(locomoTypes[q.Category], "unknown"),
-				Text: q.Question, Answer: scalar(q.Answer), Date: last, Evidence: evidence, Abstain: q.Category == 5, Category: q.Category})
+			c.Questions = append(c.Questions, Question{
+				ID: item.SampleID + "/" + strconv.Itoa(i), Type: cmp.Or(locomoTypes[q.Category], "unknown"),
+				Text: q.Question, Answer: scalar(q.Answer), Date: last, Evidence: evidence, Abstain: q.Category == 5, Category: q.Category,
+			})
 		}
 		out = append(out, c)
 	}

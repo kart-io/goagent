@@ -8,8 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm"
 )
 
 func TestOpenAIToolStreamInterleavingAndFailure(t *testing.T) {

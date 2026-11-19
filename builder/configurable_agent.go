@@ -3,14 +3,15 @@ package builder
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/middleware"
+	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -133,7 +134,7 @@ func (a *ConfigurableAgent[S]) handleError(ctx context.Context, err error) (hand
 	for _, cb := range a.callbacks {
 		if cbErr := cb.OnError(ctx, err); cbErr != nil {
 			// 记录回调错误但不覆盖原始错误
-			fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", cbErr)
+			logging.OrDefault(a.config.Logger).ErrorContext(ctx, "回调 OnError 失败", "error", cbErr)
 		}
 	}
 	return err
@@ -180,8 +181,37 @@ func (a *ConfigurableAgent[S]) buildSystemPromptContent() string {
 	return sb.String()
 }
 
-// invokeToolCall 保留工具状态，供直接返回路径校验成功标志。
-func (a *ConfigurableAgent[S]) invokeToolCall(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
+// invokeToolCall 为未声明 ObservedCallTool 的工具发出 tool 生命周期事件；Dispatcher 派发的工具自己发出，不重复。
+func (a *ConfigurableAgent[S]) invokeToolCall(ctx context.Context, call ToolCall) (out *interfaces.ToolOutput, err error) {
+	if a.emitsToolEvents(call.Name) {
+		return a.callTool(ctx, call)
+	}
+	ctx, end := observe.Start(ctx, observe.Event{Type: "tool", Path: call.Name})
+	// 不 recover：panic 照常上抛并保留原始调用栈，事件按 panic 类别结束。
+	returned := false
+	defer func() {
+		if !returned {
+			err = agentErrors.NewPanicError(fmt.Sprintf("工具 %q", call.Name), "panic")
+		}
+		end(err, false)
+	}()
+	out, err = a.callTool(ctx, call)
+	returned = true
+	return out, err
+}
+
+func (a *ConfigurableAgent[S]) emitsToolEvents(name string) bool {
+	for _, tool := range a.tools {
+		if tool.Name() == name {
+			o, ok := tool.(interfaces.ObservedCallTool)
+			return ok && o.EmitsToolEvents()
+		}
+	}
+	return false
+}
+
+// callTool 保留工具状态，供直接返回路径校验成功标志。
+func (a *ConfigurableAgent[S]) callTool(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
 	// 查找工具
 	for _, tool := range a.tools {
 		if tool.Name() == call.Name {

@@ -14,8 +14,10 @@ import (
 	mg "github.com/kart-io/goagent/management"
 )
 
-type docKey struct{ kind, tenant, id string }
-type documents map[docKey]mg.Document
+type (
+	docKey    struct{ kind, tenant, id string }
+	documents map[docKey]mg.Document
+)
 
 // Store 用串行事务和深拷贝保证失败写入不可见，读取结果不会泄漏可变引用。
 type Store struct {
@@ -42,6 +44,7 @@ func validKind(kind string) error {
 	}
 	return nil
 }
+
 func validDocument(d mg.Document) error {
 	if err := validKind(d.Kind); err != nil {
 		return err
@@ -59,6 +62,7 @@ func (s *Store) FailNext(operation, kind string, err error) {
 	defer s.mu.Unlock()
 	s.failure = &failure{operation, kind, err}
 }
+
 func (s *Store) fail(operation, kind string) error {
 	if f := s.failure; f != nil && f.operation == operation && f.kind == kind {
 		s.failure = nil
@@ -66,6 +70,7 @@ func (s *Store) fail(operation, kind string) error {
 	}
 	return nil
 }
+
 func (s *Store) WithinTx(ctx context.Context, fn func(mg.Tx) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -85,16 +90,19 @@ func (s *Store) WithinTx(ctx context.Context, fn func(mg.Tx) error) error {
 	s.docs = copy
 	return nil
 }
+
 func (s *Store) Get(ctx context.Context, kind, tenant, id string) (mg.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return (&transaction{s.docs, s}).Get(ctx, kind, tenant, id)
 }
+
 func (s *Store) List(ctx context.Context, kind string, selection mg.Selection) ([]mg.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return (&transaction{s.docs, s}).List(ctx, kind, selection)
 }
+
 func (tx *transaction) Get(ctx context.Context, kind, tenant, id string) (mg.Document, error) {
 	if err := validKind(kind); err != nil {
 		return mg.Document{}, err
@@ -111,6 +119,7 @@ func (tx *transaction) Get(ctx context.Context, kind, tenant, id string) (mg.Doc
 	}
 	return clone(d), nil
 }
+
 func (tx *transaction) Insert(ctx context.Context, d mg.Document) error {
 	if err := validDocument(d); err != nil {
 		return err
@@ -127,6 +136,7 @@ func (tx *transaction) Insert(ctx context.Context, d mg.Document) error {
 	tx.docs[key(d)] = clone(d)
 	return nil
 }
+
 func (tx *transaction) CAS(ctx context.Context, d mg.Document, expected int64) error {
 	if err := validDocument(d); err != nil {
 		return err
@@ -145,6 +155,7 @@ func (tx *transaction) CAS(ctx context.Context, d mg.Document, expected int64) e
 	tx.docs[key(d)] = clone(d)
 	return nil
 }
+
 func (tx *transaction) Delete(ctx context.Context, kind, tenant, id string, expected int64) error {
 	if err := validKind(kind); err != nil {
 		return err
@@ -163,6 +174,7 @@ func (tx *transaction) Delete(ctx context.Context, kind, tenant, id string, expe
 	delete(tx.docs, k)
 	return nil
 }
+
 func (tx *transaction) List(ctx context.Context, kind string, selection mg.Selection) ([]mg.Document, error) {
 	if err := validKind(kind); err != nil {
 		return nil, err

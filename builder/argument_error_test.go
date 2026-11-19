@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 const argSchema = `{"type":"object","properties":{"id":{"type":"string","minLength":1}},"required":["id"],"additionalProperties":false}`
@@ -35,7 +36,8 @@ func TestArgumentErrorReturnedToModelWithinTurn(t *testing.T) {
 	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "arg-turn"), store)
 	model := nativeModel(
 		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{
-			nativeCall("a", "lookup", `{"id":""}`), nativeCall("b", "quote", `{"id":"q1"}`)}}},
+			nativeCall("a", "lookup", `{"id":""}`), nativeCall("b", "quote", `{"id":"q1"}`),
+		}}},
 		[]*llm.StreamChunk{{Done: true, FinishReason: "tool_calls", ToolCalls: []llm.ToolCall{nativeCall("c", "lookup", `{"id":"k1"}`)}}},
 		[]*llm.StreamChunk{{Delta: "answer"}, {Done: true, FinishReason: "stop"}},
 	)

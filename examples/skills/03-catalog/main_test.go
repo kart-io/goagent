@@ -10,8 +10,8 @@ import (
 
 func TestRunReturnsToolRejection(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "faq"), 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "faq", "SKILL.md"), []byte("---\nname: faq\ndescription: demo\n---\nRead references/refunds.md"), 0600))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "faq"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "faq", "SKILL.md"), []byte("---\nname: faq\ndescription: demo\n---\nRead references/refunds.md"), 0o600))
 	err := run(dir)
 	require.ErrorContains(t, err, "load_skill rejected")
 	require.ErrorContains(t, err, "has no file")

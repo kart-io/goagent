@@ -83,7 +83,8 @@ func example2WithTools(apiKey string) {
 	)
 
 	// 创建带工具的 Agent
-	agent := quickAgentWithTools(apiKey,
+	agent := quickAgentWithTools(
+		apiKey,
 		"你是智能助手，可以使用工具帮助用户",
 		calculator, weather,
 	)

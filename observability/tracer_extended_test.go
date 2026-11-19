@@ -183,18 +183,21 @@ func TestAgentTracer_AddEvent_WithComplexAttributes(t *testing.T) {
 	// Add events with various attribute combinations
 	tracer.AddEvent(ctx, "event1")
 
-	tracer.AddEvent(ctx, "event2",
+	tracer.AddEvent(
+		ctx, "event2",
 		attribute.String("type", "info"),
 		attribute.Int("count", 5),
 	)
 
-	tracer.AddEvent(ctx, "event3",
+	tracer.AddEvent(
+		ctx, "event3",
 		attribute.String("type", "warning"),
 		attribute.Float64("severity", 0.8),
 		attribute.Bool("requires_action", true),
 	)
 
-	tracer.AddEvent(ctx, "event4",
+	tracer.AddEvent(
+		ctx, "event4",
 		attribute.StringSlice("tags", []string{"important", "urgent"}),
 		attribute.IntSlice("ids", []int{1, 2, 3}),
 	)
@@ -403,7 +406,8 @@ func TestAgentTracer_Concurrent_AttributeUpdates(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			tracer.SetAttributes(ctx,
+			tracer.SetAttributes(
+				ctx,
 				attribute.Int("iteration", idx),
 				attribute.String("worker", "worker-"+string(rune('0'+(idx%10)))),
 			)

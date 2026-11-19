@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/core/durable"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // fakeClock 是可注入内存版的时钟。

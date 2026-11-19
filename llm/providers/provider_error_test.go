@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/require"
 )
 
 func requireProviderError(t *testing.T, err error, status int, retryAfter time.Duration, retryable bool) {

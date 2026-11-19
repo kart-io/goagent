@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	mt "github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 func offlineCount(t *testing.T, f *mt.Fixture, kind string) int {
@@ -155,19 +156,22 @@ func TestOfflineSessionPreparationAndForkPrefix(t *testing.T) {
 	require.Equal(t, "management/session", events[0].Type)
 	_, err = f.Service.ForkSession(ctx, f.Actor, mg.ForkSessionRequest{IdempotencyKey: "no-boundary", SessionID: se.ID, ExpectedRevision: se.Revision})
 	require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: "一"})
+	require.NoError(t, err)
 	end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{})
 	require.NoError(t, err)
 	aborted, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{Aborted: true})
 	require.NoError(t, err)
-	_, err = f.Sessions.Append(ctx, se.LogID, 1, end, aborted)
+	aborted.Surface = &session.Surface{Start: 4, End: 4}
+	_, err = f.Sessions.Append(ctx, se.LogID, 1, start, end, start, aborted)
 	require.NoError(t, err)
-	_, err = f.Service.ForkSession(ctx, f.Actor, mg.ForkSessionRequest{IdempotencyKey: "aborted", SessionID: se.ID, UpTo: 3, ExpectedRevision: se.Revision})
+	_, err = f.Service.ForkSession(ctx, f.Actor, mg.ForkSessionRequest{IdempotencyKey: "aborted", SessionID: se.ID, UpTo: 5, ExpectedRevision: se.Revision})
 	require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)
 	r := mg.ForkSessionRequest{IdempotencyKey: "fork", SessionID: se.ID, ExpectedRevision: se.Revision}
 	child, err := f.Service.ForkSession(ctx, f.Actor, r)
 	require.NoError(t, err)
 	require.Equal(t, "preparing", child.Status)
-	require.Equal(t, int64(2), child.ForkSeq)
+	require.Equal(t, int64(3), child.ForkSeq)
 	require.Equal(t, se.ID, child.ParentID)
 	require.Equal(t, se.Version, child.Version)
 	again, err := f.Service.ForkSession(ctx, f.Actor, r)
@@ -182,10 +186,10 @@ func TestOfflineSessionPreparationAndForkPrefix(t *testing.T) {
 	require.NoError(t, err)
 	branch, err := f.Sessions.Read(ctx, child.LogID, 0)
 	require.NoError(t, err)
-	require.Equal(t, source[:2], branch)
+	require.Equal(t, source[:3], branch)
 	extra, err := session.NewEvent("business/message", "独立分支")
 	require.NoError(t, err)
-	_, err = f.Sessions.Append(ctx, child.LogID, 2, extra)
+	_, err = f.Sessions.Append(ctx, child.LogID, 3, extra)
 	require.NoError(t, err)
 	sourceAfter, err := f.Sessions.Read(ctx, se.LogID, 0)
 	require.NoError(t, err)
@@ -322,14 +326,20 @@ func TestOfflineVersionValidationAndMissingPublication(t *testing.T) {
 }
 
 func TestOfflineForkRejectsUnsafeSource(t *testing.T) {
-	for _, mode := range []string{"修订冲突", "会话未准备", "活跃任务", "负序号", "代理停用", "不支持分支", "队列未排空"} {
+	for _, mode := range []string{"修订冲突", "会话未准备", "活跃任务", "负序号", "代理停用", "不支持分支", "队列未排空", "日志结构无效"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx := context.Background()
 			f := mt.NewFixture(t)
 			se := f.ReadySession(t)
+			start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: "一"})
+			require.NoError(t, err)
 			end, err := session.NewEvent(constants.SessionEventTurnEnd, session.TurnEnd{})
 			require.NoError(t, err)
-			_, err = f.Sessions.Append(ctx, se.LogID, 1, end)
+			turn := []session.Event{start, end}
+			if mode == "日志结构无效" {
+				turn = turn[1:]
+			}
+			_, err = f.Sessions.Append(ctx, se.LogID, 1, turn...)
 			require.NoError(t, err)
 			r := mg.ForkSessionRequest{IdempotencyKey: "fork", SessionID: se.ID, ExpectedRevision: se.Revision}
 			want := agentErrors.ErrManagementConflict
@@ -357,6 +367,8 @@ func TestOfflineForkRejectsUnsafeSource(t *testing.T) {
 				v.Capabilities.Fork = false
 				require.NoError(t, f.Store.Put(ctx, "versions", v))
 				want = agentErrors.ErrManagementUnsupported
+			case "日志结构无效":
+				want = agentErrors.ErrManagementInvalid
 			case "队列未排空":
 				_, e := f.Service.SubmitTask(ctx, f.Actor, mg.SubmitTaskRequest{IdempotencyKey: "pending", SessionID: se.ID, Input: []byte(`1`)})
 				require.NoError(t, e)

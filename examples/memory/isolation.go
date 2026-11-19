@@ -21,7 +21,8 @@ var (
 )
 
 func isolation(ctx context.Context, w io.Writer, root string) error {
-	return runSteps(w,
+	return runSteps(
+		w,
 		step{"未绑定命名空间时拒绝读写", func() error { return unboundRejected(ctx, root) }},
 		step{"命名空间隔离", func() error { return namespaceIsolation(ctx, root) }},
 		step{"Forget 后不召回、进行中的轮次不能让它复活", func() error { return forgetNoResurrect(ctx, w, root) }},
@@ -86,7 +87,8 @@ func unboundRejected(ctx context.Context, root string) error {
 	if err != nil {
 		return err
 	}
-	return verify(append(checks,
+	return verify(append(
+		checks,
 		check{"绑定后看到的记录", contents(all), []string{"绑定后写入的内容"}},
 		check{"覆盖的操作数（8 个方法 + 4 个工具）", len(ops), 12},
 	)...)
@@ -205,7 +207,8 @@ func purgeNamespace(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	actx, bctx := memory.WithNamespace(ctx, alice...), memory.WithNamespace(ctx, bob...)
-	if _, err := remember(actx, e.mem,
+	if _, err := remember(
+		actx, e.mem,
 		memory.Record{Kind: memory.KindFact, Content: "用户叫爱丽丝", Pinned: true, Importance: 1},
 		memory.Record{Kind: memory.KindFact, Content: "用户在上海工作", Importance: 0.7},
 	); err != nil {

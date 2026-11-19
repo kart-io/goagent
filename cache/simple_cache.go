@@ -52,11 +52,13 @@ type cacheEntry struct {
 }
 
 // SimpleCacheOption 配置缓存的清理生命周期。
-type SimpleCacheOption func(*simpleCacheConfig)
-type simpleCacheConfig struct {
-	lazy       bool
-	maxEntries int64
-}
+type (
+	SimpleCacheOption func(*simpleCacheConfig)
+	simpleCacheConfig struct {
+		lazy       bool
+		maxEntries int64
+	}
+)
 
 // WithoutBackgroundCleanup 以访问和写入驱动清理，不创建后台协程。
 // 适用于不能把 Close 句柄交给调用方的函数式装配；闲置期间到期数据在下次访问或写入回收。

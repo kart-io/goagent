@@ -26,9 +26,11 @@ func fullState() state {
 	s.init()
 	for i := range 20 {
 		id := fmt.Sprintf("r%02d", i)
-		s.Records[id] = Record{ID: id, Namespace: testNS, Kind: KindFact, Content: "用户喜欢喝茶" + id, Keywords: []string{"茶"},
+		s.Records[id] = Record{
+			ID: id, Namespace: testNS, Kind: KindFact, Content: "用户喜欢喝茶" + id, Keywords: []string{"茶"},
 			Importance: 0.5, ValidFrom: now, InvalidAt: now.Add(time.Duration(i%2) * time.Hour), CreatedAt: now,
-			Sources: []Source{{Session: "s1", From: int64(i), To: int64(i + 1), Job: "s1/1"}}}
+			Sources: []Source{{Session: "s1", From: int64(i), To: int64(i + 1), Job: "s1/1"}},
+		}
 	}
 	s.Entities["e1"] = Entity{ID: "e1", Namespace: testNS, Name: "张三", Type: "人物", Aliases: []string{"老张"}, CreatedAt: now}
 	s.Edges["g1"] = Edge{ID: "g1", Namespace: testNS, Subject: "e1", Predicate: "喜欢", Object: "e1", Fact: "张三喜欢茶", ValidFrom: now, CreatedAt: now}

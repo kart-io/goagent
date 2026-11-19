@@ -82,8 +82,10 @@ func randomOp(rng *rand.Rand, ns []string) op {
 		norm := j
 		jobKind.normalize(&norm, ns)
 		st := JobStats{Records: rng.IntN(5), Conflicts: rng.IntN(3)}
-		return op{"job " + id, func(t *tx) { t.Jobs.Delete(id); t.DoneJobs.Put(id, at); t.Finished.Put(id, st) },
-			func(s *state) { delete(s.Jobs, id); s.DoneJobs[id] = at; s.Finished[id] = st }}
+		return op{
+			"job " + id, func(t *tx) { t.Jobs.Delete(id); t.DoneJobs.Put(id, at); t.Finished.Put(id, st) },
+			func(s *state) { delete(s.Jobs, id); s.DoneJobs[id] = at; s.Finished[id] = st },
+		}
 	case 8:
 		mk := rewindMarker{Session: text, To: rng.Int64N(100), Seq: int64(rng.IntN(40)), At: time.Unix(int64(rng.IntN(1e6)), 0).UTC()}
 		if rng.IntN(3) == 0 {
@@ -92,8 +94,10 @@ func randomOp(rng *rand.Rand, ns []string) op {
 		return op{"put marker", func(t *tx) { t.Markers.Put(mk.key(), mk) }, func(s *state) { s.Markers[mk.key()] = mk }}
 	default:
 		n := rng.Int64N(1000)
-		return op{"scalars", func(t *tx) { t.SetNextIncarnation(n); t.SetLastForgetSeq(n / 2); t.SetMarkerHorizon(n / 3) },
-			func(s *state) { s.NextIncarnation, s.LastForgetSeq, s.MarkerHorizon = n, n/2, n/3 }}
+		return op{
+			"scalars", func(t *tx) { t.SetNextIncarnation(n); t.SetLastForgetSeq(n / 2); t.SetMarkerHorizon(n / 3) },
+			func(s *state) { s.NextIncarnation, s.LastForgetSeq, s.MarkerHorizon = n, n/2, n/3 },
+		}
 	}
 }
 

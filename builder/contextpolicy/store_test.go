@@ -2,9 +2,11 @@ package contextpolicy
 
 import (
 	"context"
-	"github.com/kart-io/goagent/core/durable"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/durable"
 )
 
 func TestReferenceContentIdentity(t *testing.T) {
@@ -38,6 +40,7 @@ func TestReferenceContentIdentity(t *testing.T) {
 	}
 	require.NotEqual(t, NewRef("run", "a/b", "c", nil).Key, NewRef("run", "a", "b/c", nil).Key)
 }
+
 func TestContextConfigFingerprint(t *testing.T) {
 	config := OffloadConfig{MaxToolResultRunes: 10, Store: NewMemoryStore(), Namespace: "evidence"}
 	a, err := NewOffload(config)

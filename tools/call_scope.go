@@ -8,8 +8,10 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
-type depthKey struct{}
-type depthScope struct{ depth, limit int }
+type (
+	depthKey   struct{}
+	depthScope struct{ depth, limit int }
+)
 
 func enterRunnable(ctx context.Context, maxDepth int, modelInvoking bool) (context.Context, error) {
 	if err := ctx.Err(); err != nil {

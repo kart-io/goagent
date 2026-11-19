@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/llm"
-
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 )
 

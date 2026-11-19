@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/store/decorator"
-	"github.com/stretchr/testify/require"
 )
 
 type rejectedSnapshot struct{ cause error }

@@ -45,7 +45,8 @@ func (m *ObservabilityMiddleware) OnBefore(ctx context.Context, request *coremid
 		agentName = name
 	}
 
-	ctx, span := m.tracer.StartAgentSpan(ctx, agentName,
+	ctx, span := m.tracer.StartAgentSpan(
+		ctx, agentName,
 		attribute.String("request.type", "agent_execution"),
 		attribute.Int64("request.timestamp", request.Timestamp.Unix()),
 	)
@@ -79,7 +80,8 @@ func (m *ObservabilityMiddleware) OnAfter(ctx context.Context, response *coremid
 		} else {
 			m.tracer.SetStatus(spanCtx, codes.Ok, "execution completed")
 		}
-		m.tracer.SetAttributes(spanCtx,
+		m.tracer.SetAttributes(
+			spanCtx,
 			attribute.Float64("response.duration_seconds", response.Duration.Seconds()),
 		)
 	}
@@ -162,7 +164,8 @@ func (m *ObservabilityMiddleware) RecordToolCall(ctx context.Context, toolName s
 // RecordLLMCall 记录 LLM 调用 (辅助方法)
 func (m *ObservabilityMiddleware) RecordLLMCall(ctx context.Context, model, provider string, tokens int, duration time.Duration, err error) {
 	// 启动 LLM span
-	ctx, span := m.tracer.StartLLMSpan(ctx, model,
+	ctx, span := m.tracer.StartLLMSpan(
+		ctx, model,
 		attribute.String("llm.provider", provider),
 		attribute.Int("llm.tokens", tokens),
 	)

@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
 - `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
 
+- `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
+
+- 日志接口：新增稳定包 `core/logging`，定义与 `*slog.Logger` 方法签名一致的 `Logger`（`DebugContext`/`InfoContext`/`WarnContext`/`ErrorContext`），`*slog.Logger` 与 `*slogx.Logger` 可直接传入，库本身不依赖 slogx；`Default()` 每次调用读取 `slog.Default()` 并把来源记为调用方，`Discard()` 丢弃全部记录。`core/observe` 新增 `NewLogObserver`（每个事件写一条结构化记录，只含元数据、不带来源位置，不含输入输出与供应商错误文本；执行失败与 panic 为 Error，其他失败与模型重试为 Warn，结束、重放、等待为 Info，其余为 Debug）与 `AddObserver`（与已绑定观察者并存，各自隔离 panic）。`builder` 新增 `WithLogger`，把运行生命周期写入日志，Builder 的警告、回调失败与 `WithVerbose` 输出也写入它；嵌套 Agent 只由最外层记录。`core` 新增 `NewContextLoggingCallback`，`tools/middleware` 新增 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。接入 slogx（建议 v0.2.2 及以上）见 [宿主集成指南](docs/guides/HOST_INTEGRATION_CN.md#日志)。
+- `builder`：`WithTools` 注册的普通工具此前不发 tool 观测事件（只有 Dispatcher 派发的工具发），宿主观察者与日志都看不到这类工具调用。现在 Builder 为它们发出 `tool_start`、`tool_end`、`tool_error`（panic 记为 `panic` 类别，照常上抛）。新增 `interfaces.ObservedCallTool`：`Dispatcher.Tools` 声明自己发出这些事件，Builder 不再重复；包装 Dispatcher 工具的包装器须转发它，否则每次调用记两次。
+
+### 弃用
+
+- `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
+
+### 行为变化
+
+- `tools/middleware.NewLoggingMiddleware()` 未传日志时不再自建 kart-io/logger 的 JSON 标准输出日志器，改写入 `slog.Default()`；`WithContextLogger(nil)` 关闭日志。`core/middleware.NewLoggingMiddleware(nil)` 由 `fmt.Println` 写标准输出改为 `slog.Default()` 的 Info 记录。Builder 的模型缓存警告与 `OnError` 回调失败改走 `WithLogger`（未设置时为 `slog.Default()`），回调失败不再写 stderr。缓存与限流中间件经已弃用字段写 kart-io/logger 时改用 `Debugw`/`Warnw` 键值形式。
+
 ### 文档
 
 - 面向用户的 13 篇入门/编排/接入指南、`docs/README.md` 索引与稳定包 README（`builder`、`core`、`core/session`、`core/durable/migrate`、`errors`、`interfaces`、`llm`、`tools`、`workflow`）改为英文主文件，中文版移至同目录 `_CN.md`。翻译时按代码订正了失实内容：Builder 默认值（`MaxTokens`、`Temperature` 默认不设置）、已删除的 `WithMemory`、迁到 `errors` 包的哨兵错误名、错误码数量（65）、`interfaces.ToolInput` 不存在的 `Context` 字段，以及 `ToolStreamClient` 实现方漏列的 Anthropic。
@@ -20,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
+- `core/session`：推导活动事件（`Derive`、`DeriveMessages`、`Active`、`LastState`、`Archived`）时，每遇到一个中止轮次或退回都把当前整个视图克隆为检查点，分配随日志长度平方增长；Builder 每轮开启要推导两次。按每 10 轮一次中止的客服日志实测，5000 个事件每次推导分配 17MB，20000 个事件 260MB、51ms。现在视图记为保留序号的区间，检查点只复制区间，同样日志降为 0.54MB 与 3.7MB、0.8ms，结果与原实现一致（随机日志差分测试）。
+- `tools`：管线钩子拿到的 `Call.Args` 与工具执行参数是同一个 map，审批人、PreHook、Guard、Around 改写它会让工具执行与审批过的参数不同的调用（批准 `ls`，实际执行改写后的命令）。现在 Dispatcher 在准入结束和工具体执行前比对参数，被改写即返回 `CodeInvalidOutput`，工具不执行。**行为变化**：此前静默生效的原地改写现在会报错；需要改参数的钩子请改用 `PreSubstitute`，替代调用会重新校验、授权并经过准入。
 - `llm/providers`：`llm.WithResponseFormat` / `WithJSONResponse` 自 `llm.Client` 收敛为流式接口后不再生效，所有提供方都不发送该设置，模型照常返回带说明文字的非 JSON 回复。现在 OpenAI 兼容提供方（含 DeepSeek、Kimi、SiliconFlow、Ollama）发送 `response_format`，Gemini 设置 `responseMimeType`（不支持的类型返回 `CodeInvalidInput`），Anthropic 没有 JSON 模式，构造时对非 `text` 返回 `CodeInvalidInput`。新增离线示例 `examples/llm/json-response`。
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
 - `memory`：后台整理合并或否定钉住的记录时，取代它的新记录不再钉住，核心记忆随之从 `Pinned` 与每轮召回块中消失。现在取代者继承被取代记录的 `Pinned`。

@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -63,10 +62,10 @@ func NewRecorder(cfg RecorderConfig) (*Recorder, error) {
 	}
 	r := &Recorder{queue: make(chan observe.Event, cfg.QueueCapacity), done: make(chan struct{}), max: cfg.MaxEvents, writer: cfg.Writer}
 	if cfg.Path != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.Path), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(cfg.Path), 0o700); err != nil {
 			return nil, err
 		}
-		f, err := os.OpenFile(cfg.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		f, err := os.OpenFile(cfg.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return nil, err
 		}
@@ -97,6 +96,7 @@ func (r *Recorder) Observe(_ context.Context, e observe.Event) {
 		r.dropped.Add(1)
 	}
 }
+
 func (r *Recorder) write() {
 	defer close(r.done)
 	// 宿主提供的 Writer 在本 goroutine 中 panic 时，经全局 PanicHandler 转换后由 Close 返回；之后的事件不再写出。

@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 type loggingCause struct{ message string }

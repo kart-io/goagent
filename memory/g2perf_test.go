@@ -27,8 +27,10 @@ func TestG2PerfLock(t *testing.T) {
 		fs, err := durable.NewFileStore(dir)
 		require.NoError(t, err)
 		hs := &hookStore{inner: fs, root: fs, h: &storeHooks{held: map[string]int{}}}
-		m := durableMemory(t, hs, Config{MaxStateBytes: 1 << 30, Graph: true, Communities: true,
-			Model: &scriptedModel{reply: func(string, string) (string, error) { return `{"name":"x","summary":"y"}`, nil }}})
+		m := durableMemory(t, hs, Config{
+			MaxStateBytes: 1 << 30, Graph: true, Communities: true,
+			Model: &scriptedModel{reply: func(string, string) (string, error) { return `{"name":"x","summary":"y"}`, nil }},
+		})
 		_, err = m.mutate(ctx, benchNS, "", benchState(5000, ds.gen))
 		require.NoError(t, err)
 		var locked time.Time

@@ -17,6 +17,7 @@ import (
 	api "github.com/a2aproject/a2a-go/v2/a2a"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/google/uuid"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
@@ -37,11 +38,13 @@ type Handler struct {
 	rpc     http.Handler
 	card    http.Handler
 }
-type actorKey struct{}
-type rawPartsKey struct{}
-type rawPart struct {
-	Data json.RawMessage `json:"data"`
-}
+type (
+	actorKey    struct{}
+	rawPartsKey struct{}
+	rawPart     struct {
+		Data json.RawMessage `json:"data"`
+	}
+)
 
 func New(s *mg.Service, c Config) (*Handler, error) {
 	u, err := url.Parse(c.URL)
@@ -114,6 +117,7 @@ func actor(ctx context.Context, tenant string) (mg.Actor, error) {
 	}
 	return a, nil
 }
+
 func (h *Handler) agentCard(ctx context.Context) (*api.AgentCard, error) {
 	a, err := actor(ctx, "")
 	if err != nil {
@@ -126,10 +130,12 @@ func (h *Handler) agentCard(ctx context.Context) (*api.AgentCard, error) {
 	if !ag.Enabled || ag.PublishedVersion == "" {
 		return nil, api.ErrUnsupportedOperation
 	}
-	return &api.AgentCard{Name: ag.Name, Description: h.cfg.Description, Version: ag.PublishedVersion,
+	return &api.AgentCard{
+		Name: ag.Name, Description: h.cfg.Description, Version: ag.PublishedVersion,
 		SupportedInterfaces: []*api.AgentInterface{api.NewAgentInterface(h.cfg.URL, api.TransportProtocolJSONRPC)},
 		Capabilities:        api.AgentCapabilities{Streaming: true}, DefaultInputModes: []string{"text/plain", "application/json"}, DefaultOutputModes: []string{"application/json"},
-		Skills: []api.AgentSkill{{ID: ag.ID, Name: ag.Name, Description: h.cfg.Description, Tags: []string{"goagent"}}}}, nil
+		Skills: []api.AgentSkill{{ID: ag.ID, Name: ag.Name, Description: h.cfg.Description, Tags: []string{"goagent"}}},
+	}, nil
 }
 
 func translate(err error) error {
@@ -275,6 +281,7 @@ func messageInput(ctx context.Context, m *api.Message) (json.RawMessage, error) 
 		return nil, api.ErrUnsupportedContentType
 	}
 }
+
 func (h *Handler) send(ctx context.Context, r *api.SendMessageRequest) (mg.Actor, mg.Task, error) {
 	if r == nil || r.Message == nil || r.Message.ID == "" || r.Message.Role != api.MessageRoleUser {
 		return mg.Actor{}, mg.Task{}, api.ErrInvalidParams
@@ -345,6 +352,7 @@ func (h *Handler) SendMessage(ctx context.Context, r *api.SendMessageRequest) (a
 	}
 	return h.project(ctx, a, t)
 }
+
 func (h *Handler) stream(ctx context.Context, a mg.Actor, id string) iter.Seq2[api.Event, error] {
 	return func(yield func(api.Event, error) bool) {
 		first := true
@@ -376,6 +384,7 @@ func (h *Handler) stream(ctx context.Context, a mg.Actor, id string) iter.Seq2[a
 		}
 	}
 }
+
 func (h *Handler) SendStreamingMessage(ctx context.Context, r *api.SendMessageRequest) iter.Seq2[api.Event, error] {
 	return func(yield func(api.Event, error) bool) {
 		a, t, err := h.send(ctx, r)
@@ -386,6 +395,7 @@ func (h *Handler) SendStreamingMessage(ctx context.Context, r *api.SendMessageRe
 		h.stream(ctx, a, t.ID)(yield)
 	}
 }
+
 func (h *Handler) SubscribeToTask(ctx context.Context, r *api.SubscribeToTaskRequest) iter.Seq2[api.Event, error] {
 	return func(yield func(api.Event, error) bool) {
 		if r == nil || r.ID == "" {
@@ -414,18 +424,23 @@ func (h *Handler) SubscribeToTask(ctx context.Context, r *api.SubscribeToTaskReq
 func (h *Handler) ListTasks(context.Context, *api.ListTasksRequest) (*api.ListTasksResponse, error) {
 	return nil, api.ErrUnsupportedOperation
 }
+
 func (h *Handler) GetTaskPushConfig(context.Context, *api.GetTaskPushConfigRequest) (*api.PushConfig, error) {
 	return nil, api.ErrPushNotificationNotSupported
 }
+
 func (h *Handler) ListTaskPushConfigs(context.Context, *api.ListTaskPushConfigRequest) (*api.ListTaskPushConfigResponse, error) {
 	return nil, api.ErrPushNotificationNotSupported
 }
+
 func (h *Handler) CreateTaskPushConfig(context.Context, *api.PushConfig) (*api.PushConfig, error) {
 	return nil, api.ErrPushNotificationNotSupported
 }
+
 func (h *Handler) DeleteTaskPushConfig(context.Context, *api.DeleteTaskPushConfigRequest) error {
 	return api.ErrPushNotificationNotSupported
 }
+
 func (h *Handler) GetExtendedAgentCard(context.Context, *api.GetExtendedAgentCardRequest) (*api.AgentCard, error) {
 	return nil, api.ErrExtendedCardNotConfigured
 }

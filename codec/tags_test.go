@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	"github.com/kart-io/goagent/cache"
@@ -21,7 +23,6 @@ import (
 	"github.com/kart-io/goagent/tools/middleware"
 	"github.com/kart-io/goagent/utils/httpclient"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 // 可从配置文件加载的类型须给每个导出字段写 json 标签，函数、接口等不可加载的字段写 "-"；

@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/constants"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/constants"
 )
 
 // 计时只保留最近的窗口，平均值仍按全部记录计算。

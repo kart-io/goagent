@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/core/observe"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/observe"
 )
 
 func TestRecorderBoundedAndRedacted(t *testing.T) {

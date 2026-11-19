@@ -35,6 +35,7 @@ func (r *RecallTool) Name() string { return constants.ToolRecallHistory }
 func (r *RecallTool) Description() string {
 	return "取回本会话中已被压缩为摘要的原始消息。query 按子串过滤；before 只返回序号小于它的消息，用上次结果的 next_before 向前翻页；limit 默认 20。"
 }
+
 func (r *RecallTool) ArgsSchema() string {
 	return `{"type":"object","properties":{"query":{"type":"string"},"before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
 }

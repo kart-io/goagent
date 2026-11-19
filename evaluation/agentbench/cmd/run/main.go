@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/evaluation"
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
 )

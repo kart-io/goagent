@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -18,7 +20,6 @@ import (
 	"github.com/kart-io/goagent/management/adapters"
 	mt "github.com/kart-io/goagent/management/internal/managementtest"
 	"github.com/kart-io/goagent/revision"
-	"github.com/stretchr/testify/require"
 )
 
 // mode=1 只允许预检成功；随后 Build 与后续预检的读取均失败，直到测试解除故障。

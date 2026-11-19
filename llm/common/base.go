@@ -10,10 +10,9 @@ import (
 
 	"github.com/go-resty/resty/v2"
 
+	shared2 "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
-
-	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 

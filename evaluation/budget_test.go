@@ -2,12 +2,13 @@ package evaluation
 
 import (
 	"context"
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/llm"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	shared "github.com/kart-io/goagent/constants"
-	"github.com/stretchr/testify/require"
-	"testing"
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 )
 
 type budgetMock struct {

@@ -168,9 +168,9 @@ func (r *Recorder) Sync(ctx context.Context, messages []llm.Message, tools map[s
 		for _, m := range messages[p:] {
 			typ := constants.SessionEventUserMessage
 			switch m.Role {
-			case "assistant":
+			case constants.RoleAssistant:
 				typ = constants.SessionEventAssistantMessage
-			case "tool":
+			case constants.RoleTool:
 				typ = constants.SessionEventToolResult
 			}
 			ev, err := NewEvent(typ, data(m))

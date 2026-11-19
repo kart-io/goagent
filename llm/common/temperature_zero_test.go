@@ -3,9 +3,10 @@ package common_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestConfiguredZeroTemperatureIsPreserved(t *testing.T) {

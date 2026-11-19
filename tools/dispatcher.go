@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
+
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"
@@ -541,6 +541,31 @@ type admission struct {
 	input          interfaces.ToolInput
 	rejected       *interfaces.ToolOutput
 	substitutedFor string
+	// args 是进入管线前的参数编码。Call.Args 与执行参数共用同一个 map，钩子改写它会让执行偏离审批过的参数。
+	args json.RawMessage
+}
+
+// checkArgs 拒绝管线钩子对调用参数的改写；改参数须经 PreSubstitute 重新校验与准入。
+func (a *admission) checkArgs(operation string) error {
+	now, err := json.Marshal(a.input.Args)
+	if err != nil {
+		return err
+	}
+	if string(now) != string(a.args) {
+		return agentErrors.Newf(agentErrors.CodeInvalidOutput, "tool %q: pipeline hook modified call arguments; use PreSubstitute to change them", a.entry.name).
+			WithComponent("tool_pipeline").
+			WithOperation(operation).
+			WithContext("tool_name", a.entry.name)
+	}
+	return nil
+}
+
+func newAdmission(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput, substitutedFor string) (*admission, error) {
+	args, err := json.Marshal(input.Args)
+	if err != nil {
+		return nil, err
+	}
+	return &admission{call: newCall(ctx, entry, input), entry: entry, input: input, substitutedFor: substitutedFor, args: args}, nil
 }
 
 func newCall(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput) *Call {
@@ -549,10 +574,13 @@ func newCall(ctx context.Context, entry dispatchEntry, input interfaces.ToolInpu
 
 // admit 执行管线的调用前钩子、审批与守卫；替代调用按目标工具重新校验、授权并经过准入，但不能再被替代。
 func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input interfaces.ToolInput, deadline *time.Time) (*admission, error) {
-	a := &admission{call: newCall(ctx, entry, input), entry: entry, input: input}
 	p := d.config.Pipeline
 	if p == nil {
-		return a, nil
+		return &admission{call: newCall(ctx, entry, input), entry: entry, input: input}, nil
+	}
+	a, err := newAdmission(ctx, entry, input, "")
+	if err != nil {
+		return nil, err
 	}
 	// 仅管线准入暂停原超时计时；替代目标的校验、授权仍消耗原调用的剩余额度。
 	gate := func(call *Call, allowSubstitution bool) (*interfaces.ToolOutput, *Substitution, error) {
@@ -570,7 +598,7 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 	}
 	if sub == nil {
 		a.rejected = rejected
-		return a, nil
+		return a, a.checkArgs("admit")
 	}
 	target, ok := d.entries[sub.Tool]
 	if !ok {
@@ -589,11 +617,13 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 	if err = d.checkSubstitute(vctx, target, &input); err != nil {
 		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, err)
 	}
-	a = &admission{call: newCall(ctx, target, input), entry: target, input: input, substitutedFor: entry.name}
+	if a, err = newAdmission(ctx, target, input, entry.name); err != nil {
+		return nil, err
+	}
 	if a.rejected, _, err = gate(a.call, false); err != nil {
 		return nil, err
 	}
-	return a, nil
+	return a, a.checkArgs("admit")
 }
 
 // checkSubstitute 对替代调用执行与模型调用相同的校验与授权。替代参数来自宿主钩子，不合法即中止。
@@ -652,6 +682,9 @@ func (d *Dispatcher) execute(ctx context.Context, a *admission, settled *settled
 	if out == nil {
 		var err error
 		out, err = p.around(ctx, a.call, func(c context.Context) (*interfaces.ToolOutput, error) {
+			if err := a.checkArgs("execute"); err != nil {
+				return nil, err
+			}
 			return d.runTool(c, a.entry, a.input, settled, recoverArgs)
 		})
 		if err != nil {
@@ -920,6 +953,7 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 // calls in the same round share the MaxConcurrency limit and may run
 // concurrently.
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
+func (t *dispatchedTool) EmitsToolEvents() bool         { return true }
 
 // acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，
 // 避免空闲槽位与 ctx 取消竞争时迟到执行；释放函数幂等，支持提前交接阶段。

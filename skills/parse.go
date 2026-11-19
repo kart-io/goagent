@@ -108,8 +108,11 @@ func parseMetadata(fields map[string]any) (Metadata, error) {
 		name string
 		dest *string
 	}{
-		{"name", &m.Name}, {"description", &m.Description}, {"license", &m.License},
-		{"compatibility", &m.Compatibility}, {"allowed-tools", &m.AllowedTools},
+		{"name", &m.Name},
+		{"description", &m.Description},
+		{"license", &m.License},
+		{"compatibility", &m.Compatibility},
+		{"allowed-tools", &m.AllowedTools},
 	} {
 		if value, exists := fields[field.name]; exists {
 			text, ok := value.(string)

@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestMCP边界错误分类(t *testing.T) {

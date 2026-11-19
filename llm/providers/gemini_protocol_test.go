@@ -11,17 +11,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
 	llm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
-const geminiTextResponse = `{"candidates":[{"content":{"role":"model","parts":[{"text":"private thought","thought":true},{"text":"42"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"totalTokenCount":19}}`
-const geminiToolResponse = `{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{"order_id":"SHARED-1"}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":10,"totalTokenCount":35}}`
-const geminiOrderSchema = `{"type":"object","properties":{"order_id":{"type":"string","enum":["SHARED-1"]}},"required":["order_id"],"additionalProperties":false}`
+const (
+	geminiTextResponse = `{"candidates":[{"content":{"role":"model","parts":[{"text":"private thought","thought":true},{"text":"42"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"totalTokenCount":19}}`
+	geminiToolResponse = `{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{"order_id":"SHARED-1"}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":10,"totalTokenCount":35}}`
+	geminiOrderSchema  = `{"type":"object","properties":{"order_id":{"type":"string","enum":["SHARED-1"]}},"required":["order_id"],"additionalProperties":false}`
+)
 
 func TestGeminiNativeRequestAndConcurrentIsolation(t *testing.T) {
 	t.Setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")

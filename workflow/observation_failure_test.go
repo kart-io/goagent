@@ -14,6 +14,7 @@ import (
 type eventCollector struct{ events []observe.Event }
 
 func (c *eventCollector) Observe(_ context.Context, e observe.Event) { c.events = append(c.events, e) }
+
 func TestPanickingNodeObservationIsNotSuccess(t *testing.T) {
 	g := NewGraph[int]()
 	require.NoError(t, g.AddNode("panic", func(context.Context, int) (int, error) { panic("sensitive panic body") }))

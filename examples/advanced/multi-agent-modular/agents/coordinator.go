@@ -162,7 +162,8 @@ func (c *Coordinator) ExecuteWithFeedback(ctx context.Context, task string, maxI
 
 // generateSummary creates a summary of the workflow results
 func (c *Coordinator) generateSummary(result *WorkflowResult) string {
-	summary := fmt.Sprintf(`Multi-Agent Workflow Summary
+	summary := fmt.Sprintf(
+		`Multi-Agent Workflow Summary
 ============================
 Task: %s
 Duration: %s

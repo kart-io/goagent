@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 )
@@ -80,7 +81,8 @@ func modelExample() {
 		provider, err := providers.NewAnthropicWithOptions(
 			llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 			llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
-			llm.WithModel(model))
+			llm.WithModel(model),
+		)
 		if err != nil {
 			log.Printf("Failed to create provider for %s: %v\n", model, err)
 			continue
@@ -157,13 +159,13 @@ func conversationExample() {
 
 	// Add response to history
 	messages = append(messages, llm.Message{
-		Role:    "assistant",
+		Role:    constants.RoleAssistant,
 		Content: resp1.Content,
 	})
 
 	// Second turn - reference earlier context
 	messages = append(messages, llm.Message{
-		Role:    "user",
+		Role:    constants.RoleUser,
 		Content: "Do you remember my name?",
 	})
 

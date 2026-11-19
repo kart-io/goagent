@@ -8,10 +8,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kart-io/goagent/core/durable"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // diskFiles 返回目录下全部普通文件（相对路径）与子目录数量。
@@ -254,7 +255,7 @@ func TestResultStoreGetAfterTombstoneBeforeRemoval(t *testing.T) {
 	require.Equal(t, data, got)
 
 	gate := filepath.Join(dir, "scopes", digest([]byte("run"))+".gate")
-	require.NoError(t, os.WriteFile(gate, []byte("removed\n"), 0600))
+	require.NoError(t, os.WriteFile(gate, []byte("removed\n"), 0o600))
 	before, beforeDirs := diskFiles(t, dir)
 	for _, r := range []Ref{ref, NewRef("run", "p", "missing", data)} {
 		_, err = s.Get(ctx, r)

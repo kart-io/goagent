@@ -3,12 +3,13 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/workflow"
-	"testing"
 )
 
 func TestReviewGraphLostConfirmationAtNextGate(t *testing.T) {

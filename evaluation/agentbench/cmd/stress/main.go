@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/evaluation"
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
 )
@@ -102,14 +101,14 @@ func run(args []string) error {
 		return err
 	}
 	cfg := bench.Config{Provider: *provider, APIKey: apiKey, BaseURL: endpoint, Timeout: *timeout, Budget: evaluation.Budget{Model: *model, MaxCalls: *maxCalls, MaxOutputTokens: *maxTokens, ObservedTokens: *tokenStop, Temperature: 0.2}}
-	if err := os.Mkdir(*out, 0700); err != nil {
+	if err := os.Mkdir(*out, 0o700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(cases, json.Pretty)
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(filepath.Join(*out, "dataset.json"), data, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(*out, "dataset.json"), data, 0o600); err != nil { // #nosec G703 -- 输出目录由运行者通过命令行参数指定
 		return err
 	}
 	digest := sha256.Sum256(data)
@@ -150,7 +149,7 @@ func run(args []string) error {
 		fmt.Printf("已生成 %d 题，真实评测将运行 %d 个任务。\n", len(cases), len(jobs))
 		return nil
 	}
-	file, err := os.OpenFile(filepath.Join(*out, "results.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(filepath.Join(*out, "results.jsonl"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -224,5 +223,5 @@ func writeJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0600)
+	return os.WriteFile(path, data, 0o600)
 }

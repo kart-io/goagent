@@ -78,6 +78,16 @@ type ConcurrentCallTool interface {
 	SupportsConcurrentCalls() bool
 }
 
+// ObservedCallTool declares that Invoke emits the tool lifecycle observe
+// events (tool_start, tool_end, tool_error, tool_replayed) itself.
+// Dispatcher.Tools implements this contract. Builder emits these events for
+// tools that do not declare it, so wrappers must forward it explicitly to
+// avoid recording each call twice.
+type ObservedCallTool interface {
+	Tool
+	EmitsToolEvents() bool
+}
+
 // ValidatableTool is an optional interface a tool can implement to provide
 // custom input validation logic.
 //

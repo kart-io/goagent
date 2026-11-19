@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm"
 )
 
 // collectErrorEvent 读完事件流并返回唯一的 error 事件。

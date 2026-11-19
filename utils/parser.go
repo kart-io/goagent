@@ -1,12 +1,12 @@
 package utils
 
 import (
-	agentErrors "github.com/kart-io/goagent/errors"
 	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // 预编译的正则表达式，避免重复编译带来的性能开销

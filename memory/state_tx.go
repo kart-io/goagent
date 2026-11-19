@@ -157,10 +157,12 @@ func (t *tx) SetMigrationID(id string)   { t.scalars.MigrationID = id }
 
 // working 返回工作副本（已含本次修改）。
 func (t *tx) working() state {
-	return state{Seq: t.scalars.Seq, CommitID: t.scalars.CommitID, NextIncarnation: t.scalars.NextIncarnation,
+	return state{
+		Seq: t.scalars.Seq, CommitID: t.scalars.CommitID, NextIncarnation: t.scalars.NextIncarnation,
 		LastForgetSeq: t.scalars.LastForgetSeq, LastRewindSeq: t.scalars.LastRewindSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID,
 		Records: t.Records.m, Entities: t.Entities.m, Edges: t.Edges.m, Communities: t.Communities.m, Jobs: t.Jobs.m, DoneJobs: t.DoneJobs.m,
-		Markers: t.Markers.m, Finished: t.Finished.m}
+		Markers: t.Markers.m, Finished: t.Finished.m,
+	}
 }
 
 // overlay 返回本次的变更集，各项的 Seq 为 seq。

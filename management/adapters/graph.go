@@ -3,11 +3,12 @@ package adapters
 import (
 	"context"
 	"errors"
+	"os"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/workflow"
-	"os"
 )
 
 // GraphFactory 的 BuildGraph 必须为所选版本配置明确的批准/拒绝分支及 ResumeHandler。
@@ -23,6 +24,7 @@ func (f GraphFactory[T]) Validate(ctx context.Context, v mg.Version) (mg.Capabil
 	}
 	return mg.Capabilities{Approval: true, Input: true}, f.Check(ctx, v)
 }
+
 func (f GraphFactory[T]) Build(ctx context.Context, v mg.Version, r mg.Resources) (mg.Binding, error) {
 	g, cleanup, err := f.BuildGraph(ctx, v, r)
 	return mg.Binding{Runtime: &graph[T]{g: g, initial: f.Initial, r: r}, Cleanup: cleanup}, err
@@ -52,6 +54,7 @@ func (g *graph[T]) result(snap *workflow.GraphSnapshot[T]) (mg.RunResult, error)
 	}
 	return out, nil
 }
+
 func (g *graph[T]) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error) {
 	initial, err := g.initial(spec.Task.Input)
 	if err != nil {
@@ -120,6 +123,7 @@ func (g *graph[T]) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, erro
 	}
 	return g.result(snap)
 }
+
 func (g *graph[T]) Inspect(ctx context.Context, spec mg.RunSpec) (mg.RunEvidence, error) {
 	snap, err := g.g.Snapshot(ctx, spec.Task.RunID)
 	if errors.Is(err, os.ErrNotExist) {

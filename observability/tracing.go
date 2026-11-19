@@ -25,7 +25,8 @@ func StartToolSpan(ctx context.Context, toolName string, attrs ...attribute.KeyV
 
 // StartRemoteAgentSpan 启动远程 Agent span
 func StartRemoteAgentSpan(ctx context.Context, service, agentName string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
-	attrs = append(attrs,
+	attrs = append(
+		attrs,
 		attribute.String("service.name", service),
 		attribute.String("agent.name", agentName),
 	)

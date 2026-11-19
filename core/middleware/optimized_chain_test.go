@@ -22,7 +22,8 @@ func TestImmutableMiddlewareChain(t *testing.T) {
 			}, nil
 		}
 
-		mw1 := NewMiddlewareFunc("mw1",
+		mw1 := NewMiddlewareFunc(
+			"mw1",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				req.Metadata["mw1"] = "before"
 				return req, nil
@@ -34,7 +35,8 @@ func TestImmutableMiddlewareChain(t *testing.T) {
 			nil,
 		)
 
-		mw2 := NewMiddlewareFunc("mw2",
+		mw2 := NewMiddlewareFunc(
+			"mw2",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				req.Metadata["mw2"] = "before"
 				return req, nil
@@ -69,7 +71,8 @@ func TestImmutableMiddlewareChain(t *testing.T) {
 		}
 
 		expectedErr := errors.New("before error")
-		mw := NewMiddlewareFunc("mw",
+		mw := NewMiddlewareFunc(
+			"mw",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				return req, expectedErr
 			},
@@ -101,7 +104,8 @@ func TestImmutableMiddlewareChain(t *testing.T) {
 		}
 
 		errorHandled := false
-		mw := NewMiddlewareFunc("mw",
+		mw := NewMiddlewareFunc(
+			"mw",
 			nil,
 			nil,
 			func(ctx context.Context, err error) error {
@@ -159,7 +163,8 @@ func TestFastMiddlewareChain(t *testing.T) {
 			}, nil
 		}
 
-		mw1 := NewMiddlewareFunc("mw1",
+		mw1 := NewMiddlewareFunc(
+			"mw1",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				req.Metadata["mw1"] = "before"
 				return req, nil
@@ -168,7 +173,8 @@ func TestFastMiddlewareChain(t *testing.T) {
 			nil,
 		)
 
-		mw2 := NewMiddlewareFunc("mw2",
+		mw2 := NewMiddlewareFunc(
+			"mw2",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				req.Metadata["mw2"] = "before"
 				return req, nil
@@ -198,7 +204,8 @@ func TestFastMiddlewareChain(t *testing.T) {
 		}
 
 		expectedErr := errors.New("before error")
-		mw := NewMiddlewareFunc("mw",
+		mw := NewMiddlewareFunc(
+			"mw",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				return req, expectedErr
 			},
@@ -230,7 +237,8 @@ func TestFastMiddlewareChain(t *testing.T) {
 		}
 
 		afterCalled := false
-		mw := NewMiddlewareFunc("mw",
+		mw := NewMiddlewareFunc(
+			"mw",
 			func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 				req.Metadata["before"] = "called"
 				return req, nil
@@ -286,7 +294,8 @@ func TestImmutableMiddlewareChainVsOriginal(t *testing.T) {
 	}
 
 	// Create middleware that modifies request and response
-	mw1 := NewMiddlewareFunc("mw1",
+	mw1 := NewMiddlewareFunc(
+		"mw1",
 		func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 			req.Metadata["mw1_before"] = true
 			return req, nil
@@ -298,7 +307,8 @@ func TestImmutableMiddlewareChainVsOriginal(t *testing.T) {
 		nil,
 	)
 
-	mw2 := NewMiddlewareFunc("mw2",
+	mw2 := NewMiddlewareFunc(
+		"mw2",
 		func(ctx context.Context, req *MiddlewareRequest) (*MiddlewareRequest, error) {
 			req.Metadata["mw2_before"] = true
 			return req, nil

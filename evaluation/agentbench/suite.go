@@ -149,7 +149,7 @@ func SuiteJobs(cases []SuiteCase, repeats int) []SuiteJob {
 	var jobs []SuiteJob
 	for repeat := 0; repeat < repeats; repeat++ {
 		for i, c := range cases {
-			var modes = []bool{false}
+			modes := []bool{false}
 			if c.DirectEligible {
 				modes = []bool{false, true}
 			}

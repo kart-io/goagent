@@ -122,9 +122,11 @@ func showStream(ctx context.Context, r *core.StreamRunnable[state, state], in st
 	}
 	return ctx.Err()
 }
+
 func show(s state) {
 	fmt.Printf("%s -> %s (attempts=%d sources=%d)\n", s.Question, s.Answer, s.Attempts, len(s.Sources))
 }
+
 func must(err error) {
 	if err != nil {
 		log.Fatal(err)

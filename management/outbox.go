@@ -2,8 +2,9 @@ package management
 
 import (
 	"context"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"time"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // OutboxDispatcher 至少一次投递稳定 Delivery.ID；接收端必须据此去重。
@@ -17,6 +18,7 @@ func NewOutboxDispatcher(s *Service) *OutboxDispatcher {
 	w.slot = "outbox"
 	return &OutboxDispatcher{s, w}
 }
+
 func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 	if d.s.cfg.Delivery == nil {
 		return agentErrors.ErrManagementUnsupported

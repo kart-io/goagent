@@ -27,6 +27,7 @@ func (p *OpenAIProvider) reasoningEffort(req *llm.CompletionRequest) (string, er
 	}
 	return c.Effort, nil
 }
+
 func (p *GeminiProvider) thinkingConfig(req *llm.CompletionRequest) (*genai.ThinkingConfig, error) {
 	c := p.ResolveReasoning(req)
 	if c == nil {
@@ -58,9 +59,11 @@ func (p *OpenAIProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	_, err := p.reasoningEffort(req)
 	return err
 }
+
 func (p *DeepSeekProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	return p.nativeStreamProvider().ValidateReasoning(req)
 }
+
 func (p *GeminiProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	_, err := p.thinkingConfig(req)
 	return err

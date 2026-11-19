@@ -6,7 +6,6 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
-
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
 )

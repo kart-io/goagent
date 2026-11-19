@@ -30,6 +30,7 @@ func (*syntheticModel) Provider() shared.Provider { return shared.ProviderCustom
 func (m *syntheticModel) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, req, nil)
 }
+
 func (m *syntheticModel) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, available []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	timer := time.NewTimer(time.Millisecond)
 	defer timer.Stop()
@@ -79,7 +80,7 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 		if e != nil {
 			return got, e
 		}
-		b, _, e := execution.NewGovernedBuilder(model, scope, "assistant", registry, tools.DispatchConfig{MaxAdmissionConcurrency: 1, MaxQueued: 2, Authorize: func(context.Context, string, *interfaces.ToolInput) error { return nil }})
+		b, _, e := execution.NewGovernedBuilder(model, scope, shared.RoleAssistant, registry, tools.DispatchConfig{MaxAdmissionConcurrency: 1, MaxQueued: 2, Authorize: func(context.Context, string, *interfaces.ToolInput) error { return nil }})
 		if e != nil {
 			return got, e
 		}
