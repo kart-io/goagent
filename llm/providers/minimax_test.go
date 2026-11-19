@@ -113,3 +113,62 @@ func TestMiniMaxDefaults(t *testing.T) {
 	require.True(t, p.HasCapability(agentllm.CapabilityVision))
 	require.True(t, p.HasCapability(agentllm.CapabilityToolStreaming))
 }
+
+func TestMiniMaxImageRequestsUseMaxCompletionTokens(t *testing.T) {
+	imageMessage := agentllm.Message{Role: "user", Content: "describe", Images: []agentllm.ImagePart{{URL: "https://example.com/a.png"}}}
+	tests := []struct {
+		name          string
+		newClient     func(*testing.T) (*OpenAIProvider, *captureTripper)
+		message       agentllm.Message
+		send          func(*testing.T, *OpenAIProvider, *agentllm.CompletionRequest)
+		wantField     string
+		unwantedField string
+	}{
+		{name: "minimax image complete", newClient: minimaxCapture, message: imageMessage, send: sendComplete, wantField: "max_completion_tokens", unwantedField: "max_tokens"},
+		{name: "minimax image stream", newClient: minimaxCapture, message: imageMessage, send: sendStream, wantField: "max_completion_tokens", unwantedField: "max_tokens"},
+		{name: "minimax image tool stream", newClient: minimaxCapture, message: imageMessage, send: sendToolsStream, wantField: "max_completion_tokens", unwantedField: "max_tokens"},
+		{name: "minimax text complete", newClient: minimaxCapture, message: agentllm.UserMessage("hi"), send: sendComplete, wantField: "max_tokens", unwantedField: "max_completion_tokens"},
+		{name: "minimax text tool stream", newClient: minimaxCapture, message: agentllm.UserMessage("hi"), send: sendToolsStream, wantField: "max_tokens", unwantedField: "max_completion_tokens"},
+		{name: "openai image tool stream", newClient: openAICapture, message: imageMessage, send: sendToolsStream, wantField: "max_tokens", unwantedField: "max_completion_tokens"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, tripper := tt.newClient(t)
+			tt.send(t, p, &agentllm.CompletionRequest{Messages: []agentllm.Message{tt.message}, MaxTokens: 321})
+
+			require.Len(t, tripper.bodies, 1)
+			body := tripper.bodies[0]
+			require.JSONEq(t, `321`, string(body[tt.wantField]))
+			require.NotContains(t, body, tt.unwantedField)
+			require.Contains(t, body, "messages")
+			require.Contains(t, body, "stream_options")
+		})
+	}
+}
+
+func minimaxCapture(t *testing.T) (*OpenAIProvider, *captureTripper) {
+	return newCapturedMiniMax(t)
+}
+
+func openAICapture(t *testing.T) (*OpenAIProvider, *captureTripper) {
+	t.Helper()
+	tripper := &captureTripper{}
+	p, err := NewOpenAIWithOptions(agentllm.WithAPIKey("k"), agentllm.WithBaseURL("https://api.openai.test/v1"), agentllm.WithModel("gpt-4o"), agentllm.WithHTTPClient(&http.Client{Transport: tripper}))
+	require.NoError(t, err)
+	return p, tripper
+}
+
+func sendComplete(t *testing.T, p *OpenAIProvider, req *agentllm.CompletionRequest) {
+	_, err := agentllm.Complete(context.Background(), p, req)
+	require.NoError(t, err)
+}
+
+func sendStream(t *testing.T, p *OpenAIProvider, req *agentllm.CompletionRequest) {
+	ch, err := p.CompleteStream(context.Background(), req)
+	drainStream(t, ch, err)
+}
+
+func sendToolsStream(t *testing.T, p *OpenAIProvider, req *agentllm.CompletionRequest) {
+	ch, err := p.CompleteToolsStream(context.Background(), req, nil)
+	drainStream(t, ch, err)
+}

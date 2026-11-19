@@ -17,16 +17,18 @@ import (
 
 // NewMiniMaxWithOptions 创建 MiniMax 客户端，走 OpenAI 兼容协议，支持视觉与原生工具流。
 // effort=none 时 M3 系列改发 thinking 禁用；M2.x 不接受该开关，none 被忽略。
+// 视觉接口只读 max_completion_tokens，带图片的请求改发该字段，纯文本请求仍发 max_tokens。
 func NewMiniMaxWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
-		provider:       shared.ProviderMiniMax,
-		defaultBaseURL: shared.MiniMaxBaseURL,
-		defaultModel:   shared.MiniMaxDefaultModel,
-		envAPIKey:      shared.EnvMiniMaxAPIKey,
-		envBaseURL:     shared.EnvMiniMaxBaseURL,
-		envModel:       shared.EnvMiniMaxModel,
-		reasoning:      true,
-		thinkingSwitch: true,
+		provider:              shared.ProviderMiniMax,
+		defaultBaseURL:        shared.MiniMaxBaseURL,
+		defaultModel:          shared.MiniMaxDefaultModel,
+		envAPIKey:             shared.EnvMiniMaxAPIKey,
+		envBaseURL:            shared.EnvMiniMaxBaseURL,
+		envModel:              shared.EnvMiniMaxModel,
+		reasoning:             true,
+		thinkingSwitch:        true,
+		imageCompletionTokens: true,
 		capabilities: []agentllm.Capability{
 			agentllm.CapabilityCompletion,
 			agentllm.CapabilityChat,
