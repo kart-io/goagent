@@ -71,7 +71,7 @@ defer cleanup()
 agent, err := b.WithLogger(logger).BuildContext(runCtx)
 ```
 
-Use slogx v0.2.2 or later: v0.2.0 pins an OpenTelemetry log SDK that does not compile alongside goagent, and v0.2.1 still attaches goagent's internal call stack to error records of run events.
+A runnable version lives in [examples/logging/slogx](../../examples/logging/slogx/). Use slogx v0.2.2 or later: v0.2.0 pins an OpenTelemetry log SDK that does not compile alongside goagent, and v0.2.1 still attaches goagent's internal call stack to error records of run events.
 
 - `WithLogger` turns every observe event of a run (agent, model call, retry, tool call, cache, usage) into one structured record, in addition to any observer already bound by `execution.Scope`. Records carry identities, durations and error kinds only, never inputs, outputs or provider error text. Failed executions are Error, cancellations and retries are Warn, finished lifecycles are Info, and starts, usage and cache hits are Debug. In nested Agents the outermost Agent with a Logger records the whole run.
 - Code that receives no logger writes through `logging.Default()`, which reads `slog.Default()` on each call; `slogx.Init` installs it, so the Builder's warnings and the default output of `core/middleware.NewLoggingMiddleware(nil)` and `tools/middleware.NewLoggingMiddleware()` follow the host's configuration.

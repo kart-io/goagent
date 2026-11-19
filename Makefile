@@ -34,7 +34,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-contracts compatibility compatibility-postgres coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-example-slogx test-contracts compatibility compatibility-postgres coverage deps help version
 
 ## help: Display this help message
 help:
@@ -84,6 +84,10 @@ test-short:
 ## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
 test-frameworkbench:
 	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
+
+## test-example-slogx: 验证独立模块中的 slogx 日志示例（离线运行，不调用模型）
+test-example-slogx:
+	cd examples/logging/slogx && GOWORK=off $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
 
 ## test-contracts: 验证执行、模型流、恢复、审批、预算与工具公共契约
 test-contracts:
