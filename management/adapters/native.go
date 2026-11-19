@@ -22,6 +22,9 @@ import (
 type NativeFactory struct {
 	Check      func(context.Context, mg.Version) error
 	BuildAgent func(context.Context, mg.Version, mg.Resources, tools.Approver) (*builder.SimpleAgentBuilder, func(context.Context) error, error)
+	// Observe 可选：Run 对每个收到的事件先调用它再折叠结果；Inspect 的只读重放不调用。
+	// 钩子不影响任务结果，panic 会被忽略。
+	Observe func(ctx context.Context, task mg.Task, ev builder.AgentEvent)
 }
 
 func (f NativeFactory) Validate(ctx context.Context, v mg.Version) (mg.Capabilities, error) {
@@ -44,13 +47,20 @@ func (f NativeFactory) Build(ctx context.Context, v mg.Version, r mg.Resources) 
 	if err != nil {
 		return binding, err
 	}
-	binding.Runtime = &native{start: agent.ExecuteStream, r: r}
+	binding.Runtime = &native{start: agent.ExecuteStream, r: r, observe: f.Observe}
 	return binding, nil
 }
 
 type native struct {
 	start func(context.Context, interface{}) (<-chan builder.AgentEvent, error)
 	r     mg.Resources
+	// observe 仅由 Run 使用；Inspect 通过 replay 调用 run 时传 nil。
+	observe func(context.Context, mg.Task, builder.AgentEvent)
+}
+
+func callObserve(ctx context.Context, f func(context.Context, mg.Task, builder.AgentEvent), task mg.Task, ev builder.AgentEvent) {
+	defer func() { _ = recover() }()
+	f(ctx, task, ev)
 }
 
 func inputValue(raw json.RawMessage) (any, error) {
@@ -64,6 +74,10 @@ func inputValue(raw json.RawMessage) (any, error) {
 }
 
 func (n *native) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error) {
+	return n.run(ctx, spec, n.observe)
+}
+
+func (n *native) run(ctx context.Context, spec mg.RunSpec, observe func(context.Context, mg.Task, builder.AgentEvent)) (mg.RunResult, error) {
 	for k, v := range spec.ResumeInputs {
 		ctx = durable.WithResume(ctx, k, v)
 	}
@@ -77,6 +91,9 @@ func (n *native) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error)
 	}
 	var output *builder.AgentOutput
 	for ev := range events {
+		if observe != nil {
+			callObserve(ctx, observe, spec.Task, ev)
+		}
 		if ev.Error != nil {
 			err = ev.Error
 		}
@@ -169,7 +186,7 @@ func (n *native) Inspect(ctx context.Context, spec mg.RunSpec) (mg.RunEvidence, 
 		return mg.RunEvidence{}, err
 	}
 	ctx = budget.WithController(durable.WithJournal(ctx, journal), controller)
-	result, err := n.Run(durable.WithReplayOnly(ctx), mg.RunSpec{Task: spec.Task})
+	result, err := n.run(durable.WithReplayOnly(ctx), mg.RunSpec{Task: spec.Task}, nil)
 	if err != nil {
 		return mg.RunEvidence{}, err
 	}
