@@ -27,6 +27,7 @@ Examples that call a real LLM read the provider's API key from the environment (
 | [human-in-the-loop-interrupt/](human-in-the-loop-interrupt/) | Node pauses mid-execution for human input and resumes across processes, offline |
 | [execution-scope/](execution-scope/) | `execution.NewScope` + `execution.ConfigureBuilder`: shared run/session ID, request budget and timeout, with a built-in mock model, offline |
 | [execution-governed/](execution-governed/) | `execution.NewGovernedBuilder` standard governance assembly, final acceptance and zero-request replay after rebuild, offline |
+| [logging/slogx/](logging/slogx/) | `slogx.Init` + `Builder.WithLogger`: run events as JSON logs with run_id, levels and token usage; separate module (`cd examples/logging/slogx && go run .`), offline unless `DEEPSEEK_API_KEY` is set |
 | [error_handling/](error_handling/) | `errors` package: codes, context, wrapping, retry and fallback patterns |
 | [translate/](translate/) | DeepSeek translation agent, batch and interactive |
 | `testhelpers/` | Assertions and environment helpers shared by example tests |
