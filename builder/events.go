@@ -96,6 +96,7 @@ func (a *ConfigurableAgent[S]) executeStream(ctx context.Context, input interfac
 	if err != nil {
 		return nil, err
 	}
+	ctx = a.bindLogger(ctx)
 	ctx, err = a.prepareAgentUsage(ctx)
 	if err != nil {
 		return nil, err

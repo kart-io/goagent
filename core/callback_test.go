@@ -1,11 +1,15 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // mockLogger implements Logger interface for testing callbacks
@@ -376,5 +380,20 @@ func TestCallbackManager_CallbackMutatesManager(t *testing.T) {
 	requireReturnsWithin(t, 5*time.Second, func() { _ = m.OnStart(context.Background(), "x") })
 	if first.calls != 1 || second.calls != 1 || added.calls != 1 {
 		t.Fatalf("下一轮应只通知新增的回调：first=%d second=%d added=%d", first.calls, second.calls, added.calls)
+	}
+}
+
+func TestNewContextLoggingCallback(t *testing.T) {
+	var buf bytes.Buffer
+	cb := NewContextLoggingCallback(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})), true)
+	ctx := context.Background()
+	require.NoError(t, cb.OnLLMStart(ctx, []string{"提示"}, "gpt-4"))
+	require.NoError(t, cb.OnError(ctx, errors.New("失败")))
+	for _, want := range []string{
+		`level=INFO msg="LLM call started" model=gpt-4 num_prompts=1`,
+		`level=DEBUG msg="LLM prompts" prompts=[提示]`,
+		`level=ERROR msg="Execution error" error=失败`,
+	} {
+		require.Contains(t, buf.String(), want)
 	}
 }

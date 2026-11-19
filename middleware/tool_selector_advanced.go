@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/logging"
 	coremiddleware "github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -77,7 +78,7 @@ func (m *LLMToolSelectorMiddleware) Process(ctx context.Context, state core.Stat
 	selectedNames, err := m.selectTools(ctx, query, allTools)
 	if err != nil {
 		// Log error but don't fail - use all tools as fallback
-		fmt.Printf("Tool selection failed: %v\n", err)
+		logging.Default().WarnContext(ctx, "工具选择失败，回退为使用全部工具", "error", err)
 		return state, nil
 	}
 

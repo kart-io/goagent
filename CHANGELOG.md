@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
 
+- 日志接口：新增稳定包 `core/logging`，定义与 `*slog.Logger` 方法签名一致的 `Logger`（`DebugContext`/`InfoContext`/`WarnContext`/`ErrorContext`），`*slog.Logger` 与 `*slogx.Logger` 可直接传入，库本身不依赖 slogx；`Default()` 每次调用读取 `slog.Default()`，`Discard()` 丢弃全部记录。`core/observe` 新增 `NewLogObserver`（每个事件写一条结构化记录，只含元数据，不含输入输出与供应商错误文本；执行失败与 panic 为 Error，其他失败与模型重试为 Warn，结束、重放、等待为 Info，其余为 Debug）与 `AddObserver`（与已绑定观察者并存，各自隔离 panic）。`builder` 新增 `WithLogger`，把运行生命周期写入日志，Builder 的警告、回调失败与 `WithVerbose` 输出也写入它；嵌套 Agent 只由最外层记录。`core` 新增 `NewContextLoggingCallback`，`tools/middleware` 新增 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。接入 slogx（须 v0.2.1 及以上）见 [宿主集成指南](docs/guides/HOST_INTEGRATION_CN.md#日志)。
+
+### 弃用
+
+- `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
+
+### 行为变化
+
+- `tools/middleware.NewLoggingMiddleware()` 未传日志时不再自建 kart-io/logger 的 JSON 标准输出日志器，改写入 `slog.Default()`；`WithContextLogger(nil)` 关闭日志。`core/middleware.NewLoggingMiddleware(nil)` 由 `fmt.Println` 写标准输出改为 `slog.Default()` 的 Info 记录。Builder 的模型缓存警告与 `OnError` 回调失败改走 `WithLogger`（未设置时为 `slog.Default()`），回调失败不再写 stderr。缓存与限流中间件经已弃用字段写 kart-io/logger 时改用 `Debugw`/`Warnw` 键值形式。
+
 ### 文档
 
 - 面向用户的 13 篇入门/编排/接入指南、`docs/README.md` 索引与稳定包 README（`builder`、`core`、`core/session`、`core/durable/migrate`、`errors`、`interfaces`、`llm`、`tools`、`workflow`）改为英文主文件，中文版移至同目录 `_CN.md`。翻译时按代码订正了失实内容：Builder 默认值（`MaxTokens`、`Temperature` 默认不设置）、已删除的 `WithMemory`、迁到 `errors` 包的哨兵错误名、错误码数量（65）、`interfaces.ToolInput` 不存在的 `Context` 字段，以及 `ToolStreamClient` 实现方漏列的 Anthropic。

@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -209,12 +211,17 @@ func TestMiddlewareChain_ConcurrentUse(t *testing.T) {
 // ===== Logging Middleware Edge Cases =====
 
 func TestLoggingMiddleware_DefaultLogger(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	var buf bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
 	mw := NewLoggingMiddleware(nil)
 
-	// Should use default logger (println) without panicking
+	// 未传 logger 时写入 slog.Default()，宿主用 slog.SetDefault 或 slogx.Init 决定去向
 	req := &MiddlewareRequest{Input: "test"}
 	_, err := mw.OnBefore(context.Background(), req)
 	assert.NoError(t, err)
+	assert.Contains(t, buf.String(), `level=INFO msg="[logging] Request: test`)
 }
 
 func TestLoggingMiddleware_LogsComplexMetadata(t *testing.T) {

@@ -2,14 +2,13 @@ package builder
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -133,7 +132,7 @@ func (a *ConfigurableAgent[S]) handleError(ctx context.Context, err error) (hand
 	for _, cb := range a.callbacks {
 		if cbErr := cb.OnError(ctx, err); cbErr != nil {
 			// 记录回调错误但不覆盖原始错误
-			fmt.Fprintf(os.Stderr, "Callback OnError failed: %v\n", cbErr)
+			logging.OrDefault(a.config.Logger).ErrorContext(ctx, "回调 OnError 失败", "error", cbErr)
 		}
 	}
 	return err

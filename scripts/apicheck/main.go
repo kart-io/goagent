@@ -25,7 +25,7 @@ type finding struct {
 // 按路径最长前缀归层（"core/usage" 优先于 "core"）；新增顶层目录须先在此声明。
 // 下面 forbidden 中的专门规则在分层之外进一步收紧个别包。
 var layers = [][]string{
-	{"constants", "errors", "interfaces", "codec"},
+	{"constants", "errors", "interfaces", "codec", "core/logging"},
 	{"internal", "utils", "cache", "parsers", "skills", "core/usage", "core/state", "core/internal", "tools/toolargs"},
 	{"llm", "store", "revision", "harness", "core/durable", "core/middleware", "core/session", "core/budget", "core/observe"},
 	{"core"},

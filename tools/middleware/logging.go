@@ -5,10 +5,9 @@ import (
 	"time"
 
 	loggerCore "github.com/kart-io/logger/core"
-	"github.com/kart-io/logger/engines/slog"
-	"github.com/kart-io/logger/option"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -26,14 +25,13 @@ import (
 //
 // Example:
 //
-//	logger := core.GetLogger("tools")
 //	loggingMW := NewLoggingMiddleware(
-//	    WithLogger(logger),
+//	    WithContextLogger(slog.Default()), // or a *slogx.Logger
 //	    WithOutputLogging(), // log results; enable only when they contain no sensitive data
 //	)
 //	wrappedTool := middleware.Wrap(myTool, loggingMW.Wrap)
 type LoggingMiddleware struct {
-	logger      loggerCore.Logger
+	logger      logging.Logger
 	logInput    bool
 	logOutput   bool
 	maxArgBytes int // 最大参数字节数，避免日志过大
@@ -42,13 +40,24 @@ type LoggingMiddleware struct {
 // LoggingOption is a configuration option for the logging middleware.
 type LoggingOption func(*LoggingMiddleware)
 
-// WithLogger sets a custom logger.
+// WithContextLogger sets the logger, typically a *slog.Logger or a
+// *slogx.Logger.
 //
-// When unset, a JSON slog logger writing to stdout is used; passing nil
-// explicitly disables logging.
-func WithLogger(logger loggerCore.Logger) LoggingOption {
+// When unset, records go to logging.Default(), that is slog.Default(); passing
+// nil explicitly disables logging.
+func WithContextLogger(logger logging.Logger) LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logger = logger
+	}
+}
+
+// WithLogger sets a kart-io/logger logger; passing nil disables logging.
+//
+// Deprecated: use WithContextLogger, which accepts a *slog.Logger and carries
+// the call context to the logger.
+func WithLogger(logger loggerCore.Logger) LoggingOption {
+	return func(m *LoggingMiddleware) {
+		m.logger = fromKartLogger(logger)
 	}
 }
 
@@ -87,21 +96,8 @@ func WithMaxArgBytes(maxBytes int) LoggingOption {
 // Returns:
 //   - *LoggingMiddleware: the logging middleware instance
 func NewLoggingMiddleware(opts ...LoggingOption) *LoggingMiddleware {
-	// 创建默认的 slog logger
-	defaultLogger, err := slog.NewSlogLogger(&option.LogOption{
-		Engine:      "slog",
-		Level:       "INFO",
-		Format:      "json",
-		OutputPaths: []string{"stdout"},
-		Development: false,
-	})
-	if err != nil {
-		// 如果创建失败，使用 nil，后续调用会跳过日志
-		defaultLogger = nil
-	}
-
 	middleware := &LoggingMiddleware{
-		logger:      defaultLogger,
+		logger:      logging.Default(),
 		maxArgBytes: 1024, // 默认 1KB
 	}
 
@@ -128,17 +124,17 @@ func (m *LoggingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 				fields = append(fields, "args", m.serializeArgs(input.Args))
 			}
 		}
-		m.logger.Infow("Tool invocation started", fields...)
+		m.logger.InfoContext(ctx, "Tool invocation started", fields...)
 
 		output, err := next(ctx, input)
 		duration := time.Since(started).Milliseconds()
 		if err != nil {
-			m.logger.Errorw("Tool invocation error", "tool", tool.Name(), "error", err.Error(), "duration_ms", duration)
+			m.logger.ErrorContext(ctx, "Tool invocation error", "tool", tool.Name(), "error", err.Error(), "duration_ms", duration)
 			return output, err
 		}
 		fields = []interface{}{"tool", tool.Name(), "duration_ms", duration}
 		if output == nil {
-			m.logger.Infow("Tool invocation completed", fields...)
+			m.logger.InfoContext(ctx, "Tool invocation completed", fields...)
 			return nil, nil
 		}
 		fields = append(fields, "success", output.Success)
@@ -150,10 +146,10 @@ func (m *LoggingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			fields = append(fields, "result", m.serializeResult(output.Result))
 		}
 		if output.Success {
-			m.logger.Infow("Tool invocation completed", fields...)
+			m.logger.InfoContext(ctx, "Tool invocation completed", fields...)
 		} else {
 			fields = append(fields, "error", output.Error)
-			m.logger.Errorw("Tool invocation failed", fields...)
+			m.logger.ErrorContext(ctx, "Tool invocation failed", fields...)
 		}
 		return output, nil
 	}

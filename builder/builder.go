@@ -196,7 +196,7 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 
 	// 如果 verbose,添加默认中间件
 	if b.config.Verbose {
-		chain.Use(middleware.NewLoggingMiddleware(nil))
+		chain.Use(middleware.NewLoggingMiddleware(verboseLog(b.config.Logger)))
 		chain.Use(middleware.NewTimingMiddleware())
 	}
 

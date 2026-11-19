@@ -3,12 +3,12 @@ package builder
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"slices"
 	"sync/atomic"
 	"time"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -166,7 +166,7 @@ func (b *AgentBuilder[S]) validateModelCache() error {
 	}
 	for _, r := range rules {
 		if r.warn != "" && r.bad() {
-			slog.Warn("模型调用缓存：" + r.warn)
+			logging.OrDefault(b.config.Logger).WarnContext(context.Background(), "模型调用缓存："+r.warn)
 		}
 	}
 	return nil

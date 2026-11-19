@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/state"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -371,10 +372,11 @@ type LoggingMiddleware struct {
 	logger func(string)
 }
 
-// NewLoggingMiddleware creates a logging middleware
+// NewLoggingMiddleware creates a logging middleware. A nil logger writes each
+// line at info level through logging.Default(), that is slog.Default().
 func NewLoggingMiddleware(logger func(string)) *LoggingMiddleware {
 	if logger == nil {
-		logger = func(msg string) { fmt.Println(msg) }
+		logger = func(msg string) { logging.Default().InfoContext(context.Background(), msg) }
 	}
 	return &LoggingMiddleware{
 		BaseMiddleware: NewBaseMiddleware("logging"),
