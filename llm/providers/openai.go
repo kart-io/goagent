@@ -24,6 +24,8 @@ type OpenAIProvider struct {
 	client *openai.Client
 	// reasoning 表示服务接受 reasoning_effort；不接受时显式推理配置在请求前报错。
 	reasoning bool
+	// thinkingSwitch 为 true 时，effort=none 不发送 reasoning_effort。
+	thinkingSwitch bool
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
@@ -60,6 +62,8 @@ type openAICompatibleSpec struct {
 	// defaultTimeout 仅在调用方未改动默认超时时生效。
 	defaultTimeout time.Duration
 	reasoning      bool
+	// thinkingSwitch 表示服务用 thinking 开关控制推理：effort=none 时按模型改写为 thinking 禁用。
+	thinkingSwitch bool
 	capabilities   []agentllm.Capability
 }
 
@@ -98,13 +102,18 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}}
+	var doer openai.HTTPDoer = retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}
+	if spec.thinkingSwitch {
+		doer = thinkingDisabledDoer{next: doer}
+	}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: doer}
 
 	return &OpenAIProvider{
 		BaseProvider:         base,
 		ProviderCapabilities: common.NewProviderCapabilities(spec.capabilities...),
 		client:               openai.NewClientWithConfig(clientConfig),
 		reasoning:            spec.reasoning,
+		thinkingSwitch:       spec.thinkingSwitch,
 	}, nil
 }
 

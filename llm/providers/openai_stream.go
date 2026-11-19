@@ -41,6 +41,12 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	if err != nil {
 		return nil, err
 	}
+	if p.thinkingSwitch && effort == "none" {
+		effort = ""
+		if isMiniMaxM3(p.GetModel(req.Model)) {
+			ctx = withThinkingDisabled(ctx)
+		}
+	}
 	messages := make([]openai.ChatCompletionMessage, 0, len(req.Messages)+1)
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: p.Config.SystemPrompt})

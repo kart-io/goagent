@@ -13,6 +13,7 @@ const (
 	ProviderOllama      Provider = "ollama"
 	ProviderSiliconFlow Provider = "siliconflow"
 	ProviderKimi        Provider = "kimi"
+	ProviderMiniMax     Provider = "minimax"
 	ProviderCustom      Provider = "custom"
 	ProviderAnthropic   Provider = "anthropic"
 )
@@ -28,6 +29,9 @@ const (
 	EnvKimiAPIKey           = "KIMI_API_KEY"
 	EnvKimiBaseURL          = "KIMI_BASE_URL"
 	EnvKimiModel            = "KIMI_MODEL"
+	EnvMiniMaxAPIKey        = "MINIMAX_API_KEY"
+	EnvMiniMaxBaseURL       = "MINIMAX_BASE_URL"
+	EnvMiniMaxModel         = "MINIMAX_MODEL"
 	EnvSiliconFlowAPIKey    = "SILICONFLOW_API_KEY"
 	EnvSiliconFlowBaseURL   = "SILICONFLOW_BASE_URL"
 	EnvSiliconFlowModel     = "SILICONFLOW_MODEL"
@@ -60,6 +64,7 @@ const (
 	AnthropicBaseURL      = "https://api.anthropic.com"
 	AnthropicDefaultModel = "claude-opus-5-5"
 	KimiBaseURL           = "https://api.moonshot.cn/v1"
+	MiniMaxBaseURL        = "https://api.minimaxi.com/v1"
 	SiliconFlowBaseURL    = "https://api.siliconflow.cn/v1"
 	DeepSeekDefaultModel  = "deepseek-chat"
 	DeepSeekBaseURL       = "https://api.deepseek.com/v1"
@@ -94,6 +99,7 @@ const (
 // 提供商模型和首块等待时间分别保留各自策略。
 const (
 	KimiDefaultModel        = "moonshot-v1-8k"
+	MiniMaxDefaultModel     = "minimax-m2.7"
 	SiliconFlowDefaultModel = "Qwen/Qwen2-7B-Instruct"
 	OllamaDefaultModel      = "llama2"
 	DefaultOllamaTimeout    = 120 * time.Second
