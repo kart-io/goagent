@@ -27,6 +27,8 @@ type OpenAIProvider struct {
 	reasoning bool
 	// thinkingSwitch 为 true 时，effort=none 不发送 reasoning_effort。
 	thinkingSwitch bool
+	// imageCompletionTokens 为 true 时，带图片的请求把输出上限发为 max_completion_tokens。
+	imageCompletionTokens bool
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
@@ -65,7 +67,9 @@ type openAICompatibleSpec struct {
 	reasoning      bool
 	// thinkingSwitch 表示服务用 thinking 开关控制推理：effort=none 时按模型改写为 thinking 禁用。
 	thinkingSwitch bool
-	capabilities   []agentllm.Capability
+	// imageCompletionTokens 表示服务的视觉接口只读 max_completion_tokens、忽略 max_tokens。
+	imageCompletionTokens bool
+	capabilities          []agentllm.Capability
 }
 
 // openAICompatibleCapabilities 是兼容服务的保守能力集：Embed 固定使用 OpenAI 的向量模型，
@@ -113,11 +117,12 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	clientConfig.HTTPClient = zeroTemperatureDoer{next: doer}
 
 	return &OpenAIProvider{
-		BaseProvider:         base,
-		ProviderCapabilities: common.NewProviderCapabilities(spec.capabilities...),
-		client:               openai.NewClientWithConfig(clientConfig),
-		reasoning:            spec.reasoning,
-		thinkingSwitch:       spec.thinkingSwitch,
+		BaseProvider:          base,
+		ProviderCapabilities:  common.NewProviderCapabilities(spec.capabilities...),
+		client:                openai.NewClientWithConfig(clientConfig),
+		reasoning:             spec.reasoning,
+		thinkingSwitch:        spec.thinkingSwitch,
+		imageCompletionTokens: spec.imageCompletionTokens,
 	}, nil
 }
 

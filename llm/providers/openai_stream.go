@@ -47,6 +47,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			ctx = withThinkingDisabled(ctx)
 		}
 	}
+	maxTokens, maxCompletionTokens := p.GetMaxTokens(req.MaxTokens), 0
 	messages := make([]openai.ChatCompletionMessage, 0, len(req.Messages)+1)
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: p.Config.SystemPrompt})
@@ -54,6 +55,9 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	for _, msg := range req.Messages {
 		message := openai.ChatCompletionMessage{Role: msg.Role, Content: msg.Content, Name: msg.Name, ToolCallID: msg.ToolCallID, ReasoningContent: msg.ReasoningContent}
 		if len(msg.Images) > 0 {
+			if p.imageCompletionTokens {
+				maxTokens, maxCompletionTokens = 0, p.GetMaxTokens(req.MaxTokens)
+			}
 			message.Content = ""
 			if msg.Content != "" {
 				message.MultiContent = append(message.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: msg.Content})
@@ -77,7 +81,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	watch := newStreamWatchdog(ctx, p.Config.StreamIdleTimeout, p.Config.StreamTimeout)
 	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
-		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: p.GetMaxTokens(req.MaxTokens),
+		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: maxTokens, MaxCompletionTokens: maxCompletionTokens,
 		Temperature: float32(temperature), TopP: float32(req.TopP),
 		Stop: req.Stop, ResponseFormat: responseFormat, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
 	})
