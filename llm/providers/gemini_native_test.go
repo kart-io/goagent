@@ -18,6 +18,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	shared "github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
@@ -218,6 +219,25 @@ func TestGeminiEmbeddingInvalidResponses(t *testing.T) {
 	// The SDK boundary also rejects malformed converter output without panicking.
 	_, err := geminiSDKEmbed(func() (*genai.EmbedContentResponse, error) { panic(math.Inf(1)) })
 	require.Error(t, err)
+}
+
+func TestGeminiEmbeddingDimensionsOverflowRejected(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "unexpected request", 500)
+	}))
+	defer server.Close()
+	p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	p.Config.EmbeddingDimensions = math.MaxInt32 + 1
+	_, err = p.Embed(context.Background(), "sample")
+	require.Error(t, err)
+	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
+	_, err = p.EmbedBatch(context.Background(), []string{"a", "b"})
+	require.Error(t, err)
+	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
+	require.EqualValues(t, 0, requests.Load())
 }
 
 // Gemini 3 的流可能带一个不含任何字段的 part（如空文本的收尾帧）；回放时 API 以

@@ -212,6 +212,11 @@ func (p *GeminiProvider) EmbedBatch(ctx context.Context, texts []string) ([][]fl
 	}
 	var config *genai.EmbedContentConfig
 	if n := p.Config.EmbeddingDimensions; n > 0 {
+		if n > math.MaxInt32 {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: embedding dimensions %d exceed int32", n).
+				WithComponent("gemini").
+				WithOperation("embed")
+		}
 		dims := int32(n)
 		config = &genai.EmbedContentConfig{OutputDimensionality: &dims}
 	}

@@ -29,7 +29,7 @@ const (
 	EnvKimiAPIKey           = "KIMI_API_KEY"
 	EnvKimiBaseURL          = "KIMI_BASE_URL"
 	EnvKimiModel            = "KIMI_MODEL"
-	EnvMiniMaxAPIKey        = "MINIMAX_API_KEY"
+	EnvMiniMaxAPIKey        = "MINIMAX_API_KEY" // #nosec G101 -- 环境变量名，不是凭据
 	EnvMiniMaxBaseURL       = "MINIMAX_BASE_URL"
 	EnvMiniMaxModel         = "MINIMAX_MODEL"
 	EnvSiliconFlowAPIKey    = "SILICONFLOW_API_KEY"
