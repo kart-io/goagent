@@ -72,13 +72,14 @@ func TestWithHTTPClientRoutesEveryProvider(t *testing.T) {
 func TestWithHTTPClientKeepsRedirectPolicy(t *testing.T) {
 	for name, newClient := range injectionConstructors {
 		t.Run(name, func(t *testing.T) {
-			var hits atomic.Int32
+			var hits, originHits atomic.Int32
 			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				hits.Add(1)
 				http.Error(w, "{}", http.StatusBadRequest)
 			}))
 			defer target.Close()
 			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				originHits.Add(1)
 				http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
 			}))
 			defer origin.Close()
@@ -94,7 +95,13 @@ func TestWithHTTPClientKeepsRedirectPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			completeOnce(client)
+			_, err = agentllm.Complete(context.Background(), client, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("hi")}})
+			if err == nil {
+				t.Fatal("重定向被拒绝时调用应返回错误")
+			}
+			if originHits.Load() < 1 {
+				t.Fatal("源服务未收到请求，测试未触发重定向")
+			}
 			if n := hits.Load(); n != 0 {
 				t.Fatalf("重定向目标收到 %d 次请求，应为 0", n)
 			}
