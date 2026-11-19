@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -105,9 +106,16 @@ func (n *native) run(ctx context.Context, spec mg.RunSpec, observe func(context.
 		if waits := durable.Waits(err); waits != nil {
 			return mg.RunResult{Outcome: "waiting", Waits: mg.WaitPoints(waits)}, err
 		}
+		// 取消时终止事件可能被丢弃，按 builder 约定以 ctx.Err() 为准。
+		if cerr := ctx.Err(); cerr != nil && !errors.Is(err, cerr) {
+			err = errors.Join(err, cerr)
+		}
 		return mg.RunResult{}, err
 	}
 	if output == nil {
+		if cerr := ctx.Err(); cerr != nil {
+			return mg.RunResult{}, cerr
+		}
 		return mg.RunResult{}, agentErrors.Newf(agentErrors.CodeInvalidOutput, "生产者退出时没有确定结果").WithComponent("management")
 	}
 	raw, err := json.Marshal(output.Result)
