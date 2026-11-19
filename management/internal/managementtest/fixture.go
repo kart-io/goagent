@@ -2,15 +2,14 @@ package managementtest
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 	mg "github.com/kart-io/goagent/management"
+	"github.com/kart-io/goagent/management/memstore"
 )
 
 // Factory 在启动 Worker 前配置；执行回调的跨协程状态须由测试自行同步。
@@ -42,36 +41,7 @@ func (f *Factory) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error
 	return mg.RunResult{Outcome: "completed", Output: []byte(`{"ok":true}`)}, nil
 }
 
-// History 读取真实内存会话日志，并遵守业务历史隐藏内部事件的边界。
-type History struct{ Sessions session.Store }
-
-func (h History) History(ctx context.Context, id string, after int64, limit int, types []string) (mg.HistoryPage, error) {
-	events, err := h.Sessions.Read(ctx, id, after)
-	if err != nil {
-		return mg.HistoryPage{}, err
-	}
-	p := mg.HistoryPage{Items: []session.Event{}, NextSeq: after}
-	for _, ev := range events {
-		if strings.HasPrefix(ev.Type, "management/") || ev.Type == constants.SessionEventBoundarySnapshot {
-			continue
-		}
-		match := len(types) == 0
-		for _, typ := range types {
-			if typ == ev.Type {
-				match = true
-			}
-		}
-		if !match {
-			continue
-		}
-		p.Items = append(p.Items, ev)
-		p.NextSeq = ev.Seq
-		if len(p.Items) == limit {
-			break
-		}
-	}
-	return p, nil
-}
+type History = memstore.History
 
 type Fixture struct {
 	Store    *Store
@@ -91,7 +61,7 @@ func NewFixture(t testing.TB) *Fixture {
 }
 
 func (f *Fixture) Config() mg.Config {
-	return mg.Config{Store: f.Store, Sessions: f.Sessions, HistoryReader: History{f.Sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"offline": f.Factory}}
+	return mg.Config{Store: f.Store, Sessions: f.Sessions, HistoryReader: History{Sessions: f.Sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"offline": f.Factory}}
 }
 
 func (f *Fixture) Register(t testing.TB) (mg.Agent, mg.Version) {
