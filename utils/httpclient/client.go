@@ -56,6 +56,10 @@ type Config struct {
 
 	// MaxIdleConnsPerHost 每个主机的最大空闲连接数
 	MaxIdleConnsPerHost int
+
+	// HTTPClient 非空时，其 Transport 取代默认传输层，CheckRedirect 作为重定向策略；
+	// 该配置不参与客户端缓存，每次都新建客户端。
+	HTTPClient *http.Client
 }
 
 // DefaultConfig 返回默认配置
@@ -129,7 +133,18 @@ func NewClient(config *Config) *Client {
 	// 增加空闲连接超时时间，降低连接重建频率
 	transport.IdleConnTimeout = 90 * time.Second
 
-	restyClient.SetTransport(transport)
+	if injected := config.HTTPClient; injected != nil {
+		if injected.Transport != nil {
+			restyClient.SetTransport(injected.Transport)
+		} else {
+			restyClient.SetTransport(transport)
+		}
+		if injected.CheckRedirect != nil {
+			restyClient.SetRedirectPolicy(resty.RedirectPolicyFunc(injected.CheckRedirect))
+		}
+	} else {
+		restyClient.SetTransport(transport)
+	}
 
 	return &Client{
 		resty:  restyClient,
@@ -320,6 +335,9 @@ func generateCacheKey(config *Config) string {
 func GetOrCreateClient(config *Config) *Client {
 	if config == nil {
 		config = DefaultConfig()
+	}
+	if config.HTTPClient != nil {
+		return NewClient(config)
 	}
 
 	// 生成缓存 key

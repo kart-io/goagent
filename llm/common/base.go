@@ -61,6 +61,12 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.EmbeddingModel != "" {
 		opts = append(opts, agentllm.WithEmbeddingModel(config.EmbeddingModel))
 	}
+	if config.HTTPClient != nil {
+		opts = append(opts, agentllm.WithHTTPClient(config.HTTPClient))
+	}
+	if config.EmbeddingDimensions != 0 {
+		opts = append(opts, agentllm.WithEmbeddingDimensions(config.EmbeddingDimensions))
+	}
 	if config.MaxTokens > 0 {
 		opts = append(opts, agentllm.WithMaxTokens(config.MaxTokens))
 	}
@@ -232,9 +238,10 @@ func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 	// 使用缓存机制创建或获取客户端
 	// 相同配置的客户端将被复用，显著提升并发场景性能
 	return httpclient.GetOrCreateClient(&httpclient.Config{
-		Timeout: timeout,
-		Headers: headers,
-		BaseURL: cfg.BaseURL,
+		Timeout:    timeout,
+		Headers:    headers,
+		BaseURL:    cfg.BaseURL,
+		HTTPClient: b.Config.HTTPClient,
 	})
 }
 

@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
@@ -32,6 +33,14 @@ type Message struct {
 	// ProviderState preserves opaque response parts (e.g. Gemini signatures).
 	// Replay unchanged with the matching assistant content and tool calls.
 	ProviderState *ProviderState `json:"provider_state,omitzero"`
+	// Images 随消息一起发送；仅 OpenAI 兼容族支持，其余提供商会拒绝。
+	Images []ImagePart `json:"images,omitempty"`
+}
+
+// ImagePart 是消息携带的一张图片。
+type ImagePart struct {
+	// URL 可以是 https 地址或 data: URI。
+	URL string `json:"url"`
 }
 
 type ProviderState struct {
@@ -90,6 +99,8 @@ type LLMOptions struct {
 	BaseURL        string          `json:"base_url,omitempty"`        // custom API endpoint
 	Model          string          `json:"model"`                     // default model
 	EmbeddingModel string          `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
+	// EmbeddingDimensions requests a vector size from OpenAI-family and Gemini embeddings; 0 leaves it to the model.
+	EmbeddingDimensions int `json:"embedding_dimensions,omitempty"`
 
 	// Generation parameters.
 	MaxTokens      int             `json:"max_tokens"`               // default maximum tokens
@@ -110,6 +121,10 @@ type LLMOptions struct {
 	// Other settings.
 	SystemPrompt  string            `json:"system_prompt,omitempty"`  // default system prompt
 	CustomHeaders map[string]string `json:"custom_headers,omitempty"` // custom HTTP headers
+
+	// HTTPClient supplies the transport and redirect policy for provider requests;
+	// see WithHTTPClient. Never serialized.
+	HTTPClient *http.Client `json:"-"`
 }
 
 // DefaultLLMOptions returns the default configuration.

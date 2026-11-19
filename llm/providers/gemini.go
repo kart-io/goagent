@@ -34,6 +34,9 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	if err := base.EnsureAPIKey(shared.EnvGeminiAPIKey, shared.ProviderGemini); err != nil {
 		return nil, err
 	}
+	if err := validateEmbeddingDimensions(shared.ProviderGemini, base.Config.EmbeddingDimensions); err != nil {
+		return nil, err
+	}
 	// Explicit backend prevents ambient Vertex settings from changing authentication.
 	// No implicit SDK retries: one provider invocation is one upstream request.
 	attempts := int32(1)
@@ -42,8 +45,12 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	for key, value := range base.Config.CustomHeaders {
 		headers.Set(key, value)
 	}
+	var httpClient *http.Client
+	if injected := base.Config.HTTPClient; injected != nil {
+		httpClient = &http.Client{Transport: injected.Transport, CheckRedirect: injected.CheckRedirect}
+	}
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey: base.Config.APIKey, Backend: genai.BackendGeminiAPI,
+		APIKey: base.Config.APIKey, Backend: genai.BackendGeminiAPI, HTTPClient: httpClient,
 		HTTPOptions: genai.HTTPOptions{BaseURL: base.Config.BaseURL, APIVersion: "v1beta", Timeout: &timeout, RetryOptions: &genai.HTTPRetryOptions{Attempts: &attempts}, Headers: headers},
 	})
 	if err != nil {

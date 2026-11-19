@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"net/http"
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
@@ -52,6 +53,11 @@ func WithModel(model string) ClientOption {
 // WithEmbeddingModel selects a separate embedding model for providers that support it.
 func WithEmbeddingModel(model string) ClientOption {
 	return func(c *LLMOptions) { c.EmbeddingModel = model }
+}
+
+// WithEmbeddingDimensions requests n-dimensional embeddings; 0 (default) sends nothing, n < 0 is rejected at construction.
+func WithEmbeddingDimensions(n int) ClientOption {
+	return func(c *LLMOptions) { c.EmbeddingDimensions = n }
 }
 
 // WithMaxTokens sets the maximum number of tokens.
@@ -150,6 +156,14 @@ func WithJSONResponse() ClientOption {
 	return func(c *LLMOptions) {
 		c.ResponseFormat = ResponseFormatJSON
 	}
+}
+
+// WithHTTPClient makes every provider send its requests through c.Transport
+// (http.DefaultTransport when nil) and apply c.CheckRedirect, so hosts can
+// enforce outbound policies such as SSRF protection. Timeouts and custom
+// headers still apply; c.Timeout and c.Jar are ignored.
+func WithHTTPClient(c *http.Client) ClientOption {
+	return func(o *LLMOptions) { o.HTTPClient = c }
 }
 
 // WithCustomHeaders sets custom HTTP headers.

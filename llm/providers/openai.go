@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ type OpenAIProvider struct {
 	client *openai.Client
 	// reasoning 表示服务接受 reasoning_effort；不接受时显式推理配置在请求前报错。
 	reasoning bool
+	// thinkingSwitch 为 true 时，effort=none 不发送 reasoning_effort。
+	thinkingSwitch bool
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
@@ -60,6 +63,8 @@ type openAICompatibleSpec struct {
 	// defaultTimeout 仅在调用方未改动默认超时时生效。
 	defaultTimeout time.Duration
 	reasoning      bool
+	// thinkingSwitch 表示服务用 thinking 开关控制推理：effort=none 时按模型改写为 thinking 禁用。
+	thinkingSwitch bool
 	capabilities   []agentllm.Capability
 }
 
@@ -77,6 +82,9 @@ var openAICompatibleCapabilities = []agentllm.Capability{
 func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	base := common.NewBaseProvider(opts...)
 	base.ApplyProviderDefaults(spec.provider, spec.defaultBaseURL, spec.defaultModel, spec.envBaseURL, spec.envModel)
+	if err := validateEmbeddingDimensions(spec.provider, base.Config.EmbeddingDimensions); err != nil {
+		return nil, err
+	}
 
 	if spec.apiKeyOptional {
 		if err := base.RejectReasoning(nil); err != nil {
@@ -98,13 +106,18 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders)}}
+	var doer openai.HTTPDoer = retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}
+	if spec.thinkingSwitch {
+		doer = thinkingDisabledDoer{next: doer}
+	}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: doer}
 
 	return &OpenAIProvider{
 		BaseProvider:         base,
 		ProviderCapabilities: common.NewProviderCapabilities(spec.capabilities...),
 		client:               openai.NewClientWithConfig(clientConfig),
 		reasoning:            spec.reasoning,
+		thinkingSwitch:       spec.thinkingSwitch,
 	}, nil
 }
 
@@ -119,15 +132,31 @@ func compatibleTimeout(configured, serviceDefault time.Duration) time.Duration {
 // responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
 // 流式请求的响应头随首块到达，之后的读取只受 ctx 控制，长回复不会被截断。
 // headers 来自 WithCustomHeaders，覆盖 SDK 设置的同名头。
-func responseHeaderTimeoutClient(timeout time.Duration, headers map[string]string) *http.Client {
-	return &http.Client{Transport: headerTimeoutTransport{timeout: timeout, headers: headers}}
+// injected 来自 WithHTTPClient：其 Transport 取代 http.DefaultTransport，CheckRedirect 原样沿用。
+func responseHeaderTimeoutClient(timeout time.Duration, headers map[string]string, injected *http.Client) *http.Client {
+	t := headerTimeoutTransport{timeout: timeout, headers: headers}
+	client := &http.Client{}
+	if injected != nil {
+		t.base = injected.Transport
+		client.CheckRedirect = injected.CheckRedirect
+	}
+	client.Transport = t
+	return client
 }
 
-// headerTimeoutTransport 每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
-// 连接池也由它统一持有。计时从发起请求开始，覆盖建连与写请求。
+// headerTimeoutTransport 默认每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
+// 连接池也由它统一持有；base 非空时改用 base。计时从发起请求开始，覆盖建连与写请求。
 type headerTimeoutTransport struct {
 	timeout time.Duration
 	headers map[string]string
+	base    http.RoundTripper
+}
+
+func (t headerTimeoutTransport) roundTripper() http.RoundTripper {
+	if t.base != nil {
+		return t.base
+	}
+	return http.DefaultTransport
 }
 
 func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -138,11 +167,11 @@ func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, er
 		}
 	}
 	if t.timeout <= 0 {
-		return http.DefaultTransport.RoundTrip(req)
+		return t.roundTripper().RoundTrip(req)
 	}
 	ctx, cancel := context.WithCancel(req.Context())
 	timer := time.AfterFunc(t.timeout, cancel)
-	resp, err := http.DefaultTransport.RoundTrip(req.WithContext(ctx))
+	resp, err := t.roundTripper().RoundTrip(req.WithContext(ctx))
 	// 定时器已触发时 ctx 已取消，即便响应恰好返回其 Body 也不可读，统一按超时处理。
 	if !timer.Stop() {
 		if err == nil {
@@ -188,12 +217,25 @@ func (p *OpenAIProvider) convertTools(tools []interfaces.Tool) []openai.Tool {
 	return result
 }
 
-// Embed uses the model set by llm.WithEmbeddingModel, defaulting to
-// text-embedding-ada-002.
+// Embed embeds one text through EmbedBatch.
 func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, error) {
-	textPreview := text
-	if len(text) > 100 {
-		textPreview = text[:100] + "..."
+	vecs, err := p.EmbedBatch(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return vecs[0], nil
+}
+
+// EmbedBatch sends all texts in one request and returns vectors in input order.
+// It uses the model set by llm.WithEmbeddingModel, defaulting to text-embedding-ada-002.
+func (p *OpenAIProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	if len(texts) == 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "%s: embedding input is required", p.ProviderName()).
+			WithComponent(p.ProviderName()).WithOperation("generate_embedding")
+	}
+	textPreview := texts[0]
+	if len(textPreview) > 100 {
+		textPreview = textPreview[:100] + "..."
 	}
 	model := openai.EmbeddingModel(p.Config.EmbeddingModel)
 	if model == "" {
@@ -202,19 +244,35 @@ func (p *OpenAIProvider) Embed(ctx context.Context, text string) ([]float32, err
 
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	resp, err := p.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
-		Input: []string{text},
-		Model: model,
+		Input:      texts,
+		Model:      model,
+		Dimensions: p.Config.EmbeddingDimensions,
 	})
 	if err != nil {
 		return nil, wrapProviderError(p.ProviderName(), string(model), openAIProviderError(err, *retryAfter)).
 			WithContext("text_preview", textPreview).WithOperation("generate_embedding")
 	}
 
-	if len(resp.Data) == 0 {
-		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(model), "no embeddings in response")
+	if len(resp.Data) != len(texts) {
+		return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(model),
+			fmt.Sprintf("expected %d embeddings, got %d", len(texts), len(resp.Data)))
 	}
+	out := make([][]float32, len(texts))
+	for _, d := range resp.Data {
+		if d.Index < 0 || d.Index >= len(texts) || out[d.Index] != nil {
+			return nil, agentErrors.NewLLMResponseError(p.ProviderName(), string(model),
+				fmt.Sprintf("invalid or duplicate embedding index %d", d.Index))
+		}
+		out[d.Index] = d.Embedding
+	}
+	return out, nil
+}
 
-	return resp.Data[0].Embedding, nil
+func validateEmbeddingDimensions(provider shared.Provider, n int) error {
+	if n < 0 {
+		return agentErrors.NewInvalidConfigError(string(provider), "embedding_dimensions", "must not be negative")
+	}
+	return nil
 }
 
 // Provider returns the provider type

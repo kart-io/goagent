@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	_ llm.ToolStreamClient = (*GeminiProvider)(nil)
-	_ llm.EmbeddingClient  = (*GeminiProvider)(nil)
+	_ llm.ToolStreamClient     = (*GeminiProvider)(nil)
+	_ llm.EmbeddingClient      = (*GeminiProvider)(nil)
+	_ llm.BatchEmbeddingClient = (*GeminiProvider)(nil)
 )
 
 func (p *GeminiProvider) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
@@ -40,6 +41,11 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 	var order []string
 	responses := map[string]*genai.Part{}
 	for _, msg := range messages {
+		if len(msg.Images) > 0 {
+			return nil, nil, agentErrors.New(agentErrors.CodeInvalidInput, "gemini: images not supported").
+				WithComponent("gemini").
+				WithOperation("build_request")
+		}
 		if msg.Role != "tool" && len(pending) > 0 {
 			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: missing tool responses before next message").
 				WithComponent("gemini").
@@ -175,44 +181,81 @@ func geminiAssistant(msg llm.Message) (*genai.Content, []*genai.FunctionCall, er
 	return content, calls, nil
 }
 
-// Embed uses a separate embedding model; chat model settings never select it.
+// Embed embeds one text through EmbedBatch.
 func (p *GeminiProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	vecs, err := p.EmbedBatch(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return vecs[0], nil
+}
+
+// EmbedBatch sends all texts in one EmbedContent call and returns vectors in
+// input order. It uses a separate embedding model; chat model settings never select it.
+func (p *GeminiProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, geminiProviderError(err)
 	}
-	if strings.TrimSpace(text) == "" {
+	if len(texts) == 0 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: embedding text is required").
 			WithComponent("gemini").
 			WithOperation("embed")
 	}
+	contents := make([]*genai.Content, len(texts))
+	for i, text := range texts {
+		if strings.TrimSpace(text) == "" {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: embedding text is required").
+				WithComponent("gemini").
+				WithOperation("embed")
+		}
+		contents[i] = genai.NewContentFromText(text, genai.RoleUser)
+	}
+	var config *genai.EmbedContentConfig
+	if n := p.Config.EmbeddingDimensions; n > 0 {
+		if n > math.MaxInt32 {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: embedding dimensions %d exceed int32", n).
+				WithComponent("gemini").
+				WithOperation("embed")
+		}
+		dims := int32(n)
+		config = &genai.EmbedContentConfig{OutputDimensionality: &dims}
+	}
 	ctx, cancel := context.WithTimeout(ctx, p.GetTimeout())
 	defer cancel()
 	response, err := geminiSDKEmbed(func() (*genai.EmbedContentResponse, error) {
-		return p.client.Models.EmbedContent(ctx, p.Config.EmbeddingModel, []*genai.Content{genai.NewContentFromText(text, genai.RoleUser)}, nil)
+		return p.client.Models.EmbedContent(ctx, p.Config.EmbeddingModel, contents, config)
 	})
 	if err != nil {
 		return nil, geminiProviderError(err)
 	}
-	if response == nil || len(response.Embeddings) != 1 || response.Embeddings[0] == nil || len(response.Embeddings[0].Values) == 0 {
+	if response == nil || len(response.Embeddings) != len(texts) {
 		return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: missing embedding vector").
 			WithComponent("gemini").
 			WithOperation("embed")
 	}
-	values := response.Embeddings[0].Values
-	nonzero := false
-	for _, value := range values {
-		v := float64(value)
-		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: non-finite embedding value").
+	out := make([][]float32, len(texts))
+	for i, embedding := range response.Embeddings {
+		if embedding == nil || len(embedding.Values) == 0 {
+			return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: missing embedding vector").
 				WithComponent("gemini").
 				WithOperation("embed")
 		}
-		nonzero = nonzero || value != 0
+		nonzero := false
+		for _, value := range embedding.Values {
+			v := float64(value)
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: non-finite embedding value").
+					WithComponent("gemini").
+					WithOperation("embed")
+			}
+			nonzero = nonzero || value != 0
+		}
+		if !nonzero {
+			return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: zero embedding vector").WithComponent("gemini").WithOperation("embed")
+		}
+		out[i] = embedding.Values
 	}
-	if !nonzero {
-		return nil, agentErrors.Newf(agentErrors.CodeLLMResponse, "gemini: zero embedding vector").WithComponent("gemini").WithOperation("embed")
-	}
-	return values, nil
+	return out, nil
 }
 
 func geminiSDKEmbed(call func() (*genai.EmbedContentResponse, error)) (response *genai.EmbedContentResponse, err error) {

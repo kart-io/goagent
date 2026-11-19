@@ -47,7 +47,7 @@ func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider,
 		option.WithAPIKey(base.Config.APIKey),
 		option.WithBaseURL(base.Config.BaseURL),
 		option.WithMaxRetries(0),
-		option.WithHTTPClient(responseHeaderTimeoutClient(base.GetTimeout(), base.Config.CustomHeaders)),
+		option.WithHTTPClient(responseHeaderTimeoutClient(base.GetTimeout(), base.Config.CustomHeaders, base.Config.HTTPClient)),
 	)
 	return &AnthropicProvider{
 		BaseProvider: base,
@@ -142,6 +142,11 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 		return nil
 	}
 	for _, msg := range messages {
+		if len(msg.Images) > 0 {
+			return nil, "", agentErrors.New(agentErrors.CodeInvalidInput, "anthropic: images not supported").
+				WithComponent("anthropic").
+				WithOperation("build_request")
+		}
 		if msg.Role != shared.RoleTool {
 			if err := flush(); err != nil {
 				return nil, "", err
