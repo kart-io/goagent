@@ -160,7 +160,8 @@ func (f ApproverFunc) Approve(ctx context.Context, req ApprovalRequest) (Approva
 // do not pass through admission again. Admission uses separately configurable
 // admission slots, occupies no tool execution slot, and does not count toward
 // DispatchConfig.Timeout; Around, the tool and PostHook run within the
-// timeout.
+// timeout. Hooks and the Approver must not modify Call.Args: the Dispatcher
+// fails the call if they do. Use PreSubstitute to change arguments.
 type Pipeline struct {
 	Pre      []PreHook
 	Approver Approver
