@@ -41,9 +41,9 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	if err != nil {
 		return nil, err
 	}
-	if p.thinkingSwitch && effort == "none" {
+	if effort == "none" && (p.thinkingSwitch || p.thinkingNoneOnly) {
 		effort = ""
-		if isMiniMaxM3(p.GetModel(req.Model)) {
+		if p.thinkingNoneOnly || isMiniMaxM3(p.GetModel(req.Model)) {
 			ctx = withThinkingDisabled(ctx)
 		}
 	}

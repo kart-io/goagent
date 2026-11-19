@@ -11,6 +11,9 @@ import (
 
 func (p *OpenAIProvider) reasoningEffort(req *llm.CompletionRequest) (string, error) {
 	if !p.reasoning {
+		if c := p.ResolveReasoning(req); p.thinkingNoneOnly && c != nil && c.Effort == "none" && !c.BudgetSet {
+			return c.Effort, nil
+		}
 		return "", p.RejectReasoning(req)
 	}
 	c := p.ResolveReasoning(req)
