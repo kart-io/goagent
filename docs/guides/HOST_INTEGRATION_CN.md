@@ -71,7 +71,7 @@ defer cleanup()
 agent, err := b.WithLogger(logger).BuildContext(runCtx)
 ```
 
-slogx 须用 v0.2.1 及以上；v0.2.0 固定的 OpenTelemetry 日志 SDK 与 goagent 无法一起编译。
+建议使用 slogx v0.2.2 及以上：v0.2.0 固定的 OpenTelemetry 日志 SDK 与 goagent 无法一起编译，v0.2.1 仍会给运行事件的 ERROR 记录附加 goagent 内部调用栈。
 
 - `WithLogger` 把一次执行的每个 observe 事件（Agent、模型调用、重试、工具调用、缓存、用量）写成一条结构化日志，`execution.Scope` 已绑定的观察者照常收到事件。日志只含身份、耗时和错误类别，不含输入、输出和提供方错误原文。执行失败记为 Error，取消和重试记为 Warn，生命周期结束记为 Info，开始、用量和缓存命中记为 Debug。嵌套 Agent 由最外层带 Logger 的 Agent 记录整次执行。
 - 没拿到日志器的代码写入 `logging.Default()`，它每次调用时读取 `slog.Default()`；`slogx.Init` 会设置它，因此 Builder 的告警，以及 `core/middleware.NewLoggingMiddleware(nil)` 与 `tools/middleware.NewLoggingMiddleware()` 的默认输出都跟随宿主配置。

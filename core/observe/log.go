@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/kart-io/goagent/core/logging"
 )
@@ -86,8 +87,24 @@ var logAt = map[slog.Level]func(logging.Logger, context.Context, string, ...any)
 	slog.LevelError: logging.Logger.ErrorContext,
 }
 
+// handlerLogger 是暴露处理器的日志器，*slog.Logger、内嵌它的 *slogx.Logger 与 logging.Default() 都满足。
+type handlerLogger interface{ Handler() slog.Handler }
+
+// Observe 优先直接交给处理器并把 PC 置 0：事件不产生于某个调用点，否则 source/caller 恒为本文件。
 func (o logObserver) Observe(ctx context.Context, e Event) {
-	logAt[eventLevel(e)](o.l, ctx, e.Type, eventAttrs(e)...)
+	level := eventLevel(e)
+	h, ok := o.l.(handlerLogger)
+	if !ok {
+		logAt[level](o.l, ctx, e.Type, eventAttrs(e)...)
+		return
+	}
+	handler := h.Handler()
+	if !handler.Enabled(ctx, level) {
+		return
+	}
+	r := slog.NewRecord(time.Now(), level, e.Type, 0)
+	r.Add(eventAttrs(e)...)
+	_ = handler.Handle(ctx, r)
 }
 
 // eventAttrs 只输出非零字段，避免每条记录带一串空值。

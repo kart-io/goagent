@@ -44,3 +44,19 @@ func TestOrDefaultAndDiscard(t *testing.T) {
 	logging.Discard().ErrorContext(context.Background(), "丢弃")
 	require.Empty(t, buf.String())
 }
+
+// 经 Default() 写出的记录，来源是调用方而不是 logging 包。
+func TestDefaultReportsCallerSource(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	var buf bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})))
+
+	l := logging.Default()
+	for _, write := range []func(context.Context, string, ...any){l.DebugContext, l.InfoContext, l.WarnContext, l.ErrorContext} {
+		buf.Reset()
+		write(context.Background(), "m", "k", "v")
+		require.Contains(t, buf.String(), "logging_test.go:")
+		require.Contains(t, buf.String(), "msg=m k=v")
+	}
+}

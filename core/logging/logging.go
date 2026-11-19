@@ -11,6 +11,8 @@ package logging
 import (
 	"context"
 	"log/slog"
+	"runtime"
+	"time"
 )
 
 // Logger is a leveled, structured logger. args are alternating keys and
@@ -41,20 +43,39 @@ func Discard() Logger { return discard{} }
 
 type defaultLogger struct{}
 
-func (defaultLogger) DebugContext(ctx context.Context, msg string, args ...any) {
-	slog.Default().DebugContext(ctx, msg, args...)
+func (d defaultLogger) DebugContext(ctx context.Context, msg string, args ...any) {
+	d.log(ctx, slog.LevelDebug, msg, args)
 }
 
-func (defaultLogger) InfoContext(ctx context.Context, msg string, args ...any) {
-	slog.Default().InfoContext(ctx, msg, args...)
+func (d defaultLogger) InfoContext(ctx context.Context, msg string, args ...any) {
+	d.log(ctx, slog.LevelInfo, msg, args)
 }
 
-func (defaultLogger) WarnContext(ctx context.Context, msg string, args ...any) {
-	slog.Default().WarnContext(ctx, msg, args...)
+func (d defaultLogger) WarnContext(ctx context.Context, msg string, args ...any) {
+	d.log(ctx, slog.LevelWarn, msg, args)
 }
 
-func (defaultLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	slog.Default().ErrorContext(ctx, msg, args...)
+func (d defaultLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
+	d.log(ctx, slog.LevelError, msg, args)
+}
+
+// Handler 让需要自行构造记录的调用方（如 observe 的日志观察者）拿到当前默认处理器。
+func (defaultLogger) Handler() slog.Handler { return slog.Default().Handler() }
+
+// log 记录调用方的 PC，否则处理器的 source/caller 恒为本文件。
+func (defaultLogger) log(ctx context.Context, level slog.Level, msg string, args []any) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	h := slog.Default().Handler()
+	if !h.Enabled(ctx, level) {
+		return
+	}
+	var pcs [1]uintptr
+	runtime.Callers(3, pcs[:]) // 跳过 runtime.Callers、log 与 XxxContext
+	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	r.Add(args...)
+	_ = h.Handle(ctx, r)
 }
 
 type discard struct{}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/usage"
 )
 
@@ -93,4 +94,29 @@ func TestAddObserverIsolatesPanics(t *testing.T) {
 	only := &collector{}
 	Emit(AddObserver(context.Background(), only), Event{Type: "model_usage"})
 	require.Len(t, only.events, 1)
+}
+
+// 事件不是在某个调用点产生的：处理器开启 AddSource 时也不能把本观察者记成来源。
+func TestLogObserverRecordsNoSource(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		logger func(*bytes.Buffer) logging.Logger
+	}{
+		{"slog.Logger", func(buf *bytes.Buffer) logging.Logger {
+			return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{AddSource: true}))
+		}},
+		{"logging.Default", func(buf *bytes.Buffer) logging.Logger {
+			prev := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(prev) })
+			slog.SetDefault(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{AddSource: true})))
+			return nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			NewLogObserver(tc.logger(&buf)).Observe(context.Background(), Event{Type: "model_error", ErrorKind: "execution"})
+			require.Contains(t, buf.String(), "level=ERROR msg=model_error error_kind=execution")
+			require.NotContains(t, buf.String(), "source=")
+		})
+	}
 }
