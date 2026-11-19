@@ -139,7 +139,8 @@ func TestExport(t *testing.T) {
 	convo := []llm.Message{
 		llm.UserMessage("查 a 和 b"),
 		{Role: "assistant", ToolCalls: []llm.ToolCall{c1, c2}},
-		{Role: "tool", ToolCallID: "c1", Content: "A"}, {Role: "tool", ToolCallID: "c2", Content: "not found"},
+		{Role: "tool", ToolCallID: "c1", Content: "A"},
+		{Role: "tool", ToolCallID: "c2", Content: "not found"},
 		llm.UserMessage("顺便说明来源"),
 		{Role: "assistant", Content: "a 是 A，b 没查到"},
 	}
@@ -239,10 +240,16 @@ func TestRewindRestoresViewAtTarget(t *testing.T) {
 		turns int
 	}{
 		{"单次退回", func(add func(int), rewind func(int64)) { add(2); rewind(2) }, []string{"m1"}, 1},
-		{"退回到上次退回之前", func(add func(int), rewind func(int64)) { add(5); rewind(4); add(2); rewind(10) },
-			[]string{"m1", "m2", "m3", "m4", "m5"}, 5},
-		{"退回到上次退回之后", func(add func(int), rewind func(int64)) { add(3); rewind(2); add(2); rewind(9) },
-			[]string{"m1", "m4"}, 2},
+		{
+			"退回到上次退回之前", func(add func(int), rewind func(int64)) { add(5); rewind(4); add(2); rewind(10) },
+			[]string{"m1", "m2", "m3", "m4", "m5"},
+			5,
+		},
+		{
+			"退回到上次退回之后", func(add func(int), rewind func(int64)) { add(3); rewind(2); add(2); rewind(9) },
+			[]string{"m1", "m4"},
+			2,
+		},
 		{"连续退回", func(add func(int), rewind func(int64)) { add(3); rewind(4); rewind(2) }, []string{"m1"}, 1},
 	}
 	for _, tt := range tests {

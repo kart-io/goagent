@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type InputHandler func(context.Context, *InputRequiredError) (mcp.InputResponseMap, error)
@@ -25,9 +26,11 @@ type InputRequiredError struct {
 func (e *InputRequiredError) Error() string {
 	return fmt.Sprintf("MCP 工具 %s 等待宿主输入", e.Name)
 }
+
 func (e *InputRequiredError) Unwrap() error {
 	return agentErrors.Newf(agentErrors.CodeToolExecution, "MCP 需要输入续接")
 }
+
 func pendingCall(r *mcp.CallToolParams, result *mcp.CallToolResult) (*InputRequiredError, error) {
 	args, err := json.Marshal(r.Arguments)
 	if err != nil {

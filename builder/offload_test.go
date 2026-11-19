@@ -217,6 +217,7 @@ func (s *trackingStore) PutIfAbsent(ctx context.Context, ref contextpolicy.Ref, 
 	s.mu.Unlock()
 	return s.ResultStore.PutIfAbsent(ctx, ref, data)
 }
+
 func (s *trackingStore) Release(ctx context.Context, run string) error {
 	s.mu.Lock()
 	delete(s.live, run)

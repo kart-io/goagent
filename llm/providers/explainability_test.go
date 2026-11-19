@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOpenAIExplainability(t *testing.T) {
@@ -36,6 +36,7 @@ func TestOpenAIExplainability(t *testing.T) {
 	require.Equal(t, 18, last.Usage.TotalTokens)
 	require.NotZero(t, last.Usage.Fields()&usage.Reasoning)
 }
+
 func TestGeminiExplainability(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]any
@@ -60,6 +61,7 @@ func TestGeminiExplainability(t *testing.T) {
 	require.Equal(t, 3, last.Usage.ToolUsePromptTokens)
 	require.Equal(t, 21, last.Usage.TotalTokens)
 }
+
 func TestUnsupportedReasoningIsRejectedBeforeHTTP(t *testing.T) {
 	p, err := NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL("http://127.0.0.1:1"))
 	require.NoError(t, err)

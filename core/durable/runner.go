@@ -234,6 +234,7 @@ func (r *Runner) Run(ctx context.Context, id string, initial json.RawMessage, ap
 	}
 	return snapshot, nil
 }
+
 func (r *Runner) checkBeforeApprove(ctx context.Context, id string, snapshot *Snapshot) (err error) {
 	defer func() {
 		if p := recover(); p != nil {

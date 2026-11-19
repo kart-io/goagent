@@ -68,8 +68,10 @@ type inbox struct {
 	transcript []llm.Message
 }
 
-type inboxKey struct{}
-type historyKey struct{}
+type (
+	inboxKey   struct{}
+	historyKey struct{}
+)
 
 func inboxFrom(ctx context.Context) *inbox {
 	b, _ := ctx.Value(inboxKey{}).(*inbox)

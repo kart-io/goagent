@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBuilderRunnableUsesEventExecution(t *testing.T) {

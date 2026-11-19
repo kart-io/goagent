@@ -31,7 +31,8 @@ func TestFileStoreAppendAllCrashAfterCommit(t *testing.T) {
 		store, err := NewFileStore(dir)
 		require.NoError(t, err)
 		txnlog.AfterCommit = func() { os.Exit(appendAllCrashExit) }
-		_, _ = store.AppendAll(context.Background(),
+		_, _ = store.AppendAll(
+			context.Background(),
 			AppendBatch{ID: "a", Events: []Event{userEvent(t, "a1")}},
 			AppendBatch{ID: "b", Events: []Event{userEvent(t, "b1"), userEvent(t, "b2")}},
 		)

@@ -3,10 +3,11 @@ package providers
 import (
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	agentllm "github.com/kart-io/goagent/llm"
 )
 
 func TestGemini阻断响应错误分类(t *testing.T) {

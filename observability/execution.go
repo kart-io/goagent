@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+
 	"github.com/kart-io/goagent/core/observe"
 )
 

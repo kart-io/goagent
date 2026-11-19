@@ -111,8 +111,10 @@ func cutTurns(t *tx, session string, to int64, now time.Time) []Job {
 		if forgotten[k] || pending || done {
 			continue
 		}
-		out = append(out, Job{Key: key, Namespace: slices.Clone(t.ns), Session: session, From: k[0], To: to, Aborted: aborted[k],
-			Scope: t.scope, TurnSeq: t.nextSeq(), Status: JobPending, CreatedAt: now})
+		out = append(out, Job{
+			Key: key, Namespace: slices.Clone(t.ns), Session: session, From: k[0], To: to, Aborted: aborted[k],
+			Scope: t.scope, TurnSeq: t.nextSeq(), Status: JobPending, CreatedAt: now,
+		})
 	}
 	slices.SortFunc(out, func(a, b Job) int { return strings.Compare(a.Key, b.Key) })
 	return slices.CompactFunc(out, func(a, b Job) bool { return a.Key == b.Key })

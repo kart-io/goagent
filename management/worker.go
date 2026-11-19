@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
@@ -15,7 +17,6 @@ import (
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type Worker struct {

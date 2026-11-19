@@ -7,11 +7,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/tools"

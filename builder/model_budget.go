@@ -3,8 +3,8 @@ package builder
 import (
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/core/budget"
 
+	"github.com/kart-io/goagent/core/budget"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
@@ -23,12 +23,14 @@ func (b *AgentBuilder[S]) WithTokenEstimator(estimate TokenEstimator) *AgentBuil
 	return b
 }
 
-type tokenEstimatorKey struct{}
-type tokenRequestKey struct{}
-type tokenRequest struct {
-	request *llm.CompletionRequest
-	tools   []interfaces.Tool
-}
+type (
+	tokenEstimatorKey struct{}
+	tokenRequestKey   struct{}
+	tokenRequest      struct {
+		request *llm.CompletionRequest
+		tools   []interfaces.Tool
+	}
+)
 
 func withTokenEstimator(ctx context.Context, estimator TokenEstimator) context.Context {
 	return context.WithValue(ctx, tokenEstimatorKey{}, estimator)

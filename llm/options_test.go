@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	shared2 "github.com/kart-io/goagent/constants"
 	"github.com/stretchr/testify/assert"
+
+	shared2 "github.com/kart-io/goagent/constants"
 )
 
 // TestDefaultConfig 测试默认配置

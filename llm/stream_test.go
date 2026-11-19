@@ -3,9 +3,10 @@ package llm
 import (
 	"context"
 	"errors"
-	shared2 "github.com/kart-io/goagent/constants"
 	"testing"
 	"time"
+
+	shared2 "github.com/kart-io/goagent/constants"
 )
 
 func TestMockStreamClient(t *testing.T) {

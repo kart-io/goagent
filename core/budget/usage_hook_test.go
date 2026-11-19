@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUsageHookIncludesEvidenceAndIndependentTotals(t *testing.T) {
@@ -48,12 +49,14 @@ type hookQueryFailure struct {
 func (s hookQueryFailure) Lock(context.Context, string) (func() error, error) {
 	return func() error { return nil }, nil
 }
+
 func (s hookQueryFailure) Load(context.Context, string) (*durable.Snapshot, error) {
 	if s.panics {
 		panic("query panic")
 	}
 	return nil, errors.New("query unavailable")
 }
+
 func TestUsageHookStillReceivesEvidenceWhenStatisticsFail(t *testing.T) {
 	for _, panics := range []bool{false, true} {
 		c, err := New(Config{RootKey: "query", Version: "policy", MaxModelRequests: 1})

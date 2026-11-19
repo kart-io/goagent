@@ -5,15 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/go-resty/resty/v2"
 
+	"github.com/kart-io/goagent/codec/json"
+	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 

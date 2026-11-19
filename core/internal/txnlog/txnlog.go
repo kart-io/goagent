@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 

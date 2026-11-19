@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -36,6 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func run(args []string) error {
 	flags := flag.NewFlagSet("gemini-verify", flag.ContinueOnError)
 	live := flags.Bool("live", false, "调用真实 Gemini；默认仅显示计划")
@@ -70,7 +70,7 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("create GeminiProvider: %s", strings.ReplaceAll(err.Error(), key, "[REDACTED]"))
 	}
-	file, err := os.OpenFile(*out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	file, err := os.OpenFile(*out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}

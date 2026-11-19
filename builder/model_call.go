@@ -27,6 +27,7 @@ func ensureModelScope(ctx context.Context) context.Context {
 	}
 	return ctx
 }
+
 func modelInvocations(ctx context.Context) int64 {
 	n, _ := ctx.Value(modelScopeKey{}).(*atomic.Int64)
 	if n == nil {
@@ -34,6 +35,7 @@ func modelInvocations(ctx context.Context) int64 {
 	}
 	return n.Load()
 }
+
 func validateModelBudget(ctx context.Context) error {
 	if c, ok := budget.FromContext(ctx); ok && durable.HasJournal(ctx) && !c.IsDurable() {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "durable model calls require a durable root budget").WithComponent("builder").WithOperation("validate_model_budget")
@@ -347,6 +349,7 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	}
 	return turn, nil
 }
+
 func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err

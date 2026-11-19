@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 type eventModel struct {
@@ -46,6 +47,7 @@ func (m *eventModel) stream(ctx context.Context, msg []llm.Message) (<-chan *llm
 	}()
 	return c, nil
 }
+
 func (m *eventModel) CompleteStream(ctx context.Context, r *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	m.request = r
 	return m.stream(ctx, r.Messages)
@@ -57,6 +59,7 @@ func (m endingMiddleware) OnAfter(ctx context.Context, r *middleware.MiddlewareR
 	r.Metadata["after"] = true
 	return r, nil
 }
+
 func TestUnifiedEventsFailureAndCancellation(t *testing.T) {
 	for _, chunks := range [][]*llm.StreamChunk{{{Delta: "partial"}}, {{Error: io.ErrUnexpectedEOF}}} {
 		model := &eventModel{MockLLMClient: NewMockLLMClient(), chunks: chunks}

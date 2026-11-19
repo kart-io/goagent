@@ -107,14 +107,17 @@ func FromContext(ctx context.Context) (*Controller, bool) {
 	c, _ := ctx.Value(contextKey{}).(*Controller)
 	return c, c != nil
 }
+
 func (c *Controller) storageID() string {
 	b, _ := json.Marshal([]string{c.config.RootKey, "budget"})
 	d := sha256.Sum256(b)
 	return "goagent/budget/" + hex.EncodeToString(d[:])
 }
+
 func clone(l ledger) ledger {
 	return ledger{Config: l.Config, Entries: maps.Clone(l.Entries), AgentCalls: maps.Clone(l.AgentCalls), Tools: maps.Clone(l.Tools)}
 }
+
 func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledger) error) (err error) {
 	if err = ctx.Err(); err != nil {
 		return err

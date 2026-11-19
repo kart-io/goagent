@@ -2,10 +2,11 @@ package tools
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPipelineGrantTTLExpiresAndPrunes(t *testing.T) {
@@ -38,6 +39,7 @@ func TestPipelineGrantTTLExpiresAndPrunes(t *testing.T) {
 	require.Nil(t, out)
 	require.EqualValues(t, 2, approvals.Load())
 }
+
 func TestPipelineExpiredGrantRequiresApprovalBeforePrune(t *testing.T) {
 	var approvals atomic.Int32
 	p := &Pipeline{GrantTTL: time.Hour, Pre: []PreHook{askWithGrant}, Approver: ApproverFunc(func(context.Context, ApprovalRequest) (ApprovalResult, error) {

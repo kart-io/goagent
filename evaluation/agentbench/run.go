@@ -83,12 +83,14 @@ func (t *lookup) Description() string {
 	}
 	return LookupDescription
 }
+
 func (t *lookup) ArgsSchema() string {
 	if len(t.parameters) > 0 {
 		return string(t.parameters)
 	}
 	return `{"type":"object","properties":{}}`
 }
+
 func (t *lookup) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

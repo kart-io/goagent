@@ -5,22 +5,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 type sink struct{ events []observe.Event }
 
 func (s *sink) Observe(_ context.Context, e observe.Event) { s.events = append(s.events, e) }
 
-type nilStore struct{ durable.Store }
-type nilTracer struct{ trace.Tracer }
+type (
+	nilStore  struct{ durable.Store }
+	nilTracer struct{ trace.Tracer }
+)
 
 func TestScopeConfiguration(t *testing.T) {
 	var store *nilStore
@@ -31,9 +34,15 @@ func TestScopeConfiguration(t *testing.T) {
 	journal, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)
 	for _, cfg := range []execution.Config{
-		{}, {RunID: " run"}, {RunID: "run "}, {RunID: "run", Timeout: -1},
-		{RunID: "other", Budget: memory}, {RunID: "run", Journal: journal, Budget: memory},
-		{RunID: "run", Journal: store}, {RunID: "run", Observer: observer}, {RunID: "run", Tracer: tracer},
+		{},
+		{RunID: " run"},
+		{RunID: "run "},
+		{RunID: "run", Timeout: -1},
+		{RunID: "other", Budget: memory},
+		{RunID: "run", Journal: journal, Budget: memory},
+		{RunID: "run", Journal: store},
+		{RunID: "run", Observer: observer},
+		{RunID: "run", Tracer: tracer},
 	} {
 		_, err := execution.NewScope(cfg)
 		require.Error(t, err, "%+v", cfg)

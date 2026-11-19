@@ -1,9 +1,10 @@
 package providers
 
 import (
+	"github.com/sashabaranov/go-openai"
+
 	"github.com/kart-io/goagent/core/usage"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/sashabaranov/go-openai"
 )
 
 // sdkUsage preserves the reported total, including provider-specific reasoning

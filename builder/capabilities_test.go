@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/llm"
 )
 
 func TestBuildRejectsUnavailableLoopFeatures(t *testing.T) {

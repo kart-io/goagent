@@ -8,10 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	agentllm "github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 // captureServer 记录每次请求体，并按协议回一段最小的流式响应。

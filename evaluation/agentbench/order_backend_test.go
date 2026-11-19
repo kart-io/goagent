@@ -9,11 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 const orderSchema = `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"],"additionalProperties":false}`
@@ -40,7 +40,8 @@ func TestTenantLookupUsesActualArgumentsAndNeverScoringLabels(t *testing.T) {
 		{`{"order_id":"B-only"}`, "NOT_FOUND", false},
 		{`{"order_id":"missing"}`, "NOT_FOUND", false},
 		{`{"order_id":"shared","tenant_id":"tenant-B"}`, "", true},
-		{`{"order_id":1001}`, "", true}, {`{}`, "", true},
+		{`{"order_id":1001}`, "", true},
+		{`{}`, "", true},
 	} {
 		t.Run(tc.args, func(t *testing.T) {
 			c := orderCase()

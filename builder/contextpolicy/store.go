@@ -57,13 +57,15 @@ func WithResultScope(ctx context.Context, runKey string) context.Context {
 
 // ResultScope returns the trusted scope or the empty string.
 func ResultScope(ctx context.Context) string { s, _ := ctx.Value(scopeKey{}).(string); return s }
-func digest(b []byte) string                 { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
+
+func digest(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
 
 // NewRef uses structural encoding to avoid collisions between delimiter-containing IDs.
 func NewRef(run, policy, logical string, data []byte) Ref {
 	b, _ := json.Marshal([]string{run, policy, logical})
 	return Ref{RunKey: run, Key: digest(b), SHA256: digest(data), Version: resultVersion}
 }
+
 func validRef(ctx context.Context, ref Ref) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -111,6 +113,7 @@ func (s *resultStore) IsDurable() bool { return s.store != nil }
 func resultID(ref Ref) string {
 	return "goagent/context-result/" + durable.ChildKey(ref.RunKey, ref.Key)
 }
+
 func (s *resultStore) runStore(run string) durable.Store {
 	if scoped, ok := s.store.(durable.Scoped); ok {
 		return scoped.Scope(run)
@@ -140,6 +143,7 @@ func releasedError(err error) error {
 	}
 	return err
 }
+
 func verify(saved entry, ref Ref) error {
 	if digest(saved.Data) != saved.Ref.SHA256 {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "result identity or content conflict").WithComponent("builder/contextpolicy").WithOperation("verify")

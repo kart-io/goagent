@@ -209,7 +209,8 @@ func TestParallelCancellationAndMergeFailure(t *testing.T) {
 
 func TestParallelRejectsInvalidConfiguration(t *testing.T) {
 	for _, cfg := range []ParallelConfig[int]{
-		{}, {Branches: []Branch[int]{{Name: "a", Run: increment}}},
+		{},
+		{Branches: []Branch[int]{{Name: "a", Run: increment}}},
 		{Branches: []Branch[int]{{Name: "a", Run: nil}}, Clone: func(in int) int { return in }, Merge: func(_ context.Context, in int, _ []int) (int, error) { return in, nil }},
 		{Branches: []Branch[int]{{Name: "a", Run: increment}, {Name: "a", Run: increment}}, Clone: func(in int) int { return in }, Merge: func(_ context.Context, in int, _ []int) (int, error) { return in, nil }},
 	} {

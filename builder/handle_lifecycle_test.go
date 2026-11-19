@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // Handle must not claim a new turn after cancellation has already won at the

@@ -102,9 +102,11 @@ func (s *state) split() []stateChunk {
 	chunks := make([]stateChunk, stateChunks)
 	per := func(n int) int { return n/stateChunks + 1 }
 	for i := range chunks {
-		chunks[i] = stateChunk{Records: make([]Record, 0, per(len(s.Records))), Entities: make([]Entity, 0, per(len(s.Entities))),
+		chunks[i] = stateChunk{
+			Records: make([]Record, 0, per(len(s.Records))), Entities: make([]Entity, 0, per(len(s.Entities))),
 			Edges: make([]Edge, 0, per(len(s.Edges))), Communities: make([]Community, 0, per(len(s.Communities))),
-			Jobs: make([]Job, 0, per(len(s.Jobs))), DoneJobs: make([]doneJob, 0, per(len(s.DoneJobs)))}
+			Jobs: make([]Job, 0, per(len(s.Jobs))), DoneJobs: make([]doneJob, 0, per(len(s.DoneJobs))),
+		}
 	}
 	i := 0
 	next := func() *stateChunk { c := &chunks[i%stateChunks]; i++; return c }

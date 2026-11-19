@@ -27,6 +27,7 @@ func oneNode(t *testing.T, fn workflow.Node[int]) *workflow.Graph[int] {
 	require.NoError(t, g.AddEdge("effect", constants.WorkflowEnd))
 	return g
 }
+
 func newStore(t *testing.T) *durable.FileStore {
 	t.Helper()
 	s, e := durable.NewFileStore(t.TempDir())
@@ -163,6 +164,7 @@ func (s *failSaveStore) Save(ctx context.Context, id string, cp *durable.Snapsho
 	}
 	return s.Store.Save(ctx, id, cp)
 }
+
 func TestDurableGraphCheckpointFailureReplaysStableKey(t *testing.T) {
 	ctx := context.Background()
 	store := &failSaveStore{Store: newStore(t), fail: true}
@@ -214,7 +216,7 @@ func TestDurableGraphRealProcessCrash(t *testing.T) {
 		require.NoError(t, err)
 		g := oneNode(t, func(ctx context.Context, n int) (int, error) {
 			path := filepath.Join(dir, workflow.DurableKey(ctx)+".effect")
-			f, e := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			f, e := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 			if errors.Is(e, os.ErrExist) {
 				return n + 1, nil
 			}

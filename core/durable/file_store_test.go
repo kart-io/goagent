@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/kart-io/goagent/testing/panictest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/testing/panictest"
 )
 
 func saveScope(ctx context.Context, store *FileStore, name, id string) error {

@@ -9,11 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	loggercore "github.com/kart-io/logger/core"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -128,7 +127,8 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			m.stats.Hits.Add(1)
 
 			if m.config.Logger != nil {
-				m.config.Logger.Debug("工具缓存命中",
+				m.config.Logger.Debug(
+					"工具缓存命中",
 					"tool", tool.Name(),
 					"cacheKey", cacheKey,
 					"hits", m.stats.Hits.Load(),
@@ -146,7 +146,8 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 		// 缓存未命中
 		m.stats.Misses.Add(1)
 		if m.config.Logger != nil {
-			m.config.Logger.Debug("工具缓存未命中",
+			m.config.Logger.Debug(
+				"工具缓存未命中",
 				"tool", tool.Name(),
 				"cacheKey", cacheKey,
 			)
@@ -178,7 +179,8 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			stored := false
 			if err := m.config.Cache.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
 				if m.config.Logger != nil {
-					m.config.Logger.Warn("缓存设置失败",
+					m.config.Logger.Warn(
+						"缓存设置失败",
 						"tool", tool.Name(),
 						"error", err,
 					)

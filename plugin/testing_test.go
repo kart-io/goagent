@@ -7,10 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
 )
 
@@ -44,6 +43,7 @@ func (p *lifecyclePlugin) Start(ctx context.Context, env *Env) error {
 	}
 	return p.start(ctx, env)
 }
+
 func (p *lifecyclePlugin) Stop(ctx context.Context) error {
 	if p.stop == nil {
 		return nil
@@ -121,15 +121,19 @@ func (m *scriptModel) IsAvailable() bool         { return true }
 func (m *scriptModel) Complete(context.Context, *llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	return nil, errors.New("测试模型只支持流式")
 }
+
 func (m *scriptModel) Chat(context.Context, []llm.Message) (*llm.CompletionResponse, error) {
 	return nil, errors.New("测试模型只支持流式")
 }
+
 func (m *scriptModel) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, req, nil)
 }
+
 func (m *scriptModel) ChatStream(ctx context.Context, ms []llm.Message) (<-chan *llm.StreamChunk, error) {
 	return m.CompleteToolsStream(ctx, &llm.CompletionRequest{Messages: ms}, nil)
 }
+
 func (m *scriptModel) CompleteToolsStream(_ context.Context, req *llm.CompletionRequest, _ []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -181,7 +185,8 @@ func startedHost(t interface {
 	Helper()
 	Cleanup(func())
 	Fatalf(string, ...any)
-}, plugins ...Plugin) *Host {
+}, plugins ...Plugin,
+) *Host {
 	t.Helper()
 	h, err := NewHost(plugins...)
 	if err != nil {

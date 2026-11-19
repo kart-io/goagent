@@ -13,13 +13,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sashabaranov/go-openai"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/genai"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/sashabaranov/go-openai"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/genai"
 )
 
 func Test提供方真实HTTP保留错误码与恢复信息(t *testing.T) {

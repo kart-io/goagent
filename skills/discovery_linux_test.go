@@ -15,7 +15,7 @@ import (
 func TestDiscoverListedDirectoryReplacedByFIFO(t *testing.T) {
 	base := t.TempDir()
 	name := filepath.Join(base, "demo")
-	require.NoError(t, os.Mkdir(name, 0700))
+	require.NoError(t, os.Mkdir(name, 0o700))
 	root, err := os.OpenRoot(base)
 	require.NoError(t, err)
 	defer root.Close()
@@ -25,7 +25,7 @@ func TestDiscoverListedDirectoryReplacedByFIFO(t *testing.T) {
 	// Deterministically place the mutation between the IsDir check and the
 	// retained-root acquisition used by Discover.
 	require.NoError(t, os.Remove(name))
-	require.NoError(t, syscall.Mkfifo(name, 0600))
+	require.NoError(t, syscall.Mkfifo(name, 0o600))
 	done := make(chan error, 1)
 	go func() {
 		_, retained, err := discoverSkill(root, listed[0].Name())

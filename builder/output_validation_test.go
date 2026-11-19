@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
@@ -12,7 +14,6 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 type rewriteOutput struct{ *middleware.BaseMiddleware }

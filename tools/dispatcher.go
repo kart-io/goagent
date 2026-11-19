@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/google/uuid"
+
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/budget"

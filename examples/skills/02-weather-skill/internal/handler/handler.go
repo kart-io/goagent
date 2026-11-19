@@ -156,7 +156,8 @@ func (h *Handler) extractInt(args map[string]interface{}, key string, defaultVal
 // FormatWeatherOutput 格式化天气输出为人类可读格式
 func FormatWeatherOutput(resp *types.WeatherResponse) string {
 	w := resp.Weather
-	return fmt.Sprintf(`
+	return fmt.Sprintf(
+		`
 🌤️ %s 天气
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 天气状况: %s

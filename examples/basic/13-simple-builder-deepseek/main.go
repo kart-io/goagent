@@ -14,9 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"

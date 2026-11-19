@@ -2,10 +2,12 @@ package builder
 
 import (
 	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestAgentWaitingCodeDoesNotChangeWaitLeaves(t *testing.T) {

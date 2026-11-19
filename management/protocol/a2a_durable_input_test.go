@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	a2aremote "github.com/kart-io/goagent/a2a/remote"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
@@ -17,7 +19,6 @@ import (
 	"github.com/kart-io/goagent/management/internal/managementtest"
 	"github.com/kart-io/goagent/management/protocol"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // sendCounter 统计经 A2A 客户端发出的 SendMessage 请求。

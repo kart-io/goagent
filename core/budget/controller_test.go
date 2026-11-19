@@ -47,6 +47,7 @@ func TestRootBudgetConcurrentAdmission(t *testing.T) {
 	require.Equal(t, 2, snap.ReservedRequests)
 	require.Equal(t, 2, snap.UnknownUsageEntries)
 }
+
 func TestUsageIsIdempotentAndRequiresReservation(t *testing.T) {
 	ctx := context.Background()
 	c, err := New(Config{RootKey: "run", Version: "v1", MaxModelRequests: 2})
@@ -65,6 +66,7 @@ func TestUsageIsIdempotentAndRequiresReservation(t *testing.T) {
 	require.Equal(t, 5, s.KnownTokens.TotalTokens)
 	require.Equal(t, 1, s.KnownUsageEntries)
 }
+
 func TestBudgetSurvivesProcessExit(t *testing.T) {
 	if dir := os.Getenv("GOAGENT_BUDGET_CHILD"); dir != "" {
 		store, e := durable.NewFileStore(dir)
@@ -107,6 +109,7 @@ type failingStore struct{ durable.Store }
 func (f failingStore) Save(context.Context, string, *durable.Snapshot) error {
 	return errors.New("save failed")
 }
+
 func TestBudgetSaveFailureDoesNotAdmit(t *testing.T) {
 	s, err := durable.NewFileStore(t.TempDir())
 	require.NoError(t, err)

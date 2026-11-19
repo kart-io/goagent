@@ -37,6 +37,7 @@ type AttributionReport struct {
 func validOwner(o usage.Owner) bool {
 	return o.RunID != "" && o.AgentID != "" && o.AgentCallKey != "" && len(o.RunID) <= 1024 && len(o.AgentID) <= 256 && len(o.AgentCallKey) <= 1024 && len(o.ParentAgentCallKey) <= 1024
 }
+
 func (c *Controller) register(l *ledger, chain []usage.Owner) error {
 	if len(chain) == 0 || len(chain) > c.config.MaxAgentCalls {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid attribution lineage").WithComponent("budget").WithOperation("register")
@@ -67,9 +68,11 @@ func (c *Controller) register(l *ledger, chain []usage.Owner) error {
 	}
 	return nil
 }
+
 func (c *Controller) RegisterAgent(ctx context.Context, lineage []usage.Owner) error {
 	return c.transaction(ctx, true, func(l *ledger) error { return c.register(l, lineage) })
 }
+
 func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens int, lineage []usage.Owner) error {
 	if key == "" || tokens < 0 {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid reservation").WithComponent("budget").WithOperation("reserve_attributed")
@@ -107,6 +110,7 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 		return nil
 	})
 }
+
 func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []usage.Owner, e usage.Evidence) (out usage.Evidence, err error) {
 	if err = e.Validate(); err != nil {
 		return
@@ -139,6 +143,7 @@ func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []u
 	})
 	return
 }
+
 func (c *Controller) validateAttribution(l *ledger) error {
 	if len(l.AgentCalls) > c.config.MaxAgentCalls {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "agent call limit exceeded").WithComponent("budget").WithOperation("validate_attribution")
@@ -199,6 +204,7 @@ func rootSnapshot(l *ledger) (out Snapshot, err error) {
 	}
 	return
 }
+
 func addTokens(dst *interfaces.TokenUsage, src interfaces.TokenUsage) error {
 	d := []*int{&dst.PromptTokens, &dst.CompletionTokens, &dst.TotalTokens, &dst.CachedTokens, &dst.ReasoningTokens, &dst.ToolUsePromptTokens}
 	s := []int{src.PromptTokens, src.CompletionTokens, src.TotalTokens, src.CachedTokens, src.ReasoningTokens, src.ToolUsePromptTokens}
@@ -212,6 +218,7 @@ func addTokens(dst *interfaces.TokenUsage, src interfaces.TokenUsage) error {
 	}
 	return nil
 }
+
 func addSummary(dst *UsageSummary, src UsageSummary) error {
 	if err := addTokens(&dst.KnownTokens, src.KnownTokens); err != nil {
 		return err
@@ -228,6 +235,7 @@ func addSummary(dst *UsageSummary, src UsageSummary) error {
 	dst.UnknownToolUsePromptEntries += src.UnknownToolUsePromptEntries
 	return nil
 }
+
 func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, err error) {
 	err = c.transaction(ctx, false, func(l *ledger) error {
 		calls := map[string]*CallAttribution{}

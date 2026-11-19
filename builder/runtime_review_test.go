@@ -3,12 +3,14 @@ package builder
 import (
 	"context"
 	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestReviewRT09BuilderConsumesSelectedTools(t *testing.T) {

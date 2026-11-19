@@ -23,7 +23,8 @@ var tagKey = []byte(strings.Repeat("k", 32))
 type untaggedCache struct{ cache.Bytes }
 
 func cacheConsistency(ctx context.Context, w io.Writer, root string) error {
-	return runSteps(w,
+	return runSteps(
+		w,
 		step{"ModelCache 的擦除模式在构建时校验", func() error { return eraseBuildRules(ctx, root) }},
 		step{"Forget/Rewound/Purge 之后缓存不再命中", func() error { return eraseMatrix(ctx, w, root) }},
 		step{"Rewound 之后不再召回，被取代的旧记录恢复", func() error { return rewoundRestores(ctx, w, root) }},
@@ -121,7 +122,8 @@ func eraseMatrix(ctx context.Context, w io.Writer, root string) error {
 			if mode.physical {
 				wantAfter = 0
 			}
-			checks = append(checks,
+			checks = append(
+				checks,
 				check{name + " 重新生成命中缓存", res.regenHits, "1"},
 				check{name + " 删除前缓存条目", res.sizeBefore, int64(1)},
 				check{name + " 删除后缓存条目", res.sizeAfter, wantAfter},

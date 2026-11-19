@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/interfaces"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func inputServer(t *testing.T, old bool) (context.Context, string, *atomic.Int32) {
@@ -55,6 +56,7 @@ func inputServer(t *testing.T, old bool) (context.Context, string, *atomic.Int32
 func inputAnswer() mcp.InputResponseMap {
 	return mcp.InputResponseMap{"answer": &mcp.ElicitResult{Action: "accept", Content: map[string]any{}}}
 }
+
 func inputArgs() *interfaces.ToolInput {
 	return &interfaces.ToolInput{Args: map[string]any{"id": json.Number("9007199254740993")}}
 }

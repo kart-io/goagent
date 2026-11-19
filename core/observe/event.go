@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kart-io/goagent/core/durable"
-	"github.com/kart-io/goagent/core/usage"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/kart-io/goagent/core/durable"
+	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Event deliberately excludes raw inputs, outputs and provider error messages.
@@ -37,17 +38,19 @@ type Event struct {
 }
 
 // Observer must support concurrent calls. Custom callbacks must return promptly.
-type Observer interface{ Observe(context.Context, Event) }
-type observerKey struct{}
-type tracerKey struct{}
-type scopeKey struct{}
-type pathKey struct{}
-type cachedKey struct{}
-type scope struct {
-	id         string
-	invocation string
-	seq        atomic.Uint64
-}
+type (
+	Observer    interface{ Observe(context.Context, Event) }
+	observerKey struct{}
+	tracerKey   struct{}
+	scopeKey    struct{}
+	pathKey     struct{}
+	cachedKey   struct{}
+	scope       struct {
+		id         string
+		invocation string
+		seq        atomic.Uint64
+	}
+)
 
 var noTracer = noop.NewTracerProvider().Tracer("goagent")
 
@@ -82,6 +85,7 @@ func WithRunID(ctx context.Context, id string) context.Context {
 func Enabled(ctx context.Context) bool {
 	return ctx.Value(observerKey{}) != nil || ctx.Value(tracerKey{}) != nil
 }
+
 func send(ctx context.Context, e Event) {
 	defer func() { _ = recover() }()
 	if o, ok := ctx.Value(observerKey{}).(Observer); ok && o != nil {
@@ -176,6 +180,7 @@ func Start(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	}
 	return startEnabled(ctx, e)
 }
+
 func startEnabled(ctx context.Context, e Event) (context.Context, func(error, bool)) {
 	e = cloneEvent(e)
 	if in, ok := usage.FromContext(ctx); ok {

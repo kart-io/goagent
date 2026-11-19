@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDispatcherArgumentErrorCodeAndIdentity(t *testing.T) {

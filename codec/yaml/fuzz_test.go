@@ -60,8 +60,10 @@ func FuzzStructRoundTripsStrict(f *testing.F) {
 		if math.IsNaN(ratio) || math.IsInf(ratio, 0) {
 			return
 		}
-		in := fuzzConfig{Name: name, Retries: retries, Ratio: ratio, Enabled: enabled, Timeout: time.Duration(timeout),
-			Labels: map[string]string{key: tool}, Tools: []string{tool, name}}
+		in := fuzzConfig{
+			Name: name, Retries: retries, Ratio: ratio, Enabled: enabled, Timeout: time.Duration(timeout),
+			Labels: map[string]string{key: tool}, Tools: []string{tool, name},
+		}
 		out, err := Marshal(in)
 		if err != nil {
 			// 非法 UTF-8 在 JSON 阶段替换为 U+FFFD 后仍可编码；其余错误不应出现。

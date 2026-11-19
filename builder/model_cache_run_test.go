@@ -214,14 +214,18 @@ func TestModelCacheRun(t *testing.T) {
 		{name: "显式温度 0 与未设置", second: func(s *cacheRunSpec) { s.temp = &zero }, calls: 2, sets: 2, gets: 2},
 		{name: "增加工具", second: func(s *cacheRunSpec) { s.tools = []interfaces.Tool{plainTool()} }, calls: 2, sets: 2, gets: 2},
 		{name: "客户端无法解析模型名不缓存", first: func(s *cacheRunSpec) { s.identity = "" }, second: func(s *cacheRunSpec) { s.identity = "" }, calls: 2},
-		{name: "工具 schema 只是键顺序不同仍命中",
+		{
+			name:   "工具 schema 只是键顺序不同仍命中",
 			first:  func(s *cacheRunSpec) { s.tools = []interfaces.Tool{schemaTool(`{"type":"object","properties":{}}`)} },
 			second: func(s *cacheRunSpec) { s.tools = []interfaces.Tool{schemaTool(`{"properties":{},"type":"object"}`)} },
-			calls:  1, sets: 1, gets: 2},
-		{name: "工具 schema 无法解析不缓存",
+			calls:  1, sets: 1, gets: 2,
+		},
+		{
+			name:   "工具 schema 无法解析不缓存",
 			first:  func(s *cacheRunSpec) { s.tools = []interfaces.Tool{schemaTool(`{`)} },
 			second: func(s *cacheRunSpec) { s.tools = []interfaces.Tool{schemaTool(`{`)} },
-			calls:  2},
+			calls:  2,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -431,10 +435,14 @@ func TestModelCacheRunNotCached(t *testing.T) {
 		{name: "取消", cancel: true},
 		{name: "空回答", turns: [][]*llm.StreamChunk{{{Done: true, FinishReason: "stop"}}}},
 		{name: "带 ProviderState", turns: [][]*llm.StreamChunk{{{Delta: "答"}, {Done: true, FinishReason: "stop", ProviderState: state}}}},
-		{name: "调用不存在的工具（反馈模式）", tools: true, feedback: true,
-			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, sets: 1, calls: 2},
-		{name: "调用不存在的工具（非反馈模式）", tools: true,
-			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, calls: 1},
+		{
+			name: "调用不存在的工具（反馈模式）", tools: true, feedback: true,
+			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, sets: 1, calls: 2,
+		},
+		{
+			name: "调用不存在的工具（非反馈模式）", tools: true,
+			turns: [][]*llm.StreamChunk{toolTurn("c1", "missing", "{}"), textTurn("答")}, calls: 1,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1034,29 +1042,37 @@ func TestModelCacheRunCallAccounting(t *testing.T) {
 		usageComplete bool
 		answerUsage   bool
 	}{
-		{name: "最终回答命中", cached: true, calls: 0, hits: 1, usageComplete: true, answerUsage: true,
+		{
+			name: "最终回答命中", cached: true, calls: 0, hits: 1, usageComplete: true, answerUsage: true,
 			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
 				_, err := build(t, newCacheModel("dep", textTurn("完成")), nil, mc).AsRunnable().Invoke(context.Background(), "问题")
 				require.NoError(t, err)
 				return build(t, newCacheModel("dep"), nil, mc)
-			}},
-		{name: "前一轮命中、最后一轮真实调用未报用量", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
+			},
+		},
+		{
+			name: "前一轮命中、最后一轮真实调用未报用量", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
 			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
 				first := newCacheModel("dep", toolTurn("c1", "lookup", "{}"))
 				_, err := build(t, first, nil, mc).AsRunnable().Invoke(context.Background(), "问题")
 				require.Error(t, err, "第二步没有回合，执行失败，第一步已写入缓存")
 				return build(t, newCacheModel("dep", noUsage), nil, mc)
-			}},
-		{name: "主模型失败后换备用模型命中", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
+			},
+		},
+		{
+			name: "主模型失败后换备用模型命中", cached: true, calls: 1, hits: 1, usageComplete: false, answerUsage: false,
 			run: func(t *testing.T, mc *ModelCache) *ConfigurableAgent[*core.AgentState] {
 				_, err := build(t, newCacheModel("backup", textTurn("完成")), nil, mc).AsRunnable().Invoke(context.Background(), "问题")
 				require.NoError(t, err)
 				return build(t, primaryDown(), newCacheModel("backup"), mc)
-			}},
-		{name: "主模型失败后换备用模型真实调用，无缓存", calls: 1, hits: -1, usageComplete: true, answerUsage: true,
+			},
+		},
+		{
+			name: "主模型失败后换备用模型真实调用，无缓存", calls: 1, hits: -1, usageComplete: true, answerUsage: true,
 			run: func(t *testing.T, _ *ModelCache) *ConfigurableAgent[*core.AgentState] {
 				return build(t, primaryDown(), newCacheModel("backup", textTurn("完成")), nil)
-			}},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var mc *ModelCache
@@ -1093,18 +1109,22 @@ func TestModelCacheRunDurableToolReplay(t *testing.T) {
 		calls, hits int
 		answerUsage bool
 	}{
-		{name: "两轮都命中", calls: 0, hits: 2, answerUsage: true,
+		{
+			name: "两轮都命中", calls: 0, hits: 2, answerUsage: true,
 			prime: func(t *testing.T, mc ModelCache) {
 				_, err := build(t, newCacheModel("dep", toolTurn("c1", "lookup", "{}"), textTurn("完成")), mc).AsRunnable().Invoke(context.Background(), "问题")
 				require.NoError(t, err)
 			},
-			model: func() *cacheModel { return newCacheModel("dep") }},
-		{name: "第一轮命中、最后一轮真实调用未报用量", calls: 1, hits: 1, answerUsage: false,
+			model: func() *cacheModel { return newCacheModel("dep") },
+		},
+		{
+			name: "第一轮命中、最后一轮真实调用未报用量", calls: 1, hits: 1, answerUsage: false,
 			prime: func(t *testing.T, mc ModelCache) {
 				_, err := build(t, newCacheModel("dep", toolTurn("c1", "lookup", "{}")), mc).AsRunnable().Invoke(context.Background(), "问题")
 				require.Error(t, err, "第二步没有回合，执行失败，第一步已写入缓存")
 			},
-			model: func() *cacheModel { return newCacheModel("dep", noUsage) }},
+			model: func() *cacheModel { return newCacheModel("dep", noUsage) },
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newCountingCache()

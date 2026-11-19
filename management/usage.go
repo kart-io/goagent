@@ -3,11 +3,11 @@ package management
 import (
 	"context"
 	"errors"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"os"
 
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // usageSnapshot 只读取一次源快照。预算构造器的初始化仅作用于内存副本，
@@ -25,11 +25,13 @@ func (s *usageSnapshot) Lock(context.Context, string) (func() error, error) {
 	}
 	return func() error { return nil }, nil
 }
+
 func cloneUsageSnapshot(snapshot *durable.Snapshot) *durable.Snapshot {
 	copy := *snapshot
 	copy.Data = append([]byte(nil), snapshot.Data...)
 	return &copy
 }
+
 func (s *usageSnapshot) Load(_ context.Context, id string) (*durable.Snapshot, error) {
 	if err := s.ctx.Err(); err != nil {
 		return nil, err
@@ -50,9 +52,11 @@ func (s *usageSnapshot) Load(_ context.Context, id string) (*durable.Snapshot, e
 	s.snapshots[id] = cloneUsageSnapshot(snapshot)
 	return cloneUsageSnapshot(snapshot), nil
 }
+
 func (s *usageSnapshot) Save(ctx context.Context, id string, snapshot *durable.Snapshot) error {
 	return s.SaveAll(ctx, durable.Write{ID: id, Snapshot: snapshot})
 }
+
 func (s *usageSnapshot) SaveAll(_ context.Context, writes ...durable.Write) error {
 	if err := s.ctx.Err(); err != nil {
 		return err

@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
-	"github.com/stretchr/testify/require"
 )
 
 // 三种传输使用相同语义输入，仅在测试边界编码各自已支持的协议。

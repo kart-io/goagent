@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/observe"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // 同轮并发调用中间一个的 OnResult 失败：前面的调用照常结束，失败调用以 tool_error 结束且不发 tool_end，

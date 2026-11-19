@@ -7,10 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/sashabaranov/go-openai"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"

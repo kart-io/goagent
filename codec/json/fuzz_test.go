@@ -147,8 +147,10 @@ func FuzzMarshalStructMatchesV1(f *testing.F) {
 	f.Add("", math.NaN(), -1, false, "\xff", "失败", []byte(nil), uint8(1))
 	f.Add("\u2028", math.Inf(-1), 0, true, `"q"`, "e", []byte{0xff}, uint8(2))
 	f.Fuzz(func(t *testing.T, id string, score float64, count int, flag bool, label, errText string, raw []byte, pick uint8) {
-		r := fuzzRecord{ID: id, Score: score, Count: count, Flag: flag, Label: label, Bytes: raw, Hidden: count, private: count,
-			Meta: map[string]any{id: score, label: []any{flag, errText}}}
+		r := fuzzRecord{
+			ID: id, Score: score, Count: count, Flag: flag, Label: label, Bytes: raw, Hidden: count, private: count,
+			Meta: map[string]any{id: score, label: []any{flag, errText}},
+		}
 		if errText != "" {
 			r.Err = errors.New(errText)
 		}

@@ -184,7 +184,8 @@ func (m *RateLimitMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolI
 			m.rejected.Add(1)
 
 			if m.config.Logger != nil {
-				m.config.Logger.Warn("工具调用被限流拒绝",
+				m.config.Logger.Warn(
+					"工具调用被限流拒绝",
 					"tool", tool.Name(),
 					"qps", m.config.QPS,
 					"rejected", m.rejected.Load(),

@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 func TestFormattedBudgetErrorClassification(t *testing.T) {

@@ -1,9 +1,10 @@
 package usage
 
 import (
-	"github.com/kart-io/goagent/interfaces"
 	"math"
 	"testing"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
 func TestDetailEvidence(t *testing.T) {

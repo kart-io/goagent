@@ -31,16 +31,26 @@ func TestCommunitiesLifecycle(t *testing.T) {
 	ctx := WithNamespace(context.Background(), "u")
 	ns := []string{"u"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	for _, e := range []Entity{{ID: "acme", Name: "Acme"}, {ID: "sz", Name: "深圳"}, {ID: "zs", Name: "张三"},
-		{ID: "coffee", Name: "咖啡"}, {ID: "latte", Name: "拿铁"}, {ID: "yn", Name: "云南"}, {ID: "a", Name: "孤立甲"}, {ID: "b", Name: "孤立乙"}} {
+	for _, e := range []Entity{
+		{ID: "acme", Name: "Acme"},
+		{ID: "sz", Name: "深圳"},
+		{ID: "zs", Name: "张三"},
+		{ID: "coffee", Name: "咖啡"},
+		{ID: "latte", Name: "拿铁"},
+		{ID: "yn", Name: "云南"},
+		{ID: "a", Name: "孤立甲"},
+		{ID: "b", Name: "孤立乙"},
+	} {
 		e.Namespace, e.Type = ns, "x"
 		require.NoError(t, g.PutEntity(ctx, e))
 	}
 	edge := func(id, s, o, fact string) Edge {
 		return Edge{ID: id, Namespace: ns, Subject: s, Predicate: "关联", Object: o, Fact: fact, ValidFrom: day}
 	}
-	for _, e := range []Edge{edge("1", "acme", "sz", "Acme 位于深圳"), edge("2", "zs", "acme", "张三就职于 Acme"),
-		edge("3", "latte", "coffee", "拿铁是一种咖啡"), edge("4", "coffee", "yn", "咖啡豆产自云南"), edge("5", "a", "b", "只有两个成员")} {
+	for _, e := range []Edge{
+		edge("1", "acme", "sz", "Acme 位于深圳"), edge("2", "zs", "acme", "张三就职于 Acme"),
+		edge("3", "latte", "coffee", "拿铁是一种咖啡"), edge("4", "coffee", "yn", "咖啡豆产自云南"), edge("5", "a", "b", "只有两个成员"),
+	} {
 		require.NoError(t, g.PutEdge(ctx, e))
 	}
 

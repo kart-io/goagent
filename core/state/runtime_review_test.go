@@ -3,14 +3,16 @@ package state
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/codec/json"
-	agentErrors "github.com/kart-io/goagent/errors"
-	"github.com/stretchr/testify/require"
 	"math"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestRuntimeErrorGateStateClassification(t *testing.T) {
@@ -66,10 +68,14 @@ func TestReviewRT07SchemaTypes(t *testing.T) {
 	}{
 		{"数组非法", FieldSchema{Type: FieldTypeArray, ItemType: FieldTypeInt}, []string{"错"}, false},
 		{"数组合法", FieldSchema{Type: FieldTypeArray, ItemType: FieldTypeInt}, []int{1}, true},
-		{"字节非法", FieldSchema{Type: FieldTypeBytes}, 123, false}, {"字节合法", FieldSchema{Type: FieldTypeBytes}, []byte{1}, true},
-		{"时间非法", FieldSchema{Type: FieldTypeTime}, "今天", false}, {"时间合法", FieldSchema{Type: FieldTypeTime}, time.Now(), true},
-		{"小数", FieldSchema{Type: FieldTypeInt}, 1.5, false}, {"无穷", FieldSchema{Type: FieldTypeInt}, math.Inf(1), false},
-		{"溢出", FieldSchema{Type: FieldTypeInt}, float64(math.MaxInt64), false}, {"小整数", FieldSchema{Type: FieldTypeInt}, int8(2), true},
+		{"字节非法", FieldSchema{Type: FieldTypeBytes}, 123, false},
+		{"字节合法", FieldSchema{Type: FieldTypeBytes}, []byte{1}, true},
+		{"时间非法", FieldSchema{Type: FieldTypeTime}, "今天", false},
+		{"时间合法", FieldSchema{Type: FieldTypeTime}, time.Now(), true},
+		{"小数", FieldSchema{Type: FieldTypeInt}, 1.5, false},
+		{"无穷", FieldSchema{Type: FieldTypeInt}, math.Inf(1), false},
+		{"溢出", FieldSchema{Type: FieldTypeInt}, float64(math.MaxInt64), false},
+		{"小整数", FieldSchema{Type: FieldTypeInt}, int8(2), true},
 		{"未知", FieldSchema{Type: FieldType("未知")}, 1, false},
 		{"嵌套别名", FieldSchema{Type: FieldTypeObject, ObjectSchema: nested}, map[string]string{"数量": "错"}, false},
 		{"非字符串键", FieldSchema{Type: FieldTypeObject}, map[int]int{1: 1}, false},

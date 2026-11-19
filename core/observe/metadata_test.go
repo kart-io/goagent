@@ -2,12 +2,14 @@ package observe
 
 import (
 	"context"
-	"github.com/kart-io/goagent/core/usage"
-	"github.com/kart-io/goagent/interfaces"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"testing"
+
+	"github.com/kart-io/goagent/core/usage"
+	"github.com/kart-io/goagent/interfaces"
 )
 
 type mutatingObserver struct{ seen []Event }
@@ -21,6 +23,7 @@ func (m *mutatingObserver) Observe(_ context.Context, e Event) {
 		e.Usage.Tokens.TotalTokens = 999
 	}
 }
+
 func TestMetadataIsolationAndEmit(t *testing.T) {
 	m := &mutatingObserver{}
 	in := usage.Invocation{Owner: usage.Owner{RunID: "r", AgentID: "agent", AgentCallKey: "call"}, VisitID: "agent-visit"}
@@ -40,6 +43,7 @@ func TestMetadataIsolationAndEmit(t *testing.T) {
 	require.Equal(t, 7, evidence.Tokens.TotalTokens)
 	require.NotEqual(t, m.seen[0].EventID, m.seen[1].EventID)
 }
+
 func TestEmitDisabledNoAllocation(t *testing.T) {
 	ctx := context.Background()
 	require.Zero(t, testing.AllocsPerRun(100, func() { Emit(ctx, Event{Type: "model_usage"}) }))

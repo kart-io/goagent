@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 type dispatchTestTool struct {
@@ -32,6 +33,7 @@ const strictOrderSchema = `{"type":"object","properties":{"order":{"type":"objec
 func validToolInput() *interfaces.ToolInput {
 	return &interfaces.ToolInput{Args: map[string]any{"order": map[string]any{"id": "order-1"}, "amount": int64(9007199254740993)}, CallerID: "trusted-user"}
 }
+
 func newTestDispatcher(t *testing.T, tool interfaces.Tool, cfg tools.DispatchConfig) *tools.Dispatcher {
 	t.Helper()
 	registry := tools.NewRegistry()
@@ -40,6 +42,7 @@ func newTestDispatcher(t *testing.T, tool interfaces.Tool, cfg tools.DispatchCon
 	require.NoError(t, err)
 	return d
 }
+
 func TestDispatcherValidationAuthorizationAndEffectKey(t *testing.T) {
 	ctx := durable.WithExecutionKey(context.Background(), "node-key")
 	authorized := 0

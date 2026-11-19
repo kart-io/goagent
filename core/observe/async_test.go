@@ -36,6 +36,7 @@ func TestAsyncObserverBoundedQueueAndCancelableClose(t *testing.T) {
 	require.EqualValues(t, 1, calls.Load())
 	require.EqualValues(t, 3, a.Dropped())
 }
+
 func TestAsyncObserverIsolatesPanicAndDrainsOnClose(t *testing.T) {
 	var calls atomic.Int32
 	a, err := NewAsyncObserver(asyncSink(func(context.Context, Event) {
@@ -50,6 +51,7 @@ func TestAsyncObserverIsolatesPanicAndDrainsOnClose(t *testing.T) {
 	require.EqualValues(t, 2, calls.Load())
 	require.Zero(t, a.Dropped())
 }
+
 func TestAsyncObserverCloseCancelsSinkAndPreservesValues(t *testing.T) {
 	type key struct{}
 	entered := make(chan struct{})
@@ -66,6 +68,7 @@ func TestAsyncObserverCloseCancelsSinkAndPreservesValues(t *testing.T) {
 	require.NoError(t, a.Close(wait))
 	require.Equal(t, "trace", <-got)
 }
+
 func TestAsyncObserverRejectsInvalidConfiguration(t *testing.T) {
 	_, err := NewAsyncObserver(nil, 1, 1)
 	require.Error(t, err)

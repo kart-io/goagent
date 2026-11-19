@@ -9,10 +9,11 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/constants"
 	agenterrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/skills"
-	"github.com/stretchr/testify/require"
 )
 
 func writeBudgetFiles(t *testing.T, dir string, count int) []string {
@@ -20,7 +21,7 @@ func writeBudgetFiles(t *testing.T, dir string, count int) []string {
 	names := make([]string, 0, count)
 	for i := range count {
 		name := fmt.Sprintf("resource-%05d.txt", i)
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("reference"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("reference"), 0o600))
 		names = append(names, name)
 	}
 	return names
@@ -38,7 +39,7 @@ func TestCatalogBudgetDiscoverEntriesAcrossSources(t *testing.T) {
 	writeSkill(t, first, "first", "first", "first instructions")
 	writeSkill(t, second, "second", "second", "second instructions")
 	// 普通文件和无 SKILL.md 的目录同样消耗发现预算，不能只数技能。
-	require.NoError(t, os.Mkdir(filepath.Join(first, "without-skill"), 0700))
+	require.NoError(t, os.Mkdir(filepath.Join(first, "without-skill"), 0o700))
 	firstEntries := constants.SkillMaxEntries / 2
 	writeBudgetFiles(t, first, firstEntries-2)
 	writeBudgetFiles(t, second, constants.SkillMaxEntries-firstEntries-1)
@@ -51,7 +52,7 @@ func TestCatalogBudgetDiscoverEntriesAcrossSources(t *testing.T) {
 	require.NoError(t, c.Close())
 
 	// 每个来源仍低于上限，只有跨来源累计才能拒绝第 10001 个条目。
-	require.NoError(t, os.WriteFile(filepath.Join(second, "overflow.txt"), nil, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(second, "overflow.txt"), nil, 0o600))
 	partial, err := skills.Discover(ctx, r1, r2)
 	if partial != nil {
 		t.Cleanup(func() { require.NoError(t, partial.Close()) })
@@ -64,7 +65,7 @@ func TestCatalogBudgetResourceEntriesAcrossDirectories(t *testing.T) {
 	base := t.TempDir()
 	dir := writeSkill(t, base, "demo", "demo", "instructions")
 	for _, subdir := range []string{"a", "b"} {
-		require.NoError(t, os.Mkdir(filepath.Join(dir, subdir), 0700))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, subdir), 0o700))
 	}
 	// 根目录的 SKILL.md 和两个子目录占三个条目，均不进入 Files。
 	fileCount := constants.SkillMaxEntries - 3
@@ -86,7 +87,7 @@ func TestCatalogBudgetResourceEntriesAcrossDirectories(t *testing.T) {
 
 	// a 已产生文件结果后，b 耗尽整个资源树的共享预算。
 	overflow := filepath.Join(dir, "b", "overflow.txt")
-	require.NoError(t, os.WriteFile(overflow, nil, 0600))
+	require.NoError(t, os.WriteFile(overflow, nil, 0o600))
 	partial, err := c.Load(ctx, "demo")
 	requireBudgetError(t, err, "directory entry limit exceeded")
 	require.Equal(t, skills.Skill{}, partial, "超限不能返回部分正文、元数据或文件列表")

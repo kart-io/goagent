@@ -2,9 +2,10 @@ package llm
 
 import (
 	"context"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"io"
 	"strings"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 // Complete issues a streaming request and collects it into a full response.

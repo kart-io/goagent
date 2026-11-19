@@ -82,9 +82,11 @@ func mergeMap[T any](a, b map[string]change[T]) map[string]change[T] {
 
 // after 返回 Seq > seq 的变更：压缩时保留期间新提交的部分。
 func (o overlay) after(seq int64) overlay {
-	return overlay{Records: filterSeq(o.Records, seq), Entities: filterSeq(o.Entities, seq), Edges: filterSeq(o.Edges, seq),
+	return overlay{
+		Records: filterSeq(o.Records, seq), Entities: filterSeq(o.Entities, seq), Edges: filterSeq(o.Edges, seq),
 		Communities: filterSeq(o.Communities, seq), Jobs: filterSeq(o.Jobs, seq), DoneJobs: filterSeq(o.DoneJobs, seq),
-		Markers: filterSeq(o.Markers, seq), Finished: filterSeq(o.Finished, seq)}
+		Markers: filterSeq(o.Markers, seq), Finished: filterSeq(o.Finished, seq),
+	}
 }
 
 func filterSeq[T any](m map[string]change[T], seq int64) map[string]change[T] {

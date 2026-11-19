@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func temperatureServer(t *testing.T) (*httptest.Server, <-chan map[string]any) {
@@ -39,6 +39,7 @@ func temperatureServer(t *testing.T) (*httptest.Server, <-chan map[string]any) {
 	t.Cleanup(server.Close)
 	return server, received
 }
+
 func checkWireTemperature(t *testing.T, received <-chan map[string]any, want float64) {
 	t.Helper()
 	select {
@@ -49,6 +50,7 @@ func checkWireTemperature(t *testing.T, received <-chan map[string]any, want flo
 		t.Fatal("未收到线上请求")
 	}
 }
+
 func TestOpenAIWireTemperatureSelection(t *testing.T) {
 	for _, method := range []string{"Complete", "CompleteStream", "CompleteToolsStream"} {
 		t.Run(method, func(t *testing.T) {
@@ -79,6 +81,7 @@ func TestOpenAIWireTemperatureSelection(t *testing.T) {
 		})
 	}
 }
+
 func TestBuilderExplicitZeroOverridesProvider(t *testing.T) {
 	for _, mode := range []string{"Invoke", "流式", "原生工具流"} {
 		t.Run(mode, func(t *testing.T) {
@@ -111,6 +114,7 @@ func TestBuilderExplicitZeroOverridesProvider(t *testing.T) {
 		})
 	}
 }
+
 func TestJSONExplicitZeroOverridesProvider(t *testing.T) {
 	server, received := temperatureServer(t)
 	p, err := providers.NewOpenAIWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL), llm.WithTemperature(0.8))
@@ -195,6 +199,7 @@ func TestDefaultAndPositiveWireTemperatureUnchanged(t *testing.T) {
 		})
 	}
 }
+
 func TestDeepSeekNativeStreamZero(t *testing.T) {
 	server, received := temperatureServer(t)
 	p, err := providers.NewDeepSeekWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL), llm.WithTemperature(0))

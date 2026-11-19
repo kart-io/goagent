@@ -5,9 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // 工具内运行的子 Agent 继承父 Agent 的 ctx，但父 Handle 的输入属于父 Agent，子 Agent 不能领取。

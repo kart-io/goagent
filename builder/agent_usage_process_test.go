@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/testing/panictest"
-	"github.com/stretchr/testify/require"
 )
 
 type exitBeforeEvidenceStore struct{ durable.Store }

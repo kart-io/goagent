@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBuiltAgentKeepsItsConfigurationAndSession(t *testing.T) {

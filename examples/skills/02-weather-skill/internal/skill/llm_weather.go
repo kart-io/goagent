@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/config"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/llmtools"
 	"github.com/kart-io/goagent/examples/skills/02-weather-skill/internal/svc"
@@ -63,7 +62,8 @@ func NewLLMWeatherSkill(c *config.Config) *LLMWeatherSkill {
 
 // buildSystemPrompt 构建系统提示词
 func buildSystemPrompt(c *config.Config) string {
-	return fmt.Sprintf(`你是一个专业的天气助手。你可以使用以下工具来帮助用户查询天气信息：
+	return fmt.Sprintf(
+		`你是一个专业的天气助手。你可以使用以下工具来帮助用户查询天气信息：
 
 1. get_weather: 获取指定城市的当前天气
 2. get_forecast: 获取指定城市未来 1-7 天的天气预报

@@ -104,6 +104,7 @@ func NewRunnableToolFactory[I, O any](factory func(context.Context) (OwnedRunnab
 	t.factory = factory
 	return t, nil
 }
+
 func nilRunnable(value any) bool {
 	if value == nil {
 		return true
@@ -115,6 +116,7 @@ func nilRunnable(value any) bool {
 	}
 	return false
 }
+
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
 	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid depth, cleanup timeout and timeout").

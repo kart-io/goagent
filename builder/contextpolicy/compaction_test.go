@@ -6,9 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 // summaryModel 记录收到的摘要请求，按 reply 返回摘要或错误。

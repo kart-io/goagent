@@ -39,8 +39,10 @@ func TestResumeHumanInputUsesLatestCheckpointAndRejectsStaleKey(t *testing.T) {
 	// Reconstruct the graph; the host's new initial state cannot replace saved state.
 	run, err = graph.CompileDurable(ctx, cfg, workflow.WithResumeHandler(addHumanNumber))
 	require.NoError(t, err)
-	out, err := run.AsRunnable().Invoke(ctx, workflow.RunRequest[int]{RunID: "human", Initial: 999,
-		Resume: &workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`3`)}})
+	out, err := run.AsRunnable().Invoke(ctx, workflow.RunRequest[int]{
+		RunID: "human", Initial: 999,
+		Resume: &workflow.ResumeRequest{Key: wait.Key, Input: json.RawMessage(`3`)},
+	})
 	require.NoError(t, err)
 	require.True(t, out.Done)
 	require.Equal(t, 26, out.State)

@@ -33,6 +33,7 @@ func (panicMiddleware) Name() string { return "panic" }
 func (panicMiddleware) OnBefore(context.Context, *middleware.MiddlewareRequest) (*middleware.MiddlewareRequest, error) {
 	panic("middleware boom")
 }
+
 func (panicMiddleware) OnAfter(_ context.Context, r *middleware.MiddlewareResponse) (*middleware.MiddlewareResponse, error) {
 	return r, nil
 }
@@ -341,41 +342,54 @@ func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
 		// wantCalls 断言回调 panic 后不再调用回调：发生 panic 的回调只调用一次，其他回调不被调用。
 		wantCalls map[string]int
 	}{
-		{name: "execute_error_handler", wantValue: "error_handler boom", frame: "builder.panicErrorHandler",
+		{
+			name: "execute_error_handler", wantValue: "error_handler boom", frame: "builder.panicErrorHandler",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(failingCompleteModel{NewMockLLMClient()}).WithErrorHandler(panicErrorHandler).WithCallbacks(cb)
 			},
-			run: execute, wantCalls: map[string]int{}},
-		{name: "execute_on_error", where: "OnError", wantValue: "OnError boom", frame: "(*panicCallback).OnError",
+			run: execute, wantCalls: map[string]int{},
+		},
+		{
+			name: "execute_on_error", where: "OnError", wantValue: "OnError boom", frame: "(*panicCallback).OnError",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(failingCompleteModel{NewMockLLMClient()}).WithCallbacks(cb, cb)
 			},
-			run: execute, wantCalls: map[string]int{"OnError": 1}},
-		{name: "execute_on_end", where: "OnEnd", wantValue: "OnEnd boom", frame: "(*panicCallback).OnEnd",
+			run: execute, wantCalls: map[string]int{"OnError": 1},
+		},
+		{
+			name: "execute_on_end", where: "OnEnd", wantValue: "OnEnd boom", frame: "(*panicCallback).OnEnd",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(NewMockLLMClient("ok")).WithCallbacks(cb, cb)
 			},
-			run: execute, wantCalls: map[string]int{"OnEnd": 1}},
-		{name: "build_on_start", where: "OnStart", wantValue: "OnStart boom", frame: "(*panicCallback).OnStart",
+			run: execute, wantCalls: map[string]int{"OnEnd": 1},
+		},
+		{
+			name: "build_on_start", where: "OnStart", wantValue: "OnStart boom", frame: "(*panicCallback).OnStart",
 			build: func(cb *panicCallback) *SimpleAgentBuilder { return NewSimpleBuilder(NewMockLLMClient("ok")) },
 			run: func(_ context.Context, _ *agentT, cb *panicCallback) error {
 				_, err := NewSimpleBuilder(NewMockLLMClient("ok")).WithCallbacks(cb, cb).Build()
 				return err
 			},
-			wantCalls: map[string]int{"OnStart": 1}},
-		{name: "initialize_on_start", where: "OnStart", wantValue: "OnStart boom", frame: "(*panicCallback).OnStart",
+			wantCalls: map[string]int{"OnStart": 1},
+		},
+		{
+			name: "initialize_on_start", where: "OnStart", wantValue: "OnStart boom", frame: "(*panicCallback).OnStart",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(NewMockLLMClient("ok")).WithCallbacks(cb, cb)
 			},
 			run:       func(ctx context.Context, agent *agentT, _ *panicCallback) error { return agent.Initialize(ctx) },
-			wantCalls: map[string]int{"OnStart": 1}},
-		{name: "shutdown_on_shutdown", where: "OnShutdown", wantValue: "OnShutdown boom", frame: "(*panicCallback).OnShutdown",
+			wantCalls: map[string]int{"OnStart": 1},
+		},
+		{
+			name: "shutdown_on_shutdown", where: "OnShutdown", wantValue: "OnShutdown boom", frame: "(*panicCallback).OnShutdown",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(NewMockLLMClient("ok")).WithCallbacks(cb, cb)
 			},
 			run:       func(ctx context.Context, agent *agentT, _ *panicCallback) error { return agent.Shutdown(ctx) },
-			wantCalls: map[string]int{"OnShutdown": 1}},
-		{name: "stream_start", wantValue: "durable check boom", frame: "durablePanicTool.SupportsDurableCalls",
+			wantCalls: map[string]int{"OnShutdown": 1},
+		},
+		{
+			name: "stream_start", wantValue: "durable check boom", frame: "durablePanicTool.SupportsDurableCalls",
 			build: func(cb *panicCallback) *SimpleAgentBuilder {
 				return NewSimpleBuilder(answerModel()).WithTools(durablePanicTool{NewMockTool("boom", "x")}).
 					WithDurableScope("panic").WithCallbacks(cb)
@@ -397,7 +411,8 @@ func TestSyncEntryPanicReturnsPanicError(t *testing.T) {
 				}
 				return err
 			},
-			wantCalls: map[string]int{}},
+			wantCalls: map[string]int{},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cb := &panicCallback{}

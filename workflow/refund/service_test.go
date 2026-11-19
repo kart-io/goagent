@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow/refund"
-	"github.com/stretchr/testify/require"
 )
 
 // A transactional test store copies state and commits only on success.
@@ -42,6 +43,7 @@ func (t *memoryTx) Request(_ context.Context, id string) (refund.Request, string
 	}
 	return t.req, t.actor, nil
 }
+
 func (t *memoryTx) Receipt(context.Context, string) (string, error) {
 	if t.receipt == "" {
 		return "", agentErrors.ErrRefundNotFound
@@ -50,10 +52,12 @@ func (t *memoryTx) Receipt(context.Context, string) (string, error) {
 }
 func (t *memoryTx) TotalRefunded(context.Context, string) (int64, error)    { return t.total, nil }
 func (t *memoryTx) InsertRequest(_ context.Context, r refund.Request) error { t.req = r; return nil }
+
 func (t *memoryTx) Approve(_ context.Context, _, actor string, _ time.Time) error {
 	t.actor = actor
 	return nil
 }
+
 func (t *memoryTx) InsertRefund(_ context.Context, _ string, r refund.Request, receipt string) error {
 	t.receipt = receipt
 	t.total += r.AmountCents
@@ -65,13 +69,15 @@ func TestServiceRevocationCommitFailureAndRecovery(t *testing.T) {
 	now := time.Now().UTC()
 	allowed := true
 	db := &memoryStore{tx: memoryTx{order: refund.Order{PaidCents: 1000, Currency: "CNY", Version: 1, DeliveryDays: 2}}}
-	svc := &refund.Service{Store: db, Now: func() time.Time { return now },
+	svc := &refund.Service{
+		Store: db, Now: func() time.Time { return now },
 		Authorizer: refund.AuthorizeFunc(func(_ context.Context, actor string, r refund.Request) error {
 			if !allowed || actor != "verified-user" || r.OrderID != "tenant-A/order-1" {
 				return errors.New("permission denied")
 			}
 			return nil
-		}), Policy: func(context.Context, refund.Request, refund.Order) error { return nil }}
+		}), Policy: func(context.Context, refund.Request, refund.Order) error { return nil },
+	}
 	req := refund.Request{RequestID: "tenant-A/refund-1", OrderID: "tenant-A/order-1", AmountCents: 500, PaidCents: 1000, Currency: "CNY", OrderVersion: 1, DeliveryDays: 2, ValidUntil: now.Add(time.Minute).Format(time.RFC3339Nano)}
 	registered, err := svc.Register(ctx, req)
 	require.NoError(t, err)

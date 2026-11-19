@@ -1,11 +1,13 @@
 package httpapi
 
 import (
-	"github.com/kart-io/goagent/codec/json"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestOpenAPIRoutesMatchHandler(t *testing.T) {

@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/tools"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/tools"
 )
 
 func call(tool, command string) *tools.Call {

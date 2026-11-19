@@ -8,11 +8,9 @@ import (
 	"strings"
 
 	"github.com/kart-io/goagent/codec/json"
-
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/examples/advanced/multi-agent-modular/agents"
 	"github.com/kart-io/goagent/llm"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/llm/providers"
 )
 

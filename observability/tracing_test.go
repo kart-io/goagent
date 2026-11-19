@@ -303,7 +303,8 @@ func TestMultipleAttributesAndEvents(t *testing.T) {
 
 	// Add multiple sets of attributes
 	for i := 0; i < 5; i++ {
-		AddAttributes(span,
+		AddAttributes(
+			span,
 			attribute.Int("iteration", i),
 			attribute.String("phase", "processing"),
 		)
@@ -311,7 +312,8 @@ func TestMultipleAttributesAndEvents(t *testing.T) {
 
 	// Add multiple events
 	for i := 0; i < 5; i++ {
-		AddEvent(span, "iteration_completed",
+		AddEvent(
+			span, "iteration_completed",
 			attribute.Int("iteration", i),
 			attribute.Bool("success", i%2 == 0),
 		)

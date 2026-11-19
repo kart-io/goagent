@@ -3,8 +3,9 @@ package workflow
 import (
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // 恢复输入按压缩后字节比较：与 v1 一样容忍重复键，只忽略空白差异。

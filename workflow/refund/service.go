@@ -91,6 +91,7 @@ func (s *Service) now() time.Time {
 	}
 	return time.Now()
 }
+
 func (s *Service) transact(ctx context.Context, f func(Transaction) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -100,9 +101,11 @@ func (s *Service) transact(ctx context.Context, f func(Transaction) error) error
 	}
 	return s.Store.Transaction(ctx, f)
 }
+
 func sameIntent(a, b Request) bool {
 	return a.RequestID == b.RequestID && a.OrderID == b.OrderID && a.AmountCents == b.AmountCents
 }
+
 func validIntent(req Request) error {
 	if req.RequestID == "" || req.OrderID == "" || req.AmountCents <= 0 {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "business request ID, order ID and positive amount are required").WithComponent("workflow/refund").WithOperation("valid_intent")

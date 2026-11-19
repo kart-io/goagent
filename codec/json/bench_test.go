@@ -15,17 +15,20 @@ func BenchmarkMarshalDirect(b *testing.B) {
 		_, _ = jsonv2.Marshal(benchEvent, stable)
 	}
 }
+
 func BenchmarkMarshalCodec(b *testing.B) {
 	for b.Loop() {
 		_, _ = Marshal(benchEvent)
 	}
 }
+
 func BenchmarkEncodeReused(b *testing.B) {
 	enc := jsontext.NewEncoder(io.Discard, stable)
 	for b.Loop() {
 		_ = jsonv2.MarshalEncode(enc, benchEvent)
 	}
 }
+
 func BenchmarkEncodeJSON(b *testing.B) {
 	for b.Loop() {
 		_ = Encode(io.Discard, benchEvent)

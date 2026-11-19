@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type collector struct{ events []Event }

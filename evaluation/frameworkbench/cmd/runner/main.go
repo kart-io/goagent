@@ -8,9 +8,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	bench "github.com/kart-io/goagent-frameworkbench"
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func main() {

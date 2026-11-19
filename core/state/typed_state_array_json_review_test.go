@@ -5,8 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestReviewRound2SchemaArrayByteEncoding(t *testing.T) {

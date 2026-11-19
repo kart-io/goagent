@@ -7,10 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/sashabaranov/go-openai"
 
+	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
@@ -100,8 +99,10 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			}
 		}
 		fail := func(err error) {
-			send(&agentllm.StreamChunk{Done: true, Error: err, Usage: usage, ResponseModel: responseModel,
-				Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason})
+			send(&agentllm.StreamChunk{
+				Done: true, Error: err, Usage: usage, ResponseModel: responseModel,
+				Content: content.String(), ReasoningContent: reasoning.String(), FinishReason: finishReason,
+			})
 		}
 		for {
 			response, err := stream.Recv()

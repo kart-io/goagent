@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 	mg "github.com/kart-io/goagent/management"
-	"github.com/stretchr/testify/require"
 )
 
 // Factory 在启动 Worker 前配置；执行回调的跨协程状态须由测试自行同步。
@@ -22,15 +23,18 @@ type Factory struct {
 func (f *Factory) Validate(context.Context, mg.Version) (mg.Capabilities, error) {
 	return f.Capabilities, f.ValidateErr
 }
+
 func (f *Factory) Build(context.Context, mg.Version, mg.Resources) (mg.Binding, error) {
 	return mg.Binding{Runtime: f}, nil
 }
+
 func (f *Factory) Inspect(_ context.Context, spec mg.RunSpec) (mg.RunEvidence, error) {
 	if len(spec.Task.Waits) > 0 {
 		return mg.RunEvidence{State: "waiting"}, nil
 	}
 	return mg.RunEvidence{State: "absent"}, nil
 }
+
 func (f *Factory) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error) {
 	if f.RunFunc != nil {
 		return f.RunFunc(ctx, spec)
@@ -85,9 +89,11 @@ func NewFixture(t testing.TB) *Fixture {
 	require.NoError(t, err)
 	return f
 }
+
 func (f *Fixture) Config() mg.Config {
 	return mg.Config{Store: f.Store, Sessions: f.Sessions, HistoryReader: History{f.Sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"offline": f.Factory}}
 }
+
 func (f *Fixture) Register(t testing.TB) (mg.Agent, mg.Version) {
 	t.Helper()
 	ctx := context.Background()
@@ -99,6 +105,7 @@ func (f *Fixture) Register(t testing.TB) (mg.Agent, mg.Version) {
 	require.NoError(t, err)
 	return a, v
 }
+
 func (f *Fixture) StartWorker(t testing.TB) *mg.Worker {
 	t.Helper()
 	w := mg.NewWorker(f.Service)

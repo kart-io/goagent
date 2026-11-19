@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/core/durable"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core/durable"
 )
 
 func TestNativeApprovalAfterRestart(t *testing.T) {

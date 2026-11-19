@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	mt "github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 func offlineDocument(t *testing.T, kind string, value any) mg.Document {

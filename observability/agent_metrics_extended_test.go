@@ -37,7 +37,8 @@ func TestAgentMetrics_ConcurrentRecordRequest(t *testing.T) {
 			defer wg.Done()
 			duration := float64(idx) * 0.1
 			success := idx%2 == 0
-			metrics.RecordRequest(ctx, duration, success,
+			metrics.RecordRequest(
+				ctx, duration, success,
 				attribute.String("agent.name", "concurrent-agent"),
 				attribute.Int("iteration", idx),
 			)
@@ -220,7 +221,8 @@ func TestAgentMetrics_RecordError_WithVariousErrorTypes(t *testing.T) {
 	}
 
 	for _, errType := range errorTypes {
-		metrics.RecordError(ctx, errType,
+		metrics.RecordError(
+			ctx, errType,
 			attribute.String("error.type", errType),
 		)
 	}
@@ -463,7 +465,8 @@ func BenchmarkAgentMetrics_RecordRequest_Concurrent(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			metrics.RecordRequest(ctx, 1.5, true,
+			metrics.RecordRequest(
+				ctx, 1.5, true,
 				attribute.String("agent.name", "bench-agent"),
 			)
 		}

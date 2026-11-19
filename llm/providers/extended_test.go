@@ -7,11 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
@@ -68,7 +67,6 @@ func TestDeepSeekProvider_EmbedMultipleChunks(t *testing.T) {
 // TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling tests error during streaming
 func TestDeepSeekStreamingProvider_StreamWithMetadata_ErrorHandling(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		// Send one good response, then close connection
 		resp := json.RawMessage(`{"id":"stream-error","model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"token"}}]}`)
 		writeDeepSeekSSE(w, false, resp)

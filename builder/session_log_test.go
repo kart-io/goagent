@@ -114,7 +114,6 @@ func TestSessionLogAbortsInterruptedTurn(t *testing.T) {
 	derived, err := session.DeriveMessages(sessionEvents(t, store, "s"))
 	require.NoError(t, err)
 	require.Equal(t, []llm.Message{llm.UserMessage("第二次"), {Role: "assistant", Content: "好"}}, derived)
-
 }
 
 // 持久运行以会话日志为 durable 日志：中断后以同一执行键恢复，日志与未中断的运行一致，消息不重复记录。

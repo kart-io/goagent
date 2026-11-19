@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/internal/txnlog"
 	agentErrors "github.com/kart-io/goagent/errors"

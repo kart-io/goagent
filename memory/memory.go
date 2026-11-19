@@ -180,9 +180,11 @@ func New(cfg Config) (*Memory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Memory{cfg: cfg, identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: now,
+	return &Memory{
+		cfg: cfg, identity: fmt.Sprintf("memory:%x", sha256.Sum256(fingerprint)), now: now,
 		modelTag: modelTag(cfg.EmbedModel), cache: newStateCache(cfg.StateCacheBytes), commitTimeout: constants.MemoryCommitTimeout,
-		overlaySoft: overlaySoftBytes, overlayHard: overlayHardBytes, overlayItems: overlayMaxItems, baseShare: baseShareDiv, eraseWithin: cfg.EraseWithin}, nil
+		overlaySoft: overlaySoftBytes, overlayHard: overlayHardBytes, overlayItems: overlayMaxItems, baseShare: baseShareDiv, eraseWithin: cfg.EraseWithin,
+	}, nil
 }
 
 // CacheStats 返回 state 解码缓存的计数。

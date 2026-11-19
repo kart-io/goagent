@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
-
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func operationContext(t *testing.T) context.Context {

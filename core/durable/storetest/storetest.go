@@ -13,10 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -514,7 +513,8 @@ func testSaveAll(t *testing.T, a, b durable.Store) {
 	unlockX, unlockY := lock(t, a, "x"), lock(t, a, "y")
 	ctx := context.Background()
 	require.NoError(t, a.SaveAll(ctx))
-	require.NoError(t, a.SaveAll(ctx,
+	require.NoError(t, a.SaveAll(
+		ctx,
 		durable.Write{ID: "x", Snapshot: versioned("x", "x1")},
 		durable.Write{ID: "y", Snapshot: versioned("y", "y1")},
 	))
@@ -551,7 +551,8 @@ func testSaveAllVisibility(t *testing.T, a, b durable.Store) {
 	ctx := context.Background()
 	commit := func(n int) error {
 		version := strconv.Itoa(n)
-		return a.SaveAll(ctx,
+		return a.SaveAll(
+			ctx,
 			durable.Write{ID: "x", Snapshot: &durable.Snapshot{Version: version, RunID: "x", Data: json.RawMessage(`{}`)}},
 			durable.Write{ID: "y", Snapshot: &durable.Snapshot{Version: version, RunID: "y", Data: json.RawMessage(`{}`)}},
 		)
@@ -598,7 +599,8 @@ func testSaveAllFencing(t *testing.T, l *Leases, a, b durable.Store) {
 	l.Expire(t, a, "y")
 	takeover := lock(t, b, "y")
 	defer takeover()
-	err := a.SaveAll(context.Background(),
+	err := a.SaveAll(
+		context.Background(),
 		durable.Write{ID: "x", Snapshot: versioned("x", "new")},
 		durable.Write{ID: "y", Snapshot: versioned("y", "new")},
 	)

@@ -6,11 +6,10 @@ import (
 
 	"github.com/kart-io/goagent/builder/contextpolicy"
 	shared "github.com/kart-io/goagent/constants"
-	"github.com/kart-io/goagent/core/session"
-	"github.com/kart-io/goagent/memory"
-
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/core/usage"
+	"github.com/kart-io/goagent/memory"
 )
 
 // Runtime 配置方法

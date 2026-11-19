@@ -12,10 +12,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/revision"
-	"github.com/stretchr/testify/require"
 )
 
 func TestArchivedRetryValidationBoundary(t *testing.T) {

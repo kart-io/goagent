@@ -3,16 +3,20 @@ package usage
 
 import "context"
 
-type Owner struct{ RunID, AgentID, AgentCallKey, ParentAgentCallKey string }
-type Invocation struct {
-	Owner
-	VisitID, ParentVisitID string
-}
-type invocationKey struct{}
-type invocationContext struct {
-	invocation Invocation
-	lineage    []Owner
-}
+type (
+	Owner      struct{ RunID, AgentID, AgentCallKey, ParentAgentCallKey string }
+	Invocation struct {
+		Owner
+		VisitID, ParentVisitID string
+	}
+)
+type (
+	invocationKey     struct{}
+	invocationContext struct {
+		invocation Invocation
+		lineage    []Owner
+	}
+)
 
 // WithInvocation appends an invocation while retaining a private ancestor chain.
 func WithInvocation(ctx context.Context, in Invocation) context.Context {
@@ -20,6 +24,7 @@ func WithInvocation(ctx context.Context, in Invocation) context.Context {
 	chain = append(chain, in.Owner)
 	return context.WithValue(ctx, invocationKey{}, invocationContext{in, chain})
 }
+
 func FromContext(ctx context.Context) (Invocation, bool) {
 	v, ok := ctx.Value(invocationKey{}).(invocationContext)
 	return v.invocation, ok

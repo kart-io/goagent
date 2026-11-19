@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/llm/providers"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
-	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/llm"
+	"github.com/kart-io/goagent/llm/providers"
+	"github.com/kart-io/goagent/testing/mocks"
 )
 
 func TestVerifyCorrectsOnceAndReplays(t *testing.T) {

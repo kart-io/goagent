@@ -4,12 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	loggerCore "github.com/kart-io/logger/core"
 	"github.com/kart-io/logger/engines/slog"
 	"github.com/kart-io/logger/option"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/interfaces"
 )
 

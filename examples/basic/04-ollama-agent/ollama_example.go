@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
@@ -422,7 +421,8 @@ After receiving the tool result, provide a natural language response to the user
 			fmt.Printf("🎯 Tool Result: %v\n\n", toolResult)
 
 			// 将工具结果返回给 LLM 生成最终回复
-			messages = append(messages,
+			messages = append(
+				messages,
 				llm.AssistantMessage(response.Content),
 				llm.UserMessage(fmt.Sprintf("Tool Result: %v\n\nNow provide a natural language response to the user.", toolResult)),
 			)
@@ -490,7 +490,8 @@ Input: <tool_input_as_json>`, toolDescriptions)),
 func buildToolDescriptions(tools []interfaces.Tool) string {
 	var descriptions []string
 	for _, tool := range tools {
-		desc := fmt.Sprintf("- %s: %s\n  Schema: %s",
+		desc := fmt.Sprintf(
+			"- %s: %s\n  Schema: %s",
 			tool.Name(),
 			tool.Description(),
 			tool.ArgsSchema(),

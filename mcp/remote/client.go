@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Connect negotiates MCP over an SDK transport (StreamableClientTransport or

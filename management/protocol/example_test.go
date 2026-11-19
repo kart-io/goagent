@@ -4,11 +4,12 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	mg "github.com/kart-io/goagent/management"
 	a2aserver "github.com/kart-io/goagent/management/a2a"
 	"github.com/kart-io/goagent/management/httpapi"
 	"github.com/kart-io/goagent/management/mcpserver"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // 同一个管理服务包含同一个 Store、Authorizer 和执行工厂；宿主另行启动其 Worker。

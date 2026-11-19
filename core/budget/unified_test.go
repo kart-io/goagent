@@ -2,10 +2,12 @@ package budget
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestUnifiedDefaultEvidenceAndUnattributed(t *testing.T) {

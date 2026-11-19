@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/kart-io/goagent/core/durable"
-
 	"github.com/kart-io/goagent/evaluation/executionbench"
 )
 
@@ -45,7 +43,7 @@ func TestModesCountsBudgetJSONAndCleanup(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			sentinel := filepath.Join(dir, "keep")
-			if err := os.WriteFile(sentinel, []byte("用户文件"), 0600); err != nil {
+			if err := os.WriteFile(sentinel, []byte("用户文件"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			cfg := executionbench.Config{Mode: mode, Operations: 3}

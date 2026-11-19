@@ -15,7 +15,8 @@ import (
 )
 
 func budgetRetention(ctx context.Context, w io.Writer, root string) error {
-	return runSteps(w,
+	return runSteps(
+		w,
 		step{"核心记忆总在召回块最前", func() error { return pinnedFirst(ctx, root) }},
 		step{"召回块按 rune 截断", func() error { return recallRunes(ctx, w, root) }},
 		step{"权重、半衰期与类别过滤", func() error { return ranking(ctx, w, root) }},
@@ -52,7 +53,8 @@ func pinnedFirst(ctx context.Context, root string) error {
 		return err
 	}
 	actx := memory.WithNamespace(ctx, alice...)
-	if _, err := remember(actx, e.mem,
+	if _, err := remember(
+		actx, e.mem,
 		memory.Record{Kind: memory.KindFact, Content: "用户喜欢喝咖啡", Importance: 0.9},
 		memory.Record{Kind: memory.KindFact, Content: "用户的名字叫小明", Importance: 0.1, Pinned: true},
 		memory.Record{Kind: memory.KindFact, Content: "用户周末去爬山", Importance: 0.9},
@@ -74,7 +76,8 @@ func pinnedFirst(ctx context.Context, root string) error {
 		if len(items) > 0 {
 			first = items[0]
 		}
-		checks = append(checks,
+		checks = append(
+			checks,
 			check{"查询 " + q + "：召回块以 RecallPrefix 开头", strings.HasPrefix(block, memory.RecallPrefix), true},
 			check{"查询 " + q + "：第一条是核心记忆（实际 " + first + "）", strings.HasSuffix(first, "用户的名字叫小明"), true},
 		)
@@ -92,8 +95,10 @@ func recallRunes(ctx context.Context, w io.Writer, root string) error {
 	// 每行带 [类别 ID 日期] 前缀，短 ID 让预算能放下多条，便于观察截断。
 	recs := []memory.Record{{ID: "veg", Kind: memory.KindFact, Content: "用户是素食者，行程不要安排含肉的餐食", Importance: 0.5, Pinned: true}}
 	for i := range 10 {
-		recs = append(recs, memory.Record{ID: fmt.Sprintf("trip%d", i+1), Kind: memory.KindEpisode, Importance: float64(i+1) / 10,
-			Content: fmt.Sprintf("第%d次旅行：用户去了第%d个城市，参观博物馆与老街", i+1, i+1)})
+		recs = append(recs, memory.Record{
+			ID: fmt.Sprintf("trip%d", i+1), Kind: memory.KindEpisode, Importance: float64(i+1) / 10,
+			Content: fmt.Sprintf("第%d次旅行：用户去了第%d个城市，参观博物馆与老街", i+1, i+1),
+		})
 	}
 	if _, err := remember(actx, e.mem, recs...); err != nil {
 		return err
@@ -151,7 +156,8 @@ func ranking(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	e.clock.Advance(30 * 24 * time.Hour)
-	if _, err := remember(actx, e.mem,
+	if _, err := remember(
+		actx, e.mem,
 		memory.Record{Kind: memory.KindFact, Content: "用户喜欢喝红茶", Importance: 0.2},
 		memory.Record{Kind: memory.KindEpisode, Content: "用户上周在杭州喝了龙井茶", Importance: 0.5},
 	); err != nil {
@@ -203,7 +209,8 @@ func ranking(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	_, _ = fmt.Fprintf(w, "    半衰期 7 天：红茶得分 %.3f → 14 天后 %.3f\n", fresh, aged)
-	return verify(append(checks,
+	return verify(append(
+		checks,
 		check{fmt.Sprintf("两个半衰期后新近性约为原来的 1/4（%.3f → %.3f）", fresh, aged), math.Abs(aged/fresh-0.25) < 0.01, true},
 		check{"衰减不删除：两个半衰期后仍可召回", aged > 0, true},
 	)...)
@@ -219,7 +226,8 @@ func retention(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	actx := memory.WithNamespace(ctx, alice...)
-	recs, err := remember(actx, e.mem,
+	recs, err := remember(
+		actx, e.mem,
 		memory.Record{ID: "pinned", Kind: memory.KindFact, Content: "用户是左撇子", Importance: 0.05, Pinned: true},
 		memory.Record{ID: "f-high", Kind: memory.KindFact, Content: "用户对青霉素过敏", Importance: 0.9},
 		memory.Record{ID: "f-mid", Kind: memory.KindFact, Content: "用户喜欢靠窗的座位", Importance: 0.5},
@@ -260,16 +268,22 @@ func retention(ctx context.Context, w io.Writer, root string) error {
 		action  func() error
 		want    map[string]state
 	}{
-		{"25 小时后：情景 TTL 到期；未钉住的有效记录 3 条，未超容量", 25 * time.Hour, nil,
-			map[string]state{"pinned": valid, "f-high": valid, "f-mid": valid, "f-low": valid, "episode": expired}},
+		{
+			"25 小时后：情景 TTL 到期；未钉住的有效记录 3 条，未超容量", 25 * time.Hour, nil,
+			map[string]state{"pinned": valid, "f-high": valid, "f-mid": valid, "f-low": valid, "episode": expired},
+		},
 		{"再写一条事实后超出容量：淘汰得分最低的未钉住记录", 0, func() error {
 			_, err := e.mem.Remember(actx, memory.Record{ID: "f-new", Kind: memory.KindFact, Content: "用户订了下周的机票", Importance: 0.7})
 			return err
 		}, map[string]state{"pinned": valid, "f-high": valid, "f-mid": valid, "f-low": expired, "episode": expired}},
-		{"遗忘一条：失效但仍保留", time.Hour, func() error { return e.mem.Forget(actx, "f-mid") },
-			map[string]state{"pinned": valid, "f-high": valid, "f-mid": forgotten, "f-low": expired, "episode": expired}},
-		{"超过失效保留期 48 小时：失效记录被物理删除", 49 * time.Hour, nil,
-			map[string]state{"pinned": valid, "f-high": valid, "f-mid": gone, "f-low": gone, "episode": gone}},
+		{
+			"遗忘一条：失效但仍保留", time.Hour, func() error { return e.mem.Forget(actx, "f-mid") },
+			map[string]state{"pinned": valid, "f-high": valid, "f-mid": forgotten, "f-low": expired, "episode": expired},
+		},
+		{
+			"超过失效保留期 48 小时：失效记录被物理删除", 49 * time.Hour, nil,
+			map[string]state{"pinned": valid, "f-high": valid, "f-mid": gone, "f-low": gone, "episode": gone},
+		},
 	}
 	var checks []check
 	for _, s := range stages {
@@ -326,7 +340,8 @@ func reindex(ctx context.Context, w io.Writer, root string) error {
 		return err
 	}
 	actx := memory.WithNamespace(ctx, alice...)
-	recs, err := remember(actx, e.mem,
+	recs, err := remember(
+		actx, e.mem,
 		memory.Record{Kind: memory.KindFact, Content: "用户家里有一只猫", Importance: 0.5},
 		memory.Record{Kind: memory.KindFact, Content: "用户每天喝一杯拿铁", Importance: 0.5},
 	)

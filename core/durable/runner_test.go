@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/testing/panictest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRestartApprovalAndIdempotentRetry(t *testing.T) {
@@ -64,6 +64,7 @@ func TestRestartApprovalAndIdempotentRetry(t *testing.T) {
 	_, err = runner.Run(context.Background(), "run", nil, "")
 	require.Error(t, err)
 }
+
 func TestLockCancellationAndCorruption(t *testing.T) {
 	store, err := NewFileStore(t.TempDir())
 	require.NoError(t, err)
@@ -74,7 +75,7 @@ func TestLockCancellationAndCorruption(t *testing.T) {
 	_, err = store.Lock(ctx, "run")
 	require.Error(t, err)
 	require.NoError(t, unlock())
-	require.NoError(t, os.WriteFile(store.path("run"), []byte(`{broken`), 0600))
+	require.NoError(t, os.WriteFile(store.path("run"), []byte(`{broken`), 0o600))
 	runner := &Runner{Store: store, Version: "v1"}
 	_, err = runner.Run(context.Background(), "run", nil, "")
 	require.ErrorContains(t, err, "corrupt")
@@ -109,10 +110,11 @@ func TestDurableProcessRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "once", string(data))
 }
+
 func processSteps(dir string) []Step {
 	return []Step{
 		{Name: "prepare", Run: func(context.Context, StepInput) (json.RawMessage, error) {
-			f, err := os.OpenFile(filepath.Join(dir, "prepare-count"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+			f, err := os.OpenFile(filepath.Join(dir, "prepare-count"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 			if err != nil {
 				return nil, err
 			}

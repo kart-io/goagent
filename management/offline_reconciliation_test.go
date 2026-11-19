@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	mt "github.com/kart-io/goagent/management/internal/managementtest"
-	"github.com/stretchr/testify/require"
 )
 
 type offlineReconciliationReader struct {

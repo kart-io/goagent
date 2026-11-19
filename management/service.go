@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/execution"
-	"strings"
-	"time"
 )
 
 type Service struct{ cfg Config }
@@ -45,7 +47,9 @@ func New(c Config) (*Service, error) {
 	c.Factories = copyFactories
 	return &Service{c}, nil
 }
-func (s *Service) meta(a Actor) Meta        { return Meta{uuid.NewString(), a.TenantID, 1, s.cfg.Now().UTC()} }
+
+func (s *Service) meta(a Actor) Meta { return Meta{uuid.NewString(), a.TenantID, 1, s.cfg.Now().UTC()} }
+
 func digest(raw []byte) string              { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
 func encode(v any) (json.RawMessage, error) { return json.Marshal(v) }
 func document(kind string, v any) (Document, error) {
@@ -59,6 +63,7 @@ func document(kind string, v any) (Document, error) {
 	}
 	return Document{kind, m.TenantID, m.ID, m.Revision, m.CreatedAt, raw}, nil
 }
+
 func insert(ctx context.Context, tx Tx, kind string, v any) error {
 	d, err := document(kind, v)
 	if err != nil {
@@ -66,6 +71,7 @@ func insert(ctx context.Context, tx Tx, kind string, v any) error {
 	}
 	return tx.Insert(ctx, d)
 }
+
 func update(ctx context.Context, tx Tx, kind string, v any, expected int64) error {
 	d, err := document(kind, v)
 	if err != nil {
@@ -73,6 +79,7 @@ func update(ctx context.Context, tx Tx, kind string, v any, expected int64) erro
 	}
 	return tx.CAS(ctx, d, expected)
 }
+
 func read[T any](ctx context.Context, r Reader, kind, tenant, id string) (v T, err error) {
 	d, err := r.Get(ctx, kind, tenant, id)
 	if err == nil {
@@ -80,6 +87,7 @@ func read[T any](ctx context.Context, r Reader, kind, tenant, id string) (v T, e
 	}
 	return
 }
+
 func all[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]T, error) {
 	ds, err := r.List(ctx, kind, Selection{TenantID: tenant, Query: q, Visibility: Visibility{All: true}})
 	if err != nil {
@@ -95,6 +103,7 @@ func all[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]
 	}
 	return out, nil
 }
+
 func (s *Service) auth(ctx context.Context, a Actor, action, kind, id string) error {
 	if err := ValidateActor(a); err != nil {
 		return err
@@ -112,9 +121,11 @@ func (s *Service) auth(ctx context.Context, a Actor, action, kind, id string) er
 	}
 	return s.cfg.Authorizer.Authorize(ctx, a, action, ref)
 }
+
 func (s *Service) audit(ctx context.Context, tx Tx, a Actor, kind, id, op, reason string) error {
 	return insert(ctx, tx, "audit", Audit{Meta: s.meta(a), ResourceType: kind, ResourceID: id, Operation: op, Actor: a, Reason: reason})
 }
+
 func mutate[T any](s *Service, ctx context.Context, a Actor, key, op string, request any, fn func(Tx) (T, error)) (out T, err error) {
 	if ValidateActor(a) != nil {
 		return out, agentErrors.ErrManagementUnauthenticated
@@ -171,6 +182,7 @@ func CanonicalJSON(raw []byte) ([]byte, error) {
 	}
 	return json.Marshal(value)
 }
+
 func validText(s string, max int) bool {
 	return s != "" && strings.TrimSpace(s) == s && len([]rune(s)) <= max
 }
@@ -179,6 +191,7 @@ func (s *Service) command(ctx context.Context, tx Tx, a Actor, kind, task, sessi
 	c := Command{Meta: s.meta(a), Kind: kind, TaskID: task, SessionID: session, State: "pending", Actor: a, AvailableAt: s.cfg.Now().UTC()}
 	return c, insert(ctx, tx, "commands", c)
 }
+
 func wrapInvalid(err error) error {
 	if err == nil {
 		return nil

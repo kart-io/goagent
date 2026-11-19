@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
@@ -17,7 +19,6 @@ import (
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/tools"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func adapterResources(t *testing.T) (context.Context, mg.Resources) {

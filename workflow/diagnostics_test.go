@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/workflow"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGraphDiagnoseAmbiguityAndCompletion(t *testing.T) {
@@ -61,6 +61,7 @@ type graphDiagnosticReadOnly struct{ durable.Store }
 func (graphDiagnosticReadOnly) Lock(context.Context, string) (func() error, error) {
 	panic("diagnostic lock")
 }
+
 func (graphDiagnosticReadOnly) Save(context.Context, string, *durable.Snapshot) error {
 	panic("diagnostic write")
 }

@@ -140,8 +140,10 @@ func TestAwaitInputInsideResumableOperation(t *testing.T) {
 func TestAwaitInputReentersAfterCrashBeforeWaitingSaved(t *testing.T) {
 	ctx := interruptContext(t)
 	key := interruptKey("amount")
-	pending := &OperationRecord{ID: "interrupt/amount", Key: key, InputHash: digest(string(amountInfo)), Status: "pending",
-		Attempts: 1, MaxAttempts: constants.DefaultInterruptAttempts, Value: json.RawMessage(`null`), FailureKind: "ambiguous"}
+	pending := &OperationRecord{
+		ID: "interrupt/amount", Key: key, InputHash: digest(string(amountInfo)), Status: "pending",
+		Attempts: 1, MaxAttempts: constants.DefaultInterruptAttempts, Value: json.RawMessage(`null`), FailureKind: "ambiguous",
+	}
 	require.NoError(t, saveOperation(ctx, JournalStore(ctx), OperationStorageID(key), pending))
 	got, err := AwaitInput(WithResume(ctx, key, `7`), "amount", amountInfo, positive)
 	require.NoError(t, err)

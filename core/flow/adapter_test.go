@@ -3,14 +3,17 @@ package flow
 import (
 	"context"
 	"errors"
-	"github.com/kart-io/goagent/core"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/core"
 )
 
 func sumFold() Fold[int, int] {
 	return Fold[int, int]{Init: func() int { return 0 }, Add: func(_ context.Context, a, b int) (int, error) { return a + b, nil }}
 }
+
 func TestIncrementalBeforeSourceReturns(t *testing.T) {
 	first, release := make(chan struct{}), make(chan struct{})
 	r, err := AsRunnable(func(context.Context, int) (Source[int], error) {
@@ -44,6 +47,7 @@ func TestIncrementalBeforeSourceReturns(t *testing.T) {
 	}
 	require.Equal(t, 2, final)
 }
+
 func TestMapAndFoldErrorsCannotBeSwallowed(t *testing.T) {
 	sentinel := errors.New("late failure")
 	calls := 0
@@ -61,6 +65,7 @@ func TestMapAndFoldErrorsCannotBeSwallowed(t *testing.T) {
 	_, err = r.Invoke(context.Background(), 0)
 	require.ErrorIs(t, err, sentinel)
 }
+
 func TestSourceCancellationAndLimits(t *testing.T) {
 	source := Source[int](func(ctx context.Context, y func(int) error) error {
 		for range 1025 {
@@ -85,6 +90,7 @@ func TestSourceCancellationAndLimits(t *testing.T) {
 	_, err = r.Invoke(ctx, 0)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
 func BenchmarkFold(b *testing.B) {
 	r, _ := AsRunnable(func(context.Context, int) (Source[int], error) {
 		return func(_ context.Context, y func(int) error) error {

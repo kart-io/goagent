@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/interfaces"
-	"github.com/stretchr/testify/require"
 )
 
 // 固定规模账本的幂等记账应避免为每个JSON键重新分配字符串；这个资源上限保留足够余量。

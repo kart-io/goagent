@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/internal/txnlog"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -25,7 +26,7 @@ func NewFileStore(dir string) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = os.MkdirAll(path, 0700); err != nil {
+	if err = os.MkdirAll(path, 0o700); err != nil {
 		return nil, err
 	}
 	return &FileStore{dir: path}, nil
@@ -42,6 +43,7 @@ func (s *FileStore) Lock(ctx context.Context, id string) (func() error, error) {
 	}
 	return lock.Close, nil
 }
+
 func (s *FileStore) Load(ctx context.Context, id string) (*Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -59,6 +61,7 @@ func (s *FileStore) Load(ctx context.Context, id string) (*Snapshot, error) {
 	}
 	return &snapshot, nil
 }
+
 func (s *FileStore) Save(ctx context.Context, id string, snapshot *Snapshot) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -278,7 +281,7 @@ func pruneScope(ctx context.Context, dir, path string, cutoff time.Time) (err er
 func lockGate(ctx context.Context, path string, shared, create bool) (*flock.Flock, error) {
 	flag := os.O_RDONLY
 	if create {
-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, err
 		}
 		flag |= os.O_CREATE
@@ -337,7 +340,7 @@ func scopeRemoved(gate *flock.Flock) (bool, error) {
 }
 
 func writeTombstone(path string) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0600)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -371,7 +374,7 @@ func (s *fileScope) enter(ctx context.Context) (func() error, error) {
 		err = agentErrors.ErrScopeRemoved
 	}
 	if err == nil {
-		err = os.MkdirAll(s.files.dir, 0700)
+		err = os.MkdirAll(s.files.dir, 0o700)
 	}
 	if err != nil {
 		return nil, errors.Join(err, gate.Close())

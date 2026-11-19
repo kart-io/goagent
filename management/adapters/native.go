@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
+
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
@@ -14,7 +16,6 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/tools"
-	"strings"
 )
 
 // NativeFactory 由宿主提供固定实现版本的 Builder；适配器强制绑定管理身份与日志。
@@ -29,6 +30,7 @@ func (f NativeFactory) Validate(ctx context.Context, v mg.Version) (mg.Capabilit
 	}
 	return mg.Capabilities{Approval: true, Fork: true, Input: true}, f.Check(ctx, v)
 }
+
 func (f NativeFactory) Build(ctx context.Context, v mg.Version, r mg.Resources) (mg.Binding, error) {
 	b, cleanup, err := f.BuildAgent(ctx, v, r, approver{r: r})
 	binding := mg.Binding{Cleanup: cleanup}
@@ -60,6 +62,7 @@ func inputValue(raw json.RawMessage) (any, error) {
 	err := json.Unmarshal(raw, &value, json.UseNumber)
 	return value, err
 }
+
 func (n *native) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error) {
 	for k, v := range spec.ResumeInputs {
 		ctx = durable.WithResume(ctx, k, v)
@@ -93,6 +96,7 @@ func (n *native) Run(ctx context.Context, spec mg.RunSpec) (mg.RunResult, error)
 	raw, err := json.Marshal(output.Result)
 	return mg.RunResult{Outcome: "completed", Output: raw}, err
 }
+
 func (n *native) Inspect(ctx context.Context, spec mg.RunSpec) (mg.RunEvidence, error) {
 	events, err := n.r.Sessions.Read(ctx, n.r.Session.LogID, 0)
 	if err != nil {

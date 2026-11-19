@@ -180,7 +180,8 @@ func FormatToolResult(toolName string, result interface{}) string {
 	switch toolName {
 	case "get_weather":
 		if data, ok := result.(map[string]interface{}); ok {
-			return fmt.Sprintf(`
+			return fmt.Sprintf(
+				`
 🌤️ %s 天气
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 天气状况: %v

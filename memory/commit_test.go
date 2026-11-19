@@ -33,7 +33,8 @@ type commitFixture struct {
 }
 
 func newCommitFixture(t *testing.T, cfg Config) *commitFixture {
-	f := &commitFixture{t: t, st: newHookStore(t), sessions: session.NewMemoryStore(), ctx: WithNamespace(context.Background(), "u"),
+	f := &commitFixture{
+		t: t, st: newHookStore(t), sessions: session.NewMemoryStore(), ctx: WithNamespace(context.Background(), "u"),
 		reconcile: func(string) string { return `{"op":"add"}` },
 		resolve:   func(string) string { return `{"resolutions":[]}` },
 	}

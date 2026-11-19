@@ -178,18 +178,24 @@ func recordItem(ns []string, scope string, r Record) recallItem {
 	if r.Pinned {
 		tag = "核心"
 	}
-	return recallItem{ref: Ref{Kind: RefRecord, Namespace: ns, ID: r.ID, Scope: scope, Incarnation: r.Incarnation, ContentRev: r.ContentRev}, record: &r,
-		line: fmt.Sprintf("- [%s %s %s] %s", tag, r.ID, r.ValidFrom.Format(time.DateTime), r.Content)}
+	return recallItem{
+		ref: Ref{Kind: RefRecord, Namespace: ns, ID: r.ID, Scope: scope, Incarnation: r.Incarnation, ContentRev: r.ContentRev}, record: &r,
+		line: fmt.Sprintf("- [%s %s %s] %s", tag, r.ID, r.ValidFrom.Format(time.DateTime), r.Content),
+	}
 }
 
 func relationItem(ns []string, scope string, rel Relation) recallItem {
-	return recallItem{ref: Ref{Kind: RefRelation, Namespace: ns, ID: rel.ID, Scope: scope, Incarnation: rel.Incarnation, ContentRev: rel.ContentRev}, relation: &rel,
-		line: fmt.Sprintf("- [关系 自%s] %s", rel.ValidFrom.Format(time.DateTime), rel.Fact)}
+	return recallItem{
+		ref: Ref{Kind: RefRelation, Namespace: ns, ID: rel.ID, Scope: scope, Incarnation: rel.Incarnation, ContentRev: rel.ContentRev}, relation: &rel,
+		line: fmt.Sprintf("- [关系 自%s] %s", rel.ValidFrom.Format(time.DateTime), rel.Fact),
+	}
 }
 
 func communityItem(ns []string, scope string, c Community) recallItem {
-	return recallItem{ref: Ref{Kind: RefCommunity, Namespace: ns, ID: c.ID, Scope: scope, Incarnation: c.Incarnation, ContentRev: c.ContentRev}, community: &c,
-		line: fmt.Sprintf("- [主题 %s] %s", c.Name, c.Summary)}
+	return recallItem{
+		ref: Ref{Kind: RefCommunity, Namespace: ns, ID: c.ID, Scope: scope, Incarnation: c.Incarnation, ContentRev: c.ContentRev}, community: &c,
+		line: fmt.Sprintf("- [主题 %s] %s", c.Name, c.Summary),
+	}
 }
 
 // Snapshot 按 query 召回并返回引用快照：钉住的核心记忆在前，其后为召回的记录、相关社区的摘要与关系，

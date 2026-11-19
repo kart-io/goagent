@@ -2,11 +2,11 @@ package management
 
 import (
 	"context"
-	agentErrors "github.com/kart-io/goagent/errors"
 	"math"
 	"sort"
 	"time"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -16,6 +16,7 @@ func millisBetween(from, to time.Time) int64 {
 	}
 	return to.Sub(from).Milliseconds()
 }
+
 func projectDurations(run *Run, now time.Time) {
 	run.DurationComplete = true
 	end := now
@@ -120,6 +121,7 @@ func addTokens(target **interfaces.TokenUsage, value interfaces.TokenUsage) erro
 	}
 	return nil
 }
+
 func addRunTotals(dst *RunTotals, run Run, known *interfaces.TokenUsage) error {
 	if dst.States == nil {
 		dst.States = map[TaskState]int{}

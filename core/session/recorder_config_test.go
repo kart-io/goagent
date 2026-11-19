@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 func TestRecorderPersistsClearedConfiguration(t *testing.T) {

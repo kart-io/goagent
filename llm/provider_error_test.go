@@ -13,8 +13,9 @@ import (
 	"syscall"
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestProviderErrorRetryable(t *testing.T) {

@@ -2,8 +2,9 @@ package management
 
 import (
 	"context"
-	"github.com/kart-io/goagent/codec/json"
 	"time"
+
+	"github.com/kart-io/goagent/codec/json"
 )
 
 // Document 隔离存储与业务实体；Kind 只能取 Kinds 列出的固定表名。

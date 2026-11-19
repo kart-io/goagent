@@ -47,6 +47,7 @@ func (f *format) Name() string { return f.name }
 func (f *format) Marshal(v any, opts ...json.Option) ([]byte, error) {
 	return f.marshal(v, opts...)
 }
+
 func (f *format) Unmarshal(data []byte, v any, opts ...json.Option) error {
 	return f.unmarshal(data, v, opts...)
 }

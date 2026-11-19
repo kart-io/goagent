@@ -7,10 +7,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 // 默认（ParallelToolCalls=0）与显式 1 都按顺序执行：即使工具经 Dispatcher 声明可并发，

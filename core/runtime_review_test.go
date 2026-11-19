@@ -6,8 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/stretchr/testify/require"
+
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 type reviewEndCallback struct {

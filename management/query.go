@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
-	"strings"
-	"time"
 )
 
 func getAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, action, id string) (v T, err error) {
@@ -34,15 +35,19 @@ func getAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, action
 	err = json.Unmarshal(d.Data, &v)
 	return
 }
+
 func (s *Service) GetAgent(c context.Context, a Actor, id string) (Agent, error) {
 	return getAuthorized[Agent](s, c, a, "agents", "agent.read", id)
 }
+
 func (s *Service) GetSession(c context.Context, a Actor, id string) (Session, error) {
 	return getAuthorized[Session](s, c, a, "sessions", "session.read", id)
 }
+
 func (s *Service) GetTask(c context.Context, a Actor, id string) (Task, error) {
 	return getAuthorized[Task](s, c, a, "tasks", "task.read", id)
 }
+
 func (s *Service) GetApproval(c context.Context, a Actor, id string) (Approval, error) {
 	ap, err := getAuthorized[Approval](s, c, a, "approvals", "approval.read", id)
 	if err != nil {
@@ -76,6 +81,7 @@ func (s *Service) GetCommand(ctx context.Context, a Actor, id string) (Command, 
 	}
 	return c, nil
 }
+
 func listAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, action string, q Query) (out Page[T], err error) {
 	out.Items = []T{}
 	if err = ValidateActor(a); err != nil {
@@ -138,18 +144,23 @@ func listAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, actio
 	}
 	return out, nil
 }
+
 func (s *Service) ListAgents(c context.Context, a Actor, q Query) (Page[Agent], error) {
 	return listAuthorized[Agent](s, c, a, "agents", "agent.read", q)
 }
+
 func (s *Service) ListVersions(c context.Context, a Actor, q Query) (Page[Version], error) {
 	return listAuthorized[Version](s, c, a, "versions", "agent.read", q)
 }
+
 func (s *Service) ListSessions(c context.Context, a Actor, q Query) (Page[Session], error) {
 	return listAuthorized[Session](s, c, a, "sessions", "session.read", q)
 }
+
 func (s *Service) ListTasks(c context.Context, a Actor, q Query) (Page[Task], error) {
 	return listAuthorized[Task](s, c, a, "tasks", "task.read", q)
 }
+
 func (s *Service) ListApprovals(c context.Context, a Actor, q Query) (Page[Approval], error) {
 	page, err := listAuthorized[Approval](s, c, a, "approvals", "approval.read", q)
 	if err != nil {
@@ -167,6 +178,7 @@ func (s *Service) ListApprovals(c context.Context, a Actor, q Query) (Page[Appro
 	}
 	return page, nil
 }
+
 func (s *Service) History(ctx context.Context, a Actor, r HistoryRequest) (HistoryPage, error) {
 	v, err := s.GetSession(ctx, a, r.SessionID)
 	if err != nil {
@@ -223,6 +235,7 @@ func (s *Service) GetRun(ctx context.Context, a Actor, id string) (Run, error) {
 	out.Complete = out.Usage != nil && out.Usage.Complete
 	return out, nil
 }
+
 func (s *Service) ListRuns(ctx context.Context, a Actor, q Query) (Page[Run], error) {
 	ts, err := listAuthorized[Task](s, ctx, a, "tasks", "run.read", q)
 	out := Page[Run]{Items: []Run{}, NextCursor: ts.NextCursor}

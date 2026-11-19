@@ -106,8 +106,10 @@ func newEraseFixture(t *testing.T, withErase bool) *eraseFixture {
 
 func newEraseFixtureWith(t *testing.T, withErase bool, cfg Config) *eraseFixture {
 	t.Helper()
-	f := &eraseFixture{st: newHookStore(t), rec: &eraseRecorder{}, ctx: WithNamespace(context.Background(), testNS...),
-		now: time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)}
+	f := &eraseFixture{
+		st: newHookStore(t), rec: &eraseRecorder{}, ctx: WithNamespace(context.Background(), testNS...),
+		now: time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC),
+	}
 	cfg.Durable = f.st
 	if withErase {
 		cfg.OnErase = f.rec.erase

@@ -9,20 +9,23 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/protocol"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type Agent struct{ ID, Name, Description string }
-type Config struct {
-	Agents           []Agent
-	ActorFromRequest func(context.Context, *mcp.CallToolRequest) (mg.Actor, error)
-	PollInterval     time.Duration
-}
+type (
+	Agent  struct{ ID, Name, Description string }
+	Config struct {
+		Agents           []Agent
+		ActorFromRequest func(context.Context, *mcp.CallToolRequest) (mg.Actor, error)
+		PollInterval     time.Duration
+	}
+)
 type server struct {
 	service *protocol.Service
 	cfg     Config
@@ -189,6 +192,7 @@ func (h *server) invoke(ctx context.Context, a mg.Actor, req *mcp.CallToolReques
 		req = &next
 	}
 }
+
 func decode(req *mcp.CallToolRequest, out any) error {
 	if req == nil || req.Params == nil || len(req.Params.Arguments) > 1<<20 {
 		return agentErrors.ErrManagementInvalid
@@ -198,6 +202,7 @@ func decode(req *mcp.CallToolRequest, out any) error {
 	}
 	return nil
 }
+
 func (h *server) get(ctx context.Context, a mg.Actor, id string) (mg.Task, error) {
 	t, err := h.service.Management.GetTask(ctx, a, id)
 	if err != nil {
@@ -208,6 +213,7 @@ func (h *server) get(ctx context.Context, a mg.Actor, id string) (mg.Task, error
 	}
 	return t, nil
 }
+
 func (h *server) result(ctx context.Context, a mg.Actor, t mg.Task) (*mcp.CallToolResult, error) {
 	v, err := h.service.Describe(ctx, a, t)
 	if err != nil {
@@ -215,6 +221,7 @@ func (h *server) result(ctx context.Context, a mg.Actor, t mg.Task) (*mcp.CallTo
 	}
 	return complete(v)
 }
+
 func complete(v any) (*mcp.CallToolResult, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -222,6 +229,7 @@ func complete(v any) (*mcp.CallToolResult, error) {
 	}
 	return &mcp.CallToolResult{StructuredContent: v, Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, nil
 }
+
 func toolError(err error) *mcp.CallToolResult {
 	msg := "依赖暂不可用"
 	switch {
