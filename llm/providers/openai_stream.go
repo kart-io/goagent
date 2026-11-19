@@ -47,6 +47,15 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	}
 	for _, msg := range req.Messages {
 		message := openai.ChatCompletionMessage{Role: msg.Role, Content: msg.Content, Name: msg.Name, ToolCallID: msg.ToolCallID, ReasoningContent: msg.ReasoningContent}
+		if len(msg.Images) > 0 {
+			message.Content = ""
+			if msg.Content != "" {
+				message.MultiContent = append(message.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: msg.Content})
+			}
+			for _, image := range msg.Images {
+				message.MultiContent = append(message.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeImageURL, ImageURL: &openai.ChatMessageImageURL{URL: image.URL}})
+			}
+		}
 		for _, call := range msg.ToolCalls {
 			message.ToolCalls = append(message.ToolCalls, openai.ToolCall{ID: call.ID, Type: openai.ToolTypeFunction, Function: openai.FunctionCall{Name: call.Function.Name, Arguments: call.Function.Arguments}})
 		}

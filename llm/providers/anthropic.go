@@ -142,6 +142,11 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 		return nil
 	}
 	for _, msg := range messages {
+		if len(msg.Images) > 0 {
+			return nil, "", agentErrors.New(agentErrors.CodeInvalidInput, "anthropic: images not supported").
+				WithComponent("anthropic").
+				WithOperation("build_request")
+		}
 		if msg.Role != shared.RoleTool {
 			if err := flush(); err != nil {
 				return nil, "", err

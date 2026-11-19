@@ -40,6 +40,11 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 	var order []string
 	responses := map[string]*genai.Part{}
 	for _, msg := range messages {
+		if len(msg.Images) > 0 {
+			return nil, nil, agentErrors.New(agentErrors.CodeInvalidInput, "gemini: images not supported").
+				WithComponent("gemini").
+				WithOperation("build_request")
+		}
 		if msg.Role != "tool" && len(pending) > 0 {
 			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: missing tool responses before next message").
 				WithComponent("gemini").

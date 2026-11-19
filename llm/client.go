@@ -33,6 +33,14 @@ type Message struct {
 	// ProviderState preserves opaque response parts (e.g. Gemini signatures).
 	// Replay unchanged with the matching assistant content and tool calls.
 	ProviderState *ProviderState `json:"provider_state,omitzero"`
+	// Images 随消息一起发送；仅 OpenAI 兼容族支持，其余提供商会拒绝。
+	Images []ImagePart `json:"images,omitempty"`
+}
+
+// ImagePart 是消息携带的一张图片。
+type ImagePart struct {
+	// URL 可以是 https 地址或 data: URI。
+	URL string `json:"url"`
 }
 
 type ProviderState struct {
