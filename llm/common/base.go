@@ -61,6 +61,9 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.EmbeddingModel != "" {
 		opts = append(opts, agentllm.WithEmbeddingModel(config.EmbeddingModel))
 	}
+	if config.HTTPClient != nil {
+		opts = append(opts, agentllm.WithHTTPClient(config.HTTPClient))
+	}
 	if config.EmbeddingDimensions != 0 {
 		opts = append(opts, agentllm.WithEmbeddingDimensions(config.EmbeddingDimensions))
 	}

@@ -190,3 +190,22 @@ func TestEmbeddingDimensionsThroughLLMOptions(t *testing.T) {
 	_, err = NewGeminiStreaming(&agentllm.LLMOptions{APIKey: "k", BaseURL: s.URL, EmbeddingDimensions: -1})
 	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 }
+
+func TestLLMOptionsConstructorsRouteThroughInjectedHTTPClient(t *testing.T) {
+	constructors := map[string]func(*agentllm.LLMOptions) (agentllm.Client, error){
+		"gemini-streaming":   func(c *agentllm.LLMOptions) (agentllm.Client, error) { return NewGeminiStreaming(c) },
+		"deepseek-streaming": func(c *agentllm.LLMOptions) (agentllm.Client, error) { return NewDeepSeekStreaming(c) },
+	}
+	for name, newClient := range constructors {
+		t.Run(name, func(t *testing.T) {
+			tripper := &recordingTripper{}
+			client, err := newClient(&agentllm.LLMOptions{
+				APIKey: "k", BaseURL: "http://injected.invalid", Model: "m",
+				HTTPClient: &http.Client{Transport: tripper},
+			})
+			require.NoError(t, err)
+			completeOnce(client)
+			require.GreaterOrEqual(t, tripper.count(), 1)
+		})
+	}
+}
