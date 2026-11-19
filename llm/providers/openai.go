@@ -98,7 +98,7 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders)}}
+	clientConfig.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}}
 
 	return &OpenAIProvider{
 		BaseProvider:         base,
@@ -119,15 +119,31 @@ func compatibleTimeout(configured, serviceDefault time.Duration) time.Duration {
 // responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；
 // 流式请求的响应头随首块到达，之后的读取只受 ctx 控制，长回复不会被截断。
 // headers 来自 WithCustomHeaders，覆盖 SDK 设置的同名头。
-func responseHeaderTimeoutClient(timeout time.Duration, headers map[string]string) *http.Client {
-	return &http.Client{Transport: headerTimeoutTransport{timeout: timeout, headers: headers}}
+// injected 来自 WithHTTPClient：其 Transport 取代 http.DefaultTransport，CheckRedirect 原样沿用。
+func responseHeaderTimeoutClient(timeout time.Duration, headers map[string]string, injected *http.Client) *http.Client {
+	t := headerTimeoutTransport{timeout: timeout, headers: headers}
+	client := &http.Client{}
+	if injected != nil {
+		t.base = injected.Transport
+		client.CheckRedirect = injected.CheckRedirect
+	}
+	client.Transport = t
+	return client
 }
 
-// headerTimeoutTransport 每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
-// 连接池也由它统一持有。计时从发起请求开始，覆盖建连与写请求。
+// headerTimeoutTransport 默认每次请求都使用当时的 http.DefaultTransport（宿主可能替换为 otelhttp、httpmock 等任意实现），
+// 连接池也由它统一持有；base 非空时改用 base。计时从发起请求开始，覆盖建连与写请求。
 type headerTimeoutTransport struct {
 	timeout time.Duration
 	headers map[string]string
+	base    http.RoundTripper
+}
+
+func (t headerTimeoutTransport) roundTripper() http.RoundTripper {
+	if t.base != nil {
+		return t.base
+	}
+	return http.DefaultTransport
 }
 
 func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -138,11 +154,11 @@ func (t headerTimeoutTransport) RoundTrip(req *http.Request) (*http.Response, er
 		}
 	}
 	if t.timeout <= 0 {
-		return http.DefaultTransport.RoundTrip(req)
+		return t.roundTripper().RoundTrip(req)
 	}
 	ctx, cancel := context.WithCancel(req.Context())
 	timer := time.AfterFunc(t.timeout, cancel)
-	resp, err := http.DefaultTransport.RoundTrip(req.WithContext(ctx))
+	resp, err := t.roundTripper().RoundTrip(req.WithContext(ctx))
 	// 定时器已触发时 ctx 已取消，即便响应恰好返回其 Body 也不可读，统一按超时处理。
 	if !timer.Stop() {
 		if err == nil {

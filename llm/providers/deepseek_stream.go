@@ -20,7 +20,7 @@ var _ agentllm.ToolStreamClient = (*DeepSeekProvider)(nil)
 func (p *DeepSeekProvider) nativeStreamProvider() *OpenAIProvider {
 	config := openai.DefaultConfig(p.Config.APIKey)
 	config.BaseURL = strings.TrimRight(p.Config.BaseURL, "/")
-	config.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(p.GetTimeout(), p.Config.CustomHeaders)}}
+	config.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(p.GetTimeout(), p.Config.CustomHeaders, p.Config.HTTPClient)}}
 	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config)}
 }
 

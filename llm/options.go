@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"net/http"
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
@@ -150,6 +151,14 @@ func WithJSONResponse() ClientOption {
 	return func(c *LLMOptions) {
 		c.ResponseFormat = ResponseFormatJSON
 	}
+}
+
+// WithHTTPClient makes every provider send its requests through c.Transport
+// (http.DefaultTransport when nil) and apply c.CheckRedirect, so hosts can
+// enforce outbound policies such as SSRF protection. Timeouts and custom
+// headers still apply; c.Timeout and c.Jar are ignored.
+func WithHTTPClient(c *http.Client) ClientOption {
+	return func(o *LLMOptions) { o.HTTPClient = c }
 }
 
 // WithCustomHeaders sets custom HTTP headers.

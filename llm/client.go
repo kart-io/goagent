@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
@@ -110,6 +111,10 @@ type LLMOptions struct {
 	// Other settings.
 	SystemPrompt  string            `json:"system_prompt,omitempty"`  // default system prompt
 	CustomHeaders map[string]string `json:"custom_headers,omitempty"` // custom HTTP headers
+
+	// HTTPClient supplies the transport and redirect policy for provider requests;
+	// see WithHTTPClient. Never serialized.
+	HTTPClient *http.Client `json:"-"`
 }
 
 // DefaultLLMOptions returns the default configuration.

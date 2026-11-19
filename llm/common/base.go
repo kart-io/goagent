@@ -235,6 +235,8 @@ func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 		Timeout: timeout,
 		Headers: headers,
 		BaseURL: cfg.BaseURL,
+
+		HTTPClient: b.Config.HTTPClient,
 	})
 }
 
