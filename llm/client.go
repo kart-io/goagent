@@ -99,6 +99,8 @@ type LLMOptions struct {
 	BaseURL        string          `json:"base_url,omitempty"`        // custom API endpoint
 	Model          string          `json:"model"`                     // default model
 	EmbeddingModel string          `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
+	// EmbeddingDimensions requests a vector size from OpenAI-family and Gemini embeddings; 0 leaves it to the model.
+	EmbeddingDimensions int `json:"embedding_dimensions,omitempty"`
 
 	// Generation parameters.
 	MaxTokens      int             `json:"max_tokens"`               // default maximum tokens

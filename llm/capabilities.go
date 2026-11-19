@@ -29,6 +29,12 @@ type EmbeddingClient interface {
 	Embed(ctx context.Context, text string) ([]float32, error)
 }
 
+// BatchEmbeddingClient embeds several texts in one request. Results are in
+// input order; len(result) == len(texts).
+type BatchEmbeddingClient interface {
+	EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
+}
+
 // Capability represents a provider capability that can be checked at runtime.
 type Capability string
 
@@ -125,6 +131,18 @@ func AsEmbedder(client Client) EmbeddingClient {
 	}
 	if ec, ok := client.(EmbeddingClient); ok {
 		return ec
+	}
+	return nil
+}
+
+// AsBatchEmbedder returns the batch embedding interface, or nil when the client
+// lacks the embedding capability or does not implement EmbedBatch.
+func AsBatchEmbedder(client Client) BatchEmbeddingClient {
+	if !HasEmbedding(client) {
+		return nil
+	}
+	if bc, ok := client.(BatchEmbeddingClient); ok {
+		return bc
 	}
 	return nil
 }

@@ -34,6 +34,9 @@ func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error
 	if err := base.EnsureAPIKey(shared.EnvGeminiAPIKey, shared.ProviderGemini); err != nil {
 		return nil, err
 	}
+	if err := validateEmbeddingDimensions(shared.ProviderGemini, base.Config.EmbeddingDimensions); err != nil {
+		return nil, err
+	}
 	// Explicit backend prevents ambient Vertex settings from changing authentication.
 	// No implicit SDK retries: one provider invocation is one upstream request.
 	attempts := int32(1)

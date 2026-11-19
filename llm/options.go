@@ -55,6 +55,11 @@ func WithEmbeddingModel(model string) ClientOption {
 	return func(c *LLMOptions) { c.EmbeddingModel = model }
 }
 
+// WithEmbeddingDimensions requests n-dimensional embeddings; 0 (default) sends nothing, n < 0 is rejected at construction.
+func WithEmbeddingDimensions(n int) ClientOption {
+	return func(c *LLMOptions) { c.EmbeddingDimensions = n }
+}
+
 // WithMaxTokens sets the maximum number of tokens.
 func WithMaxTokens(maxTokens int) ClientOption {
 	return func(c *LLMOptions) {
