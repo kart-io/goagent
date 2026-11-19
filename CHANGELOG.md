@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 新增
 
 - `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
+- `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
 - `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
 - `llm/providers`：新增 MiniMax 预设 `NewMiniMaxWithOptions`（`constants.ProviderMiniMax`，环境变量 `MINIMAX_API_KEY`/`MINIMAX_BASE_URL`/`MINIMAX_MODEL`，默认模型 `minimax-m2.7`），走 OpenAI 兼容协议，支持视觉与原生工具流。推理强度为 `none` 时，M3 系列改发 `thinking: {"type":"disabled"}`，M2.x 不接受该开关，`none` 被忽略（两者都不再发送 `reasoning_effort`）。
 - `llm`：新增批量 embedding：`BatchEmbeddingClient.EmbedBatch(ctx, texts)` 一次请求返回按输入顺序排列的向量，`AsBatchEmbedder(client)` 在客户端无 embedding 能力或未实现时返回 nil；OpenAI 兼容族与 Gemini 已实现，`Embed` 改为经 `EmbedBatch` 处理单条。空列表、空文本、返回数量或索引不符均返回错误。新增 `WithEmbeddingDimensions(n)`（OpenAI 兼容族与 Gemini 的输出维度，0 不发送，负数在构造时报错），`ConfigToOptions` 同步透传 `EmbeddingDimensions`。
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
+- `llm/providers`：DeepSeek 显式推理配置此前一律返回 `CodeInvalidConfig`，调用方无法关闭思考。现在推理强度为 `none` 时发送 `thinking: {"type":"disabled"}`（覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`，不发送 `reasoning_effort`）；其余强度与 thinking budget 仍返回 `CodeInvalidConfig`，未配置推理时请求不变。
 - `llm/providers`：MiniMax 的 OpenAI 兼容视觉接口只读 `max_completion_tokens`、忽略 `max_tokens`，带图片（`Message.Images`）的请求输出上限此前静默失效。现在 MiniMax 预设在请求含图片时改发 `max_completion_tokens`（不再发 `max_tokens`），覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`；纯文本请求与其他提供方不变。
 - `core/session`：推导活动事件（`Derive`、`DeriveMessages`、`Active`、`LastState`、`Archived`）时，每遇到一个中止轮次或退回都把当前整个视图克隆为检查点，分配随日志长度平方增长；Builder 每轮开启要推导两次。按每 10 轮一次中止的客服日志实测，5000 个事件每次推导分配 17MB，20000 个事件 260MB、51ms。现在视图记为保留序号的区间，检查点只复制区间，同样日志降为 0.54MB 与 3.7MB、0.8ms，结果与原实现一致（随机日志差分测试）。
 - `tools`：管线钩子拿到的 `Call.Args` 与工具执行参数是同一个 map，审批人、PreHook、Guard、Around 改写它会让工具执行与审批过的参数不同的调用（批准 `ls`，实际执行改写后的命令）。现在 Dispatcher 在准入结束和工具体执行前比对参数，被改写即返回 `CodeInvalidOutput`，工具不执行。**行为变化**：此前静默生效的原地改写现在会报错；需要改参数的钩子请改用 `PreSubstitute`，替代调用会重新校验、授权并经过准入。

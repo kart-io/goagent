@@ -15,13 +15,15 @@ var _ agentllm.ToolStreamClient = (*DeepSeekProvider)(nil)
 // nativeStreamProvider reuses the same SSE decoder and completion checks as
 // OpenAI-compatible endpoints, retaining DeepSeek configuration and transport.
 // It performs no implicit retries; callers own the request budget.
+// DeepSeek does not accept reasoning_effort: effort "none" is sent as
+// thinking {"type":"disabled"} and any other reasoning configuration is rejected.
 // The resty client's overall Timeout would cut long SSE bodies, so the timeout
 // only bounds the wait for response headers here.
 func (p *DeepSeekProvider) nativeStreamProvider() *OpenAIProvider {
 	config := openai.DefaultConfig(p.Config.APIKey)
 	config.BaseURL = strings.TrimRight(p.Config.BaseURL, "/")
-	config.HTTPClient = zeroTemperatureDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(p.GetTimeout(), p.Config.CustomHeaders, p.Config.HTTPClient)}}
-	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config)}
+	config.HTTPClient = zeroTemperatureDoer{next: thinkingDisabledDoer{next: retryAfterDoer{next: responseHeaderTimeoutClient(p.GetTimeout(), p.Config.CustomHeaders, p.Config.HTTPClient)}}}
+	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config), thinkingNoneOnly: true}
 }
 
 // CompleteStream implements structured streaming with terminal status and usage.

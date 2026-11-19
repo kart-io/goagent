@@ -41,9 +41,9 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	if err != nil {
 		return nil, err
 	}
-	if p.thinkingSwitch && effort == "none" {
+	if effort == "none" && (p.thinkingSwitch || p.thinkingNoneOnly) {
 		effort = ""
-		if isMiniMaxM3(p.GetModel(req.Model)) {
+		if p.thinkingNoneOnly || isMiniMaxM3(p.GetModel(req.Model)) {
 			ctx = withThinkingDisabled(ctx)
 		}
 	}
@@ -78,12 +78,16 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	model := p.GetModel(req.Model)
 	temperature := p.ResolveTemperature(req)
 	ctx = withOpenAITemperature(ctx, temperature)
+	var streamOptions *openai.StreamOptions
+	if !p.Config.DisableStreamUsage {
+		streamOptions = &openai.StreamOptions{IncludeUsage: true}
+	}
 	ctx, retryAfter := withRetryAfterSlot(ctx)
 	watch := newStreamWatchdog(ctx, p.Config.StreamIdleTimeout, p.Config.StreamTimeout)
 	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
 		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: maxTokens, MaxCompletionTokens: maxCompletionTokens,
 		Temperature: float32(temperature), TopP: float32(req.TopP),
-		Stop: req.Stop, ResponseFormat: responseFormat, Stream: true, StreamOptions: &openai.StreamOptions{IncludeUsage: true},
+		Stop: req.Stop, ResponseFormat: responseFormat, Stream: true, StreamOptions: streamOptions,
 	})
 	if err != nil {
 		if stall := watch.stalled(); stall != nil {

@@ -67,6 +67,9 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.EmbeddingDimensions != 0 {
 		opts = append(opts, agentllm.WithEmbeddingDimensions(config.EmbeddingDimensions))
 	}
+	if config.DisableStreamUsage {
+		opts = append(opts, agentllm.WithStreamUsage(false))
+	}
 	if config.MaxTokens > 0 {
 		opts = append(opts, agentllm.WithMaxTokens(config.MaxTokens))
 	}

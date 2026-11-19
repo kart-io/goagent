@@ -108,6 +108,14 @@ func WithStreamTimeout(d time.Duration) ClientOption {
 	return func(c *LLMOptions) { c.StreamTimeout = max(d, 0) }
 }
 
+// WithStreamUsage controls whether OpenAI-compatible streaming requests
+// (including DeepSeek) send stream_options.include_usage. It defaults to true;
+// pass false for strict gateways that reject unknown fields, in which case the
+// stream usually carries no usage.
+func WithStreamUsage(enabled bool) ClientOption {
+	return func(c *LLMOptions) { c.DisableStreamUsage = !enabled }
+}
+
 // WithTopP sets the Top-P sampling parameter.
 func WithTopP(topP float64) ClientOption {
 	return func(c *LLMOptions) {

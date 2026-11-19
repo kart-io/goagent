@@ -81,6 +81,7 @@ func TestConfigToOptions(t *testing.T) {
 		CustomHeaders: map[string]string{
 			"X-Custom": "value",
 		},
+		DisableStreamUsage: true,
 	}
 
 	opts := common.ConfigToOptions(config)
@@ -95,6 +96,7 @@ func TestConfigToOptions(t *testing.T) {
 	assert.Equal(t, config.MaxTokens, newConfig.MaxTokens)
 	assert.Equal(t, config.Temperature, newConfig.Temperature)
 	assert.Equal(t, config.SystemPrompt, newConfig.SystemPrompt)
+	assert.True(t, newConfig.DisableStreamUsage)
 }
 
 func TestConfigToOptions_NilConfig(t *testing.T) {

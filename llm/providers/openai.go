@@ -29,6 +29,9 @@ type OpenAIProvider struct {
 	thinkingSwitch bool
 	// imageCompletionTokens 为 true 时，带图片的请求把输出上限发为 max_completion_tokens。
 	imageCompletionTokens bool
+	// thinkingNoneOnly 用于不接受 reasoning_effort 的服务（DeepSeek）：只接受 effort=none 并改发 thinking 禁用，
+	// 其余推理配置仍在请求前报错。
+	thinkingNoneOnly bool
 }
 
 // NewOpenAIWithOptions creates a new OpenAI provider using options pattern
