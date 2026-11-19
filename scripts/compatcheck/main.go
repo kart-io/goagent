@@ -71,7 +71,7 @@ func (c *goProcess) Output() ([]byte, error) {
 func cleanupProcess(cmd *exec.Cmd) { _ = processgroup.Kill(cmd) }
 
 func goCommand(ctx context.Context, dir string, args ...string) *goProcess {
-	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd := exec.CommandContext(ctx, "go", args...) // #nosec G204 -- 固定执行 go，参数由本工具构造
 	cmd.Dir = dir
 	// 清除旧标准库路径和外部 workspace/GOFLAGS，保留代理、工具链及显式测试服务配置。
 	for _, entry := range os.Environ() {
@@ -212,7 +212,7 @@ func verify(ctx context.Context, root, out string, timeout time.Duration, coreDi
 	for _, m := range modules {
 		if m.Path == coreModule {
 			report.CoreDir = m.Dir
-			cmd := exec.CommandContext(startupCtx, "git", "-C", m.Dir, "rev-parse", "HEAD")
+			cmd := exec.CommandContext(startupCtx, "git", "-C", m.Dir, "rev-parse", "HEAD") // #nosec G204 -- 固定执行 git，目录来自 go list 的模块路径
 			cmd.WaitDelay = 2 * time.Second
 			processgroup.Configure(cmd)
 			if revision, err := (&goProcess{cmd}).Output(); err == nil {
@@ -261,19 +261,19 @@ func verifyModule(ctx context.Context, m module, modules []module, coreDir, out 
 	defer func() { _ = os.RemoveAll(tmp) }()
 	modfile := filepath.Join(tmp, "go.mod")
 	for _, name := range []string{"go.mod", "go.sum"} {
-		data, err := os.ReadFile(filepath.Join(m.Dir, name))
+		data, err := os.ReadFile(filepath.Join(m.Dir, name)) // #nosec G304 -- 读取 go list 给出的模块目录下的固定文件名
 		if errors.Is(err, os.ErrNotExist) && name == "go.sum" {
 			continue
 		}
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(tmp, name), data, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(tmp, name), data, 0o600); err != nil { // #nosec G703 -- 写入本工具新建的临时目录，文件名为固定常量
 			return err
 		}
 	}
 	result.Log = fmt.Sprintf("%02d-tests.jsonl", index)
-	log, err := os.OpenFile(filepath.Join(out, result.Log), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	log, err := os.OpenFile(filepath.Join(out, result.Log), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) // #nosec G304 -- 报告目录由本工具新建，文件名由序号生成
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func verifyModule(ctx context.Context, m module, modules []module, coreDir, out 
 }
 
 func readTestResults(path string, result *moduleResult) error {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- 读取本工具刚写入的报告文件
 	if err != nil {
 		return err
 	}

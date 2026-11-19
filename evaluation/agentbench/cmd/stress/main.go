@@ -108,7 +108,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(filepath.Join(*out, "dataset.json"), data, 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(*out, "dataset.json"), data, 0o600); err != nil { // #nosec G703 -- 输出目录由运行者通过命令行参数指定
 		return err
 	}
 	digest := sha256.Sum256(data)

@@ -15,19 +15,19 @@ import (
 
 func revisionFixture() (Definition, map[string][]byte) {
 	return Definition{
-			Config:  json.RawMessage(`{"name":"归档代理","nested":{"b":2,"a":1}}`),
-			Prompts: map[string]string{"system": "请读取归档内的运行手册"},
-			Tools:   json.RawMessage(`[{"name":"read","parameters":{"b":2,"a":1}}]`),
-			Models:  map[string]Reference{"primary": {ID: "model-a", Version: "v1"}},
-			Policy:  Reference{ID: "policy-a", Version: "v1"},
-			Skills:  map[string]string{"oncall": "skills/oncall"},
-			Runtime: Runtime{Kind: "native", Version: "v1", Digest: strings.Repeat("a", 64)},
-		}, map[string][]byte{
-			"skills/oncall/SKILL.md":             []byte("---\nname: oncall\ndescription: 排查服务故障\n---\n请读取 resources/runbook.md。\n"),
-			"skills/oncall/resources/runbook.md": []byte("保留这份运行手册的旧内容"),
-			"skills/oncall/templates/report.txt": []byte("报告：{{.Summary}}"),
-			"skills/oncall/programs/check.bin":   {0, 1, 255, 10},
-		}
+		Config:  json.RawMessage(`{"name":"归档代理","nested":{"b":2,"a":1}}`),
+		Prompts: map[string]string{"system": "请读取归档内的运行手册"},
+		Tools:   json.RawMessage(`[{"name":"read","parameters":{"b":2,"a":1}}]`),
+		Models:  map[string]Reference{"primary": {ID: "model-a", Version: "v1"}},
+		Policy:  Reference{ID: "policy-a", Version: "v1"},
+		Skills:  map[string]string{"oncall": "skills/oncall"},
+		Runtime: Runtime{Kind: "native", Version: "v1", Digest: strings.Repeat("a", 64)},
+	}, map[string][]byte{
+		"skills/oncall/SKILL.md":             []byte("---\nname: oncall\ndescription: 排查服务故障\n---\n请读取 resources/runbook.md。\n"),
+		"skills/oncall/resources/runbook.md": []byte("保留这份运行手册的旧内容"),
+		"skills/oncall/templates/report.txt": []byte("报告：{{.Summary}}"),
+		"skills/oncall/programs/check.bin":   {0, 1, 255, 10},
+	}
 }
 
 func sealFixture(t *testing.T) AgentRevision {
