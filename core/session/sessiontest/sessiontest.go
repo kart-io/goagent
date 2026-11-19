@@ -111,6 +111,9 @@ func read(t *testing.T, s session.Store, id string, after int64) []session.Event
 	t.Helper()
 	events, err := s.Read(context.Background(), id, after)
 	require.NoError(t, err)
+	if after == 0 {
+		require.NoError(t, session.Validate(events), "读回的完整日志须满足结构不变式")
+	}
 	return events
 }
 

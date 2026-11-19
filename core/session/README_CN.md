@@ -60,6 +60,8 @@ Builder 在每次模型请求前把实际发送的对话（不含 system 与运�
 
 `Rewind(ctx, store, id, to, expected)` 以调用方看到的最后序号做比较并交换，其间有新写入时返回 `errors.ErrSessionConflict`。被撤销的事件仍保留在日志中；持久操作的快照不受影响。`Fork` 把会话的前缀复制为新会话。
 
+`Validate(events)` 校验一份完整日志（即 `Read(ctx, id, 0)` 的结果），返回包装 `errors.ErrSessionInvalidLog` 的第一处违例：序号从 1 起连续；已知事件类型能解码，消息角色与事件类型相符；`turn/start` 与 `turn/end` 交替，中止的 `turn/end` 恰好撤销本轮；`Surface` 只出现在 `history/rewrite`、`session/rewind` 与中止的 `turn/end` 上，且只覆盖之前的事件；中止的 `turn/end` 须覆盖本轮其后的全部消息，退回区间止于本事件之前。未知事件类型放行但不能带 `Surface`；止于轮次中途的前缀合法。Builder 不在每轮调用它：Builder 自己写出的日志由测试保证，而对存量日志校验失败会让会话无法使用且无修复手段。手写或导入事件的宿主应在该入口调用，如 `management.ForkSession` 在复制前缀前所做；`sessiontest.Run` 对自定义 Store 读回的每份完整日志执行校验。
+
 从持久运行的某一点分叉并继续：`store.Fork(ctx, src, dst, seq)` 之后，对 `dst` 以同一执行键恢复（`WithSessionID(dst)`、`session.DurableStore(store, dst)`）。分叉点之前完成的操作回放，之后的实跑，原会话不变。分叉点应选在消息事件上（如某条 `tool/result` 的序号）；落在某个操作的开始与完成之间时，恢复该操作返回需宿主处理的错误，与进程在该处崩溃相同。
 
 ## 轨迹导出

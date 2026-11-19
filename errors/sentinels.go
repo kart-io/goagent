@@ -45,6 +45,8 @@ var (
 	ErrSessionConflict = newSentinel(CodeConflict, "会话日志已被并发写入")
 	ErrSessionNotFound = newSentinel(CodeNotFound, "会话不存在")
 	ErrSessionExists   = newSentinel(CodeAlreadyExists, "会话已存在")
+	// ErrSessionInvalidLog reports a session journal that violates session.Validate.
+	ErrSessionInvalidLog = newSentinel(CodeInvalidInput, "会话日志结构无效")
 	// evaluation。
 	ErrEvaluationBudgetExceeded = newSentinel(CodeBudgetExceeded, "evaluation budget exhausted")
 	// llm。

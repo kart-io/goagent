@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
 - `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
 
+- `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
+
 ### 文档
 
 - 面向用户的 13 篇入门/编排/接入指南、`docs/README.md` 索引与稳定包 README（`builder`、`core`、`core/session`、`core/durable/migrate`、`errors`、`interfaces`、`llm`、`tools`、`workflow`）改为英文主文件，中文版移至同目录 `_CN.md`。翻译时按代码订正了失实内容：Builder 默认值（`MaxTokens`、`Temperature` 默认不设置）、已删除的 `WithMemory`、迁到 `errors` 包的哨兵错误名、错误码数量（65）、`interfaces.ToolInput` 不存在的 `Context` 字段，以及 `ToolStreamClient` 实现方漏列的 Anthropic。

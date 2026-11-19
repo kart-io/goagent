@@ -105,6 +105,9 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 			return Session{}, agentErrors.ErrManagementInvalid
 		}
 		prefix := prefixEvents(events, seq)
+		if session.Validate(prefix) != nil {
+			return Session{}, agentErrors.ErrManagementInvalid
+		}
 		raw, err := encode(prefix)
 		if err != nil {
 			return Session{}, err

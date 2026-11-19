@@ -26,6 +26,7 @@ func sessionEvents(t *testing.T, store session.Store, id string) []session.Event
 	t.Helper()
 	events, err := store.Read(context.Background(), id, 0)
 	require.NoError(t, err)
+	require.NoError(t, session.Validate(events), "Builder 写出的日志须满足结构不变式")
 	return events
 }
 
