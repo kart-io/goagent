@@ -117,6 +117,9 @@ type LLMOptions struct {
 	// tool streams (including DeepSeek).
 	StreamIdleTimeout time.Duration `json:"stream_idle_timeout,omitzero"`
 	StreamTimeout     time.Duration `json:"stream_timeout,omitzero"`
+	// DisableStreamUsage stops OpenAI-compatible streaming requests (including
+	// DeepSeek) from sending stream_options; see WithStreamUsage.
+	DisableStreamUsage bool `json:"disable_stream_usage,omitzero"`
 
 	// Other settings.
 	SystemPrompt  string            `json:"system_prompt,omitempty"`  // default system prompt

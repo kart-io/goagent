@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 新增
 
 - `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
+- `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
 - `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
 - `llm/providers`：新增 MiniMax 预设 `NewMiniMaxWithOptions`（`constants.ProviderMiniMax`，环境变量 `MINIMAX_API_KEY`/`MINIMAX_BASE_URL`/`MINIMAX_MODEL`，默认模型 `minimax-m2.7`），走 OpenAI 兼容协议，支持视觉与原生工具流。推理强度为 `none` 时，M3 系列改发 `thinking: {"type":"disabled"}`，M2.x 不接受该开关，`none` 被忽略（两者都不再发送 `reasoning_effort`）。
 - `llm`：新增批量 embedding：`BatchEmbeddingClient.EmbedBatch(ctx, texts)` 一次请求返回按输入顺序排列的向量，`AsBatchEmbedder(client)` 在客户端无 embedding 能力或未实现时返回 nil；OpenAI 兼容族与 Gemini 已实现，`Embed` 改为经 `EmbedBatch` 处理单条。空列表、空文本、返回数量或索引不符均返回错误。新增 `WithEmbeddingDimensions(n)`（OpenAI 兼容族与 Gemini 的输出维度，0 不发送，负数在构造时报错），`ConfigToOptions` 同步透传 `EmbeddingDimensions`。

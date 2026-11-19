@@ -90,6 +90,6 @@ for chunk := range chunks {
 }
 ```
 
-`Delta` 是新增文本，`Content` 是累计文本。`finish_reason` 后可能还有用量帧，因此只有终止块标记 `Done=true`。流中读取错误通过 `chunk.Error` 传回。OpenAI 兼容服务需支持 `stream_options.include_usage`。
+`Delta` 是新增文本，`Content` 是累计文本。`finish_reason` 后可能还有用量帧，因此只有终止块标记 `Done=true`。流中读取错误通过 `chunk.Error` 传回。OpenAI 兼容服务（含 DeepSeek）默认发送 `stream_options.include_usage` 以取得用量；拒绝未知字段的严格网关可用 `llm.WithStreamUsage(false)` 关闭，此时流通常不带用量。
 
 Agent 级的事件流用 `agent.AsRunnable().Stream` 或 `ExecuteStream`，见[执行契约](EXECUTION_CONTRACT.md)与[事件流](PRIORITY_CAPABILITIES.md#统一事件流)。

@@ -94,3 +94,51 @@ func TestDeepSeekRejectsOtherReasoningConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamUsageOption(t *testing.T) {
+	tests := []struct {
+		name      string
+		newClient func(*testing.T, ...agentllm.ClientOption) (streamClient, *captureTripper)
+	}{
+		{name: "openai", newClient: func(t *testing.T, opts ...agentllm.ClientOption) (streamClient, *captureTripper) {
+			tripper := &captureTripper{}
+			opts = append([]agentllm.ClientOption{agentllm.WithAPIKey("k"), agentllm.WithBaseURL("https://api.openai.test/v1"), agentllm.WithHTTPClient(&http.Client{Transport: tripper})}, opts...)
+			p, err := NewOpenAIWithOptions(opts...)
+			require.NoError(t, err)
+			return p, tripper
+		}},
+		{name: "minimax", newClient: func(t *testing.T, opts ...agentllm.ClientOption) (streamClient, *captureTripper) {
+			return newCapturedMiniMax(t, opts...)
+		}},
+		{name: "deepseek", newClient: func(t *testing.T, opts ...agentllm.ClientOption) (streamClient, *captureTripper) {
+			return newCapturedDeepSeek(t, opts...)
+		}},
+	}
+	for _, tt := range tests {
+		for _, mode := range []struct {
+			name string
+			opts []agentllm.ClientOption
+			want bool
+		}{
+			{name: "default", want: true},
+			{name: "enabled", opts: []agentllm.ClientOption{agentllm.WithStreamUsage(true)}, want: true},
+			{name: "disabled", opts: []agentllm.ClientOption{agentllm.WithStreamUsage(false)}},
+		} {
+			t.Run(tt.name+"/"+mode.name, func(t *testing.T) {
+				p, tripper := tt.newClient(t, mode.opts...)
+				sendAllPaths(t, p, func() *agentllm.CompletionRequest {
+					return &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage("hi")}}
+				})
+
+				require.Len(t, tripper.bodies, 3)
+				for _, body := range tripper.bodies {
+					if mode.want {
+						require.JSONEq(t, `{"include_usage":true}`, string(body["stream_options"]))
+					} else {
+						require.NotContains(t, body, "stream_options")
+					}
+				}
+			})
+		}
+	}
+}
