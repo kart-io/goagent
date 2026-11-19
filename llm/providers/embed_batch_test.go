@@ -178,3 +178,15 @@ func TestEmbeddingDimensionsRejectsNegative(t *testing.T) {
 	_, err = NewGeminiWithOptions(opts...)
 	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 }
+
+func TestEmbeddingDimensionsThroughLLMOptions(t *testing.T) {
+	s := newEmbedServer(t, `{"embeddings":[{"values":[0.1]}]}`)
+	p, err := NewGeminiStreaming(&agentllm.LLMOptions{APIKey: "k", BaseURL: s.URL, EmbeddingDimensions: 1024})
+	require.NoError(t, err)
+	_, err = p.Embed(context.Background(), "x")
+	require.NoError(t, err)
+	require.Contains(t, s.requests()[0], `"outputDimensionality":1024`)
+
+	_, err = NewGeminiStreaming(&agentllm.LLMOptions{APIKey: "k", BaseURL: s.URL, EmbeddingDimensions: -1})
+	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
+}

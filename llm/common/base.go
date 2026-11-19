@@ -61,6 +61,9 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.EmbeddingModel != "" {
 		opts = append(opts, agentllm.WithEmbeddingModel(config.EmbeddingModel))
 	}
+	if config.EmbeddingDimensions != 0 {
+		opts = append(opts, agentllm.WithEmbeddingDimensions(config.EmbeddingDimensions))
+	}
 	if config.MaxTokens > 0 {
 		opts = append(opts, agentllm.WithMaxTokens(config.MaxTokens))
 	}
