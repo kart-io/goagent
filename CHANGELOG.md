@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
+- `core/session`：推导活动事件（`Derive`、`DeriveMessages`、`Active`、`LastState`、`Archived`）时，每遇到一个中止轮次或退回都把当前整个视图克隆为检查点，分配随日志长度平方增长；Builder 每轮开启要推导两次。按每 10 轮一次中止的客服日志实测，5000 个事件每次推导分配 17MB，20000 个事件 260MB、51ms。现在视图记为保留序号的区间，检查点只复制区间，同样日志降为 0.54MB 与 3.7MB、0.8ms，结果与原实现一致（随机日志差分测试）。
 - `tools`：管线钩子拿到的 `Call.Args` 与工具执行参数是同一个 map，审批人、PreHook、Guard、Around 改写它会让工具执行与审批过的参数不同的调用（批准 `ls`，实际执行改写后的命令）。现在 Dispatcher 在准入结束和工具体执行前比对参数，被改写即返回 `CodeInvalidOutput`，工具不执行。**行为变化**：此前静默生效的原地改写现在会报错；需要改参数的钩子请改用 `PreSubstitute`，替代调用会重新校验、授权并经过准入。
 - `llm/providers`：`llm.WithResponseFormat` / `WithJSONResponse` 自 `llm.Client` 收敛为流式接口后不再生效，所有提供方都不发送该设置，模型照常返回带说明文字的非 JSON 回复。现在 OpenAI 兼容提供方（含 DeepSeek、Kimi、SiliconFlow、Ollama）发送 `response_format`，Gemini 设置 `responseMimeType`（不支持的类型返回 `CodeInvalidInput`），Anthropic 没有 JSON 模式，构造时对非 `text` 返回 `CodeInvalidInput`。新增离线示例 `examples/llm/json-response`。
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
