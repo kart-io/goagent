@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
 
 - 日志接口：新增稳定包 `core/logging`，定义与 `*slog.Logger` 方法签名一致的 `Logger`（`DebugContext`/`InfoContext`/`WarnContext`/`ErrorContext`），`*slog.Logger` 与 `*slogx.Logger` 可直接传入，库本身不依赖 slogx；`Default()` 每次调用读取 `slog.Default()`，`Discard()` 丢弃全部记录。`core/observe` 新增 `NewLogObserver`（每个事件写一条结构化记录，只含元数据，不含输入输出与供应商错误文本；执行失败与 panic 为 Error，其他失败与模型重试为 Warn，结束、重放、等待为 Info，其余为 Debug）与 `AddObserver`（与已绑定观察者并存，各自隔离 panic）。`builder` 新增 `WithLogger`，把运行生命周期写入日志，Builder 的警告、回调失败与 `WithVerbose` 输出也写入它；嵌套 Agent 只由最外层记录。`core` 新增 `NewContextLoggingCallback`，`tools/middleware` 新增 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。接入 slogx（须 v0.2.1 及以上）见 [宿主集成指南](docs/guides/HOST_INTEGRATION_CN.md#日志)。
+- `builder`：`WithTools` 注册的普通工具此前不发 tool 观测事件（只有 Dispatcher 派发的工具发），宿主观察者与日志都看不到这类工具调用。现在 Builder 为它们发出 `tool_start`、`tool_end`、`tool_error`（panic 记为 `panic` 类别，照常上抛）。新增 `interfaces.ObservedCallTool`：`Dispatcher.Tools` 声明自己发出这些事件，Builder 不再重复；包装 Dispatcher 工具的包装器须转发它，否则每次调用记两次。
 
 ### 弃用
 

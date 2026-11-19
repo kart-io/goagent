@@ -953,6 +953,7 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 // calls in the same round share the MaxConcurrency limit and may run
 // concurrently.
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
+func (t *dispatchedTool) EmitsToolEvents() bool         { return true }
 
 // acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，
 // 避免空闲槽位与 ctx 取消竞争时迟到执行；释放函数幂等，支持提前交接阶段。
