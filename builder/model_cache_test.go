@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/cache"
+	"github.com/kart-io/goagent/constants"
 	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
@@ -121,7 +122,7 @@ func (s stubTool) Invoke(context.Context, *interfaces.ToolInput) (*interfaces.To
 func baseKeyInput() cacheKeyInput {
 	return cacheKeyInput{
 		Identity: "u1", SessionID: "s1", Client: "openai\x00gpt",
-		Request: &llm.CompletionRequest{Model: "gpt", Messages: []llm.Message{{Role: "user", Content: "hi"}}},
+		Request: &llm.CompletionRequest{Model: "gpt", Messages: []llm.Message{{Role: constants.RoleUser, Content: "hi"}}},
 		Tools:   []interfaces.Tool{stubTool{"t1", "d", `{"a":1,"b":2}`}},
 		Memory:  []memory.NamespaceVersion{{Namespace: []string{"t", "u"}, Scope: "sc", LastForgetSeq: 1, LastRewindSeq: 2}},
 	}

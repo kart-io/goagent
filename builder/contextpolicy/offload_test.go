@@ -5,13 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
 )
 
 func toolRound(id, name string) llm.Message {
@@ -33,7 +34,7 @@ func TestOffloadAliasStableAndMissRecoverable(t *testing.T) {
 		require.NoError(t, err)
 		return p
 	}
-	messages := []llm.Message{{Role: "user", Content: "q"}, toolRound("c1", "fetch"), {Role: "tool", ToolCallID: "c1", Content: strings.Repeat("x", 50)}}
+	messages := []llm.Message{{Role: constants.RoleUser, Content: "q"}, toolRound("c1", "fetch"), {Role: "tool", ToolCallID: "c1", Content: strings.Repeat("x", 50)}}
 	p := newPolicy()
 	out, err := p.Reduce(ctx, messages, false)
 	require.NoError(t, err)
@@ -87,8 +88,11 @@ func TestOffloadReduce(t *testing.T) {
 	latest.ToolCalls = append(latest.ToolCalls, toolRound("d", "lookup").ToolCalls...)
 	messages := []llm.Message{
 		llm.SystemMessage("instructions"), round,
-		{Role: "tool", ToolCallID: "a", Content: "excluded"}, {Role: "tool", ToolCallID: "b", Content: "old result"},
-		latest, {Role: "tool", ToolCallID: "c", Content: "latest one"}, {Role: "tool", ToolCallID: "d", Content: "latest two"},
+		{Role: "tool", ToolCallID: "a", Content: "excluded"},
+		{Role: "tool", ToolCallID: "b", Content: "old result"},
+		latest,
+		{Role: "tool", ToolCallID: "c", Content: "latest one"},
+		{Role: "tool", ToolCallID: "d", Content: "latest two"},
 	}
 	out, err := p.Reduce(ctx, messages, false)
 	require.NoError(t, err)

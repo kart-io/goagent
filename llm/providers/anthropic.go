@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -143,17 +142,17 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 		return nil
 	}
 	for _, msg := range messages {
-		if msg.Role != "tool" {
+		if msg.Role != shared.RoleTool {
 			if err := flush(); err != nil {
 				return nil, "", err
 			}
 		}
 		switch msg.Role {
-		case "system":
+		case shared.RoleSystem:
 			system = append(system, msg.Content)
-		case "user":
+		case shared.RoleUser:
 			result = append(result, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
-		case "assistant":
+		case shared.RoleAssistant:
 			param, err := anthropicAssistant(msg)
 			if err != nil {
 				return nil, "", err
@@ -167,7 +166,7 @@ func anthropicMessages(messages []agentllm.Message, configuredSystem string) ([]
 				}
 				pending[call.ID] = true
 			}
-		case "tool":
+		case shared.RoleTool:
 			if !pending[msg.ToolCallID] {
 				return nil, "", agentErrors.Newf(agentErrors.CodeInvalidInput, "anthropic: unmatched or duplicate tool response").
 					WithComponent("anthropic").
@@ -257,7 +256,7 @@ func anthropicAssistant(msg agentllm.Message) (anthropic.MessageParam, error) {
 
 // anthropicResult 把完整消息转换为终止块；未正常结束（截断、拒答等）返回错误。
 func anthropicResult(message *anthropic.Message) (*agentllm.StreamChunk, error) {
-	chunk := &agentllm.StreamChunk{Done: true, ResponseModel: string(message.Model), Role: "assistant"}
+	chunk := &agentllm.StreamChunk{Done: true, ResponseModel: string(message.Model), Role: shared.RoleAssistant}
 	u := message.Usage
 	cached := int(u.CacheReadInputTokens)
 	prompt := int(u.InputTokens) + cached + int(u.CacheCreationInputTokens)
@@ -377,7 +376,7 @@ func (p *AnthropicProvider) stream(ctx context.Context, req *agentllm.Completion
 			if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
 				if text, ok := delta.Delta.AsAny().(anthropic.TextDelta); ok && text.Text != "" {
 					content.WriteString(text.Text)
-					if !send(&agentllm.StreamChunk{Delta: text.Text, Content: content.String(), Role: "assistant"}) {
+					if !send(&agentllm.StreamChunk{Delta: text.Text, Content: content.String(), Role: shared.RoleAssistant}) {
 						return
 					}
 				}

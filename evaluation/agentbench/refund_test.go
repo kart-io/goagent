@@ -11,11 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/evaluation"
 	bench "github.com/kart-io/goagent/evaluation/agentbench"
-	"github.com/stretchr/testify/require"
 )
 
 // Run the refund fixture through the real SDK and tool loop with a local model.
@@ -40,8 +41,10 @@ func TestRefundScenario(t *testing.T) {
 				serveRefundModel(w, r, tc.incomplete)
 			}))
 			defer upstream.Close()
-			cfg := bench.Config{APIKey: "local-demo-only", BaseURL: upstream.URL, Timeout: 5 * time.Second,
-				Budget: evaluation.Budget{Model: "refund-demo-model", MaxCalls: 2, MaxOutputTokens: 512}}
+			cfg := bench.Config{
+				APIKey: "local-demo-only", BaseURL: upstream.URL, Timeout: 5 * time.Second,
+				Budget: evaluation.Budget{Model: "refund-demo-model", MaxCalls: 2, MaxOutputTokens: 512},
+			}
 			var outcomes []bench.SuiteOutcome
 			calls := 0
 			for _, job := range bench.SuiteJobs(cases, tc.repeats) {
@@ -99,22 +102,24 @@ func serveRefundModel(w http.ResponseWriter, r *http.Request, incomplete bool) {
 	}
 	var question, evidence string
 	for _, message := range body.Messages {
-		if message.Role == "user" {
+		if message.Role == constants.RoleUser {
 			question = message.Content
 		}
-		if message.Role == "tool" {
+		if message.Role == constants.RoleTool {
 			evidence = message.Content
 		}
 	}
-	delta := map[string]any{"role": "assistant"}
+	delta := map[string]any{"role": constants.RoleAssistant}
 	reason := "stop"
 	if evidence == "" {
 		if len(body.Tools) != 1 || body.Tools[0].Function.Name != "lookup" {
 			http.Error(w, "expected lookup tool before answering", http.StatusBadRequest)
 			return
 		}
-		delta["tool_calls"] = []any{map[string]any{"index": 0, "id": "refund-lookup", "type": "function",
-			"function": map[string]any{"name": "lookup", "arguments": "{}"}}}
+		delta["tool_calls"] = []any{map[string]any{
+			"index": 0, "id": "refund-lookup", "type": "function",
+			"function": map[string]any{"name": "lookup", "arguments": "{}"},
+		}}
 		reason = "tool_calls"
 	} else if strings.Contains(question, "原样返回") {
 		delta["content"] = evidence

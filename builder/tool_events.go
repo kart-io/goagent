@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/middleware"
 	"github.com/kart-io/goagent/core/usage"
@@ -251,8 +252,10 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			if !wake && len(a.config.TurnStopping) > 0 {
 				if round+2 >= a.config.MaxIterations {
 					metadata["turn_stopping_skipped"] = true
-				} else if next, err = a.runTurnStopping(ctx, &Stopping{Step: round, Answer: turn.Content,
-					Continued: metadataInt(metadata, "continued_turns"), Blocked: metadataInt(metadata, "stopping_continued")}); err != nil {
+				} else if next, err = a.runTurnStopping(ctx, &Stopping{
+					Step: round, Answer: turn.Content,
+					Continued: metadataInt(metadata, "continued_turns"), Blocked: metadataInt(metadata, "stopping_continued"),
+				}); err != nil {
 					return nil, err
 				}
 			}
@@ -302,7 +305,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				invalid[i] = fmt.Sprintf("工具 %s 的参数必须为 JSON 对象，请修正后重新调用", tc.Function.Name)
 			}
 		}
-		messages = append(messages, llm.Message{Role: "assistant", Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
+		messages = append(messages, llm.Message{Role: constants.RoleAssistant, Content: turn.Content, ReasoningContent: turn.ReasoningContent, ToolCalls: turn.ToolCalls, ProviderState: turn.ProviderState})
 		invoke := func(ctx context.Context, call ToolCall) (*interfaces.ToolOutput, error) {
 			return a.invokeToolCall(ctx, call)
 		}
@@ -409,12 +412,12 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				if err := emit(AgentEvent{Type: "text", Delta: answer}); err != nil {
 					return nil, err
 				}
-				return finish(answer, llm.Message{Role: "assistant", Content: answer})
+				return finish(answer, llm.Message{Role: constants.RoleAssistant, Content: answer})
 			}
 		}
 		// 调用后钩子追加的上下文在本批工具结果之后作为一条 user 消息注入；assistant(tool_calls)→tool→user 在各 provider 上都合法。
 		if len(additional) > 0 {
-			messages = append(messages, llm.Message{Role: "user", Content: additionalContextMessage(additional)})
+			messages = append(messages, llm.Message{Role: constants.RoleUser, Content: additionalContextMessage(additional)})
 		}
 	}
 	return nil, exhausted()

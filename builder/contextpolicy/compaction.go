@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -279,7 +280,7 @@ func omitted(span []llm.Message, cause error) string {
 
 // IsSummary reports whether m is a summary message produced by compaction.
 func IsSummary(m llm.Message) bool {
-	return m.Role == "user" && strings.HasPrefix(m.Content, SummaryPrefix)
+	return m.Role == constants.RoleUser && strings.HasPrefix(m.Content, SummaryPrefix)
 }
 
 // SummaryBody returns the body of a summary message, without the prefix and
@@ -299,7 +300,7 @@ func SummaryBody(content string) string {
 func KeepUserMessages(span []llm.Message, limit int, estimate func(llm.Message) int, skip func(llm.Message) bool) []llm.Message {
 	var users []int
 	for i, m := range span {
-		if m.Role == "user" && !IsSummary(m) && (skip == nil || !skip(m)) {
+		if m.Role == constants.RoleUser && !IsSummary(m) && (skip == nil || !skip(m)) {
 			users = append(users, i)
 		}
 	}

@@ -206,14 +206,14 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 	}
 	total := 0
 	for _, m := range out {
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+		if m.Role == constants.RoleAssistant && len(m.ToolCalls) > 0 {
 			total++
 		}
 	}
 	names := map[string]string{}
 	round := 0
 	for i, m := range out {
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+		if m.Role == constants.RoleAssistant && len(m.ToolCalls) > 0 {
 			round++
 			for _, call := range m.ToolCalls {
 				names[call.ID] = call.Function.Name
@@ -251,9 +251,11 @@ func (p *Offload) Name() string                 { return constants.ToolReadConte
 func (p *Offload) Description() string {
 	return "Read untrusted offloaded evidence within the current host run. key is the context_result value; offset counts Unicode characters."
 }
+
 func (p *Offload) ArgsSchema() string {
 	return `{"type":"object","properties":{"key":{"type":"string"},"offset":{"type":"integer","minimum":0}},"required":["key"],"additionalProperties":false}`
 }
+
 func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if input == nil || input.Args == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "evidence reader arguments required").WithComponent("builder/contextpolicy").WithOperation("invoke")

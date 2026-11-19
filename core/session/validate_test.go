@@ -45,7 +45,7 @@ func validLog(t *testing.T) []Event {
 	tc := llm.ToolCall{ID: "c1", Type: "function"}
 	tc.Function.Name, tc.Function.Arguments = "lookup", "{}"
 	call := llm.Message{Role: constants.RoleAssistant, ToolCalls: []llm.ToolCall{tc}}
-	history := []llm.Message{llm.UserMessage("一"), call, {Role: "tool", ToolCallID: "c1", Content: "结果"}, llm.AssistantMessage("答")}
+	history := []llm.Message{llm.UserMessage("一"), call, {Role: constants.RoleTool, ToolCallID: "c1", Content: "结果"}, llm.AssistantMessage("答")}
 	require.NoError(t, rec.Sync(ctx, history, map[string]ToolMeta{"c1": {Name: "lookup", Success: true}}))
 	require.NoError(t, DurableStore(store, "s").Save(ctx, "op", &durable.Snapshot{Data: json.RawMessage(`{}`)}))
 	require.NoError(t, rec.Sync(ctx, []llm.Message{llm.UserMessage("摘要"), llm.AssistantMessage("答")}, nil))
@@ -122,7 +122,7 @@ func TestValidateRejectsCorruptLog(t *testing.T) {
 		{"数据与类型不符", at(constants.SessionEventToolDefinitions, nil, func(ev *Event) { ev.Data = json.RawMessage(`{"tools":1}`) }), "事件"},
 		{"助手消息角色错误", at(constants.SessionEventAssistantMessage, nil, func(ev *Event) { ev.Data = data(MessageData{Message: llm.UserMessage("x")}) }), "消息角色"},
 		{"工具结果角色错误", at(constants.SessionEventToolResult, nil, func(ev *Event) { ev.Data = data(MessageData{Message: llm.AssistantMessage("x")}) }), "消息角色"},
-		{"用户消息记成工具", at(constants.SessionEventUserMessage, nil, func(ev *Event) { ev.Data = data(MessageData{Message: llm.Message{Role: "tool"}}) }), "消息角色"},
+		{"用户消息记成工具", at(constants.SessionEventUserMessage, nil, func(ev *Event) { ev.Data = data(MessageData{Message: llm.Message{Role: constants.RoleTool}}) }), "消息角色"},
 		{"系统消息角色错误", at(constants.SessionEventSystemMessage, nil, func(ev *Event) { ev.Data = data(MessageData{Message: llm.UserMessage("x")}) }), "消息角色"},
 		{"快照缺 ID", at(constants.SessionEventBoundarySnapshot, nil, func(ev *Event) { ev.Data = data(BoundaryData{}) }), "缺少 ID"},
 		{"轮次嵌套", at(constants.SessionEventTurnEnd, completed, func(ev *Event) {

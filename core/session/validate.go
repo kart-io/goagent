@@ -59,10 +59,10 @@ var messageTypes = map[string]bool{
 // roleAllowed 给出各消息事件允许的角色；Recorder 把助手与工具以外的角色都记为 user/message。
 var roleAllowed = map[string]func(string) bool{
 	constants.SessionEventUserMessage: func(r string) bool {
-		return r != constants.RoleAssistant && r != "tool"
+		return r != constants.RoleAssistant && r != constants.RoleTool
 	},
 	constants.SessionEventAssistantMessage: func(r string) bool { return r == constants.RoleAssistant },
-	constants.SessionEventToolResult:       func(r string) bool { return r == "tool" },
+	constants.SessionEventToolResult:       func(r string) bool { return r == constants.RoleTool },
 	constants.SessionEventSystemMessage:    func(r string) bool { return r == constants.RoleSystem },
 }
 

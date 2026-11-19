@@ -6,22 +6,24 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"google.golang.org/genai"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	llm "github.com/kart-io/goagent/llm"
 )
 
-var _ llm.ToolStreamClient = (*GeminiProvider)(nil)
-var _ llm.EmbeddingClient = (*GeminiProvider)(nil)
+var (
+	_ llm.ToolStreamClient = (*GeminiProvider)(nil)
+	_ llm.EmbeddingClient  = (*GeminiProvider)(nil)
+)
 
 func (p *GeminiProvider) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, nil)
 }
+
 func (p *GeminiProvider) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, tools []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, tools)
 }
@@ -43,22 +45,22 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 				WithComponent("gemini").
 				WithOperation("build_request")
 		}
-		if msg.Role != "assistant" && (msg.ProviderState != nil || len(msg.ToolCalls) > 0) {
+		if msg.Role != shared.RoleAssistant && (msg.ProviderState != nil || len(msg.ToolCalls) > 0) {
 			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: native state and calls require assistant role").
 				WithComponent("gemini").
 				WithOperation("build_request")
 		}
-		if msg.Role != "tool" && msg.ToolCallID != "" {
+		if msg.Role != shared.RoleTool && msg.ToolCallID != "" {
 			return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: tool_call_id requires tool role").
 				WithComponent("gemini").
 				WithOperation("build_request")
 		}
 		switch msg.Role {
-		case "system":
+		case shared.RoleSystem:
 			system = append(system, msg.Content)
-		case "user":
-			contents = append(contents, &genai.Content{Role: "user", Parts: []*genai.Part{{Text: msg.Content}}})
-		case "assistant":
+		case shared.RoleUser:
+			contents = append(contents, &genai.Content{Role: shared.RoleUser, Parts: []*genai.Part{{Text: msg.Content}}})
+		case shared.RoleAssistant:
 			content, calls, err := geminiAssistant(msg)
 			if err != nil {
 				return nil, nil, err
@@ -75,7 +77,7 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 				pending[call.ID] = calls[i]
 				order = append(order, call.ID)
 			}
-		case "tool":
+		case shared.RoleTool:
 			call := pending[msg.ToolCallID]
 			if call == nil || responses[msg.ToolCallID] != nil || (msg.Name != "" && msg.Name != call.Name) {
 				return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: unmatched or duplicate tool response").
@@ -85,7 +87,7 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 			// Preserve the tool's exact text, even when it happens to be valid JSON.
 			responses[msg.ToolCallID] = &genai.Part{FunctionResponse: &genai.FunctionResponse{ID: call.ID, Name: call.Name, Response: map[string]any{"output": msg.Content}}}
 			if len(responses) == len(pending) {
-				content := &genai.Content{Role: "user"}
+				content := &genai.Content{Role: shared.RoleUser}
 				for _, id := range order {
 					content.Parts = append(content.Parts, responses[id])
 				}
@@ -104,7 +106,7 @@ func geminiMessages(messages []llm.Message, configuredSystem string) ([]*genai.C
 			WithComponent("gemini").
 			WithOperation("build_request")
 	}
-	if len(contents) == 0 || contents[len(contents)-1].Role != "user" {
+	if len(contents) == 0 || contents[len(contents)-1].Role != shared.RoleUser {
 		return nil, nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "gemini: last message must be a user or completed tool response").
 			WithComponent("gemini").
 			WithOperation("build_request")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 )
@@ -46,7 +47,7 @@ func TestRAGAgentRetrievesFreshEvidence(t *testing.T) {
 	require.Len(t, client.requests, 2, "RAG must not return a stale answer for an unchanged query")
 	for i, expected := range []string{"Original evidence", "Updated evidence"} {
 		last := client.requests[i].Messages[len(client.requests[i].Messages)-1]
-		require.Equal(t, "user", last.Role)
+		require.Equal(t, constants.RoleUser, last.Role)
 		require.Contains(t, last.Content, expected)
 		require.True(t, strings.HasSuffix(last.Content, "用户请求：What is the policy?"))
 	}

@@ -5,15 +5,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/kart-io/goagent/constants"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 )
 
 func TestConvertMessages(t *testing.T) {
 	messages := []agentllm.Message{
-		{Role: "user", Content: "Hello", Name: "User1"},
-		{Role: "assistant", Content: "Hi there", Name: ""},
-		{Role: "system", Content: "You are helpful", Name: ""},
+		{Role: constants.RoleUser, Content: "Hello", Name: "User1"},
+		{Role: constants.RoleAssistant, Content: "Hi there", Name: ""},
+		{Role: constants.RoleSystem, Content: "You are helpful", Name: ""},
 	}
 
 	type TestMessage struct {
@@ -54,35 +55,35 @@ func TestConvertMessages_Empty(t *testing.T) {
 
 func TestToStandardMessage(t *testing.T) {
 	msg := agentllm.Message{
-		Role:    "user",
+		Role:    constants.RoleUser,
 		Content: "Hello",
 		Name:    "TestUser",
 	}
 
 	result := common.ToStandardMessage(msg)
 
-	assert.Equal(t, "user", result.Role)
+	assert.Equal(t, constants.RoleUser, result.Role)
 	assert.Equal(t, "Hello", result.Content)
 	assert.Equal(t, "TestUser", result.Name)
 }
 
 func TestConvertToStandardMessages(t *testing.T) {
 	messages := []agentllm.Message{
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi"},
+		{Role: constants.RoleUser, Content: "Hello"},
+		{Role: constants.RoleAssistant, Content: "Hi"},
 	}
 
 	result := common.ConvertToStandardMessages(messages)
 
 	assert.Len(t, result, 2)
-	assert.Equal(t, "user", result[0].Role)
+	assert.Equal(t, constants.RoleUser, result[0].Role)
 	assert.Equal(t, "Hello", result[0].Content)
-	assert.Equal(t, "assistant", result[1].Role)
+	assert.Equal(t, constants.RoleAssistant, result[1].Role)
 	assert.Equal(t, "Hi", result[1].Content)
 }
 
 func TestDefaultRoleMapper(t *testing.T) {
-	testCases := []string{"user", "assistant", "system", "function"}
+	testCases := []string{constants.RoleUser, constants.RoleAssistant, constants.RoleSystem, constants.RoleTool}
 
 	for _, role := range testCases {
 		result := common.DefaultRoleMapper(role)
@@ -92,19 +93,19 @@ func TestDefaultRoleMapper(t *testing.T) {
 
 func TestConvertMessagesWithRoleMapping(t *testing.T) {
 	messages := []agentllm.Message{
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi"},
-		{Role: "system", Content: "Be helpful"},
+		{Role: constants.RoleUser, Content: "Hello"},
+		{Role: constants.RoleAssistant, Content: "Hi"},
+		{Role: constants.RoleSystem, Content: "Be helpful"},
 	}
 
 	// Custom role mapper (like Cohere)
 	roleMapper := func(role string) string {
 		switch role {
-		case "user":
+		case constants.RoleUser:
 			return "USER"
-		case "assistant":
+		case constants.RoleAssistant:
 			return "CHATBOT"
-		case "system":
+		case constants.RoleSystem:
 			return "SYSTEM"
 		default:
 			return "USER"

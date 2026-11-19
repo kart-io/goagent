@@ -524,9 +524,11 @@ func (m *Memory) applyDecisions(t *tx, j Job, p *jobPlan, now time.Time, w *jobW
 	}
 	var supersedes []supersede
 	record := func(d decision, content string) *pendingRecord {
-		r := &pendingRecord{r: Record{ID: d.id, Namespace: slices.Clone(t.ns), Kind: d.c.Kind, Content: content,
+		r := &pendingRecord{r: Record{
+			ID: d.id, Namespace: slices.Clone(t.ns), Kind: d.c.Kind, Content: content,
 			Keywords: slices.Clone(d.c.Keywords), Entities: slices.Clone(d.c.Entities), Importance: d.c.Importance,
-			CreatedAt: now, ValidFrom: p.at, Sources: []Source{j.source()}}}
+			CreatedAt: now, ValidFrom: p.at, Sources: []Source{j.source()},
+		}}
 		built[d.index], owner[d.index] = r, d.index
 		return r
 	}
@@ -762,8 +764,10 @@ func (m *Memory) planLesson(ctx context.Context, j Job, transcript string, p *jo
 	if _, err := m.vector(ctx, p, out.Lesson); err != nil {
 		return err
 	}
-	p.decisions = []decision{{id: stableID(j.Key, "lesson"), op: opAdd, planned: -1,
-		c: candidate{Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, Importance: min(max(out.Importance, 0), 1)}}}
+	p.decisions = []decision{{
+		id: stableID(j.Key, "lesson"), op: opAdd, planned: -1,
+		c: candidate{Kind: KindReflection, Content: out.Lesson, Keywords: out.Keywords, Importance: min(max(out.Importance, 0), 1)},
+	}}
 	return nil
 }
 
@@ -818,8 +822,10 @@ func (m *Memory) reflect(ctx context.Context) error {
 		if strings.TrimSpace(in.Content) == "" {
 			continue
 		}
-		insights = append(insights, Record{ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords,
-			Importance: min(max(in.Importance, 0), 1), ReflectedFrom: basis})
+		insights = append(insights, Record{
+			ID: stableID(key, fmt.Sprint(i)), Kind: KindReflection, Content: in.Content, Keywords: in.Keywords,
+			Importance: min(max(in.Importance, 0), 1), ReflectedFrom: basis,
+		})
 	}
 	// 结论与"已反思"标记在同一次提交中。
 	_, err = m.derive(ctx, ns, scope, insights, func(t *tx) ([]Record, error) {
@@ -913,7 +919,7 @@ func (m *Memory) chatJSON(ctx context.Context, system, user string, out any) err
 		if err == nil || attempt == constants.MemoryJSONRepairAttempts {
 			return err
 		}
-		msgs = append(msgs, llm.Message{Role: "assistant", Content: resp.Content},
+		msgs = append(msgs, llm.Message{Role: constants.RoleAssistant, Content: resp.Content},
 			llm.UserMessage("上面的回复不是合法 JSON（"+err.Error()+"）。按原要求重新输出完整、合法的 JSON，只输出 JSON。"))
 	}
 }

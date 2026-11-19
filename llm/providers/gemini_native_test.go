@@ -11,17 +11,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/genai"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
-
-	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/tools"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/genai"
 )
 
 func TestGeminiAsRunnableToolContract(t *testing.T) {
@@ -128,12 +128,12 @@ func TestGeminiNativeStateRoundTripAndMismatch(t *testing.T) {
 	response := &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: &genai.Content{Role: "model", Parts: []*genai.Part{{Text: "checking"}, {FunctionCall: &genai.FunctionCall{Name: "lookup", ID: "native", Args: map[string]any{"id": "A"}}, ThoughtSignature: []byte("signed")}}}, FinishReason: genai.FinishReasonStop}}}
 	chunk, err := decodeGeminiResponse(response)
 	require.NoError(t, err)
-	original := llm.Message{Role: "assistant", Content: chunk.Content, ToolCalls: chunk.ToolCalls, ProviderState: chunk.ProviderState}
+	original := llm.Message{Role: constants.RoleAssistant, Content: chunk.Content, ToolCalls: chunk.ToolCalls, ProviderState: chunk.ProviderState}
 	data, err := json.Marshal(original)
 	require.NoError(t, err)
 	var copied llm.Message
 	require.NoError(t, json.Unmarshal(data, &copied))
-	messages := []llm.Message{llm.UserMessage("query"), copied, {Role: "tool", ToolCallID: "native", Content: `{"real":"tool data"}`}}
+	messages := []llm.Message{llm.UserMessage("query"), copied, {Role: constants.RoleTool, ToolCallID: "native", Content: `{"real":"tool data"}`}}
 	contents, _, err := geminiMessages(messages, "")
 	require.NoError(t, err)
 	require.Equal(t, []byte("signed"), contents[1].Parts[1].ThoughtSignature)

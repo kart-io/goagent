@@ -10,10 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/goagent/codec/json"
-
 	"google.golang.org/genai"
 
+	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -252,7 +251,7 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 			c.Index = index
 			index++
 			c.Timestamp = time.Now()
-			c.Role = "assistant"
+			c.Role = shared.RoleAssistant
 			select {
 			case out <- c:
 				return true
@@ -415,9 +414,11 @@ func NewGeminiStreamingWithOptions(opts ...agentllm.ClientOption) (*GeminiStream
 	}
 	return &GeminiStreamingProvider{p}, nil
 }
+
 func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
 	return NewGeminiStreamingWithOptions(common.ConfigToOptions(config)...)
 }
+
 func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt string) (<-chan StreamEvent, error) {
 	chunks, err := p.stream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}}, nil)
 	if err != nil {

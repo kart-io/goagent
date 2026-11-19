@@ -101,7 +101,7 @@ func (t *Trajectory) WriteOpenAI(w io.Writer) error {
 		Tools    []openAITool    `json:"tools,omitempty"`
 	}
 	if t.System != "" {
-		line.Messages = append(line.Messages, openAIMessage{Role: "system", Content: t.System})
+		line.Messages = append(line.Messages, openAIMessage{Role: constants.RoleSystem, Content: t.System})
 	}
 	for _, m := range t.Messages {
 		line.Messages = append(line.Messages, openAIMessage{Role: m.Role, Content: m.Content, ToolCalls: m.ToolCalls, ToolCallID: m.ToolCallID})
@@ -153,9 +153,9 @@ func (t *Trajectory) WriteShareGPT(w io.Writer) error {
 			flush()
 		}
 		switch m.Role {
-		case "user":
+		case constants.RoleUser:
 			add("human", m.Content)
-		case "assistant":
+		case constants.RoleAssistant:
 			if len(m.ToolCalls) == 0 {
 				add("gpt", m.Content)
 				continue
@@ -173,7 +173,7 @@ func (t *Trajectory) WriteShareGPT(w io.Writer) error {
 				calls = append(calls, c)
 			}
 			add("function_call", jsonValue(calls))
-		case "tool":
+		case constants.RoleTool:
 			c, _ := json.Marshal(m.Content)
 			pending = append(pending, c)
 		}

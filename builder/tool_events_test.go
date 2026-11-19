@@ -7,11 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/llm"
-	"github.com/stretchr/testify/require"
 )
 
 type nativeEventModel struct {
@@ -43,12 +45,14 @@ func (m *nativeEventModel) CompleteToolsStream(ctx context.Context, req *llm.Com
 	}()
 	return stream, nil
 }
+
 func nativeCall(id, name, args string) llm.ToolCall {
 	call := llm.ToolCall{ID: id, Type: "function"}
 	call.Function.Name = name
 	call.Function.Arguments = args
 	return call
 }
+
 func nativeModel(turns ...[]*llm.StreamChunk) *nativeEventModel {
 	return &nativeEventModel{eventModel: &eventModel{MockLLMClient: NewMockLLMClient()}, turns: turns}
 }
@@ -156,7 +160,7 @@ func TestPlainStreamDoesNotDuplicateSystemPrompt(t *testing.T) {
 	require.NoError(t, err)
 	_, err = agent.AsRunnable().Invoke(context.Background(), "问题")
 	require.NoError(t, err)
-	require.Equal(t, []llm.Message{{Role: "system", Content: "唯一指令"}, {Role: "user", Content: "问题"}}, model.request.Messages)
+	require.Equal(t, []llm.Message{{Role: "system", Content: "唯一指令"}, {Role: constants.RoleUser, Content: "问题"}}, model.request.Messages)
 }
 
 func TestNativeLoopReservesOnlyLastRoundForAnswer(t *testing.T) {
