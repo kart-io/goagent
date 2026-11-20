@@ -19,7 +19,7 @@ func TestEffectUnknownIsInterrupted(t *testing.T) {
 	_, err := Do(ctx, "write", json.RawMessage(`{}`), OperationPolicy{MaxAttempts: 2, RetryInterrupted: true}, func(context.Context) (json.RawMessage, error) {
 		calls++
 		if calls == 1 {
-			return nil, fmt.Errorf("连接在响应前断开：%w", ErrEffectUnknown)
+			return nil, fmt.Errorf("连接在响应前断开：%w", agentErrors.ErrEffectUnknown)
 		}
 		return json.RawMessage(`"ok"`), nil
 	})
@@ -46,7 +46,7 @@ func TestEffectUnknownIsInterrupted(t *testing.T) {
 func TestEffectUnknownConsultsReconcile(t *testing.T) {
 	ctx := operationContext(t)
 	_, err := Do(ctx, "write", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {
-		return nil, ErrEffectUnknown
+		return nil, agentErrors.ErrEffectUnknown
 	})
 	require.ErrorIs(t, err, agentErrors.ErrOperationAttention)
 	reconciled := 0
@@ -78,7 +78,7 @@ func nestedAttentionKeepsOuterPending(t *testing.T, resumable bool) {
 	run := func(ctx context.Context) (json.RawMessage, error) {
 		_, err := Do(ctx, "inner", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {
 			innerRuns++
-			return nil, ErrEffectUnknown
+			return nil, agentErrors.ErrEffectUnknown
 		})
 		if err != nil {
 			return nil, fmt.Errorf("子流程：%w", err)

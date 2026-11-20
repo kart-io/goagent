@@ -64,7 +64,7 @@ type OperationPolicy struct {
 	RetryFailed bool `json:"retry_failed"`
 	// Reconcile is called before a rerun when a record was interrupted (stuck
 	// in pending, failed due to cancellation or timeout, or failed with
-	// ErrEffectUnknown) and checks by derived execution key whether the effect has taken
+	// agentErrors.ErrEffectUnknown) and checks by derived execution key whether the effect has taken
 	// place: if found is true the record is completed with value without
 	// calling run or counting an attempt; if it returns an error the record is
 	// unchanged.
@@ -81,7 +81,7 @@ type OperationPolicy struct {
 	Resumable bool `json:"resumable"`
 	// RetryInterrupted allows rerunning an interrupted operation within
 	// MaxAttempts: one whose record is stuck in pending (process crash), failed
-	// due to cancellation or timeout, or failed with ErrEffectUnknown. The previous execution may already
+	// due to cancellation or timeout, or failed with agentErrors.ErrEffectUnknown. The previous execution may already
 	// have taken effect, so the caller must accept duplicate effects; ordinary
 	// failures are not interruptions.
 	RetryInterrupted bool `json:"retry_interrupted"`
@@ -121,13 +121,6 @@ func CanWait(ctx context.Context) bool {
 	ok, _ := ctx.Value(waitableContext{}).(bool)
 	return ok
 }
-
-// ErrEffectUnknown is returned (wrapped) by an operation's run function when
-// it cannot tell whether its effect took place, for example when a connection
-// drops after the request was sent. Do records it as failed with FailureKind
-// "effect_unknown", treats it like a crash (an interrupted record) and returns
-// an *OperationError so the host decides what happened.
-var ErrEffectUnknown = errors.New("durable operation effect is unknown")
 
 // OperationError reports an operation whose outcome needs host attention.
 // ParentKey and ID identify it as a durable.OperationRef.
@@ -412,7 +405,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 				}
 			}
 		}
-	} else if errors.Is(callErr, agentErrors.ErrOperationAttention) && !errors.Is(callErr, ErrEffectUnknown) {
+	} else if errors.Is(callErr, agentErrors.ErrOperationAttention) && !errors.Is(callErr, agentErrors.ErrEffectUnknown) {
 		// 内层操作需要宿主处理：外层没有失败也不能算一次尝试，保持 pending 以便恢复时重新进入内层记录。
 		record.Status, record.FailureKind = "pending", nestedAttentionKind
 	} else if callErr != nil {
@@ -424,7 +417,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		if errors.Is(callErr, context.DeadlineExceeded) {
 			record.FailureKind = "deadline"
 		}
-		if errors.Is(callErr, ErrEffectUnknown) {
+		if errors.Is(callErr, agentErrors.ErrEffectUnknown) {
 			record.FailureKind = "effect_unknown"
 			// 只返回分类错误：外层据此判断是内层待处理，而不是把结果未知记到自己身上。
 			callErr = &OperationError{ID: id, Kind: "effect_unknown", ParentKey: parentKey}

@@ -141,5 +141,5 @@ func (n *native) Reconcile(ctx context.Context, spec mg.RunSpec, rec mg.Reconcil
 }
 
 func conflict(msg string) error {
-	return errors.Join(agentErrors.ErrManagementConflict, errors.New(msg))
+	return errors.Join(agentErrors.ErrManagementConflict, agentErrors.New(agentErrors.CodeConflict, msg))
 }

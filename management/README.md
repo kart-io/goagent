@@ -26,7 +26,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 
 ## 原生运行时的核对
 
-`adapters.NativeFactory` 声明 `Capabilities.Reconcile`。工具调用经 Dispatcher 写入操作日志，崩溃或结果未知（工具返回 wrap 了 `durable.ErrEffectUnknown` 的错误）后：
+`adapters.NativeFactory` 声明 `Capabilities.Reconcile`。工具调用经 Dispatcher 写入操作日志，崩溃或结果未知（工具返回 wrap 了 `errors.ErrEffectUnknown` 的错误）后：
 
 - `Inspect` 对本轮中断的工具记录一律返回 `absent`，只统计本任务所在轮次；续跑中的 `durable.Do` 按工具策略处理。默认策略（`MaxAttempts` 3、`RetryInterrupted`）的工具自动重跑；声明 `{MaxAttempts: 1}` 的工具先调用 `tools.ReconcilableTool.Reconcile`，查到结果即定案，查不到才进入 attention，`Task.Operations` 只列出这些调用（`tool/` 前缀，带 `ParentKey`）。
 - 宿主核对后以 `ResumeTask{ReconciliationRef}` 续跑。`Reconcile` 要求 `OperationRefs` 恰好覆盖本轮未决的工具调用，否则返回 `ErrManagementConflict`；通过后返回 `absent`，worker 带着结论调用 `Run`。结论对整组统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时工具结果为 `operation was verified as applied; output unavailable`；`not_applied` 记为业务拒绝 `operation was not applied; call again if still needed`，不调用工具 `Reconcile`、不重跑。未列入的调用照常按策略执行。需要逐个给结论时，宿主应让写工具串行，使未决调用最多一项。

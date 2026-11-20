@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `management/adapters`：原生运行时声明 `Capabilities.Reconcile`。结果未知或崩溃后尝试次数用尽的工具调用进入 attention，`Task.Operations` 列出这些调用（`tool/` 前缀、带 `ParentKey`）；宿主以 `ResumeTask{ReconciliationRef}` 续跑，`Reconcile` 要求恰好覆盖本轮未决调用（否则 `ErrManagementConflict`），结论统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时为固定说明文字；`not_applied` 记为业务拒绝，不重跑。模型请求中断引起的 attention 没有 `Operations`，只能取消。见 [management 原生运行时的核对](management/README.md#原生运行时的核对)。
 - `tools`：新增 `Reconciliation` 与 `WithReconciliation(ctx, r)`，Dispatcher 据此为列出的中断调用定案；新增 `DurableCallPolicyProvider`，工具可按校验后的参数声明单次调用的持久策略（结果只能取决于参数）。
-- `core/durable`：新增 `ErrEffectUnknown`，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
+- `core/durable`：新增 `errors.ErrEffectUnknown` 哨兵，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
 - `management/adapters`：原生运行时审批等待的 `Wait.Info` 新增 `arguments`（工具调用参数）。
 - `core/durable`：内层操作需要宿主处理时，外层记录无论是否 `Resumable` 都会在续跑时重新进入（只回放内层），不消耗尝试次数；`ParentKey` 序列化为 `parent_key`。
 - `management`：`Task.Operations` 为历史记录，核对成功后不清空。

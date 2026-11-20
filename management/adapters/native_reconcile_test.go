@@ -95,7 +95,7 @@ func blockUntilCrash(started chan<- struct{}) func(ctx context.Context, n int) (
 
 func effectUnknownOnce(ctx context.Context, n int) (*interfaces.ToolOutput, error) {
 	if n == 1 {
-		return nil, durable.ErrEffectUnknown
+		return nil, agentErrors.ErrEffectUnknown
 	}
 	return &interfaces.ToolOutput{Success: true, Result: "done"}, nil
 }
@@ -500,7 +500,7 @@ func TestFollowupTurnIgnoresPreviousTurnRecords(t *testing.T) {
 	appendEvent(constants.SessionEventTurnStart, session.TurnStart{Input: "第一轮", ExecutionKey: "first"})
 	jctx := durable.WithJournal(durable.WithExecutionKey(ctx, "first-parent"), session.DurableStore(store, logID))
 	_, err := durable.Do(jctx, "tool/call-1", json.RawMessage(`{}`), durable.OperationPolicy{MaxAttempts: 1}, func(context.Context) (json.RawMessage, error) {
-		return nil, durable.ErrEffectUnknown
+		return nil, agentErrors.ErrEffectUnknown
 	})
 	var opErr *durable.OperationError
 	require.ErrorAs(t, err, &opErr)

@@ -2,7 +2,6 @@ package management
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -119,7 +118,7 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 func (d *OutboxDispatcher) accept(ctx context.Context, item Delivery) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("delivery sink panic: %v", r)
+			err = agentErrors.NewPanicError("delivery sink", r)
 		}
 	}()
 	return d.s.cfg.Delivery.Accept(ctx, item)
