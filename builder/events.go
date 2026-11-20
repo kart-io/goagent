@@ -226,7 +226,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		return nil, fmt.Errorf("会话日志: %w", err)
 	}
 	attempt := 0
-	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.ResendInterruptedModel)
+	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.interruptedModelResends())
 	before, counted := modelCacheCounts(ctx)
 	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: a.config.TemperatureSet}, emit)
 	if replan := (*replanRequest)(nil); errors.As(err, &replan) {

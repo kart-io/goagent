@@ -322,7 +322,7 @@ func TestOfflineAuthenticationOnEveryRoute(t *testing.T) {
 func TestOfflineInvalidRequestsAndConstructor(t *testing.T) {
 	f := managementtest.NewFixture(t)
 	actor := func(*http.Request) (mg.Actor, error) { return f.Actor, nil }
-	for _, cfg := range []httpapi.Config{{}, {ActorFromRequest: actor, MaxInputBytes: -1}, {ActorFromRequest: actor, MaxInputBytes: (1 << 20) + 1}} {
+	for _, cfg := range []httpapi.Config{{}, {ActorFromRequest: actor, MaxInputBytes: -2}} {
 		h, err := httpapi.New(f.Service, cfg)
 		require.Nil(t, h)
 		require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)
@@ -330,7 +330,11 @@ func TestOfflineInvalidRequestsAndConstructor(t *testing.T) {
 	h, err := httpapi.New(nil, httpapi.Config{ActorFromRequest: actor})
 	require.Nil(t, h)
 	require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)
-	h, err = httpapi.New(f.Service, httpapi.Config{ActorFromRequest: actor, MaxInputBytes: 64})
+	cfg := f.Config()
+	cfg.Limits = mg.DefaultLimits()
+	capped, err := mg.New(cfg)
+	require.NoError(t, err)
+	h, err = httpapi.New(capped, httpapi.Config{ActorFromRequest: actor, MaxInputBytes: 64})
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		name, body, key, code string

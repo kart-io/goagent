@@ -239,7 +239,7 @@ func run() int {
 		if e != nil {
 			return e
 		}
-		controller, e = budget.NewDurable(budget.Config{RootKey: *id, Version: "live-hitl-v1/" + *provider + "/" + *model, MaxModelRequests: 2}, base)
+		controller, e = budget.NewDurable(budget.Config{RootKey: *id, Version: "live-hitl-v1/" + *provider + "/" + *model, MaxModelRequests: 2, MaxAgentCalls: constants.DefaultMaxAgentCalls}, base)
 		if e != nil {
 			return e
 		}

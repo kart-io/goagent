@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/kart-io/slogx"
 
@@ -54,7 +55,7 @@ func run(ctx context.Context, logs io.Writer, apiKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	agent, err := builder.NewSimpleBuilder(client).
+	agent, err := builder.NewSimpleBuilder(client).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是电商客服。回答发货问题前必须调用 lookup_order 查询订单。").
 		WithTools(lookupOrder()).
 		WithMaxIterations(3).
@@ -75,7 +76,7 @@ func run(ctx context.Context, logs io.Writer, apiKey string) (string, error) {
 
 func newClient(apiKey string) (llm.Client, error) {
 	if apiKey != "" {
-		return providers.NewDeepSeekWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("deepseek-chat"), llm.WithMaxTokens(300))
+		return providers.NewDeepSeekWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("deepseek-chat"), llm.WithMaxTokens(300), llm.WithTimeout(60*time.Second))
 	}
 	return mocks.NewScriptedClient(
 		mocks.ToolCallReply("查询订单", mocks.ToolCall("call-1", "lookup_order", `{"order_id":"A1001"}`)),

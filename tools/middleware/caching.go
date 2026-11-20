@@ -13,7 +13,6 @@ import (
 
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/logging"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
@@ -23,9 +22,15 @@ import (
 
 // CachingConfig is the caching middleware configuration.
 type CachingConfig struct {
-	Cache   cache.Cache                                 `json:"-"`
-	TTL     time.Duration                               `json:"ttl"`
-	KeyFunc func(string, map[string]interface{}) string `json:"-"`
+	Cache cache.Cache `json:"-"`
+	// TTL is how long a cached result stays valid; 0 means it never expires
+	// (it previously meant 5 minutes).
+	TTL time.Duration `json:"ttl"`
+	// MaxEntries caps the built-in cache used when Cache is nil; 0 means no
+	// cap (it previously meant 10000). Set it when keys come from model input,
+	// otherwise memory grows with every distinct argument set.
+	MaxEntries int                                         `json:"max_entries,omitzero"`
+	KeyFunc    func(string, map[string]interface{}) string `json:"-"`
 	// Logger is a kart-io/logger logger.
 	//
 	// Deprecated: use ContextLogger; Logger is used only when ContextLogger is nil.
@@ -49,6 +54,13 @@ func WithCache(c cache.Cache) CachingOption {
 func WithTTL(ttl time.Duration) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.TTL = ttl
+	}
+}
+
+// WithCacheMaxEntries caps the built-in cache; see CachingConfig.MaxEntries.
+func WithCacheMaxEntries(n int) CachingOption {
+	return func(cfg *CachingConfig) {
+		cfg.MaxEntries = n
 	}
 }
 
@@ -109,7 +121,6 @@ type CachingMiddleware struct {
 //   - *CachingMiddleware: the caching middleware instance
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
-		TTL:     5 * time.Minute,
 		KeyFunc: defaultCacheKeyFunc,
 		Logger:  nil, // 默认不使用日志（避免依赖）
 	}
@@ -119,7 +130,7 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	}
 
 	if cfg.Cache == nil {
-		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))
+		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(cfg.MaxEntries))
 	}
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = defaultCacheKeyFunc

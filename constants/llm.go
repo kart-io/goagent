@@ -51,7 +51,7 @@ const (
 	ToolTypeFunction = "function"
 )
 
-// 提供商默认参数。
+// 提供商默认参数。DefaultProviderMaxTokens 与 DefaultProviderTimeout 是旧兜底值，provider 不再套用。
 const (
 	DefaultProviderMaxTokens = 1000
 	DefaultTemperature       = 0.7
@@ -102,5 +102,5 @@ const (
 	MiniMaxDefaultModel     = "minimax-m2.7"
 	SiliconFlowDefaultModel = "Qwen/Qwen2-7B-Instruct"
 	OllamaDefaultModel      = "llama2"
-	DefaultOllamaTimeout    = 120 * time.Second
+	DefaultOllamaTimeout    = 120 * time.Second // 旧默认值，Ollama 预设不再套用（未设超时即不限）
 )

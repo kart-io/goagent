@@ -321,12 +321,14 @@ func demonstrateAgentWithLLM() {
 llmClient, err := providers.NewOpenAIWithOptions(
     llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
     llm.WithModel("gpt-4"), // 或使用其他 LLM
+    llm.WithTimeout(60*time.Second),
+    llm.WithMaxTokens(2000),
 )
 if err != nil {
     log.Fatal(err)
 }
 
-agent, err := builder.NewSimpleBuilder(llmClient).
+agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
     WithSystemPrompt("你是智能助手，可以获取时间和查询天气").
     WithTools(
         createTimeTool(),

@@ -143,7 +143,7 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 	defer close(w.done)
 	defer cancel()
 	// 认领不随 parent 取消：提交途中被取消时服务端可能已提交，而本端不会进入下方释放，槽位就泄漏了。
-	claim, cancelClaim := slotCtx(parent)
+	claim, cancelClaim := w.persistCtx(parent)
 	err := w.owner(claim, false)
 	cancelClaim()
 	if err != nil {
@@ -158,7 +158,7 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 		}
 		w.mu.Unlock()
 		w.wg.Wait()
-		cleanup, cancel := slotCtx(parent)
+		cleanup, cancel := w.persistCtx(parent)
 		defer cancel()
 		runErr = errors.Join(runErr, w.owner(cleanup, true))
 	}()
@@ -169,7 +169,7 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 		}
 		return err
 	}
-	tick := time.NewTicker(20 * time.Millisecond)
+	tick := time.NewTicker(w.s.cfg.Limits.PollInterval)
 	defer tick.Stop()
 	for {
 		if err := w.poll(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -183,8 +183,10 @@ func (w *Worker) Run(parent context.Context) (runErr error) {
 	}
 }
 
-func slotCtx(parent context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+// persistCtx detaches management writes from cancellation and bounds them by
+// Limits.PersistTimeout, so a canceled run can still record its outcome.
+func (w *Worker) persistCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), w.s.cfg.Limits.PersistTimeout)
 }
 
 func (w *Worker) recover(ctx context.Context) error {
@@ -196,7 +198,7 @@ func (w *Worker) recover(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			tasks, e := all[Task](ctx, tx, "tasks", "", Query{Statuses: []string{string(Running), string(Canceling)}, Limit: batchSize})
+			tasks, e := page[Task](ctx, tx, "tasks", "", Query{Statuses: []string{string(Running), string(Canceling)}, Limit: batchSize})
 			if e != nil {
 				return e
 			}
@@ -217,7 +219,7 @@ func (w *Worker) recover(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			cs, e := all[Command](ctx, tx, "commands", "", Query{Statuses: []string{"applying"}, Limit: batchSize})
+			cs, e := page[Command](ctx, tx, "commands", "", Query{Statuses: []string{"applying"}, Limit: batchSize})
 			if e != nil {
 				return e
 			}
@@ -249,7 +251,7 @@ func (w *Worker) poll(ctx context.Context) error {
 	if err = w.retryUnconfirmed(ctx); err != nil {
 		return err
 	}
-	cs, err := all[Command](ctx, w.s.cfg.Store, "commands", "", Query{Statuses: []string{"pending", "blocked"}, Limit: 10000})
+	cs, err := all[Command](ctx, w.s.cfg.Store, "commands", "", Query{Statuses: []string{"pending", "blocked"}})
 	if err != nil {
 		return err
 	}
@@ -488,14 +490,11 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		}
 		if task.CancelRequested && canCancelWithoutInspection(task.State, task.RecoveryNeeded) {
 			old := task.Revision
-			task.State = Canceled
 			task.Revision++
-			now := w.s.cfg.Now().UTC()
-			task.FinishedAt = &now
-			if e = update(ctx, tx, "tasks", task, old); e != nil {
+			if e = w.s.finishTerminal(ctx, tx, &task, Canceled); e != nil {
 				return e
 			}
-			if e = w.s.releaseSession(ctx, tx, task); e != nil {
+			if e = update(ctx, tx, "tasks", task, old); e != nil {
 				return e
 			}
 			old = cur.Revision
@@ -616,7 +615,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 			runErr = agentErrors.Newf(agentErrors.CodeInternal, "运行回调发生 panic").WithComponent("management")
 			result = RunResult{Outcome: "attention", ErrorKind: "panic"}
 		}
-		doneCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		doneCtx, cancel := w.persistCtx(ctx)
 		defer cancel()
 		if blockKind != "" {
 			if e := w.blockBuild(doneCtx, c, t, attempt, claim, blockKind); e != nil {
@@ -628,7 +627,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 			w.report("finish", e)
 		}
 	}()
-	inspectionCtx, inspectionCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	inspectionCtx, inspectionCancel := w.persistCtx(ctx)
 	defer inspectionCancel()
 	unlock, err := w.s.cfg.Sessions.Lock(inspectionCtx, se.LogID, "management/execution")
 	if err != nil {
@@ -678,7 +677,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 	if err != nil {
 		var cleanupErr error
 		if binding.Cleanup != nil {
-			cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			cleanCtx, cancel := w.persistCtx(ctx)
 			cleanupErr = binding.Cleanup(cleanCtx)
 			cancel()
 			w.report("cleanup", cleanupErr)
@@ -692,7 +691,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 	}
 	if binding.Cleanup != nil {
 		defer func() {
-			cleanCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			cleanCtx, cancel := w.persistCtx(ctx)
 			defer cancel()
 			w.report("cleanup", binding.Cleanup(cleanCtx))
 		}()
@@ -781,6 +780,9 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 			result.ErrorKind = "unknown_effect"
 		} else if errors.Is(runErr, context.Canceled) {
 			result.Outcome = "interrupted"
+		} else if errors.Is(runErr, agentErrors.ErrModelBudgetExceeded) {
+			result.Outcome = "failed"
+			result.ErrorKind = "budget_exhausted"
 		} else {
 			result.Outcome = "failed"
 			result.ErrorKind = "execution"
@@ -790,7 +792,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 		result.Outcome = "failed"
 		result.ErrorKind = "missing_outcome"
 	}
-	if len(result.Output) > w.s.cfg.Limits.MaxOutputBytes {
+	if over(len(result.Output), w.s.cfg.Limits.MaxOutputBytes) {
 		result.Output = nil
 		result.Outcome = "failed"
 		result.ErrorKind = "output_limit"
@@ -799,7 +801,7 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 		result.FinishedAt = w.s.cfg.Now().UTC()
 	}
 	if result.Outcome != "interrupted" {
-		persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		persist, cancel := w.persistCtx(ctx)
 		defer cancel()
 		if e := saveOutcome(persist, j, t, v, result); e != nil {
 			result.Outcome = "attention"
@@ -815,7 +817,7 @@ func (w *Worker) confirmOutcome(ctx context.Context, j durable.Store, t Task, v 
 		result.ErrorKind = "invalid_completion_evidence"
 		return agentErrors.ErrManagementConflict
 	}
-	if len(result.Output) > w.s.cfg.Limits.MaxOutputBytes {
+	if over(len(result.Output), w.s.cfg.Limits.MaxOutputBytes) {
 		result.Outcome = "failed"
 		result.ErrorKind = "output_limit"
 		result.Output = nil
@@ -823,7 +825,7 @@ func (w *Worker) confirmOutcome(ctx context.Context, j durable.Store, t Task, v 
 	if result.FinishedAt.IsZero() {
 		result.FinishedAt = w.s.cfg.Now().UTC()
 	}
-	persist, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	persist, cancel := w.persistCtx(ctx)
 	defer cancel()
 	if e := saveOutcome(persist, j, t, v, *result); e != nil {
 		result.Outcome = "attention"
@@ -962,16 +964,7 @@ func (w *Worker) finish(ctx context.Context, c Command, original Task, attempt A
 			}
 		}
 		if t.State.Terminal() {
-			now := w.s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if e = w.s.releaseSession(ctx, tx, t); e != nil {
-				return e
-			}
-			if e = w.s.supersedeApprovals(ctx, tx, t); e != nil {
-				return e
-			}
-			raw, _ := encode(map[string]any{"task_id": t.ID, "state": t.State})
-			if e = insert(ctx, tx, "outbox", Delivery{Meta: w.s.meta(t.Actor), Kind: "task." + string(t.State), ResourceID: t.ID, Payload: raw, State: "pending", AvailableAt: now}); e != nil {
+			if e = w.s.finishTerminal(ctx, tx, &t, t.State); e != nil {
 				return e
 			}
 		}

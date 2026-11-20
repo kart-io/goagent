@@ -11,7 +11,9 @@ import (
 // the conversation exceeds the threshold, older messages are replaced with a
 // summary. It also appends a RequestError hook: when a request fails because it
 // exceeds the context, it keeps only the most recent exchange, forces one
-// compaction, and retries. It applies only to the native tool stream. To let
+// compaction, and retries; that retry counts against WithRequestError's
+// maxRecoveries, so with the default of 0 it never runs. It applies only to the
+// native tool stream. To let
 // the model retrieve compacted originals, register contextpolicy.NewRecallTool
 // separately.
 func (b *AgentBuilder[S]) WithCompaction(c *contextpolicy.Compaction) *AgentBuilder[S] {
@@ -36,8 +38,5 @@ func (b *AgentBuilder[S]) WithCompaction(c *contextpolicy.Compaction) *AgentBuil
 		}
 		return RequestErrorDecision{Action: RequestRetry, Messages: messages}, nil
 	})
-	if b.config.MaxRequestRecoveries == 0 {
-		b.config.MaxRequestRecoveries = 3
-	}
 	return b
 }

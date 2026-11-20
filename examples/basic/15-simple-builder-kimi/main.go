@@ -98,6 +98,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 		llm.WithModel("moonshot-v1-8k"), // 8K 上下文模型
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -105,7 +106,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 
 	// 使用 NewSimpleBuilder - 无需泛型参数
 	fmt.Println("使用 NewSimpleBuilder 构建 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是 Kimi，由月之暗面科技开发的智能助手。你擅长用简洁明了的语言回答问题。").
 		WithState(core.NewAgentState()).
 		Build()
@@ -147,6 +148,8 @@ func runQuickAgent(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -186,6 +189,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -198,7 +202,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建带工具的 Agent
 	fmt.Println("构建带工具的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个智能助手，可以使用工具来帮助用户完成任务。").
 		WithTools(calculatorTool, timeTool).
 		WithState(core.NewAgentState()).
@@ -240,6 +244,8 @@ func runPresetAgents(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -322,6 +328,7 @@ func runJSONFormatExample(apiKey string) error {
 		llm.WithTemperature(0.3), // 较低温度确保 JSON 格式稳定
 		llm.WithMaxTokens(1000),
 		llm.WithJSONResponse(), // 启用 JSON 格式输出
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -329,7 +336,7 @@ func runJSONFormatExample(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建 Agent
 	fmt.Println("构建支持 JSON 输出的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(`你是一个数据分析助手，必须以 JSON 格式回复。
 请严格按照以下格式输出：
 {
@@ -389,6 +396,7 @@ func runLongContextExample(apiKey string) error {
 		llm.WithModel("moonshot-v1-128k"), // 128K 上下文模型
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -396,7 +404,7 @@ func runLongContextExample(apiKey string) error {
 
 	// 构建 Agent
 	fmt.Println("构建支持超长上下文的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是 Kimi，一个擅长处理长文本的智能助手。你可以分析和总结大量文本内容。").
 		WithState(core.NewAgentState()).
 		Build()
@@ -580,8 +588,10 @@ func runMockExample() {
    llmClient, _ := providers.NewKimiWithOptions(
        llm.WithAPIKey(apiKey),
        llm.WithModel("moonshot-v1-8k"),
+       llm.WithTimeout(60*time.Second),
+       llm.WithMaxTokens(2000),
    )
-   agent, err := builder.NewSimpleBuilder(llmClient).
+   agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("你是 Kimi，一个友好的 AI 助手").
        WithState(core.NewAgentState()).
        Build()
@@ -600,6 +610,8 @@ func runMockExample() {
    llmClient, _ := providers.NewKimiWithOptions(
        llm.WithAPIKey(apiKey),
        llm.WithModel("moonshot-v1-128k"), // 超长上下文
+       llm.WithTimeout(60*time.Second),
+       llm.WithMaxTokens(2000),
    )
 `)
 	fmt.Println("4. 预设 Agent 类型:")

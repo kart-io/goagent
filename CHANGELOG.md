@@ -7,8 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 破坏性变更：限额改由调用方配置
+
+限额是宿主策略，框架写死后宿主无法表达“不限”或自己的约束（例如推理模型被 2000 token 截断、接入工具后第 10 轮被悄悄去工具、10000 行扫描静默漏掉审批与清理对象）。本版本按三类语义统一处理（PR 需加 `breaking-change` 标签）：
+
+- **限额类**（次数上限、预算、迭代、超时、并发、分页、保留期、截断）：不配置或 0 = 不限制，负数报错。原先“0 = 用默认值”的字段直接改语义。
+- **重试类**（模型请求恢复、中断重发、Embed 重试）：0 = 不重试，字段表示首次之后的重试/重发次数。
+- **必需值与防滥用上限**（worker 数、轮询间隔、落盘超时、Anthropic `max_tokens`、入站请求大小、http/shell/skill 大小与深度）：0 = 合理默认，负数报错；防滥用上限另有显式“不限”常量。
+
+不变（已持久化的协议值）：`tools.DispatchConfig.MaxAttempts` 默认 3、`RunnableToolConfig.MaxAttempts`/`multiagent.Member.MaxAttempts` 默认 3（写入日志、重放时校验，改默认会让升级前的等待中调用报 attempt policy changed）、durable 中断重放 3 次、去重窗口 256；执行闸门容量 1、单 worker 槽与全局 advisory lock（见 [management 已知限制](management/README.md#已知限制)）。`scripts/check_api_compat.sh` 相对 v0.59.2 无签名不兼容；变化全部是语义变化。
+
+迁移表（字段 → 旧默认 → 新语义 → 要保持旧行为应传的值）：
+
+| 字段 | 旧默认 | 新语义 | 保持旧行为 |
+| --- | --- | --- | --- |
+| `budget.Config.MaxAgentCalls` | 0 → 1000 | 0 = 不限 | `constants.DefaultMaxAgentCalls`（1000）；**在途账本必须传**，否则配置变化被拒绝 |
+| `budget.Config.MaxModelRequests` | 0 报错（须 ≥1） | 0 = 不限，`Remaining` 返回 `BudgetUnlimited` | 原值 |
+| `budget` 用量回调超时 | 固定 5s | `budget.WithUsageHookTimeout(ctx, d)`，0 = `constants.DefaultUsageHookTimeout`（5s），负数报错 | 不传 |
+| `management.Config.Limits` | 全零 → 旧默认；部分设置时每个字段都必须为正 | 每个字段独立解释，见 [management 限额配置](management/README.md#限额配置) | `management.DefaultLimits()` |
+| `Limits.MaxPageSize` | 200（且不得超过 200） | 0 = 不限；去掉 200 上限 | 200 |
+| `Limits.MaxInputBytes` / `MaxOutputBytes` | 1 MiB / 4 MiB | 0 = 不限 | `1<<20` / `4<<20` |
+| `Limits.MaxPending` | 10000 | 0 = 不限；有值时按租户分页计数 | 10000 |
+| `Limits.IdempotencyRetention` / `TaskRetention` / `AuditRetention` | 30d / 90d / 180d | 0 = 永不清理（幂等记录 `ExpiresAt` 写零值） | `30*24h` / `90*24h` / `180*24h` |
+| `Limits.DeliveryTimeout`（新） | 固定 5s | 0 = 只受 ctx 约束 | `5*time.Second` |
+| `Limits.Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`（后五个新增） | 4 / 20ms / 100ms / 5s / 256s / 1s | 必需值：0 = `constants.DefaultManagement*`，负数报错 | 不传 |
+| 任务预算（`SubmitTaskRequest.Budget`、`Config.DefaultTaskBudget`，新） | 固定 100 次模型请求、1000 次工具调用、1000 次智能体调用、24h | 0 = 不限；计入幂等哈希，以 `management/v2` 持久化；v1 任务解码时补 `MaxAgentCalls=1000`；`SubmitTaskRequest.Budget` 只对进程内调用生效，httpapi `POST /v1/tasks` 丢弃请求体中的 `budget`，远程任务一律用 `DefaultTaskBudget` | `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}` |
+| `httpapi`/`a2a`/`mcpserver` `MaxInputBytes` | 0 → 1 MiB，且不得超过 1 MiB | 防滥用上限：0 = `constants.DefaultManagementMaxRequestBytes`，`UnlimitedRequestBytes` 不限，可超过 1 MiB；mcpserver 工具参数同受此上限 | 不传 |
+| `Store.List` / `History` 的 `limit` | 未写明 | 0 = 不限，由调用方分页；`management/storetest.RunListConformance` 校验 | 自定义 Store 跑一致性测试 |
+| `builder` `MaxIterations` | 0 → 10 | 0 = 不限；“最后一轮去工具”只在设置上限时生效 | `WithMaxIterations(10)` |
+| `builder` `Timeout` | 0 → 5min | 0 = 回合不限时 | `WithTimeout(5*time.Minute)` |
+| `WithRequestError(maxRecoveries, ...)`、`plugin` `MaxRecoveries` | 0 → 3 | 0 = 不恢复；`WithCompaction` 的溢出后压缩重试同样计入，不再隐式开启 3 次 | `WithRequestError(3, hooks...)` |
+| `WithInterruptedModelResend()` | 最多发送 3 次 | 弃用，行为不变；新增 `WithInterruptedModelResends(n)`，n 为重发次数，0 = 不重发 | `WithInterruptedModelResends(2)` |
+| `WithPersistTimeout(d)`（新） | 固定 5s | 必需值：0 = 5s，负数报错 | 不传 |
+| `RetrievalConfig.MaxDocuments` / `MaxContextRunes` | 0 → 4 / 12000 | 0 = 不限 | `RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000}`（`NewRAGAgent` 仍用此值） |
+| `contextpolicy.CompactionConfig.MaxTokens` | 0 → 100000 | 0 = 不主动压缩（溢出恢复仍压缩），此时 `KeepTokens` 必填 | `100000` |
+| `CompactionConfig.MaxRenderedRunes`（新） | 固定 4000 | 0 = 摘要请求不截断单条消息 | `4000` |
+| `contextpolicy.OffloadConfig.ReadPageRunes` | 0 → 1024，最大 16384 | 0 = 一页返回剩余全部；去掉 16384 上限 | `1024` |
+| recall_history 上限 | 固定 100 条、每条截断 | `NewRecallToolConfig(store, RecallConfig{MaxLimit, MaxRunes})`，0 = 不限；`NewRecallTool` 保留原上限 | 继续用 `NewRecallTool` |
+| 快捷构造（`NewChatAgent`、`NewRAGAgent` 等） | 10 轮 / 5min | 不变，显式套用旧值 | — |
+| `tools.DispatchConfig.MaxConcurrency` | 0 → 4 | 0 = 不限 | `constants.DefaultDispatcherConcurrency`（4） |
+| `tools.DispatchConfig.Timeout` | 0 → 30s | 0 = 不设截止时间；`DispatchTimeoutProvider` 返回 0 仍沿用 Dispatcher 超时 | `constants.DefaultToolTimeout`（30s） |
+| `tools.Pipeline.ApprovalTimeout` | 0 → 10min | 0 = 只受 ctx 约束，负数在 `NewDispatcher` 报错 | `constants.DefaultApprovalTimeout` |
+| `tools.RunnableToolConfig.MaxAttempts`（新）、`multiagent.Member.MaxAttempts`（新） | Resumable 时固定 3 次 | 已持久化的协议值，默认不变：总尝试次数（同 `DispatchConfig.MaxAttempts`），0 = 3，1 = 中断后不重入，负数报错 | 无需改动 |
+| `tools.RunnableToolConfig.MaxDepth` | 0 → 8 | 防滥用上限：0 = `constants.DefaultRunnableToolMaxDepth`，新增 `UnlimitedRunnableDepth`，其他负数报错 | 不传 |
+| `tools/http` 响应体、重定向 | 固定 10 MiB / 10 次 | 防滥用上限：`WithMaxResponseBytes`、`WithMaxRedirects`，0 = `constants.DefaultAPIToolMaxResponseBytes` / `DefaultAPIToolMaxRedirects`，`http.Unlimited` 不限 | 不传 |
+| `tools/shell` 输出 | 固定 1 MiB | 防滥用上限：`WithMaxOutputBytes`，0 = `constants.DefaultShellMaxOutputBytes`，`shell.UnlimitedOutput` 不限 | 不传 |
+| `tools/spill` 预览、单行截断、读取行数 | 固定 1500 / 2000 / 2000 | `spill.NewWithConfig(dir, Config{...})`，0 = 不截断 / 读到末尾；`spill.New` 保留旧预设 | 继续用 `spill.New` |
+| `tools/middleware` 缓存 TTL / 容量 | 5min / 10000 | 0 = 不过期 / 不限；新增 `WithCacheMaxEntries` | `WithTTL(5*time.Minute)`、`WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)` |
+| `cache.NewSimpleCache(ttl)` | ttl ≤ 0 → 5min | 0 = 不过期（清理每分钟一次）；`DefaultCacheConfig` 仍为 5min | `5*time.Minute` |
+| `llm` `MaxTokens`（`DefaultClientConfig`、`DefaultLLMOptions`、`WithMaxTokens(0)`） | 发送 2000，provider 兜底 1000 | 0 = 不发送 `max_tokens` | `llm.WithMaxTokens(2000)` |
+| Anthropic `max_tokens` | 2000 | 必需值：0 = `constants.DefaultClientMaxTokens`（2000），负数构造时报错 | 不传 |
+| `llm` `Timeout` | 0 → 60s（provider 内 30s，Ollama 120s） | 0 = 不限时（Gemini 以 ctx 计时） | `llm.WithTimeout(60*time.Second)` |
+| `common.RetryConfig` | `MaxAttempts` 0 → 3 | 新增 `Retries`（0 = 不重试）；`MaxAttempts` 弃用，> 0 时保留原义（负数仍为 3 次）；两者都 > 0 报错。**`MaxAttempts` 与 `Retries` 都为 0 时不再重试**（原先是 3 次尝试） | 继续只设 `MaxAttempts: 3`，或 `Retries: 2` |
+| DeepSeek `Embed` 重试 | 固定 3 次尝试 | 新增 `WithEmbeddingRetries(n)`，0 = 不重试 | `llm.WithEmbeddingRetries(2)` |
+| `core` `Batch` 并发（`BaseRunnable`、`RunnablePipe`、`RunnableSequence`） | 10 | 0 = 不限 | 设置 `MaxConcurrency: 10` |
+| `core/flow` `AsRunnable` 条目上限 | 0 → 1024 | 0 = 不限 | `MaxItems: 1024` |
+
+仓库内 `examples/` 中依赖客户端默认值的构造调用（含注释掉的参考代码与打印出的示例片段）已显式传入旧值（`llm.WithTimeout(60*time.Second)`，Ollama 为 120s；`llm.WithMaxTokens(2000)`，Anthropic 除外），原先调用 `NewOllamaClientSimple` 的位置改用 `NewOllamaWithOptions`，行为不变。`NewOllamaClientSimple` 只设置模型，不再带超时与 max_tokens，需要时改用 `NewOllamaWithOptions`。
+
+外部仓库：goagent-harness、goagent-examples 依赖上述默认值的调用方须显式传入（随本版本发布跟进），contrib 的 pgstore 需跑 `storetest.RunListConformance` 并去掉 10001 行上限。
+
+### 破坏性变更：Dispatcher 工具的并发声明跟随内层工具
+
+`Dispatcher.Tools` 返回的包装工具此前一律声明 `SupportsConcurrentCalls() == true`，Builder 因此把写工具（shell、HTTP 写请求、业务写操作）与只读工具并行派发；同一轮的多个结果未知调用只能整体核对。现在包装工具只转述内层工具的声明，未声明的工具串行执行，串行轮次在第一个错误处停止。
+
+迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。子流程工具无法再包一层（会丢掉超时与持久策略），改用新增的 `tools.RunnableToolConfig.ConcurrentCalls` 与 `multiagent.Member.ConcurrentCalls` 声明，默认 false：需要成员或子调查同轮并行的 Supervisor 须显式打开。`tools/middleware.WrappedTool` 转发内层工具的声明。
+
 ### 新增
 
+- `management/adapters`：原生运行时声明 `Capabilities.Reconcile`。结果未知或崩溃后尝试次数用尽的工具调用进入 attention，`Task.Operations` 列出这些调用（`tool/` 前缀、带 `ParentKey`）；宿主以 `ResumeTask{ReconciliationRef}` 续跑，`Reconcile` 要求恰好覆盖本轮未决调用（否则 `ErrManagementConflict`），结论统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时为固定说明文字；`not_applied` 记为业务拒绝，不重跑。模型请求中断引起的 attention 没有 `Operations`，只能取消。见 [management 原生运行时的核对](management/README.md#原生运行时的核对)。
+- `tools`：新增 `Reconciliation` 与 `WithReconciliation(ctx, r)`，Dispatcher 据此为列出的中断调用定案；新增 `DurableCallPolicyProvider`，工具可按校验后的参数声明单次调用的持久策略（结果只能取决于参数）。
+- `core/durable`：新增 `errors.ErrEffectUnknown` 哨兵，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
+- `management/adapters`：原生运行时审批等待的 `Wait.Info` 新增 `arguments`（工具调用参数）。
+- `core/durable`：内层操作需要宿主处理时，外层记录无论是否 `Resumable` 都会在续跑时重新进入（只回放内层），不消耗尝试次数；`ParentKey` 序列化为 `parent_key`。
+- `management`：`Task.Operations` 为历史记录，核对成功后不清空。
+
+- `skills`（非破坏）：新增 `DiscoverFS(ctx, fsys, source, opts)`，可从 `embed.FS`、`os.Root.FS()` 等通用 `fs.FS` 发现技能，符号链接是否跟随由传入的 `fs.FS` 决定；新增 `DiscoverWithOptions` 与 `DiscoverOptions`（`MaxFileBytes`、`MaxTotalBytes`、`MaxFiles`、`MaxDescription`、`MaxDepth`，0 为默认，`skills.Unlimited` 为不限，其他负数报错），`Discover` 行为不变；新增 `Catalog.Select(names...)`（子目录与父目录共享句柄，仅父目录 `Close` 释放）与 `Catalog.Prompt()`（按名称排序列出 `name: description`，跳过 `DisableModelInvocation`）。
 - `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
 - `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
 - `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
@@ -28,6 +102,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
 
 ### 行为变化
+
+- `management/adapters`：默认策略（`MaxAttempts` 3）的工具在原生运行时崩溃后由续跑的任务重新执行，此前本轮有 pending 或已取消的工具记录时 `Inspect` 直接返回 attention（`unconfirmed_tool`）。只在声明 `{MaxAttempts: 1}` 且工具自身 `Reconcile` 查不到结果时才进入 attention。崩溃后行为变化的工具：
+  - 改为自动重跑（未声明策略，读或幂等）：`memory_search`、`tools/search` 的搜索工具、`tools/spill` 的 `read_spill`、`tools/compute` 计算器、`tools/skill` 的加载工具、`contextpolicy` 的 recall 与 Offload 读取工具、GET/HEAD 的 `tools/http`、`Resumable` 的 RunnableTool 与 Supervisor 成员，以及所有未声明策略的 `FunctionTool`/`BaseTool` 与自定义工具。**有副作用的自定义工具须声明 `DurableOperationPolicy() {MaxAttempts: 1}`（或按参数实现 `DurableCallPolicyProvider`），否则崩溃后会重复执行。**
+  - 只执行一次、中断后交宿主核对：`tools/shell`、非 GET/HEAD 的 `tools/http`、`memory_save`/`memory_replace`/`memory_forget`（本版本新声明），以及已声明 `MaxAttempts: 1` 的 `a2a/remote`、非 `Resumable` 的 RunnableTool 与 Supervisor 成员（子智能体内层未决时核对作用于内层记录）。
+  - `mcp/remote`：工具本身按默认策略重跑，但内层远程调用 `mcp/call/N` 只执行一次，中断后产生没有 `Operations` 的 attention，只能取消。
+  - 可中断工具（`InterruptibleTool`）：仍为 `Resumable`、`MaxAttempts: 1`，崩溃留下的 pending 交宿主处理。
+- `tools/shell`：命令一律只执行一次（`MaxAttempts` 1），中断后不再重跑，直接交宿主核对。`tools/http`：GET/HEAD 以外的方法只执行一次，GET/HEAD 仍按默认策略。升级前已写入日志、仍在等待中的此类调用会因持久策略变化（3 → 1）报 attempt policy changed。
+- `management`：Attention 任务没有已接纳的恢复命令时，`CancelTask` 直接转为 `canceled`（保留 `ErrorKind` 与 `Operations`），此前被拒绝。被取消的轮次在下一轮整轮遮蔽，模型看不到。
+- `management`：所有终态路径（直接取消 Queued/WaitingApproval/Attention、认领时取消、worker 收尾、构建阻塞时取消）都在同一事务内释放会话、作废待决审批并写恰好一条 `task.<state>` 投递；此前直接取消与认领时取消不写投递。
+- `management`：投递器保存结果失败时经 `Config.Report`（`outbox_save`）上报并按 `DeliveryBackoffMax` 封顶的指数退避重试，不再退出 `Run`；接收端 panic 计为一次投递失败。投递重试仍无次数上限、无死信。
+- `builder`：并行轮次中第一个失败是 attention 时，返回所有 attention 错误的合并，宿主能一次拿到全部未决调用。
 
 - `tools/middleware.NewLoggingMiddleware()` 未传日志时不再自建 kart-io/logger 的 JSON 标准输出日志器，改写入 `slog.Default()`；`WithContextLogger(nil)` 关闭日志。`core/middleware.NewLoggingMiddleware(nil)` 由 `fmt.Println` 写标准输出改为 `slog.Default()` 的 Info 记录。Builder 的模型缓存警告与 `OnError` 回调失败改走 `WithLogger`（未设置时为 `slog.Default()`），回调失败不再写 stderr。缓存与限流中间件经已弃用字段写 kart-io/logger 时改用 `Debugw`/`Warnw` 键值形式。
 

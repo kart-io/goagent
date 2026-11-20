@@ -8,7 +8,7 @@
 
 - `AgentBuilder[S core.State]`：泛型构建器，`S` 是状态类型。`NewSimpleBuilder(client)` 返回 `SimpleAgentBuilder`（`AgentBuilder[*core.AgentState]`）。
 - `ConfigurableAgent[S]`：`Build` / `BuildContext` 的结果。`Build` 校验配置，组装中间件链并调用 `Initialize`。会话持久化与恢复使用 `WithSessionLog`、`WithDurableScope`，长期记忆使用 `WithLongTermMemory`。
-- `AgentConfig`：配置项，`DefaultAgentConfig()` 给出默认值（MaxIterations 10、Timeout 5 分钟；MaxTokens 与 Temperature 未显式设置时不下发，由 LLM 客户端配置决定）。
+- `AgentConfig`：配置项，`DefaultAgentConfig()` 不设任何限额：MaxIterations 与 Timeout 为 0 表示不限；MaxTokens 与 Temperature 未显式设置时不下发，由 LLM 客户端配置决定。限额属于调用方策略，要保持 v0.60 之前的行为请传 `WithMaxIterations(10).WithTimeout(5*time.Minute)`；快捷构造函数（`NewRAGAgent`、`NewChatAgent` 等）仍沿用这两个值。
 
 ## 使用
 

@@ -2,10 +2,8 @@ package management
 
 import (
 	"context"
-	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -15,10 +13,17 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		return Task{}, err
 	}
 	raw, err := CanonicalJSON(r.Input)
-	if err != nil || len(raw) > s.cfg.Limits.MaxInputBytes {
+	if err != nil || over(len(raw), s.cfg.Limits.MaxInputBytes) {
 		return Task{}, agentErrors.ErrManagementInvalid
 	}
 	r.Input = raw
+	taskBudget := s.cfg.DefaultTaskBudget
+	if r.Budget != nil {
+		taskBudget = *r.Budget
+	}
+	if taskBudget.validate() != nil {
+		return Task{}, agentErrors.ErrManagementInvalid
+	}
 	return mutate(s, ctx, a, r.IdempotencyKey, "task.submit", r, func(tx Tx) (Task, error) {
 		se, e := read[Session](ctx, tx, "sessions", a.TenantID, r.SessionID)
 		if e != nil {
@@ -31,17 +36,13 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		if !ag.Enabled || se.Status != "ready" {
 			return Task{}, agentErrors.ErrManagementConflict
 		}
-		pending, e := all[Task](ctx, tx, "tasks", a.TenantID, Query{Statuses: []string{string(Queued), string(Running), string(WaitingApproval), string(WaitingInput), string(Canceling), string(Attention)}, Limit: s.cfg.Limits.MaxPending + 1})
-		if e != nil {
+		if e = s.checkPending(ctx, tx, a.TenantID); e != nil {
 			return Task{}, e
-		}
-		if len(pending) >= s.cfg.Limits.MaxPending {
-			return Task{}, agentErrors.ErrManagementBusy
 		}
 		t := Task{Meta: s.meta(a), SessionID: se.ID, AgentID: se.AgentID, Version: se.Version, RevisionID: se.RevisionID, Input: r.Input, InputHash: digest(r.Input), State: Queued, Actor: a}
 		t.RunID = t.ID
 		t.ExecutionKey = t.ID
-		t.Budget = budget.Config{RootKey: t.ID, Version: "management/v1", MaxModelRequests: 100, MaxToolCalls: 1000, DeadlineUnixMilli: s.cfg.Now().Add(24 * time.Hour).UnixMilli()}
+		t.Budget = taskBudget.config(t.ID, s.cfg.Now())
 		if e = insert(ctx, tx, "tasks", t); e != nil {
 			return t, e
 		}
@@ -50,6 +51,24 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		}
 		return t, s.audit(ctx, tx, a, "tasks", t.ID, "submit", "")
 	})
+}
+
+// checkPending enforces Limits.MaxPending for one tenant. It counts page by
+// page and stops at the cap, so no Store-specific count query is needed.
+func (s *Service) checkPending(ctx context.Context, tx Tx, tenant string) error {
+	if s.cfg.Limits.MaxPending == 0 {
+		return nil
+	}
+	n := 0
+	q := Query{Statuses: []string{string(Queued), string(Running), string(WaitingApproval), string(WaitingInput), string(Canceling), string(Attention)}}
+	err := each(ctx, tx, "tasks", tenant, q, func(Task) (bool, error) { n++; return n >= s.cfg.Limits.MaxPending, nil })
+	if err != nil {
+		return err
+	}
+	if n >= s.cfg.Limits.MaxPending {
+		return agentErrors.ErrManagementBusy
+	}
+	return nil
 }
 
 func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) (Task, error) {
@@ -70,37 +89,33 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 		if t.Revision != r.ExpectedRevision {
 			return t, agentErrors.ErrManagementConflict
 		}
+		continuing := false
 		if t.State != Running && t.State != Canceling && !canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
-			// 未知结果只能由已接纳的恢复命令核对；没有命令时拒绝取消，
-			// 否则 CancelRequested 会封死公开 ResumeTask 入口。
-			commands, err := all[Command](ctx, tx, "commands", t.TenantID, Query{TaskID: t.ID, Statuses: []string{"pending", "blocked", "applying"}, Limit: 10000})
-			if err != nil {
-				return t, err
+			e = each(ctx, tx, "commands", t.TenantID, Query{TaskID: t.ID, Statuses: []string{"pending", "blocked", "applying"}}, func(command Command) (bool, error) {
+				continuing = command.Kind == "start" || command.Kind == "resume"
+				return continuing, nil
+			})
+			if e != nil {
+				return t, e
 			}
-			continuing := false
-			for _, command := range commands {
-				if command.Kind == "start" || command.Kind == "resume" {
-					continuing = true
-					break
-				}
-			}
-			if !continuing {
+			// 未知结果只能由已接纳的恢复命令核对；待恢复任务没有命令时拒绝取消，
+			// 否则 CancelRequested 会封死公开 ResumeTask 入口。Attention 另行处理。
+			if !continuing && t.State != Attention {
 				return t, agentErrors.ErrManagementConflict
 			}
 		}
 		old := t.Revision
 		t.Revision++
 		t.CancelRequested = true
-		if t.State == Running || t.State == Canceling {
-			t.State = Canceling
-		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
-			t.State = Canceled
-			now := s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if e = s.releaseSession(ctx, tx, t); e != nil {
+		if t.State == Attention && !continuing {
+			// 放弃核对：ErrorKind 与未决 Operations 原样保留，不替宿主定案；被取消的轮次在会话中整轮遮蔽。
+			if e = s.finishTerminal(ctx, tx, &t, Canceled); e != nil {
 				return t, e
 			}
-			if e = s.supersedeApprovals(ctx, tx, t); e != nil {
+		} else if t.State == Running || t.State == Canceling {
+			t.State = Canceling
+		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
+			if e = s.finishTerminal(ctx, tx, &t, Canceled); e != nil {
 				return t, e
 			}
 		}
@@ -130,21 +145,15 @@ func (s *Service) releaseSession(ctx context.Context, tx Tx, t Task) error {
 }
 
 func (s *Service) supersedeApprovals(ctx context.Context, tx Tx, t Task) error {
-	aps, e := all[Approval](ctx, tx, "approvals", t.TenantID, Query{TaskID: t.ID, Limit: 10000})
-	if e != nil {
-		return e
-	}
-	for _, ap := range aps {
-		if ap.State == "pending" {
-			old := ap.Revision
-			ap.State = "superseded"
-			ap.Revision++
-			if e = update(ctx, tx, "approvals", ap, old); e != nil {
-				return e
-			}
+	return each(ctx, tx, "approvals", t.TenantID, Query{TaskID: t.ID}, func(ap Approval) (bool, error) {
+		if ap.State != "pending" {
+			return false, nil
 		}
-	}
-	return nil
+		old := ap.Revision
+		ap.State = "superseded"
+		ap.Revision++
+		return false, update(ctx, tx, "approvals", ap, old)
+	})
 }
 
 type ApprovalAnswer struct {
@@ -256,7 +265,7 @@ func (s *Service) ResumeTask(ctx context.Context, a Actor, r ResumeTaskRequest) 
 					found = true
 				}
 			}
-			if !found || !json.Valid(r.Input) || len(r.Input) > s.cfg.Limits.MaxInputBytes {
+			if !found || !json.Valid(r.Input) || over(len(r.Input), s.cfg.Limits.MaxInputBytes) {
 				return Command{}, agentErrors.ErrManagementInvalid
 			}
 		}

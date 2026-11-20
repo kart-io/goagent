@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
@@ -22,11 +24,35 @@ import (
 	"github.com/kart-io/goagent/utils/httpclient"
 )
 
-// maxResponseBodyBytes 是响应体上限，超出时请求失败。
-const maxResponseBodyBytes = 10 << 20
+// Response size and redirect caps are anti-abuse caps rather than policy
+// limits: the URL and so the response come from the model, and an unbounded
+// body or redirect chain lets one call exhaust memory or loop forever. For
+// that reason 0 means the default here, not "unlimited".
+//
+// Unlimited passed to WithMaxResponseBytes or WithMaxRedirects removes that cap.
+const Unlimited = -1
 
-// maxRedirects 与 net/http 默认的重定向次数上限一致。
-const maxRedirects = 10
+type apiLimits struct{ responseBytes, redirects int }
+
+// resolve 把 0 换成默认值、Unlimited 换成 0（resty 与本包都以 0 表示不限），其他负数报错。
+func (l apiLimits) resolve() (apiLimits, error) {
+	pick := func(v, def int) (int, error) {
+		switch {
+		case v == 0:
+			return def, nil
+		case v == Unlimited:
+			return 0, nil
+		case v < 0:
+			return 0, agentErrors.New(agentErrors.CodeInvalidConfig, "api tool response size and redirect caps must be positive, 0 or Unlimited").
+				WithComponent("api_tool").WithOperation("build")
+		}
+		return v, nil
+	}
+	var err1, err2 error
+	l.responseBytes, err1 = pick(l.responseBytes, shared.DefaultAPIToolMaxResponseBytes)
+	l.redirects, err2 = pick(l.redirects, shared.DefaultAPIToolMaxRedirects)
+	return l, errors.Join(err1, err2)
+}
 
 // APITool HTTP API 调用工具
 //
@@ -40,6 +66,8 @@ type APITool struct {
 	baseURL string            // 基础 URL（可选）
 	base    *url.URL          // 解析后的基础 URL，nil 表示不限主机
 	headers map[string]string // 默认请求头
+	// invalid 非空时每次调用都返回它：Build 无法返回错误，配置非法时拒绝执行而不是静默放宽上限。
+	invalid error
 }
 
 // NewAPITool 创建 API 工具
@@ -49,10 +77,11 @@ type APITool struct {
 //   - timeout: 请求超时时间
 //   - headers: 默认请求头
 func NewAPITool(baseURL string, timeout time.Duration, headers map[string]string) *APITool {
-	return newAPITool(baseURL, timeout, headers, false)
+	return newAPITool(baseURL, timeout, headers, false, apiLimits{})
 }
 
-func newAPITool(baseURL string, timeout time.Duration, headers map[string]string, privateNetwork bool) *APITool {
+func newAPITool(baseURL string, timeout time.Duration, headers map[string]string, privateNetwork bool, limits apiLimits) *APITool {
+	limits, invalid := limits.resolve()
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
@@ -70,25 +99,29 @@ func newAPITool(baseURL string, timeout time.Duration, headers map[string]string
 
 	// 创建 HTTP 客户端
 	client := httpclient.NewClient(config)
-	client.Resty().SetResponseBodyLimit(maxResponseBodyBytes)
+	client.Resty().SetResponseBodyLimit(limits.responseBytes)
 
 	tool := &APITool{
 		client:  client,
 		baseURL: baseURL,
 		headers: headers,
+		invalid: invalid,
 	}
-	if base, err := url.Parse(baseURL); baseURL != "" && err == nil {
-		tool.base = base
-		client.Resty().SetRedirectPolicy(resty.RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
-			if len(via) >= maxRedirects {
-				return agentErrors.Newf(agentErrors.CodeToolValidation, "stopped after %d redirects", maxRedirects)
-			}
-			if !sameOrigin(req.URL, base) {
-				return agentErrors.Newf(agentErrors.CodeToolValidation, "redirect to a host other than base URL is not allowed")
-			}
-			return nil
-		}))
-	} else if !privateNetwork {
+	base, err := url.Parse(baseURL)
+	if baseURL == "" || err != nil {
+		base = nil
+	}
+	tool.base = base
+	client.Resty().SetRedirectPolicy(resty.RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
+		if limits.redirects > 0 && len(via) >= limits.redirects {
+			return agentErrors.Newf(agentErrors.CodeToolValidation, "stopped after %d redirects", limits.redirects)
+		}
+		if base != nil && !sameOrigin(req.URL, base) {
+			return agentErrors.Newf(agentErrors.CodeToolValidation, "redirect to a host other than base URL is not allowed")
+		}
+		return nil
+	}))
+	if base == nil && !privateNetwork {
 		if transport, ok := client.Resty().GetClient().Transport.(*http.Transport); ok {
 			transport = transport.Clone()
 			// 代理会让拨号目标变成代理地址，绕开检查，因此直连。
@@ -135,9 +168,25 @@ func newAPITool(baseURL string, timeout time.Duration, headers map[string]string
 	return tool
 }
 
+// DurableCallPolicy implements tools.DurableCallPolicyProvider. Methods other
+// than GET and HEAD may change the remote system, so such a call runs at most
+// once: after a crash it is not rerun but reported to the host for
+// reconciliation. GET and HEAD calls keep the Dispatcher default and rerun.
+func (a *APITool) DurableCallPolicy(args map[string]any) (durable.OperationPolicy, bool) {
+	method, _ := args[shared.FieldMethod].(string)
+	switch strings.ToUpper(method) {
+	case "", shared.MethodGet, http.MethodHead:
+		return durable.OperationPolicy{}, false
+	}
+	return durable.OperationPolicy{MaxAttempts: 1}, true
+}
+
 // run 执行 HTTP 请求
 func (a *APITool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	resp := tools.NewToolErrorResponse(a.Name()).WithOperation("run")
+	if a.invalid != nil {
+		return nil, a.invalid
+	}
 
 	// 解析参数
 	method, _ := input.Args[shared.FieldMethod].(string)
@@ -367,6 +416,7 @@ type APIToolBuilder struct {
 	timeout        time.Duration
 	headers        map[string]string
 	privateNetwork bool
+	limits         apiLimits
 }
 
 // NewAPIToolBuilder 创建 API 工具构建器
@@ -416,7 +466,23 @@ func (b *APIToolBuilder) WithPrivateNetwork() *APIToolBuilder {
 	return b
 }
 
+// WithMaxResponseBytes caps the response body; 0 means
+// constants.DefaultAPIToolMaxResponseBytes and Unlimited removes the cap. Other negative values
+// make every call fail with an invalid-config error.
+func (b *APIToolBuilder) WithMaxResponseBytes(n int) *APIToolBuilder {
+	b.limits.responseBytes = n
+	return b
+}
+
+// WithMaxRedirects caps followed redirects; 0 means constants.DefaultAPIToolMaxRedirects and
+// Unlimited removes the cap. Other negative values make every call fail with
+// an invalid-config error.
+func (b *APIToolBuilder) WithMaxRedirects(n int) *APIToolBuilder {
+	b.limits.redirects = n
+	return b
+}
+
 // Build 构建工具
 func (b *APIToolBuilder) Build() *APITool {
-	return newAPITool(b.baseURL, b.timeout, b.headers, b.privateNetwork)
+	return newAPITool(b.baseURL, b.timeout, b.headers, b.privateNetwork, b.limits)
 }

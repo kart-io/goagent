@@ -91,6 +91,7 @@ func createLLMClient(apiKey, providerName string) (llm.Client, error) {
 			llm.WithModel("deepseek-chat"),
 			llm.WithTemperature(0.7),
 			llm.WithMaxTokens(2000),
+			llm.WithTimeout(60*time.Second),
 		)
 	}
 	// Kimi
@@ -99,6 +100,7 @@ func createLLMClient(apiKey, providerName string) (llm.Client, error) {
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 }
 
@@ -144,7 +146,7 @@ func example1AgentWithCustomState(apiKey, providerName string) {
 	calculator := createCalculatorTool()
 
 	// 使用泛型 AgentBuilder 配置自定义状态
-	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).
+	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		// Simple API
 		WithSystemPrompt("你是一个企业级助手").
 		WithTools(calculator).
@@ -190,7 +192,7 @@ func example2AgentWithMiddleware(apiKey, providerName string) {
 	fmt.Println("注册中间件: 日志、限流（每分钟 10 次）；模型调用缓存（TTL 5 分钟）")
 
 	// 配置 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		// Simple API
 		WithSystemPrompt("你是一个高性能助手").
 		WithTools(calculator).
@@ -262,7 +264,7 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 	sessionID := fmt.Sprintf("session-%d", time.Now().Unix())
 
 	// 配置带对话记忆和会话管理的 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		// Simple API
 		WithSystemPrompt("你是一个有记忆的助手，请记住用户告诉你的所有信息。").
 		WithTools(calculator).
@@ -270,6 +272,7 @@ func example3AgentWithSessionManagement(apiKey, providerName string) {
 		// Core API - 对话记忆
 		WithSessionLog(sessions).   // 历史来自会话日志
 		WithCompaction(compaction). // 超长时压缩较早的消息
+		WithRequestError(3).        // 请求超出上下文时允许压缩后重试
 
 		// Advanced API - 会话管理
 		WithSessionID(sessionID). // 设置会话 ID
@@ -351,7 +354,7 @@ func example4EnterpriseAgent(apiKey, providerName string) {
 	}
 
 	// 完整的企业级配置
-	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).
+	agent, err := builder.NewAgentBuilder[*CustomState](llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		// ========== Simple API ==========
 		WithSystemPrompt("你是一个企业级智能助手，为组织提供专业服务").
 		WithTools(calculator).
@@ -524,7 +527,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 		},
 	}
 
-	agent1, err := builder.NewAgentBuilder[*CustomState](llmClient).
+	agent1, err := builder.NewAgentBuilder[*CustomState](llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个数据提取助手，专门从文本中提取结构化数据").
 		WithOutputFormat(builder.OutputFormatJSON).
 		// Advanced API
@@ -548,7 +551,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 		BaseCallback: core.NewBaseCallback(),
 	}
 
-	agent2, err := builder.NewSimpleBuilder(llmClient).
+	agent2, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个报告生成助手").
 		WithCustomOutputFormat("请按以下企业报告格式回复：\n=== 报告标题 ===\n【摘要】\n【详细分析】\n【结论与建议】\n【风险提示】").
 		// Core API
@@ -570,7 +573,7 @@ func example5OutputFormatEnterprise(apiKey, providerName string) {
 	// 5.3 多格式支持 + 完整企业配置
 	fmt.Println("\n5.3 多格式支持演示（Markdown 格式 + 企业配置）:")
 
-	agent3, err := builder.NewSimpleBuilder(llmClient).
+	agent3, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个技术文档助手").
 		WithOutputFormat(builder.OutputFormatMarkdown).
 		// Core API

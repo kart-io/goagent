@@ -211,6 +211,7 @@ func TestOfflineQueryListFailuresAndPublicLists(t *testing.T) {
 	policy := &offlineQueryPolicy{visibility: mg.Visibility{All: true}}
 	cfg := f.Config()
 	cfg.Authorizer = policy
+	cfg.Limits = mg.DefaultLimits()
 	svc, err := mg.New(cfg)
 	require.NoError(t, err)
 	_, err = svc.ListAgents(ctx, mg.Actor{}, mg.Query{})
@@ -263,7 +264,7 @@ func TestOfflineQueryHistoryFiltersAndAuthorization(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, empty.Items)
 	require.Equal(t, seq, empty.NextSeq)
-	for _, req := range []mg.HistoryRequest{{AfterSeq: -1}, {Limit: -1}, {Limit: 201}} {
+	for _, req := range []mg.HistoryRequest{{AfterSeq: -1}, {Limit: -1}} {
 		req.SessionID = se.ID
 		_, err = f.Service.History(ctx, f.Actor, req)
 		require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)

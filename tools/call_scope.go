@@ -18,11 +18,11 @@ func enterRunnable(ctx context.Context, maxDepth int, modelInvoking bool) (conte
 		return nil, err
 	}
 	scope, _ := ctx.Value(depthKey{}).(depthScope)
-	if scope.limit == 0 || maxDepth < scope.limit {
+	if maxDepth > 0 && (scope.limit == 0 || maxDepth < scope.limit) {
 		scope.limit = maxDepth
 	}
 	scope.depth++
-	if scope.depth > scope.limit {
+	if scope.limit > 0 && scope.depth > scope.limit {
 		return nil, agentErrors.ErrNestedExecutionLimit
 	}
 	if modelInvoking {

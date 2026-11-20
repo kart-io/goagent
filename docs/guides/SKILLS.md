@@ -54,6 +54,18 @@ frontmatter 是文本元数据，二进制素材应放在附属文件中，避�
 摘要不包含资源文件，不代表整包签名或不可变版本。需要整包一致性时，宿主应提供不可变目录或另行校验资源；
 需要更新正文时应重新 Discover 并在旧使用者结束后关闭旧 Catalog。
 
+## 内存来源、子集与自定义上限
+
+- `skills.DiscoverFS(ctx, fsys, source, opts)` 从通用 `fs.FS`（如 `embed.FS`、`os.Root.FS()`）发现 `<name>/SKILL.md`，
+  `source` 仅用于 `Metadata.Source`。是否跟随符号链接由 `fsys` 决定：`embed.FS` 没有符号链接，`os.Root.FS()` 受根目录约束，
+  `os.DirFS` 不设边界，传入前由调用方负责。路径仍经同样的斜线相对路径检查；`DiscoverFS` 不持有句柄，`fsys` 归调用方。
+- `skills.DiscoverWithOptions(ctx, opts, roots...)` 与 `Discover` 行为相同，但可调整 `DiscoverOptions` 的防滥用上限：
+  `MaxFileBytes`（单个 SKILL.md 与引用文件）、`MaxTotalBytes`（一次发现读取的 SKILL.md 总字节，默认不限）、
+  `MaxFiles`（条目数）、`MaxDescription`（描述字符数）、`MaxDepth`（资源目录深度）。0 保持默认，`skills.Unlimited`（-1）不限，其他负数报错。
+- `catalog.Select(names...)` 返回只含所选技能的子目录（未知名称报错）；子目录的 `Load`/`ReadReference` 无法触及其他技能。
+  子目录与父目录共享底层句柄，只有父目录的 `Close` 释放它们，子目录的 `Close` 为空操作，父目录关闭后子目录同样返回 `fs.ErrClosed`。
+- `catalog.Prompt()` 按名称排序输出 `name: description` 行，跳过 `DisableModelInvocation` 的技能，空目录返回空串，供宿主注入系统提示词。
+
 ## 文件边界
 
 技能目录使用 `os.Root` 持有句柄，目录被重命名或原路径被替换不会把读取重定向到新目录。

@@ -8,7 +8,7 @@
 
 - `AgentBuilder[S core.State]`: generic builder; `S` is the state type. `NewSimpleBuilder(client)` returns a `SimpleAgentBuilder` (`AgentBuilder[*core.AgentState]`).
 - `ConfigurableAgent[S]`: the result of `Build` / `BuildContext`. `Build` validates the configuration, assembles the middleware chain, and calls `Initialize`. Session persistence and recovery use `WithSessionLog` and `WithDurableScope`; long-term memory uses `WithLongTermMemory`.
-- `AgentConfig`: configuration; `DefaultAgentConfig()` provides the defaults (MaxIterations 10, Timeout 5 minutes; MaxTokens and Temperature are not sent unless set explicitly, so the LLM client configuration decides).
+- `AgentConfig`: configuration; `DefaultAgentConfig()` sets no limits: MaxIterations 0 and Timeout 0 mean unlimited, and MaxTokens and Temperature are not sent unless set explicitly, so the LLM client configuration decides. Limits are caller policy; pass `WithMaxIterations(10).WithTimeout(5*time.Minute)` to keep the values used before v0.60. The quick constructors (`NewRAGAgent`, `NewChatAgent`, ...) still apply those values.
 
 ## Usage
 

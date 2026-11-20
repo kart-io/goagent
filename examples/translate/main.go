@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
@@ -94,6 +95,7 @@ func initializeDeepSeekClient() (llm.Client, error) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60 * time.Second),
 	}
 
 	// 创建 DeepSeek 客户端
@@ -161,7 +163,7 @@ func (t *MultiAgentTranslator) createLanguageDetectionAgent() *builder.Configura
 输入: "こんにちは"
 输出: 日语`
 
-	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调
@@ -200,7 +202,7 @@ func (t *MultiAgentTranslator) createTranslationAgent() *builder.ConfigurableAge
 输入: "Thank you very much!"
 输出: 非常感谢！`
 
-	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](t.llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(t.tokenTracker). // 添加 token 追踪回调

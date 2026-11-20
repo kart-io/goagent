@@ -33,6 +33,16 @@ type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy
 }
 
+// DurableCallPolicyProvider declares the journal policy of a single call from
+// its validated arguments, for tools whose side effects depend on them (an
+// HTTP tool that only writes for non-GET methods). When declared is true the
+// policy replaces DurablePolicyProvider and the Dispatcher default for that
+// call. The result must depend only on args: they are part of the journaled
+// intent, so a replay of the same call sees the same policy.
+type DurableCallPolicyProvider interface {
+	DurableCallPolicy(args map[string]any) (policy durable.OperationPolicy, declared bool)
+}
+
 // DispatchTimeoutProvider declares the tool's timeout when called through the
 // Dispatcher; a positive value replaces DispatchConfig.Timeout, and 0 keeps it.
 type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
@@ -50,15 +60,31 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // DurableGraph.AsChildRunnable) it can resume, and after an interrupted
 // execution it can be re-entered. When enabled, it must be called through a
 // journaled Dispatcher, otherwise it fails before starting the subflow.
+// MaxAttempts bounds how many times a Resumable call is entered in total,
+// counting the first, like DispatchConfig.MaxAttempts: 0 means
+// constants.DefaultResumableToolAttempts (3) and 1 means an interrupted call
+// is not re-entered. It is a persisted protocol value rather than a caller
+// limit: the journal records it and replay rejects a changed value, so its
+// default cannot move without failing calls journaled before an upgrade.
+// It is ignored when Resumable is false. Negative values are rejected.
+// MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
+// policy limit, because recursive delegation would otherwise never stop: 0
+// means constants.DefaultRunnableToolMaxDepth and UnlimitedRunnableDepth removes the cap.
+// ConcurrentCalls declares that calls may run in the same parallel round as
+// other concurrent tools (interfaces.ConcurrentCallTool). Only the host knows
+// whether the subflow has side effects, so it defaults to false and the
+// Dispatcher runs such a round serially.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
 	Encode                                 func(O) (any, error)
 	ModelInvoking                          bool
 	Resumable                              bool
+	MaxAttempts                            int
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
 	Timeout                                time.Duration
+	ConcurrentCalls                        bool
 }
 type runnableTool[I, O any] struct {
 	config  RunnableToolConfig[I, O]
@@ -66,6 +92,9 @@ type runnableTool[I, O any] struct {
 	schema  *jsonschema.Resolved
 	factory func(context.Context) (OwnedRunnable[I, O], error)
 }
+
+// UnlimitedRunnableDepth passed as MaxDepth removes the nesting cap.
+const UnlimitedRunnableDepth = -1
 
 // NewRunnableTool adapts a fixed runnable without taking ownership of its resources.
 func NewRunnableTool[I, O any](run core.Runnable[I, O], cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
@@ -118,8 +147,8 @@ func nilRunnable(value any) bool {
 }
 
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
-	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid depth, cleanup timeout and timeout").
+	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxAttempts < 0 || cfg.MaxDepth < UnlimitedRunnableDepth || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid attempts, depth, cleanup timeout and timeout").
 			WithComponent("runnable_tool").
 			WithOperation("initialize").
 			WithContext("tool_name", cfg.Name)
@@ -139,7 +168,10 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 		return nil, err
 	}
 	if cfg.MaxDepth == 0 {
-		cfg.MaxDepth = 8
+		cfg.MaxDepth = shared.DefaultRunnableToolMaxDepth
+	}
+	if cfg.MaxAttempts == 0 {
+		cfg.MaxAttempts = shared.DefaultResumableToolAttempts
 	}
 	if cfg.CleanupTimeout == 0 {
 		cfg.CleanupTimeout = shared.DefaultSessionCleanupTimeout
@@ -152,12 +184,16 @@ func (t *runnableTool[I, O]) ArgsSchema() string           { return t.config.Arg
 func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Version }
 func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 	if t.config.Resumable {
-		return durable.OperationPolicy{MaxAttempts: shared.DefaultResumableToolAttempts, Resumable: true}
+		return durable.OperationPolicy{MaxAttempts: t.config.MaxAttempts, Resumable: true}
 	}
 	return durable.OperationPolicy{MaxAttempts: 1}
 }
 
 func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool from
+// RunnableToolConfig.ConcurrentCalls.
+func (t *runnableTool[I, O]) SupportsConcurrentCalls() bool { return t.config.ConcurrentCalls }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
 		if v := recover(); v != nil {

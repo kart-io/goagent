@@ -95,7 +95,7 @@ func main() {
 
 	// 创建 Agent
 	llmClient := &MockLLMClient{}
-	agent, err := builder.NewAgentBuilder[*core.AgentState](llmClient).
+	agent, err := builder.NewAgentBuilder[*core.AgentState](llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("You are a helpful AI assistant with full observability.").
 		WithState(core.NewAgentState()).
 		WithMiddleware(obsMiddleware).

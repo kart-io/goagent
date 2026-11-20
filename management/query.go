@@ -94,7 +94,7 @@ func listAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, actio
 	if q.Limit == 0 {
 		q.Limit = s.cfg.Limits.PageSize
 	}
-	if q.Limit < 1 || q.Limit > s.cfg.Limits.MaxPageSize {
+	if q.Limit < 1 || over(q.Limit, s.cfg.Limits.MaxPageSize) {
 		return out, agentErrors.ErrManagementInvalid
 	}
 	cursor := q.Cursor
@@ -187,7 +187,7 @@ func (s *Service) History(ctx context.Context, a Actor, r HistoryRequest) (Histo
 	if r.Limit == 0 {
 		r.Limit = s.cfg.Limits.PageSize
 	}
-	if r.AfterSeq < 0 || r.Limit < 1 || r.Limit > s.cfg.Limits.MaxPageSize {
+	if r.AfterSeq < 0 || r.Limit < 1 || over(r.Limit, s.cfg.Limits.MaxPageSize) {
 		return HistoryPage{}, agentErrors.ErrManagementInvalid
 	}
 	for _, typ := range r.Types {
@@ -222,7 +222,7 @@ func (s *Service) GetRun(ctx context.Context, a Actor, id string) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	attempts, err := all[Attempt](ctx, s.cfg.Store, "attempts", a.TenantID, Query{TaskID: t.ID, Limit: 10000})
+	attempts, err := all[Attempt](ctx, s.cfg.Store, "attempts", a.TenantID, Query{TaskID: t.ID})
 	if err != nil {
 		return Run{}, err
 	}

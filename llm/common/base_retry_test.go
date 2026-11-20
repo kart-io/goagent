@@ -142,7 +142,7 @@ func TestExecuteWithRetry_DefaultMaxAttempts(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 0, // Should use default
+		MaxAttempts: -1, // 已弃用字段保持旧语义：≤0 为 3 次
 		BaseDelay:   10 * time.Millisecond,
 		MaxDelay:    100 * time.Millisecond,
 	}
@@ -224,7 +224,8 @@ func TestDefaultRetryConfig(t *testing.T) {
 	// Test default retry config values
 	cfg := common.DefaultRetryConfig()
 
-	assert.Greater(t, cfg.MaxAttempts, 0, "MaxAttempts should be positive")
+	assert.Equal(t, 2, cfg.Retries, "预设保持共 3 次尝试")
+	assert.Zero(t, cfg.MaxAttempts)
 	assert.Greater(t, cfg.BaseDelay, time.Duration(0), "BaseDelay should be positive")
 	assert.Greater(t, cfg.MaxDelay, time.Duration(0), "MaxDelay should be positive")
 	assert.GreaterOrEqual(t, cfg.MaxDelay, cfg.BaseDelay, "MaxDelay should be >= BaseDelay")

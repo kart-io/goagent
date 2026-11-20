@@ -36,9 +36,10 @@ func NewSiliconFlowWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, 
 }
 
 // NewOllamaWithOptions creates a local Ollama client; no API key is needed.
-// BaseURL must point to the /v1 compatible endpoint. Local models are slow to
-// produce the first chunk, so 120 seconds is used when the default timeout is
-// unchanged.
+// BaseURL must point to the /v1 compatible endpoint. Like other clients it
+// sets no timeout unless llm.WithTimeout is passed (it previously used 120
+// seconds); local models are slow to produce the first chunk, so pass a
+// generous value such as constants.DefaultOllamaTimeout when a bound is needed.
 func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:       shared.ProviderOllama,
@@ -47,13 +48,14 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 		envBaseURL:     shared.EnvOllamaBaseURL,
 		envModel:       shared.EnvOllamaModel,
 		apiKeyOptional: true,
-		defaultTimeout: shared.DefaultOllamaTimeout,
 		capabilities:   openAICompatibleCapabilities,
 	}, opts...)
 }
 
 // NewOllamaClientSimple creates an Ollama client for the given model with the
-// default configuration.
+// default configuration, which sets no timeout and no max_tokens. Callers that
+// need either use NewOllamaWithOptions with llm.WithTimeout and
+// llm.WithMaxTokens.
 func NewOllamaClientSimple(model string) (*OpenAIProvider, error) {
 	return NewOllamaWithOptions(agentllm.WithModel(model))
 }

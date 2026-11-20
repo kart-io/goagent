@@ -46,6 +46,8 @@ func main() {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("gpt-4"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		fmt.Printf("✗ 创建 LLM 客户端失败: %v\n", err)

@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -75,7 +74,7 @@ func (a *ConfigurableAgent[S]) offloadScope(ctx context.Context) (context.Contex
 	ctx = contextpolicy.WithResultScope(ctx, uuid.NewString())
 	return ctx, func(ctx context.Context) error {
 		// 不受执行取消影响，回收在超时或取消后同样进行。
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), a.config.persistTimeout())
 		defer cancel()
 		var errs []error
 		for _, o := range a.config.Offloads {

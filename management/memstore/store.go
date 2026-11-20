@@ -190,11 +190,8 @@ func (tx *transaction) List(ctx context.Context, kind string, selection mg.Selec
 		return nil, err
 	}
 	q, v := selection.Query, selection.Visibility
-	if q.Limit > 10001 {
+	if q.Limit < 0 {
 		return nil, agentErrors.ErrManagementInvalid
-	}
-	if q.Limit <= 0 {
-		q.Limit = 201
 	}
 	var cursorTime time.Time
 	var cursorID string

@@ -27,16 +27,18 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 		return err
 	}
 	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		cleanup, cancel := d.owner.persistCtx(ctx)
 		defer cancel()
 		if e := d.owner.owner(cleanup, true); err == nil {
 			err = e
 		}
 	}()
-	tick := time.NewTicker(100 * time.Millisecond)
+	tick := time.NewTicker(d.s.cfg.Limits.OutboxPollInterval)
 	defer tick.Stop()
+	// saveFailures 统计连续的结果保存失败：单条失败不让投递器退出，按退避等待后整轮重试。
+	saveFailures := 0
 	for {
-		items, e := all[Delivery](ctx, d.s.cfg.Store, "outbox", "", Query{Statuses: []string{"pending", "applying"}, Limit: 10000})
+		items, e := all[Delivery](ctx, d.s.cfg.Store, "outbox", "", Query{Statuses: []string{"pending", "applying"}})
 		if e != nil && ctx.Err() == nil {
 			return e
 		}
@@ -65,10 +67,13 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 			if err != nil {
 				continue
 			}
-			call, cancel := context.WithTimeout(ctx, 5*time.Second)
-			deliveryErr := d.s.cfg.Delivery.Accept(call, item)
+			call, cancel := ctx, context.CancelFunc(func() {})
+			if d.s.cfg.Limits.DeliveryTimeout > 0 {
+				call, cancel = context.WithTimeout(ctx, d.s.cfg.Limits.DeliveryTimeout)
+			}
+			deliveryErr := d.accept(call, item)
 			cancel()
-			save, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			save, cancel := d.owner.persistCtx(ctx)
 			err = d.s.cfg.Store.WithinTx(save, func(tx Tx) error {
 				cur, e := read[Delivery](save, tx, "outbox", item.TenantID, item.ID)
 				if e != nil {
@@ -80,20 +85,50 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 					cur.State = "done"
 				} else {
 					cur.State = "pending"
-					delay := time.Second * time.Duration(1<<min(cur.Attempts, 8))
-					cur.AvailableAt = d.s.cfg.Now().Add(delay)
+					cur.AvailableAt = d.s.cfg.Now().Add(redeliveryDelay(cur.Attempts, d.s.cfg.Limits.DeliveryBackoffMax))
 				}
 				return update(save, tx, "outbox", cur, old)
 			})
 			cancel()
 			if err != nil {
-				return err
+				if ctx.Err() != nil {
+					return nil
+				}
+				d.owner.report("outbox_save", err)
+				saveFailures++
+				break
 			}
+			saveFailures = 0
+		}
+		wait, stop := tick.C, func() bool { return false }
+		if saveFailures > 0 {
+			timer := time.NewTimer(redeliveryDelay(saveFailures-1, d.s.cfg.Limits.DeliveryBackoffMax))
+			wait, stop = timer.C, timer.Stop
 		}
 		select {
 		case <-ctx.Done():
+			stop()
 			return nil
-		case <-tick.C:
+		case <-wait:
 		}
 	}
+}
+
+// accept 把接收端的 panic 计为一次投递失败，投递器继续运行。
+func (d *OutboxDispatcher) accept(ctx context.Context, item Delivery) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = agentErrors.NewPanicError("delivery sink", r)
+		}
+	}()
+	return d.s.cfg.Delivery.Accept(ctx, item)
+}
+
+// redeliveryDelay doubles from one second per attempt and stops at ceiling.
+func redeliveryDelay(attempts int, ceiling time.Duration) time.Duration {
+	delay := time.Second
+	for i := 0; i < attempts && delay < ceiling; i++ {
+		delay *= 2
+	}
+	return min(delay, ceiling)
 }

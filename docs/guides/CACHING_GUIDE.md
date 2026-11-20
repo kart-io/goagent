@@ -150,7 +150,7 @@ m, err := memory.New(memory.Config{
 
 - 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。
 - 检索增强回答优先每次检索新证据；需要答案缓存时，键中带上知识版本。
-- TTL 按数据变化频率设置；`SimpleCache` 默认不限条目数，键由外部输入决定时用 `cache.WithMaxEntries(n)` 设置上限（工具缓存中间件的默认缓存上限为 10000 条），或由外部缓存实现 `cache.Cache`。
+- TTL 按数据变化频率设置；`SimpleCache` 默认不限条目数，键由外部输入决定时用 `cache.WithMaxEntries(n)` 设置上限（工具缓存中间件默认同样不限条目，用 `middleware.WithCacheMaxEntries(n)` 设置），或由外部缓存实现 `cache.Cache`。
 
 ## 设计审核修复后的配置迁移
 

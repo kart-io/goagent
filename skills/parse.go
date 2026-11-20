@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"maps"
+	"math"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -48,7 +49,13 @@ var namePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 // 名称、描述和兼容性说明按 Agent Skills 格式校验；未知扩展字段被忽略。
 // 正文去除首尾空白，摘要仍覆盖输入原文。目录名匹配由 Discover 校验。
 func Parse(data []byte) (Skill, error) {
-	if len(data) > constants.SkillMaxDocumentBytes {
+	return parse(data, constants.SkillMaxDocumentBytes, maxDescriptionChars)
+}
+
+const maxDescriptionChars = 1024
+
+func parse(data []byte, maxBytes int64, maxDescription int) (Skill, error) {
+	if int64(len(data)) > maxBytes {
 		return Skill{}, agenterrors.New(agenterrors.CodeInvalidInput, "SKILL.md exceeds document byte limit")
 	}
 	if !utf8.Valid(data) {
@@ -75,7 +82,7 @@ func Parse(data []byte) (Skill, error) {
 	if end < 0 {
 		return Skill{}, agenterrors.New(agenterrors.CodeInvalidInput, "frontmatter 未结束")
 	}
-	fields, err := yaml.DecodeMapping(rest[:end], constants.SkillMaxDocumentBytes)
+	fields, err := yaml.DecodeMapping(rest[:end], int(min(maxBytes, math.MaxInt32)))
 	if err != nil {
 		return Skill{}, agenterrors.Wrap(err, agenterrors.CodeInvalidInput, "invalid skill frontmatter")
 	}
@@ -87,8 +94,8 @@ func Parse(data []byte) (Skill, error) {
 		return Skill{}, agenterrors.Newf(agenterrors.CodeInvalidInput, "name %q 须为 1–64 个小写字母、数字与单连字符", front.Name)
 	}
 	description := strings.TrimSpace(front.Description)
-	if n := utf8.RuneCountInString(description); n == 0 || n > 1024 {
-		return Skill{}, agenterrors.New(agenterrors.CodeInvalidInput, "description 须为 1–1024 个字符")
+	if n := utf8.RuneCountInString(description); n == 0 || n > maxDescription {
+		return Skill{}, agenterrors.Newf(agenterrors.CodeInvalidInput, "description 须为 1–%d 个字符", maxDescription)
 	}
 	if _, exists := fields["compatibility"]; exists {
 		front.Compatibility = strings.TrimSpace(front.Compatibility)

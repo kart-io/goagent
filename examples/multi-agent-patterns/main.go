@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
@@ -72,14 +73,14 @@ func (k *kit) agent(client *mocks.ScriptedClient, scope string, list ...interfac
 				return nil, err
 			}
 		}
-		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
+		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 4, Timeout: 30 * time.Second})
 		if err != nil {
 			return nil, err
 		}
 		wrapped = d.Tools()
 	}
 	return func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error) {
-		b := builder.NewSimpleBuilder(client).WithDurableScope(scope)
+		b := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithDurableScope(scope)
 		if len(wrapped) > 0 {
 			b = b.WithTools(wrapped...).WithMaxIterations(4)
 		}
@@ -112,7 +113,7 @@ func (k *kit) texts(clients map[string]*mocks.ScriptedClient, names ...string) (
 
 // budgetFor 返回根预算上下文；持久运行的预算与图共用存储，RootKey 与运行 ID 一致。
 func budgetFor(ctx context.Context, runID string, store durable.Store) (context.Context, error) {
-	cfg := budget.Config{RootKey: runID, Version: "v1", MaxModelRequests: 20}
+	cfg := budget.Config{RootKey: runID, Version: "v1", MaxModelRequests: 20, MaxAgentCalls: constants.DefaultMaxAgentCalls}
 	var c *budget.Controller
 	var err error
 	if store == nil {

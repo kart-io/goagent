@@ -40,7 +40,7 @@ func basicOllamaExample() {
 	fmt.Println("----------------------------")
 
 	// 创建 Ollama 客户端（使用默认配置）
-	client, err := providers.NewOllamaClientSimple("gemma3:12b")
+	client, err := providers.NewOllamaWithOptions(llm.WithModel("gemma3:12b"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Printf("Error creating Ollama client: %v\n", err)
 		return
@@ -86,6 +86,7 @@ func ollamaAgentExample() {
 		llm.WithModel("gemma3:12b"), // 或者使用其他模型如 "mistral", "codellama", "phi"
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(1000),
+		llm.WithTimeout(120*time.Second),
 	)
 	if err != nil {
 		log.Printf("Error creating Ollama client: %v\n", err)
@@ -122,7 +123,7 @@ func ollamaWithCompletionExample() {
 	fmt.Println("-----------------------------")
 
 	// 创建 Ollama 客户端
-	ollamaClient, err := providers.NewOllamaClientSimple("gemma3:12b")
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("gemma3:12b"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Printf("Failed to create Ollama client: %v\n", err)
 		return
@@ -159,7 +160,7 @@ func listOllamaModels() {
 	fmt.Println("4. Available Ollama Models")
 	fmt.Println("--------------------------")
 
-	client, err := providers.NewOllamaClientSimple("")
+	client, err := providers.NewOllamaWithOptions(llm.WithModel(""), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Printf("Failed to create Ollama client: %v\n", err)
 		return
@@ -204,7 +205,7 @@ func listOllamaModels() {
 
 		if modelAvailable {
 			fmt.Printf("\n  Using %s model:\n", modelName)
-			client, err := providers.NewOllamaClientSimple(modelName)
+			client, err := providers.NewOllamaWithOptions(llm.WithModel(modelName), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 			if err != nil {
 				fmt.Printf("    Error creating client: %v\n", err)
 				continue
@@ -227,7 +228,7 @@ func listOllamaModels() {
 // 额外的辅助函数：拉取模型（如果需要） - kept for reference
 /*
 func pullModelIfNeeded(modelName string) error {
-	client := providers.NewOllamaClientSimple(modelName)
+	client := providers.NewOllamaWithOptions(llm.WithModel(modelName), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 
 	// 检查模型是否已存在
 	models, err := client.ListModels()
@@ -273,7 +274,7 @@ func ollamaWithToolsExample() {
 	fmt.Println("--------------------------------------------------")
 
 	// 创建 Ollama 客户端
-	ollamaClient, err := providers.NewOllamaClientSimple("gemma3:12b")
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("gemma3:12b"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Printf("Failed to create Ollama client: %v\n", err)
 		return

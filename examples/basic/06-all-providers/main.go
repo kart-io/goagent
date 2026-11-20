@@ -30,6 +30,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -54,6 +55,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gemini-pro"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -79,6 +81,7 @@ func main() {
 			llm.WithBaseURL("https://api.deepseek.com/v1"),
 			llm.WithModel("deepseek-chat"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -96,7 +99,7 @@ func main() {
 	// 4. Test Ollama Provider (Local)
 	fmt.Println("4. Testing Ollama Provider")
 	fmt.Println("--------------------------")
-	ollamaClient, err := providers.NewOllamaClientSimple("llama2")
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		fmt.Printf("   ❌ Error creating Ollama client: %v\n", err)
 	} else if ollamaHasModel(ollamaClient, "llama2") {
@@ -118,6 +121,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("Qwen/Qwen2-7B-Instruct"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -145,6 +149,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("moonshot-v1-8k"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -216,12 +221,14 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		client, _ := providers.NewKimiWithOptions(
 			llm.WithAPIKey(os.Getenv("KIMI_API_KEY")),
 			llm.WithModel("moonshot-v1-128k"),
+			llm.WithTimeout(60*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 		return client
 
 	case "local-privacy":
 		// Use Ollama for local execution
-		client, _ := providers.NewOllamaClientSimple("llama2")
+		client, _ := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 		return client
 
 	case "chinese":
@@ -229,6 +236,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		client, _ := providers.NewDeepSeekWithOptions(
 			llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
 			llm.WithModel("deepseek-chat"),
+			llm.WithTimeout(60*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 		return client
 
@@ -238,11 +247,13 @@ func selectProviderByRequirement(requirement string) llm.Client {
 			client, _ := providers.NewDeepSeekWithOptions(
 				llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
 				llm.WithModel("deepseek-coder"),
+				llm.WithTimeout(60*time.Second),
+				llm.WithMaxTokens(2000),
 			)
 			return client
 		}
 		// Fallback to Ollama Codellama
-		client, _ := providers.NewOllamaClientSimple("codellama")
+		client, _ := providers.NewOllamaWithOptions(llm.WithModel("codellama"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 		return client
 
 	case "multimodal":
@@ -250,6 +261,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		client, _ := providers.NewGeminiWithOptions(
 			llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
 			llm.WithModel("gemini-pro-vision"),
+			llm.WithTimeout(60*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 		return client
 
@@ -258,6 +271,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		client, _ := providers.NewSiliconFlowWithOptions(
 			llm.WithAPIKey(os.Getenv("SILICONFLOW_API_KEY")),
 			llm.WithModel("meta-llama/Meta-Llama-3.1-70B-Instruct"),
+			llm.WithTimeout(60*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 		return client
 
@@ -266,6 +281,8 @@ func selectProviderByRequirement(requirement string) llm.Client {
 		client, _ := providers.NewOpenAIWithOptions(
 			llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
 			llm.WithModel("gpt-3.5-turbo"),
+			llm.WithTimeout(60*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 		return client
 	}

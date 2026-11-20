@@ -16,6 +16,8 @@ type Fold[D, O any] struct {
 }
 
 // Limits bounds admitted items and optional bytes. Size must be nonnegative.
+// MaxItems 0 means no item limit (it previously meant 1024); MaxBytes 0 means
+// no byte limit.
 type Limits[D any] struct {
 	MaxItems int
 	MaxBytes int64
@@ -29,9 +31,6 @@ func AsRunnable[I, D, O any](open func(context.Context, I) (Source[D], error), f
 	}
 	if limits.MaxItems < 0 || limits.MaxBytes < 0 || limits.MaxBytes > 0 && limits.Size == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid flow limits").WithComponent("flow").WithOperation("as_runnable")
-	}
-	if limits.MaxItems == 0 {
-		limits.MaxItems = 1024
 	}
 	mode := core.StreamModeFinal
 	if preview != nil {
@@ -57,7 +56,7 @@ func AsRunnable[I, D, O any](open func(context.Context, I) (Source[D], error), f
 				return first
 			}
 			count++
-			if count > limits.MaxItems {
+			if limits.MaxItems > 0 && count > limits.MaxItems {
 				first = agentErrors.Newf(agentErrors.CodeExecutionLimit, "flow item limit exceeded").WithComponent("flow").WithOperation("as_runnable")
 				return first
 			}

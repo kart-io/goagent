@@ -47,6 +47,7 @@ func basicExample() {
 		llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 		llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),       // or set directly: APIKey: "your-api-key"
 		llm.WithModel("claude-opus-5-5"),                     // Optional: defaults to claude-opus-5-5
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Anthropic provider: %v", err)
@@ -82,6 +83,7 @@ func modelExample() {
 			llm.WithBaseURL(os.Getenv("ANTHROPIC_API_BASE_URL")), // Optional: for custom endpoints
 			llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
 			llm.WithModel(model),
+			llm.WithTimeout(60*time.Second),
 		)
 		if err != nil {
 			log.Printf("Failed to create provider for %s: %v\n", model, err)
@@ -110,7 +112,7 @@ func modelExample() {
 
 // Example 3: Streaming Responses
 func streamingExample() {
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithTimeout(60*time.Second))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -135,7 +137,7 @@ func streamingExample() {
 
 // Example 4: Multi-turn Conversation
 func conversationExample() {
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithMaxTokens(1000))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithMaxTokens(1000), llm.WithTimeout(60*time.Second))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -181,7 +183,7 @@ func conversationExample() {
 
 // Example 5: Token Usage Tracking
 func tokenUsageExample() {
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")), llm.WithTimeout(60*time.Second))
 	if err != nil {
 		log.Fatalf("Failed to create provider: %v", err)
 	}
@@ -211,7 +213,7 @@ func tokenUsageExample() {
 // Example 6: Error Handling
 func errorHandlingExample() {
 	// Example with invalid API key
-	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey("invalid-key"))
+	provider, err := providers.NewAnthropicWithOptions(llm.WithAPIKey("invalid-key"), llm.WithTimeout(60*time.Second))
 	if err != nil {
 		log.Printf("Initialization error (expected): %v\n", err)
 		return

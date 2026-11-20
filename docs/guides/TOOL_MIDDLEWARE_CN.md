@@ -43,7 +43,7 @@ output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a
 
 **Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
 
-- 默认缓存 `cache.NewSimpleCache(5*time.Minute, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(constants.DefaultMiddlewareCacheCapacity))`（无后台协程，最多 10000 条）、TTL 5 分钟；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithCache(cache.Cache)`、`WithTTL`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
+- 默认缓存 `cache.NewSimpleCache(TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(MaxEntries))`（无后台协程）。TTL 与容量属于调用方策略：0 表示不过期、不限条目；要保持 v0.60 之前的默认请传 `WithTTL(5*time.Minute)` 与 `WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)`；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithCache(cache.Cache)`、`WithTTL`、`WithCacheMaxEntries`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
 - 默认键 `tool:<name>:<sha256(参数JSON) 的完整十六进制摘要>`，忽略 `__` 开头的参数；键前自动加会话与 CallerID 的哈希前缀，二者都为空时才不隔离。
 - 只缓存 `err == nil` 且 `Success=true` 的结果（不含 `__` 开头的元数据）。命中时不调用内层，返回副本并设置 `Metadata["cache_hit"]=true`、`Metadata["cached"]=true`；未命中且写入时设置 `cache_hit=false`、`cache_stored=true`。
 

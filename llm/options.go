@@ -11,13 +11,12 @@ import (
 // ClientOption defines an LLM client configuration option.
 type ClientOption func(*LLMOptions)
 
-// DefaultClientConfig returns the default client configuration.
+// DefaultClientConfig returns the default client configuration. It sets no
+// max_tokens and no timeout; see WithMaxTokens and WithTimeout.
 func DefaultClientConfig() *LLMOptions {
 	return &LLMOptions{
 		Provider:    shared.ProviderCustom,
-		MaxTokens:   shared.DefaultClientMaxTokens,
 		Temperature: shared.DefaultTemperature,
-		Timeout:     shared.DefaultLLMTimeoutSeconds,
 		TopP:        shared.DefaultTopP,
 	}
 }
@@ -60,12 +59,14 @@ func WithEmbeddingDimensions(n int) ClientOption {
 	return func(c *LLMOptions) { c.EmbeddingDimensions = n }
 }
 
-// WithMaxTokens sets the maximum number of tokens.
+// WithMaxTokens caps the tokens a reply may use. 0, the default, sends no
+// max_tokens so the service's own limit applies (it previously meant 2000).
+// Anthropic requires the field, so there 0 means
+// constants.DefaultClientMaxTokens and a negative value is rejected at
+// construction; other providers send nothing for a negative value.
 func WithMaxTokens(maxTokens int) ClientOption {
 	return func(c *LLMOptions) {
-		if maxTokens > 0 {
-			c.MaxTokens = maxTokens
-		}
+		c.MaxTokens = maxTokens
 	}
 }
 
@@ -81,7 +82,9 @@ func WithTemperature(temperature float64) ClientOption {
 
 // WithTimeout sets the request timeout. The configuration is stored in whole
 // seconds and positive durations are rounded up, so values under 1 second are
-// not truncated to 0 and treated as unset.
+// not truncated to 0. 0, the default, means no timeout (it previously meant 60
+// seconds by default and 30 seconds when set to 0); negative values are
+// treated as 0.
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(c *LLMOptions) {
 		c.Timeout = 0
@@ -114,6 +117,15 @@ func WithStreamTimeout(d time.Duration) ClientOption {
 // stream usually carries no usage.
 func WithStreamUsage(enabled bool) ClientOption {
 	return func(c *LLMOptions) { c.DisableStreamUsage = !enabled }
+}
+
+// WithEmbeddingRetries sets how many times a failed retryable embedding
+// request is retried, not counting the first attempt; 0, the default, means no
+// retry (DeepSeek Embed previously retried twice). It only affects providers
+// that retry embeddings through common.ExecuteWithRetry, currently DeepSeek;
+// chat requests are retried by the Builder's RequestError hook instead.
+func WithEmbeddingRetries(n int) ClientOption {
+	return func(c *LLMOptions) { c.EmbeddingRetries = n }
 }
 
 // WithTopP sets the Top-P sampling parameter.

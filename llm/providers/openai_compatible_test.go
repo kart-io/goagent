@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -74,13 +73,6 @@ func TestOpenAICompatiblePresetsRejectReasoning(t *testing.T) {
 		_, err = p.CompleteToolsStream(context.Background(), &agentllm.CompletionRequest{Reasoning: &usage.ReasoningConfig{Effort: "low"}}, nil)
 		require.ErrorContains(t, err, "does not support")
 	}
-}
-
-func TestCompatibleTimeout(t *testing.T) {
-	def := time.Duration(agentllm.DefaultLLMOptions().Timeout) * time.Second
-	require.Equal(t, 120*time.Second, compatibleTimeout(def, 120*time.Second))
-	require.Equal(t, 5*time.Second, compatibleTimeout(5*time.Second, 120*time.Second))
-	require.Equal(t, def, compatibleTimeout(def, 0))
 }
 
 // 预设沿用 OpenAI 的原生工具流：请求发往兼容端点并携带 Bearer 密钥。

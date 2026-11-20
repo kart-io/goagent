@@ -271,3 +271,13 @@ func TestSupervisorToolsResumableMember(t *testing.T) {
 	require.ErrorContains(t, err, "requires a journaled dispatcher call", "无持久日志的调用被拒绝")
 	require.Zero(t, s.opened.Load())
 }
+
+// 成员是否可与其他工具同轮并发由宿主声明，默认不并发。
+func TestSupervisorToolsConcurrencyFollowsMember(t *testing.T) {
+	var s sessions
+	factory := s.fake(func(context.Context, any) (any, error) { return "", nil })
+	for _, concurrent := range []bool{true, false} {
+		tool := memberTool(t, Member{Name: "billing", Description: "账单专家", Version: "v1", Factory: factory, ConcurrentCalls: concurrent})
+		require.Equal(t, concurrent, tool.(interfaces.ConcurrentCallTool).SupportsConcurrentCalls())
+	}
+}

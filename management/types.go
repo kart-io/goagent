@@ -2,12 +2,14 @@
 package management
 
 import (
+	"cmp"
 	"context"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
@@ -99,6 +101,9 @@ type Session struct {
 	ActiveTaskID string `json:"active_task_id,omitempty"`
 }
 type Task struct {
+	// Operations lists the operations that last put the task into attention.
+	// It is historical: a successful reconcile, a later success or a cancel
+	// does not clear it.
 	Operations []durable.OperationRef `json:"operations,omitempty"`
 	Meta
 	RevisionID      string          `json:"revision_id,omitempty"`
@@ -243,6 +248,10 @@ type SubmitTaskRequest struct {
 	IdempotencyKey string          `json:"-"`
 	SessionID      string          `json:"session_id"`
 	Input          json.RawMessage `json:"input"`
+	// Budget overrides Config.DefaultTaskBudget for this task when non-nil.
+	// Only in-process callers can set it: httpapi discards any budget in the
+	// request body so remote clients always run under the host default.
+	Budget *TaskBudget `json:"budget,omitempty"`
 }
 type CancelTaskRequest struct {
 	IdempotencyKey   string `json:"-"`
@@ -315,13 +324,162 @@ func (TenantAuthorizer) Scope(_ context.Context, a Actor, _, _ string) (Visibili
 	return Visibility{All: true, PolicyVersion: "tenant-v1"}, ValidateActor(a)
 }
 
+// Limits are caller-owned. Each field is interpreted on its own; there is no
+// "all zero means defaults" rule.
+//
+// Caps (0 = unlimited): MaxPageSize, MaxInputBytes, MaxOutputBytes,
+// MaxPending, IdempotencyRetention, TaskRetention and AuditRetention.
+// PageSize is the page size used when a request omits one (0 = 50, lowered to
+// MaxPageSize when that is smaller).
+//
+// Required values (0 = the documented default, negative is invalid): Workers,
+// PollInterval, OutboxPollInterval, PersistTimeout, DeliveryBackoffMax and
+// BuildRetryDelay. They cannot mean "unlimited": unbounded workers remove
+// the host's concurrency bound, a zero poll interval busy-loops on the Store,
+// and an unbounded PersistTimeout lets a detached write hang shutdown forever.
+// DeliveryTimeout 0 means no per-delivery timeout (the run context still
+// applies).
 type Limits struct {
-	PageSize, MaxPageSize, MaxInputBytes, MaxOutputBytes, Workers, MaxPending int
-	IdempotencyRetention, TaskRetention, AuditRetention                       time.Duration
+	PageSize, MaxPageSize, MaxInputBytes, MaxOutputBytes int
+	// Workers is the number of tasks one Worker runs at once (0 = 4).
+	Workers int
+	// MaxPending caps unfinished tasks per tenant, counted page by page at
+	// submit time (0 = no cap).
+	MaxPending int
+	// Retentions are applied when a row is written (IdempotencyRetention sets
+	// ExpiresAt) or when Prune runs; 0 keeps the rows forever. Changing
+	// IdempotencyRetention only affects rows written afterwards.
+	IdempotencyRetention, TaskRetention, AuditRetention time.Duration
+	// PollInterval is the Worker command poll period (0 = 20ms).
+	PollInterval time.Duration
+	// OutboxPollInterval is the OutboxDispatcher poll period (0 = 100ms).
+	OutboxPollInterval time.Duration
+	// PersistTimeout bounds writes detached from cancellation: slot
+	// claim/release, finishing a task, cleanup and the session lock wait
+	// (0 = 5s).
+	PersistTimeout time.Duration
+	// DeliveryTimeout bounds one DeliverySink.Accept call (0 = no timeout).
+	DeliveryTimeout time.Duration
+	// DeliveryBackoffMax caps the doubling redelivery delay (0 = 256s).
+	DeliveryBackoffMax time.Duration
+	// BuildRetryDelay is how long a blocked build or a busy session lock waits
+	// before the command is retried (0 = 1s).
+	BuildRetryDelay time.Duration
 }
 
+// DefaultLimits returns the limits that applied when Config.Limits was left
+// zero before limits became caller-owned. Pass it explicitly to keep them.
 func DefaultLimits() Limits {
-	return Limits{50, 200, 1 << 20, 4 << 20, 4, 10000, 30 * 24 * time.Hour, 90 * 24 * time.Hour, 180 * 24 * time.Hour}
+	return Limits{
+		PageSize: constants.DefaultManagementPageSize, MaxPageSize: 200, MaxInputBytes: 1 << 20, MaxOutputBytes: 4 << 20,
+		Workers: constants.DefaultManagementWorkers, MaxPending: 10000,
+		IdempotencyRetention: 30 * 24 * time.Hour, TaskRetention: 90 * 24 * time.Hour, AuditRetention: 180 * 24 * time.Hour,
+		PollInterval: constants.DefaultManagementPollInterval, OutboxPollInterval: constants.DefaultManagementOutboxPollInterval, PersistTimeout: constants.DefaultManagementPersistTimeout,
+		DeliveryBackoffMax: constants.DefaultManagementDeliveryBackoffMax, BuildRetryDelay: constants.DefaultManagementBuildRetryDelay,
+	}
+}
+
+func (l Limits) normalize() (Limits, error) {
+	for _, n := range []int{l.PageSize, l.MaxPageSize, l.MaxInputBytes, l.MaxOutputBytes, l.Workers, l.MaxPending} {
+		if n < 0 {
+			return l, agentErrors.ErrManagementInvalid
+		}
+	}
+	for _, d := range []time.Duration{l.IdempotencyRetention, l.TaskRetention, l.AuditRetention, l.PollInterval, l.OutboxPollInterval, l.PersistTimeout, l.DeliveryTimeout, l.DeliveryBackoffMax, l.BuildRetryDelay} {
+		if d < 0 {
+			return l, agentErrors.ErrManagementInvalid
+		}
+	}
+	if l.MaxPageSize > 0 && l.PageSize > l.MaxPageSize {
+		return l, agentErrors.ErrManagementInvalid
+	}
+	if l.PageSize == 0 {
+		l.PageSize = constants.DefaultManagementPageSize
+		if l.MaxPageSize > 0 {
+			l.PageSize = min(l.PageSize, l.MaxPageSize)
+		}
+	}
+	l.Workers = cmp.Or(l.Workers, constants.DefaultManagementWorkers)
+	l.PollInterval = cmp.Or(l.PollInterval, constants.DefaultManagementPollInterval)
+	l.OutboxPollInterval = cmp.Or(l.OutboxPollInterval, constants.DefaultManagementOutboxPollInterval)
+	l.PersistTimeout = cmp.Or(l.PersistTimeout, constants.DefaultManagementPersistTimeout)
+	l.DeliveryBackoffMax = cmp.Or(l.DeliveryBackoffMax, constants.DefaultManagementDeliveryBackoffMax)
+	l.BuildRetryDelay = cmp.Or(l.BuildRetryDelay, constants.DefaultManagementBuildRetryDelay)
+	return l, nil
+}
+
+// Inbound request size caps shared by the httpapi, a2a and mcpserver
+// adapters. The cap is an abuse guard for untrusted clients, so a zero
+// MaxInputBytes takes constants.DefaultManagementMaxRequestBytes instead of
+// meaning unlimited;
+// pass UnlimitedRequestBytes to remove the cap explicitly. Other negative
+// values are invalid.
+const UnlimitedRequestBytes int64 = -1
+
+// RequestBytes resolves an adapter MaxInputBytes setting: 0 becomes
+// constants.DefaultManagementMaxRequestBytes, UnlimitedRequestBytes stays, other negatives fail.
+func RequestBytes(n int64) (int64, error) {
+	switch {
+	case n == 0:
+		return constants.DefaultManagementMaxRequestBytes, nil
+	case n == UnlimitedRequestBytes || n > 0:
+		return n, nil
+	}
+	return 0, agentErrors.ErrManagementInvalid
+}
+
+// over reports whether n exceeds limit, where limit 0 means no limit.
+func over(n, limit int) bool { return limit > 0 && n > limit }
+
+// TaskBudget is the per-task execution budget. Every field 0 means unlimited;
+// Timeout 0 sets no deadline. It is fixed at submit time, persisted with the
+// Task as a budget.Config and part of the submit idempotency hash.
+type TaskBudget struct {
+	MaxModelRequests int           `json:"max_model_requests,omitzero"`
+	MaxToolCalls     int           `json:"max_tool_calls,omitzero"`
+	MaxAgentCalls    int           `json:"max_agent_calls,omitzero"`
+	Timeout          time.Duration `json:"timeout_ns,omitzero"`
+}
+
+func (b TaskBudget) validate() error {
+	if b.MaxModelRequests < 0 || b.MaxToolCalls < 0 || b.MaxAgentCalls < 0 || b.Timeout < 0 {
+		return agentErrors.ErrManagementInvalid
+	}
+	return nil
+}
+
+// Budget versions written into Task.Budget.Version.
+const (
+	// TaskBudgetVersion marks budgets whose zero fields mean unlimited.
+	TaskBudgetVersion = "management/v2"
+	// LegacyTaskBudgetVersion marks budgets written before limits became
+	// caller-owned; their ledgers recorded MaxAgentCalls as 1000.
+	LegacyTaskBudgetVersion = "management/v1"
+)
+
+func (b TaskBudget) config(rootKey string, now time.Time) budget.Config {
+	c := budget.Config{RootKey: rootKey, Version: TaskBudgetVersion, MaxModelRequests: b.MaxModelRequests, MaxToolCalls: b.MaxToolCalls, MaxAgentCalls: b.MaxAgentCalls}
+	if b.Timeout > 0 {
+		c.DeadlineUnixMilli = now.Add(b.Timeout).UnixMilli()
+	}
+	return c
+}
+
+// UnmarshalJSON is the single decode path for persisted tasks. A
+// management/v1 budget stored MaxAgentCalls as 0 while its ledger recorded the
+// then-default 1000; the value is restored here so resumed execution, native
+// inspection and GetRun usage all bind the ledger they wrote.
+func (t *Task) UnmarshalJSON(data []byte) error {
+	type plain Task
+	var v plain
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	if v.Budget.Version == LegacyTaskBudgetVersion && v.Budget.MaxAgentCalls == 0 {
+		v.Budget.MaxAgentCalls = constants.DefaultMaxAgentCalls
+	}
+	*t = Task(v)
+	return nil
 }
 
 type Capabilities struct {
@@ -403,9 +561,17 @@ type Config struct {
 	Reconciliations      ReconciliationReader
 	Delivery             DeliverySink
 	Limits               Limits
-	Now                  func() time.Time
-	Report               func(string, error)
+	// DefaultTaskBudget applies to tasks submitted without a Budget; its zero
+	// value is unlimited. It is also the only budget for tasks submitted over
+	// httpapi, which ignores a budget sent in the request body.
+	DefaultTaskBudget TaskBudget
+	Now               func() time.Time
+	Report            func(string, error)
 }
+
+// HistoryReader reads business-visible session events after a sequence.
+// limit 0 means no limit: the reader returns every matching event and the
+// caller pages with NextSeq. Implementations must not impose their own cap.
 type HistoryReader interface {
 	History(context.Context, string, int64, int, []string) (HistoryPage, error)
 }

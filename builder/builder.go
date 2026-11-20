@@ -137,6 +137,9 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 			return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval filter requires an interfaces.RequestRetriever")
 		}
 	}
+	if err := b.config.validateLimits(); err != nil {
+		return nil, err
+	}
 	if b.retrievalConfig.MaxDocuments < 0 || b.retrievalConfig.MaxContextRunes < 0 {
 		return nil, agentErrors.NewInvalidConfigError("builder", "retrieval", "retrieval limits must not be negative")
 	}

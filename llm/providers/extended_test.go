@@ -215,7 +215,7 @@ func TestGeminiStreamingProvider_Inheritance(t *testing.T) {
 	// Test inherited methods
 	assert.Equal(t, shared.ProviderGemini, provider.Provider())
 	assert.Equal(t, "gemini-pro", provider.ModelName())
-	assert.Greater(t, provider.MaxTokens(), 0)
+	assert.Zero(t, provider.MaxTokens(), "默认不发送 max_tokens")
 }
 
 // ==============================================================================

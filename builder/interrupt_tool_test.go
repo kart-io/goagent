@@ -115,7 +115,7 @@ func TestParallelToolCallsOneInterruptsOthersComplete(t *testing.T) {
 		answerTurn("完成", 4),
 	)
 	agent, err := NewSimpleBuilder(model).WithDurableScope("support").WithParallelToolCalls(2).
-		WithTools(dispatcherFor(t, confirmRefundTool(t, &calls), lookup).Tools()...).WithMaxIterations(2).Build()
+		WithTools(dispatcherFor(t, concurrentFunc{confirmRefundTool(t, &calls).(*tools.FunctionTool)}, concurrentFunc{lookup}).Tools()...).WithMaxIterations(2).Build()
 	require.NoError(t, err)
 
 	_, err = agent.AsRunnable().Invoke(ctx, "退款 A1")

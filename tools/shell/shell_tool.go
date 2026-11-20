@@ -13,6 +13,7 @@ import (
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/processgroup"
@@ -29,6 +30,8 @@ type ShellTool struct {
 	timeout         time.Duration   // 默认超时时间
 	rootDir         string          // 工作目录根，空表示不限制
 	env             []string        // 额外透传给子进程的宿主环境变量名
+	maxOutput       int             // 保留的输出字节数，0 表示不限
+	invalid         error           // 非空时每次调用都返回它，见 ShellToolBuilder.WithMaxOutputBytes
 }
 
 // baseEnv 是子进程默认可见的宿主环境变量：命令定位、区域与临时目录所需，不含凭据。
@@ -67,6 +70,7 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	tool := &ShellTool{
 		allowedCommands: whitelist,
 		timeout:         timeout,
+		maxOutput:       shared.DefaultShellMaxOutputBytes,
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
@@ -101,20 +105,36 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	return tool
 }
 
+// DurableOperationPolicy implements tools.DurablePolicyProvider. A command may
+// change files or other state, so a call runs at most once: after a crash or
+// failure it is not rerun but reported to the host for reconciliation.
+func (s *ShellTool) DurableOperationPolicy() durable.OperationPolicy {
+	return durable.OperationPolicy{MaxAttempts: 1}
+}
+
 // shellMetachars 是 shell 会解释的字符，换行在 bash -c 中等同于命令分隔符
 const shellMetachars = ";|&`$><\n\r"
 
-// maxOutputBytes 是保留的命令输出上限，超出部分丢弃。
-const maxOutputBytes = 1 << 20
+// The output cap is an anti-abuse cap rather than a policy limit: the command
+// and its arguments come from the model, and unbounded output would be held in
+// memory and returned to it whole. For that reason 0 means the default here,
+// not "unlimited".
+//
+// UnlimitedOutput passed to WithMaxOutputBytes keeps all output.
+const UnlimitedOutput = -1
 
-// limitedBuffer 只保留前 maxOutputBytes 字节，其余照常消费，避免子进程因管道写满而阻塞。
+// limitedBuffer 只保留前 limit 字节（0 表示不限），其余照常消费，避免子进程因管道写满而阻塞。
 type limitedBuffer struct {
 	buf       bytes.Buffer
+	limit     int
 	truncated bool
 }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
-	if room := maxOutputBytes - b.buf.Len(); len(p) > room {
+	if b.limit <= 0 {
+		return b.buf.Write(p)
+	}
+	if room := b.limit - b.buf.Len(); len(p) > room {
 		b.buf.Write(p[:room])
 		b.truncated = true
 		return len(p), nil
@@ -125,6 +145,9 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 // run 执行 shell 命令
 func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	resp := tools.NewToolErrorResponse(s.Name()).WithOperation("run")
+	if s.invalid != nil {
+		return nil, s.invalid
+	}
 
 	// 解析参数
 	command, ok := input.Args["command"].(string)
@@ -194,7 +217,7 @@ func (s *ShellTool) run(ctx context.Context, input *interfaces.ToolInput) (*inte
 	cmd.Env = s.environ()
 
 	// 执行命令
-	var output limitedBuffer
+	output := limitedBuffer{limit: s.maxOutput}
 	cmd.Stdout, cmd.Stderr = &output, &output
 	startTime := time.Now()
 	err = cmd.Run()
@@ -354,6 +377,7 @@ type ShellToolBuilder struct {
 	timeout         time.Duration
 	rootDir         string
 	env             []string
+	maxOutput       int
 }
 
 // NewShellToolBuilder 创建 Shell 工具构建器
@@ -390,9 +414,27 @@ func (b *ShellToolBuilder) WithEnv(names ...string) *ShellToolBuilder {
 	return b
 }
 
+// WithMaxOutputBytes caps the combined output kept per call; 0 means
+// constants.DefaultShellMaxOutputBytes and UnlimitedOutput keeps everything. Other negative
+// values make every call fail with an invalid-config error, because Build
+// cannot return one.
+func (b *ShellToolBuilder) WithMaxOutputBytes(n int) *ShellToolBuilder {
+	b.maxOutput = n
+	return b
+}
+
 // Build 构建工具
 func (b *ShellToolBuilder) Build() *ShellTool {
 	tool := NewShellTool(b.allowedCommands, b.timeout)
+	switch {
+	case b.maxOutput == UnlimitedOutput:
+		tool.maxOutput = 0
+	case b.maxOutput > 0:
+		tool.maxOutput = b.maxOutput
+	case b.maxOutput < 0:
+		tool.invalid = agentErrors.New(agentErrors.CodeInvalidConfig, "shell tool output cap must be positive, 0 or UnlimitedOutput").
+			WithComponent("shell_tool").WithOperation("build")
+	}
 	tool.rootDir = b.rootDir
 	tool.env = slices.Clone(b.env)
 	return tool

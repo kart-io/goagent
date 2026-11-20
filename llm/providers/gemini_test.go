@@ -359,7 +359,7 @@ func TestGeminiStreaming_Inheritance(t *testing.T) {
 	// 测试继承的方法
 	assert.Equal(t, shared.ProviderGemini, provider.Provider())
 	assert.Equal(t, "gemini-pro", provider.ModelName())
-	assert.Greater(t, provider.MaxTokens(), 0)
+	assert.Zero(t, provider.MaxTokens(), "默认不发送 max_tokens")
 }
 
 // TestGeminiStreaming_Configuration 测试流式 provider 配置
@@ -388,7 +388,7 @@ func TestGeminiStreaming_DefaultValues(t *testing.T) {
 
 	// 验证默认值
 	assert.Equal(t, "gemini-2.5-flash", provider.ModelName())
-	assert.NotZero(t, provider.MaxTokens())
+	assert.Zero(t, provider.MaxTokens(), "默认不发送 max_tokens")
 }
 
 // TestGeminiStreaming_NewGeminiStreaming_Deprecated 测试已弃用的构造函数

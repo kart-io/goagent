@@ -434,3 +434,21 @@ func TestWrap_MixedTypes(t *testing.T) {
 	assert.Equal(t, int32(1), tool.callCount.Load())
 	assert.True(t, output2.Metadata["cache_hit"].(bool))
 }
+
+type concurrentBase struct{ *tools.BaseTool }
+
+func (concurrentBase) SupportsConcurrentCalls() bool { return true }
+
+// 包装转述内层工具的并发声明，否则经中间件包装的只读工具会让整轮串行。
+func TestWrappedToolForwardsConcurrency(t *testing.T) {
+	pass := func(_ interfaces.Tool, next middleware.ToolInvoker) middleware.ToolInvoker { return next }
+	base := tools.NewBaseTool("t", "t", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) { return nil, nil })
+	for _, tc := range []struct {
+		tool interfaces.Tool
+		want bool
+	}{{concurrentBase{base}, true}, {base, false}} {
+		c, ok := middleware.Wrap(tc.tool, pass).(interfaces.ConcurrentCallTool)
+		require.True(t, ok)
+		require.Equal(t, tc.want, c.SupportsConcurrentCalls())
+	}
+}
