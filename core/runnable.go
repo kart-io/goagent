@@ -62,7 +62,8 @@ type RunnableConfig struct {
 	// Metadata is the metadata.
 	Metadata map[string]interface{} `json:"metadata"`
 
-	// MaxConcurrency is the maximum concurrency (used by Batch).
+	// MaxConcurrency is the maximum concurrency used by Batch; 0 means no
+	// limit, one goroutine per input (it previously defaulted to 10).
 	MaxConcurrency int `json:"max_concurrency"`
 }
 
@@ -127,10 +128,9 @@ type BaseRunnable[I, O any] struct {
 func NewBaseRunnable[I, O any]() *BaseRunnable[I, O] {
 	return &BaseRunnable[I, O]{
 		config: RunnableConfig{
-			Callbacks:      []Callback{},
-			Tags:           []string{},
-			Metadata:       make(map[string]interface{}),
-			MaxConcurrency: 10,
+			Callbacks: []Callback{},
+			Tags:      []string{},
+			Metadata:  make(map[string]interface{}),
 		},
 	}
 }
@@ -247,8 +247,7 @@ func NewRunnablePipe[I, M, O any](first Runnable[I, M], second Runnable[M, O]) *
 		first:  first,
 		second: second,
 		config: RunnableConfig{
-			Callbacks:      []Callback{},
-			MaxConcurrency: 10,
+			Callbacks: []Callback{},
 		},
 	}
 }
@@ -433,8 +432,7 @@ func NewRunnableSequence(runnables ...Runnable[any, any]) *RunnableSequence {
 	return &RunnableSequence{
 		runnables: slices.Clone(runnables),
 		config: RunnableConfig{
-			Callbacks:      []Callback{},
-			MaxConcurrency: 10,
+			Callbacks: []Callback{},
 		},
 	}
 }

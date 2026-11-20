@@ -75,7 +75,7 @@ func TestSourceCancellationAndLimits(t *testing.T) {
 		}
 		return nil
 	})
-	r, err := AsRunnable(func(context.Context, int) (Source[int], error) { return source, nil }, sumFold(), nil, Limits[int]{})
+	r, err := AsRunnable(func(context.Context, int) (Source[int], error) { return source, nil }, sumFold(), nil, Limits[int]{MaxItems: 1024})
 	require.NoError(t, err)
 	_, err = r.Invoke(context.Background(), 0)
 	require.ErrorContains(t, err, "item limit")
