@@ -63,8 +63,8 @@ type OperationPolicy struct {
 	// confirms the effect did not take place or RetryInterrupted is declared.
 	RetryFailed bool `json:"retry_failed"`
 	// Reconcile is called before a rerun when a record was interrupted (stuck
-	// in pending, or failed due to cancellation or timeout, with an unknown
-	// outcome) and checks by derived execution key whether the effect has taken
+	// in pending, failed due to cancellation or timeout, or failed with
+	// ErrEffectUnknown) and checks by derived execution key whether the effect has taken
 	// place: if found is true the record is completed with value without
 	// calling run or counting an attempt; if it returns an error the record is
 	// unchanged.
@@ -72,12 +72,14 @@ type OperationPolicy struct {
 	// Resumable declares that all effects of run are recorded under derived
 	// execution keys, so re-entering only replays completed steps: waiting
 	// records are always re-entered without counting an attempt, and pending
-	// records are re-entered within MaxAttempts. Only operations that declare
-	// it can record a *WaitError as waiting.
+	// records are re-entered within MaxAttempts. A run that stops because an
+	// inner operation returned *OperationError keeps the record pending without
+	// consuming an attempt, and is always re-entered. Only operations that
+	// declare it can record a *WaitError as waiting.
 	Resumable bool `json:"resumable"`
 	// RetryInterrupted allows rerunning an interrupted operation within
-	// MaxAttempts: one whose record is stuck in pending (process crash) or
-	// failed due to cancellation or timeout. The previous execution may already
+	// MaxAttempts: one whose record is stuck in pending (process crash), failed
+	// due to cancellation or timeout, or failed with ErrEffectUnknown. The previous execution may already
 	// have taken effect, so the caller must accept duplicate effects; ordinary
 	// failures are not interruptions.
 	RetryInterrupted bool `json:"retry_interrupted"`
@@ -98,7 +100,11 @@ type OperationRecord struct {
 	// Reconciled reports that the completed result came from Reconcile rather
 	// than from this execution.
 	Reconciled bool `json:"reconciled,omitzero"`
-	Replayed   bool `json:"-"`
+	// ParentKey is the execution key the operation ran under (ExecutionKey of
+	// the ctx passed to Do); together with ID it forms the OperationRef a host
+	// reconciles. Records written before it existed leave it empty.
+	ParentKey string `json:",omitempty"`
+	Replayed  bool   `json:"-"`
 }
 
 const operationVersion = "goagent-operation-v2"
@@ -114,7 +120,19 @@ func CanWait(ctx context.Context) bool {
 	return ok
 }
 
-type OperationError struct{ ID, Kind string }
+// ErrEffectUnknown is returned (wrapped) by an operation's run function when
+// it cannot tell whether its effect took place, for example when a connection
+// drops after the request was sent. Do records it as failed with FailureKind
+// "effect_unknown", treats it like a crash (an interrupted record) and returns
+// an *OperationError so the host decides what happened.
+var ErrEffectUnknown = errors.New("durable operation effect is unknown")
+
+// OperationError reports an operation whose outcome needs host attention.
+// ParentKey and ID identify it as a durable.OperationRef.
+type OperationError struct {
+	ID, Kind  string
+	ParentKey string `json:",omitempty"`
+}
 
 func (e *OperationError) Error() string {
 	return fmt.Sprintf("operation %q needs host attention (%s)", e.ID, e.Kind)
@@ -313,7 +331,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	if replayOnly && (err != nil || record.Status != "completed") {
 		return nil, agentErrors.ErrReplayOnly
 	}
+	parentKey := ExecutionKey(ctx)
 	if err == nil {
+		record.ParentKey = parentKey
 		if record.InputHash != inputHash || record.MaxAttempts != policy.MaxAttempts {
 			return record, agentErrors.Newf(agentErrors.CodeConflict, "operation intent or attempt policy changed").WithComponent("durable_operation").WithOperation("do")
 		}
@@ -322,7 +342,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			return record, nil
 		}
 		absent := false
-		interrupted := record.Status == "pending" || (record.Status == "failed" && (record.FailureKind == "canceled" || record.FailureKind == "deadline"))
+		// nested 的外层没有中断：它停下是因为内层操作需要宿主处理，再次进入只回放内层记录。
+		nested := record.Status == "pending" && record.FailureKind == nestedAttentionKind
+		interrupted := !nested && (record.Status == "pending" || (record.Status == "failed" && (record.FailureKind == "canceled" || record.FailureKind == "deadline" || record.FailureKind == "effect_unknown")))
 		if interrupted && policy.Reconcile != nil {
 			value, found, e := reconcileOperation(childCtx, policy.Reconcile)
 			if e != nil {
@@ -334,22 +356,23 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			}
 			absent = true
 		}
-		resume := policy.Resumable && (record.Status == "waiting" || (record.Status == "pending" && record.Attempts < policy.MaxAttempts))
+		resume := policy.Resumable && (record.Status == "waiting" || nested || (record.Status == "pending" && record.Attempts < policy.MaxAttempts))
 		if record.Status == "waiting" && !resume {
 			record.Replayed = true
-			return record, &OperationError{ID: id, Kind: "not_resumable"}
+			return record, &OperationError{ID: id, Kind: "not_resumable", ParentKey: parentKey}
 		}
 		resume = resume || (policy.RetryInterrupted && interrupted && record.Attempts < policy.MaxAttempts)
 		retryFailed := policy.RetryFailed && (!interrupted || absent)
 		if !resume && (!retryFailed || record.Attempts >= policy.MaxAttempts) {
 			record.Replayed = true
-			return record, &OperationError{ID: id, Kind: record.FailureKind}
+			return record, &OperationError{ID: id, Kind: record.FailureKind, ParentKey: parentKey}
+		}
+		// 从等待或内层待处理中续跑不是新的尝试。
+		if record.Status != "waiting" && !(nested && policy.Resumable) {
+			record.Attempts++
 		}
 	} else {
-		record = &OperationRecord{ID: id, Key: key, InputHash: inputHash, MaxAttempts: policy.MaxAttempts}
-	}
-	// 从等待中续跑不是新的尝试。
-	if record.Status != "waiting" {
+		record = &OperationRecord{ID: id, Key: key, InputHash: inputHash, MaxAttempts: policy.MaxAttempts, ParentKey: parentKey}
 		record.Attempts++
 	}
 	record.Status, record.FailureKind, record.Value, record.Continuation = "pending", "ambiguous", json.RawMessage(`null`), nil
@@ -385,6 +408,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 				}
 			}
 		}
+	} else if errors.Is(callErr, agentErrors.ErrOperationAttention) && !errors.Is(callErr, ErrEffectUnknown) {
+		// 内层操作需要宿主处理：外层没有失败也不能算一次尝试，保持 pending 以便恢复时重新进入内层记录。
+		record.Status, record.FailureKind = "pending", nestedAttentionKind
 	} else if callErr != nil {
 		record.Status, record.FailureKind = "failed", "execution"
 		// 取消后供应方可能只返回“连接已关闭”，错误链里没有 context.Canceled。
@@ -393,6 +419,11 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 		}
 		if errors.Is(callErr, context.DeadlineExceeded) {
 			record.FailureKind = "deadline"
+		}
+		if errors.Is(callErr, ErrEffectUnknown) {
+			record.FailureKind = "effect_unknown"
+			// 只返回分类错误：外层据此判断是内层待处理，而不是把结果未知记到自己身上。
+			callErr = &OperationError{ID: id, Kind: "effect_unknown", ParentKey: parentKey}
 		}
 	}
 	// Persist cancellation/failure evidence with a bounded independent context.
@@ -403,6 +434,10 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	}
 	return record, errors.Join(callErr, save(saveCtx))
 }
+
+// nestedAttentionKind marks a pending record whose run stopped because an
+// inner operation needs host attention.
+const nestedAttentionKind = "nested_attention"
 
 type attemptContext struct{}
 
