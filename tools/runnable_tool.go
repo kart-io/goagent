@@ -70,6 +70,10 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
 // policy limit, because recursive delegation would otherwise never stop: 0
 // means DefaultRunnableMaxDepth and UnlimitedRunnableDepth removes the cap.
+// ConcurrentCalls declares that calls may run in the same parallel round as
+// other concurrent tools (interfaces.ConcurrentCallTool). Only the host knows
+// whether the subflow has side effects, so it defaults to false and the
+// Dispatcher runs such a round serially.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
@@ -80,6 +84,7 @@ type RunnableToolConfig[I, O any] struct {
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
 	Timeout                                time.Duration
+	ConcurrentCalls                        bool
 }
 type runnableTool[I, O any] struct {
 	config  RunnableToolConfig[I, O]
@@ -189,6 +194,10 @@ func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 }
 
 func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool from
+// RunnableToolConfig.ConcurrentCalls.
+func (t *runnableTool[I, O]) SupportsConcurrentCalls() bool { return t.config.ConcurrentCalls }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
 		if v := recover(); v != nil {

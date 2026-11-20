@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/tools"
@@ -46,6 +47,21 @@ func TestDispatchedToolConcurrencyFollowsInner(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, tc.want, c.SupportsConcurrentCalls())
 		})
+	}
+}
+
+// 子流程是否有副作用由宿主决定：RunnableTool 按配置声明，宿主无法再包一层而不丢掉超时与持久策略。
+func TestRunnableToolConcurrencyFollowsConfig(t *testing.T) {
+	run := core.NewRunnableFunc(func(_ context.Context, in string) (string, error) { return in, nil })
+	for _, concurrent := range []bool{true, false} {
+		tool, err := tools.NewRunnableTool(run, tools.RunnableToolConfig[string, string]{
+			Name: "sub", ArgsSchema: `{"type":"object"}`, Version: "v1", ConcurrentCalls: concurrent,
+			Decode: func(map[string]any) (string, error) { return "x", nil },
+			Encode: func(s string) (any, error) { return s, nil },
+		})
+		require.NoError(t, err)
+		wrapped := newTestDispatcher(t, tool, tools.DispatchConfig{}).Tools()
+		require.Equal(t, concurrent, wrapped[0].(interfaces.ConcurrentCallTool).SupportsConcurrentCalls())
 	}
 }
 

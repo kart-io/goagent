@@ -71,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 `Dispatcher.Tools` 返回的包装工具此前一律声明 `SupportsConcurrentCalls() == true`，Builder 因此把写工具（shell、HTTP 写请求、业务写操作）与只读工具并行派发；同一轮的多个结果未知调用只能整体核对。现在包装工具只转述内层工具的声明，未声明的工具串行执行，串行轮次在第一个错误处停止。
 
-迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。`tools/middleware.WrappedTool` 不转发该声明，经它包装的工具一律串行。
+迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。子流程工具无法再包一层（会丢掉超时与持久策略），改用新增的 `tools.RunnableToolConfig.ConcurrentCalls` 与 `multiagent.Member.ConcurrentCalls` 声明，默认 false：需要成员或子调查同轮并行的 Supervisor 须显式打开。`tools/middleware.WrappedTool` 不转发该声明，经它包装的工具一律串行。
 
 ### 新增
 
