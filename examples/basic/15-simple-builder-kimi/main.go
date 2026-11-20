@@ -98,6 +98,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 		llm.WithModel("moonshot-v1-8k"), // 8K 上下文模型
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -147,6 +148,8 @@ func runQuickAgent(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -186,6 +189,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -240,6 +244,8 @@ func runPresetAgents(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -322,6 +328,7 @@ func runJSONFormatExample(apiKey string) error {
 		llm.WithTemperature(0.3), // 较低温度确保 JSON 格式稳定
 		llm.WithMaxTokens(1000),
 		llm.WithJSONResponse(), // 启用 JSON 格式输出
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)
@@ -389,6 +396,7 @@ func runLongContextExample(apiKey string) error {
 		llm.WithModel("moonshot-v1-128k"), // 128K 上下文模型
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 Kimi 客户端失败: %w", err)

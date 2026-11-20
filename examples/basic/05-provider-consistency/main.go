@@ -64,7 +64,7 @@ func main() {
 	}
 
 	// 4. Ollama Provider (新增)
-	if ollamaClient, err := providers.NewOllamaClientSimple("llama2"); err == nil {
+	if ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000)); err == nil {
 		clients = append(clients, ollamaClient)
 		fmt.Println("✅ Ollama Provider 创建成功")
 	}

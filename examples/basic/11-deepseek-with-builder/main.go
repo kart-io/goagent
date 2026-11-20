@@ -88,6 +88,7 @@ func runBasicAgentBuilder(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -132,6 +133,7 @@ func runAgentBuilderWithTools(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -183,6 +185,8 @@ func runAgentBuilderWithMiddleware(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -239,6 +243,7 @@ func runAgentBuilderWithConfig(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3), // 低温度，更加准确
 		llm.WithMaxTokens(1000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -296,6 +301,8 @@ func runChatbotAgent(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.8), // 更高的温度，更有创造性
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)

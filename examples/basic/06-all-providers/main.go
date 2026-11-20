@@ -30,6 +30,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -54,6 +55,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("gemini-pro"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -79,6 +81,7 @@ func main() {
 			llm.WithBaseURL("https://api.deepseek.com/v1"),
 			llm.WithModel("deepseek-chat"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -96,7 +99,7 @@ func main() {
 	// 4. Test Ollama Provider (Local)
 	fmt.Println("4. Testing Ollama Provider")
 	fmt.Println("--------------------------")
-	ollamaClient, err := providers.NewOllamaClientSimple("llama2")
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		fmt.Printf("   ❌ Error creating Ollama client: %v\n", err)
 	} else if ollamaHasModel(ollamaClient, "llama2") {
@@ -118,6 +121,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("Qwen/Qwen2-7B-Instruct"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 
@@ -145,6 +149,7 @@ func main() {
 			llm.WithAPIKey(apiKey),
 			llm.WithModel("moonshot-v1-8k"),
 			llm.WithMaxTokens(100),
+			llm.WithTimeout(60 * time.Second),
 			llm.WithTemperature(0.7),
 		}
 

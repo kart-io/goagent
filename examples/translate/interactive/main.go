@@ -37,6 +37,7 @@ func main() {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		log.Fatalf("初始化 DeepSeek 客户端失败: %v", err)

@@ -37,6 +37,8 @@ func main() {
 	client, err := providers.NewDeepSeekWithOptions(
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create DeepSeek client: %v", err)

@@ -83,6 +83,7 @@ func createLLMClient(apiKey, providerName string) (llm.Client, error) {
 			llm.WithModel("deepseek-chat"),
 			llm.WithTemperature(0.7),
 			llm.WithMaxTokens(2000),
+			llm.WithTimeout(60*time.Second),
 		)
 	}
 	// Kimi
@@ -91,6 +92,7 @@ func createLLMClient(apiKey, providerName string) (llm.Client, error) {
 		llm.WithModel("moonshot-v1-8k"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 }
 

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/providers"
 )
 
 func main() {
-	provider, err := providers.NewKimiWithOptions(llm.WithAPIKey(os.Getenv("KIMI_API_KEY")), llm.WithModel("moonshot-v1-8k"))
+	provider, err := providers.NewKimiWithOptions(llm.WithAPIKey(os.Getenv("KIMI_API_KEY")), llm.WithModel("moonshot-v1-8k"), llm.WithTimeout(60*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Fatalf("Failed to create Kimi provider: %v", err)
 	}
@@ -32,7 +33,7 @@ func main() {
 }
 
 func chatExample() {
-	provider, err := providers.NewKimiWithOptions(llm.WithAPIKey(os.Getenv("KIMI_API_KEY")), llm.WithModel("moonshot-v1-8k"))
+	provider, err := providers.NewKimiWithOptions(llm.WithAPIKey(os.Getenv("KIMI_API_KEY")), llm.WithModel("moonshot-v1-8k"), llm.WithTimeout(60*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		log.Fatalf("Failed to create Kimi provider: %v", err)
 	}

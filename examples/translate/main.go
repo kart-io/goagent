@@ -95,6 +95,7 @@ func initializeDeepSeekClient() (llm.Client, error) {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60 * time.Second),
 	}
 
 	// 创建 DeepSeek 客户端

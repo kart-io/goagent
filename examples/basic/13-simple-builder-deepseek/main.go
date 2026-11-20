@@ -86,6 +86,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -135,6 +136,8 @@ func runQuickAgent(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -174,6 +177,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -228,6 +232,8 @@ func runPresetAgents(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -481,6 +487,7 @@ func runJSONFormatExample(apiKey string) error {
 		llm.WithTemperature(0.3), // 较低温度确保 JSON 格式稳定
 		llm.WithMaxTokens(1000),
 		llm.WithJSONResponse(), // 启用 JSON 格式输出
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
