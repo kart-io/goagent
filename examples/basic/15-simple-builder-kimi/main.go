@@ -105,7 +105,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 
 	// 使用 NewSimpleBuilder - 无需泛型参数
 	fmt.Println("使用 NewSimpleBuilder 构建 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是 Kimi，由月之暗面科技开发的智能助手。你擅长用简洁明了的语言回答问题。").
 		WithState(core.NewAgentState()).
 		Build()
@@ -198,7 +198,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建带工具的 Agent
 	fmt.Println("构建带工具的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个智能助手，可以使用工具来帮助用户完成任务。").
 		WithTools(calculatorTool, timeTool).
 		WithState(core.NewAgentState()).
@@ -329,7 +329,7 @@ func runJSONFormatExample(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建 Agent
 	fmt.Println("构建支持 JSON 输出的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(`你是一个数据分析助手，必须以 JSON 格式回复。
 请严格按照以下格式输出：
 {
@@ -396,7 +396,7 @@ func runLongContextExample(apiKey string) error {
 
 	// 构建 Agent
 	fmt.Println("构建支持超长上下文的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是 Kimi，一个擅长处理长文本的智能助手。你可以分析和总结大量文本内容。").
 		WithState(core.NewAgentState()).
 		Build()
@@ -581,7 +581,7 @@ func runMockExample() {
        llm.WithAPIKey(apiKey),
        llm.WithModel("moonshot-v1-8k"),
    )
-   agent, err := builder.NewSimpleBuilder(llmClient).
+   agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("你是 Kimi，一个友好的 AI 助手").
        WithState(core.NewAgentState()).
        Build()

@@ -39,7 +39,7 @@ func checkNative(ctx context.Context, p *providers.GeminiProvider, method string
 	prompt, expected := "计算 17+25，只输出整数。", "42"
 	var orders []string
 	var expectedOrders []string
-	b := builder.NewSimpleBuilder(p).WithSystemPrompt("完成用户任务。存在 lookup 工具时必须先调用工具。依据结果回答，最终只输出答案，不加解释。").WithMaxIterations(requestBudget(method)).WithMaxTokens(2048).WithTemperature(0.2).WithTimeout(90 * time.Second)
+	b := builder.NewSimpleBuilder(p).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithSystemPrompt("完成用户任务。存在 lookup 工具时必须先调用工具。依据结果回答，最终只输出答案，不加解释。").WithMaxIterations(requestBudget(method)).WithMaxTokens(2048).WithTemperature(0.2).WithTimeout(90 * time.Second)
 	if method == "RunnableToolLoop" || method == "RunnableDirectTool" || method == "RunnableSequentialTools" {
 		prompt = "查询订单 SHARED-1 的退款期限，只输出天数数字。"
 		expected = "7"

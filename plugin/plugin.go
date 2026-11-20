@@ -53,7 +53,7 @@ type Contribution struct {
 	PreSteps       []PreStep
 	RequestHooks   []builder.RequestHook
 	RequestErrors  []builder.RequestErrorHook
-	// MaxRecoveries 只对 RequestErrors 生效；所选插件取最大值，全为 0 时用 Builder 的默认值 3。
+	// MaxRecoveries 只对 RequestErrors 生效，是首次请求之后的重试次数；所选插件取最大值，全为 0 时不恢复。
 	// Install 会覆盖此前 WithRequestError 设置的上限；宿主要自定义上限，须在 Install 之后调用 WithRequestError。
 	MaxRecoveries int
 	TurnStopping  []builder.TurnStoppingHook

@@ -84,7 +84,7 @@ func main() {
 	fmt.Println("【步骤 3】创建带工具的 Agent")
 	fmt.Println("────────────────────────────────────────")
 
-	agent, err := builder.NewSimpleBuilder(client).
+	agent, err := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(`你是一个智能助手，可以使用以下工具来帮助用户：
 - calculator: 数学计算
 - weather: 查询天气

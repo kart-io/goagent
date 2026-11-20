@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/llm"
@@ -43,7 +44,7 @@ func main() {
 
 	// 1. Default Serializer
 	fmt.Println("--- Default Serializer ---")
-	agent1, _ := builder.NewSimpleBuilder(client).Build()
+	agent1, _ := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).Build()
 	// We expect the LLM to receive the raw email
 	res1, err := agent1.AsRunnable().Invoke(context.Background(), "user@example.com")
 	if err != nil {
@@ -54,7 +55,7 @@ func main() {
 
 	// 2. Custom Masking Serializer
 	fmt.Println("\n--- Custom Masking Serializer ---")
-	agent2, _ := builder.NewSimpleBuilder(client).
+	agent2, _ := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithInputSerializer(&MaskingSerializer{}).
 		WithSystemPrompt("你是一个有用的助手。请始终使用中文回答用户的请求。如果收到 'MASKED_EMAIL'，请解释什么是脱敏数据以及为什么保护隐私很重要。").
 		Build()

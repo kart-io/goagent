@@ -93,7 +93,7 @@ func runSimpleBuilderBasic(apiKey string) error {
 
 	// 使用 NewSimpleBuilder - 无需泛型参数
 	fmt.Println("使用 NewSimpleBuilder 构建 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个友好的 AI 助手，擅长用简洁明了的语言回答问题。").
 		WithState(core.NewAgentState()).
 		Build()
@@ -186,7 +186,7 @@ func runSimpleBuilderWithTools(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建带工具的 Agent
 	fmt.Println("构建带工具的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个智能助手，可以使用工具来帮助用户完成任务。").
 		WithTools(calculatorTool, timeTool).
 		WithState(core.NewAgentState()).
@@ -416,7 +416,7 @@ func runMockExample() {
 	fmt.Println("1. NewSimpleBuilder - 基础用法（推荐）:")
 	fmt.Print(`
    // 无需泛型参数，使用更简洁
-   agent, err := builder.NewSimpleBuilder(llmClient).
+   agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("你是一个友好的 AI 助手").
        WithState(core.NewAgentState()).
        Build()
@@ -449,18 +449,18 @@ func runMockExample() {
    // SimpleAgent 等价于 ConfigurableAgent[*core.AgentState]
 
    // 这意味着你可以：
-   var builder *builder.SimpleAgentBuilder = builder.NewSimpleBuilder(client)
+   var builder *builder.SimpleAgentBuilder = builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute)
    var agent *builder.SimpleAgent = agent
 `)
 	fmt.Println("5. 对比旧 API:")
 	fmt.Print(`
    // 旧 API（需要泛型参数）
-   agent, err := builder.NewAgentBuilder[*core.AgentState](llmClient).
+   agent, err := builder.NewAgentBuilder[*core.AgentState](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("...").
        Build()
 
    // 新 API（无需泛型参数）
-   agent, err := builder.NewSimpleBuilder(llmClient).
+   agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("...").
        Build()
 `)
@@ -488,7 +488,7 @@ func runJSONFormatExample(apiKey string) error {
 
 	// 使用 NewSimpleBuilder 构建 Agent
 	fmt.Println("构建支持 JSON 输出的 Agent...")
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(`你是一个数据分析助手，必须以 JSON 格式回复。
 请严格按照以下格式输出：
 {

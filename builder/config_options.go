@@ -10,6 +10,7 @@ import (
 	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/session"
 	"github.com/kart-io/goagent/core/usage"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/memory"
 )
 
@@ -110,13 +111,23 @@ type AgentConfig struct {
 	SessionState bool
 
 	// ResendInterruptedModel: see WithInterruptedModelResend.
+	//
+	// Deprecated: use InterruptedModelResends. When InterruptedModelResends is
+	// 0, true still means 2 resends (3 sends per turn).
 	ResendInterruptedModel bool
+	// InterruptedModelResends: see WithInterruptedModelResends.
+	InterruptedModelResends int
 
-	// MaxIterations limits the maximum number of reasoning steps.
+	// MaxIterations limits the number of model rounds per turn, including the
+	// final answer request. 0 means unlimited; negative values are rejected.
 	MaxIterations int
 
-	// Timeout sets the agent execution timeout.
+	// Timeout bounds one turn, including the wait for the execution gate.
+	// 0 means no turn timeout; negative values are rejected.
 	Timeout time.Duration
+
+	// PersistTimeout: see WithPersistTimeout.
+	PersistTimeout time.Duration
 
 	// MaxTokens limits the maximum number of tokens in the LLM response; 0
 	// means it is not sent and the LLM client configuration decides.
@@ -155,17 +166,80 @@ func (b *AgentBuilder[S]) WithDurableScope(scope string) *AgentBuilder[S] {
 	return b
 }
 
-// WithInterruptedModelResend makes a resumed durable run resend model requests
-// that were interrupted by a process stop, crash, or deadline, sending at most
-// 3 times per turn. Resending is off by default because an interrupted request
-// may already have been billed: enabling it may cause duplicate charges, each
-// resend takes its own budget share, and nothing is sent when the quota is
-// insufficient. Committed turns, requests the model explicitly failed, and tool
-// calls are unaffected. The switch must stay the same for the entire lifetime
+// WithInterruptedModelResends makes a resumed durable run resend a model
+// request that was interrupted by a process stop, crash, or deadline, at most n
+// times per turn (n+1 sends in total). 0, the default, never resends; negative
+// values are rejected by Build. Resending is off by default because an
+// interrupted request may already have been billed: each resend may cause a
+// duplicate charge and takes its own budget share, and nothing is sent when the
+// quota is insufficient. Committed turns, requests the model explicitly failed,
+// and tool calls are unaffected. n must stay the same for the entire lifetime
 // of a run; otherwise resuming reports a policy change.
+func (b *AgentBuilder[S]) WithInterruptedModelResends(n int) *AgentBuilder[S] {
+	b.config.InterruptedModelResends = n
+	b.config.ResendInterruptedModel = false
+	return b
+}
+
+// WithInterruptedModelResend enables resending interrupted model requests with
+// at most 3 sends per turn.
+//
+// Deprecated: use WithInterruptedModelResends(2), which records the same
+// durable policy.
 func (b *AgentBuilder[S]) WithInterruptedModelResend() *AgentBuilder[S] {
+	b.config.InterruptedModelResends = 0
 	b.config.ResendInterruptedModel = true
 	return b
+}
+
+// interruptedModelResends resolves the deprecated switch into a resend count.
+func (c *AgentConfig) interruptedModelResends() int {
+	if c.InterruptedModelResends == 0 && c.ResendInterruptedModel {
+		return shared.DefaultModelResendAttempts - 1
+	}
+	return c.InterruptedModelResends
+}
+
+// WithPersistTimeout bounds each background write the agent makes on a context
+// detached from cancellation: inbox entries, tool-result offloads and usage
+// records. 0 selects shared.DefaultInboxWriteTimeout (5s) and negative values
+// are rejected by Build. It cannot mean unlimited: these writes outlive the
+// caller's context, so a hung store would hold the goroutine forever.
+func (b *AgentBuilder[S]) WithPersistTimeout(d time.Duration) *AgentBuilder[S] {
+	b.config.PersistTimeout = d
+	return b
+}
+
+func (c *AgentConfig) persistTimeout() time.Duration {
+	if c.PersistTimeout > 0 {
+		return c.PersistTimeout
+	}
+	return shared.DefaultInboxWriteTimeout
+}
+
+// reachedIterations reports whether rounds model rounds use up MaxIterations;
+// it is never true when MaxIterations is 0 (unlimited).
+func (c *AgentConfig) reachedIterations(rounds int) bool {
+	return c.MaxIterations > 0 && rounds >= c.MaxIterations
+}
+
+// validateLimits rejects negative caller-owned limits.
+func (c *AgentConfig) validateLimits() error {
+	for _, v := range []struct {
+		name string
+		bad  bool
+	}{
+		{"max_iterations", c.MaxIterations < 0},
+		{"timeout", c.Timeout < 0},
+		{"persist_timeout", c.PersistTimeout < 0},
+		{"interrupted_model_resends", c.InterruptedModelResends < 0},
+		{"max_request_recoveries", c.MaxRequestRecoveries < 0},
+	} {
+		if v.bad {
+			return agentErrors.NewInvalidConfigError("builder", v.name, "must not be negative")
+		}
+	}
+	return nil
 }
 
 // WithReturnDirectTools names terminal tools whose results can be shown
@@ -181,8 +255,8 @@ func (b *AgentBuilder[S]) WithReturnDirectTools(names ...string) *AgentBuilder[S
 	return b
 }
 
-// WithEmptyAnswerRetries sets how many times to re-ask after an empty answer
-// (default 0, no re-asking).
+// WithEmptyAnswerRetries sets how many times to re-ask after an empty answer.
+// n counts re-asks, not the first request: 0, the default, never re-asks.
 //
 // [Advanced] When the model stops with neither content nor tool calls, no empty
 // assistant message is appended; instead a fixed user message asking it to
@@ -197,7 +271,8 @@ func (b *AgentBuilder[S]) WithEmptyAnswerRetries(n int) *AgentBuilder[S] {
 }
 
 // WithParallelToolCalls sets the concurrency limit for tool calls within one
-// round (default 0, sequential).
+// round. Unlike limit options, 0 (the default) does not mean unlimited: it
+// keeps tool calls sequential, which is the behaviour with no extra feature.
 //
 // [Advanced] It applies only to the native tool stream. With n>=2, when a round
 // has multiple calls and every called tool implements
@@ -256,33 +331,30 @@ func (b *AgentBuilder[S]) WithReplayablePartialOutput() *AgentBuilder[S] {
 // DefaultAgentConfig returns the default configuration.
 func DefaultAgentConfig() *AgentConfig {
 	return &AgentConfig{
-		MaxIterations: shared.DefaultAgentMaxIterations,
-		Timeout:       shared.DefaultAgentExecutionTimeout,
-		SessionID:     fmt.Sprintf("session-%d", time.Now().UnixNano()),
-		Verbose:       false,
+		SessionID: fmt.Sprintf("session-%d", time.Now().UnixNano()),
+		Verbose:   false,
 	}
 }
 
-// WithMaxIterations sets the maximum number of iterations.
+// WithMaxIterations sets the maximum number of model rounds per turn,
+// including the final answer request.
 //
-// [Simple] Common option that controls the maximum number of agent reasoning
-// steps (default 10). Adjust it to task complexity: 5-10 for simple tasks,
-// 15-30 for complex ones.
+// [Simple] 0, the default, means unlimited; negative values are rejected by
+// Build. The last round is sent without tools only when a limit is set, so the
+// model still answers instead of hitting the limit mid tool call. The previous
+// default was shared.DefaultAgentMaxIterations (10).
 func (b *AgentBuilder[S]) WithMaxIterations(max int) *AgentBuilder[S] {
-	if max > 0 {
-		b.config.MaxIterations = max
-	}
+	b.config.MaxIterations = max
 	return b
 }
 
-// WithTimeout sets the timeout.
+// WithTimeout bounds one turn, including the wait for the execution gate.
 //
-// [Core] Standard option that prevents agent execution from running too long
-// (default 5 minutes).
+// [Core] 0, the default, means no turn timeout (the caller's context still
+// applies); negative values are rejected by Build. The previous default was
+// shared.DefaultAgentExecutionTimeout (5 minutes).
 func (b *AgentBuilder[S]) WithTimeout(timeout time.Duration) *AgentBuilder[S] {
-	if timeout > 0 {
-		b.config.Timeout = timeout
-	}
+	b.config.Timeout = timeout
 	return b
 }
 

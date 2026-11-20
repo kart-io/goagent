@@ -116,7 +116,7 @@ func build(ctx context.Context, client *countedClient, store durable.Store, prov
 	g := workflow.NewGraph[state]()
 	modelNode := func(stage, prompt string) workflow.Node[state] {
 		return func(ctx context.Context, s state) (state, error) {
-			a, err := builder.NewSimpleBuilder(client).WithDurableScope(stage).
+			a, err := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithDurableScope(stage).
 				WithSystemPrompt(prompt).WithMaxIterations(1).WithMaxTokens(maxOutput).
 				WithTemperature(0).WithTimeout(callTimeout).Build()
 			if err != nil {

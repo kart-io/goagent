@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
@@ -79,7 +80,7 @@ func (k *kit) agent(client *mocks.ScriptedClient, scope string, list ...interfac
 		wrapped = d.Tools()
 	}
 	return func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error) {
-		b := builder.NewSimpleBuilder(client).WithDurableScope(scope)
+		b := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithDurableScope(scope)
 		if len(wrapped) > 0 {
 			b = b.WithTools(wrapped...).WithMaxIterations(4)
 		}

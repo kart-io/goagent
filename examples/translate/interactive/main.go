@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/core"
@@ -121,7 +122,7 @@ func NewSimpleTranslator(llmClient llm.Client) *SimpleTranslator {
 func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是语言检测专家。识别文本语言并用中文返回语言名称（如：英语、法语、日语、西班牙语、德语、俄语、中文、韩语等）。只返回语言名称，不要其他内容。`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪
@@ -136,7 +137,7 @@ func createDetectionAgent(llmClient llm.Client, tokenTracker *core.CostTrackingC
 func createTranslationAgent(llmClient llm.Client, tokenTracker *core.CostTrackingCallback) *builder.ConfigurableAgent[core.State] {
 	systemPrompt := `你是专业翻译专家。将输入文本翻译成简体中文。保持原文语气和风格，确保翻译准确、自然、流畅。如果输入已经是中文，保持不变。只返回翻译结果，不要其他内容。`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithState(state.NewAgentState()).
 		WithCallbacks(tokenTracker). // 添加 token 追踪

@@ -109,7 +109,7 @@ func example1SimpleAgent(apiKey, providerName string) {
 	}
 
 	// 仅需 3 个方法调用！
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个翻译助手，专门将中文翻译成英文。").
 		WithOutputFormat(builder.OutputFormatPlainText). // 使用纯文本格式
 		Build()
@@ -148,7 +148,7 @@ func example2AgentWithTools(apiKey, providerName string) {
 	calculator := createCalculatorTool()
 
 	// 添加工具到 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个数学助手，可以使用计算器工具来计算。").
 		WithTools(calculator).
 		WithOutputFormat(builder.OutputFormatPlainText). // 使用纯文本格式
@@ -191,7 +191,7 @@ func example3ConfiguredAgent(apiKey, providerName string) {
 	timeTool := createTimeTool()
 
 	// 配置 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个时间助手，可以告诉用户当前时间。").
 		WithTools(timeTool).
 		WithMaxIterations(15).                           // 允许更多推理步骤（默认 10）
@@ -380,7 +380,7 @@ func example5OutputFormat(apiKey, providerName string) {
 
 	// 5.1 使用纯文本格式（适合终端显示）
 	fmt.Println("\n5.1 纯文本格式:")
-	agent1, err := builder.NewSimpleBuilder(llmClient).
+	agent1, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个知识助手").
 		WithOutputFormat(builder.OutputFormatPlainText).
 		Build()
@@ -393,7 +393,7 @@ func example5OutputFormat(apiKey, providerName string) {
 
 	// 5.2 使用 JSON 格式（适合程序解析）
 	fmt.Println("\n5.2 JSON 格式:")
-	agent2, err := builder.NewSimpleBuilder(llmClient).
+	agent2, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个数据助手").
 		WithOutputFormat(builder.OutputFormatJSON).
 		Build()
@@ -406,7 +406,7 @@ func example5OutputFormat(apiKey, providerName string) {
 
 	// 5.3 使用自定义格式
 	fmt.Println("\n5.3 自定义格式:")
-	agent3, err := builder.NewSimpleBuilder(llmClient).
+	agent3, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个技术文档助手").
 		WithCustomOutputFormat("请按以下格式回复：\n【摘要】一句话概述\n【详情】详细说明\n【建议】给出建议").
 		Build()
@@ -419,7 +419,7 @@ func example5OutputFormat(apiKey, providerName string) {
 
 	// 5.4 使用 Markdown 格式（适合富文本显示）
 	fmt.Println("\n5.4 Markdown 格式:")
-	agent4, err := builder.NewSimpleBuilder(llmClient).
+	agent4, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个文档助手").
 		WithOutputFormat(builder.OutputFormatMarkdown).
 		Build()

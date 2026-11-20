@@ -21,6 +21,9 @@ import (
 )
 
 // OffloadConfig keeps character counts distinct from model token limits.
+// MaxToolResultRunes is the offload threshold and must be positive. ReadPageRunes
+// caps one page returned by the read tool; 0 returns the rest of the result in
+// one page (it previously meant 1024).
 // Namespace identifies host storage configuration; changing backends requires a new namespace/version.
 type OffloadConfig struct {
 	ID                   string      `json:"id"`
@@ -76,7 +79,7 @@ type reference struct {
 
 // NewOffload validates immutable configuration.
 func NewOffload(cfg OffloadConfig) (*Offload, error) {
-	if cfg.MaxToolResultRunes < 1 || cfg.KeepRecentToolRounds < 0 || cfg.ReadPageRunes < 0 || cfg.ReadPageRunes > 16384 || cfg.Store == nil {
+	if cfg.MaxToolResultRunes < 1 || cfg.KeepRecentToolRounds < 0 || cfg.ReadPageRunes < 0 || cfg.Store == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "offload requires store and positive limits").WithComponent("builder/contextpolicy").WithOperation("new_offload")
 	}
 	if cfg.ID == "" {
@@ -87,9 +90,6 @@ func NewOffload(cfg OffloadConfig) (*Offload, error) {
 	}
 	if cfg.Namespace == "" {
 		cfg.Namespace = "results"
-	}
-	if cfg.ReadPageRunes == 0 {
-		cfg.ReadPageRunes = 1024
 	}
 	cfg.ExcludeTools = slices.Clone(cfg.ExcludeTools)
 	persistent := false
@@ -300,7 +300,10 @@ func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*int
 		}
 		offset = int(n)
 	}
-	end := offset + min(p.config.ReadPageRunes, len(runes)-offset)
+	end := len(runes)
+	if p.config.ReadPageRunes > 0 {
+		end = offset + min(p.config.ReadPageRunes, len(runes)-offset)
+	}
 	b, err := json.Marshal(map[string]any{"text": string(runes[offset:end]), "next_offset": end, "done": end == len(runes)})
 	if err != nil {
 		return nil, err

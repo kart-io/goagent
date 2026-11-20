@@ -376,7 +376,7 @@ func TestRequestErrorRecovery(t *testing.T) {
 		}
 		return RequestErrorDecision{Action: RequestRetry, Messages: f.Messages[len(f.Messages)-1:]}, nil
 	}
-	agent, err := NewSimpleBuilder(model).WithSystemPrompt("系统").WithTools(plainTool()).WithRequestError(0, compress).Build()
+	agent, err := NewSimpleBuilder(model).WithSystemPrompt("系统").WithTools(plainTool()).WithRequestError(1, compress).Build()
 	require.NoError(t, err)
 	out, err := agent.AsRunnable().Invoke(context.Background(), "问")
 	require.NoError(t, err)

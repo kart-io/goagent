@@ -115,7 +115,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 	inputs := 1
 	// recall 是本轮的召回快照，第 0 步 PreStep 之前生成。
 	var recall *memory.Snapshot
-	for round := 0; round < a.config.MaxIterations; round++ {
+	for round := 0; !a.config.reachedIterations(round); round++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -150,9 +150,9 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				}
 			}
 		}
-		// 已有结果的最后一轮只能回答或使用显式配置的终态工具。
+		// 设置了 MaxIterations 时，已有结果的最后一轮只能回答或使用显式配置的终态工具。
 		// 首轮及尚有更多额度时保留完整工具集，支持连续查询。
-		final := round > 0 && round+1 == a.config.MaxIterations
+		final := round > 0 && a.config.MaxIterations > 0 && round+1 == a.config.MaxIterations
 		if final {
 			selected := tools
 			tools = nil
@@ -182,7 +182,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}
 		// 重问需要下一轮额度，最后一轮的空回答按原方式报错。
-		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && round+1 < a.config.MaxIterations
+		allowEmpty := emptyRetries < a.config.EmptyAnswerRetries && !a.config.reachedIterations(round+1)
 		before, counted := modelCacheCounts(ctx)
 		turn, redirected, recovered, err := a.requestTurn(ctx, box, round, client, messages, tools, final, allowEmpty, recall, emit)
 		if err != nil {
@@ -203,7 +203,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				messages = append(messages, llm.UserMessage(msg))
 			}
 			inputs += len(redirected.messages)
-			if round+1 >= a.config.MaxIterations {
+			if a.config.reachedIterations(round+1) {
 				return nil, exhausted()
 			}
 			continue
@@ -243,14 +243,14 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			// 收件箱中的 Steer 唤醒续跑，下一步领取；否则询问 TurnStopping。TurnStopping 续跑后至少还要有一步带工具，
 			// 模型才能按反馈修改；额度不足时不询问，按原答复结束并标记 turn_stopping_skipped。
 			wake := false
-			if box != nil && round+1 < a.config.MaxIterations {
+			if box != nil && !a.config.reachedIterations(round+1) {
 				if wake, err = journaled(ctx, fmt.Sprintf("loop/wake/%d", round), func(context.Context) (bool, error) { return box.wakes(), nil }); err != nil {
 					return nil, err
 				}
 			}
 			next := ""
 			if !wake && len(a.config.TurnStopping) > 0 {
-				if round+2 >= a.config.MaxIterations {
+				if a.config.reachedIterations(round+2) {
 					metadata["turn_stopping_skipped"] = true
 				} else if next, err = a.runTurnStopping(ctx, &Stopping{
 					Step: round, Answer: turn.Content,
@@ -272,7 +272,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 		}
 		direct := len(turn.ToolCalls) == 1 && slices.Contains(a.config.ReturnDirectTools, turn.ToolCalls[0].Function.Name)
 		// 直接返回无需下一次模型请求；其余路径预留最终答案额度。
-		if !direct && round+1 >= a.config.MaxIterations {
+		if !direct && a.config.reachedIterations(round+1) {
 			return nil, exhausted()
 		}
 		calls := make([]ToolCall, len(turn.ToolCalls))
@@ -396,7 +396,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				return nil, err
 			}
 			if direct && !output.Success {
-				if round+1 >= a.config.MaxIterations {
+				if a.config.reachedIterations(round+1) {
 					return nil, exhausted()
 				}
 				break

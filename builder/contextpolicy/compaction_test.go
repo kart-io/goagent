@@ -116,9 +116,9 @@ func TestCompactionWithoutModelAndRecursiveSummary(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, SummaryBody(out[1].Content), "较早的")
 
-	old := strings.Repeat("旧", maxRenderedRunes+10)
+	old := strings.Repeat("旧", 4010)
 	model := &summaryModel{reply: "新摘要"}
-	c, err := NewCompaction(CompactionConfig{MaxTokens: 100, KeepTokens: 20, Model: model, Estimate: lengthEstimate})
+	c, err := NewCompaction(CompactionConfig{MaxTokens: 100, KeepTokens: 20, Model: model, Estimate: lengthEstimate, MaxRenderedRunes: 4000})
 	require.NoError(t, err)
 	in := append([]llm.Message{llm.SystemMessage("系统"), llm.UserMessage(SummaryPrefix + old + annotationMark + "过时的待办")}, longConversation()[2:]...)
 	out, err = c.Reduce(context.Background(), in, 1)
@@ -167,4 +167,28 @@ func TestNewCompactionValidatesAndIdentifies(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, a.Identity(), b.Identity())
 	require.NotEqual(t, a.Identity(), c.Identity())
+}
+
+func TestCompactionZeroLimitsAreUnlimited(t *testing.T) {
+	_, err := NewCompaction(CompactionConfig{})
+	require.Error(t, err, "不设阈值时必须给 KeepTokens")
+	for _, cfg := range []CompactionConfig{{MaxTokens: -1}, {MaxTokens: 100, MaxRenderedRunes: -1}} {
+		_, err = NewCompaction(cfg)
+		require.Error(t, err)
+	}
+	c, err := NewCompaction(CompactionConfig{KeepTokens: 20, Estimate: lengthEstimate})
+	require.NoError(t, err)
+	in := longConversation()
+	out, err := c.Reduce(context.Background(), in, 1)
+	require.NoError(t, err)
+	require.Equal(t, in, out, "MaxTokens 为 0 时不主动压缩")
+
+	long := strings.Repeat("长", 5000)
+	model := &summaryModel{reply: "摘要"}
+	c, err = NewCompaction(CompactionConfig{MaxTokens: 100, KeepTokens: 20, Model: model, Estimate: lengthEstimate})
+	require.NoError(t, err)
+	in = append([]llm.Message{llm.SystemMessage("系统"), llm.UserMessage(long)}, longConversation()[2:]...)
+	_, err = c.Reduce(context.Background(), in, 1)
+	require.NoError(t, err)
+	require.Contains(t, model.requests[0].Messages[1].Content, long, "MaxRenderedRunes 为 0 时不截断")
 }

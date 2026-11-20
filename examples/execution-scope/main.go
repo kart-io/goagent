@@ -36,7 +36,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 	defer cancel()
-	configured, err := execution.ConfigureBuilder(builder.NewSimpleBuilder(llm.NewMockStreamClient()), scope, "assistant")
+	configured, err := execution.ConfigureBuilder(builder.NewSimpleBuilder(llm.NewMockStreamClient()).WithMaxIterations(10).WithTimeout(5*time.Minute), scope, "assistant")
 	if err != nil {
 		return err
 	}

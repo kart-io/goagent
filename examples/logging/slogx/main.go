@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/kart-io/slogx"
 
@@ -54,7 +55,7 @@ func run(ctx context.Context, logs io.Writer, apiKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	agent, err := builder.NewSimpleBuilder(client).
+	agent, err := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是电商客服。回答发货问题前必须调用 lookup_order 查询订单。").
 		WithTools(lookupOrder()).
 		WithMaxIterations(3).

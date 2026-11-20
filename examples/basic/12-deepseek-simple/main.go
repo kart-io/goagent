@@ -124,7 +124,7 @@ func quickAgent(apiKey, prompt string) *builder.ConfigurableAgent[core.State] {
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(prompt).
 		WithState(agentstate.NewAgentState()).
 		Build()
@@ -140,7 +140,7 @@ func quickAgentWithTools(apiKey, prompt string, tools ...interfaces.Tool) *build
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(prompt).
 		WithTools(tools...).
 		WithState(agentstate.NewAgentState()).
@@ -158,7 +158,7 @@ func chatbot(apiKey string) *builder.ConfigurableAgent[core.State] {
 	llm := mustCreateLLM(apiKey)
 
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llm).
+	agent, err := builder.NewAgentBuilder[core.State](llm).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是友好的聊天机器人").
 		WithState(agentstate.NewAgentState()).
 		ConfigureForChatbot().

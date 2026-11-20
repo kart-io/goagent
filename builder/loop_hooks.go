@@ -124,9 +124,10 @@ func defaultRetryBackoff(retry int) time.Duration {
 // emitted content, to avoid duplicate output. When the server sends Retry-After
 // it waits accordingly; otherwise it uses backoff (when nil, exponential growth
 // starting at 500ms, capped at 8s). It gives up when the wait would pass the
-// ctx deadline or Retry-After exceeds 1 minute. retries caps the number of
-// recoveries already made in this step and shares WithRequestError's
-// maxRecoveries with recoveries by other hooks.
+// ctx deadline or Retry-After exceeds 1 minute. retries is the number of
+// retries after the first request, so 0 never retries; it caps the recoveries
+// already made in this step and shares WithRequestError's maxRecoveries with
+// recoveries by other hooks.
 func RetryTransient(retries int, backoff func(retry int) time.Duration) RequestErrorHook {
 	if backoff == nil {
 		backoff = defaultRetryBackoff
@@ -235,12 +236,11 @@ func (b *AgentBuilder[S]) WithRequestHook(hooks ...RequestHook) *AgentBuilder[S]
 }
 
 // WithRequestError appends RequestError hooks; maxRecoveries is the per-step
-// limit on retries decided by hooks (default 3).
+// number of retries hooks may decide, not counting the first request. 0 means
+// no recovery (hooks are not consulted) and negative values are rejected by
+// Build. The previous default for 0 was 3.
 func (b *AgentBuilder[S]) WithRequestError(maxRecoveries int, hooks ...RequestErrorHook) *AgentBuilder[S] {
 	b.config.RequestErrorHooks = append(b.config.RequestErrorHooks, hooks...)
-	if maxRecoveries <= 0 {
-		maxRecoveries = 3
-	}
 	b.config.MaxRequestRecoveries = maxRecoveries
 	return b
 }
@@ -507,7 +507,7 @@ func (a *ConfigurableAgent[S]) requestTurn(ctx context.Context, box *inbox, roun
 		if redirectable {
 			box.beginModel(cancel)
 		}
-		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.ResendInterruptedModel), round, req.Client, req.Request, tools, allowEmpty, a.config.ToolErrorFeedback, slot, stepEmit)
+		turn, err := readJournaledTurn(withInterruptedModelResend(withRequestRecovery(turnCtx, a.requestRecovery(round, &messages, &attempt)), a.config.interruptedModelResends()), round, req.Client, req.Request, tools, allowEmpty, a.config.ToolErrorFeedback, slot, stepEmit)
 		var redirects []string
 		if redirectable {
 			redirects = box.endModel()

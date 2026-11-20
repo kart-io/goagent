@@ -178,7 +178,7 @@ When given a task:
 Always call the appropriate tools and return their results.`
 
 	// Build the agent using the builder pattern
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -211,7 +211,7 @@ When creating a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -246,7 +246,7 @@ When executing a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
