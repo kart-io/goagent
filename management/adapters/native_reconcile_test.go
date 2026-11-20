@@ -105,6 +105,7 @@ type nativeHarness struct {
 	svc      *mg.Service
 	actor    mg.Actor
 	sessions *session.MemoryStore
+	store    *memstore.Store
 	version  mg.Version
 	se       mg.Session
 	reader   *fixedReconciliations
@@ -143,7 +144,8 @@ func newNativeHarness(t *testing.T, model llm.Client, toolset []interfaces.Tool,
 			return b, nil, nil
 		},
 	}
-	svc, err := mg.New(mg.Config{Store: memstore.New(), Sessions: h.sessions, HistoryReader: memstore.History{Sessions: h.sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"native": factory}, Reconciliations: h.reader})
+	h.store = memstore.New()
+	svc, err := mg.New(mg.Config{Store: h.store, Sessions: h.sessions, HistoryReader: memstore.History{Sessions: h.sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"native": factory}, Reconciliations: h.reader})
 	require.NoError(t, err)
 	h.svc = svc
 	agent, err := svc.RegisterAgent(h.ctx, h.actor, mg.RegisterAgentRequest{IdempotencyKey: "agent", Name: "核对"})
@@ -530,4 +532,44 @@ func TestApprovalInfoCarriesArguments(t *testing.T) {
 	require.Equal(t, "write", info.Tool)
 	require.Equal(t, map[string]any{"target": "A1"}, info.Arguments)
 	require.True(t, strings.Contains(string(task.Waits[0].Info), `"arguments"`))
+}
+
+// 放弃核对：Attention 任务取消后保留原因与未决操作，会话接受新任务，新任务看不到被取消的轮次。
+func TestCancelAttentionTask(t *testing.T) {
+	model := mocks.NewScriptedClient(writeRound("write"), mocks.TextReply("新任务", "好的"))
+	write := writeTool{newFakeTool("write", true, false, effectUnknownOnce)}
+	h := newNativeHarness(t, model, []interfaces.Tool{write}, 1, false)
+	task := h.wait(h.submit("task").ID, mg.Attention)
+	operations := task.Operations
+	require.Len(t, operations, 1)
+
+	canceled, err := h.svc.CancelTask(h.ctx, h.actor, mg.CancelTaskRequest{IdempotencyKey: "cancel", TaskID: task.ID, ExpectedRevision: task.Revision, Reason: "放弃核对"})
+	require.NoError(t, err)
+	require.Equal(t, mg.Canceled, canceled.State)
+	require.Equal(t, "unknown_effect", canceled.ErrorKind, "保留原 attention 原因")
+	require.Equal(t, operations, canceled.Operations, "未决操作不定案")
+	require.NotNil(t, canceled.FinishedAt)
+
+	docs, err := h.store.List(h.ctx, "audit", mg.Selection{TenantID: h.actor.TenantID, Visibility: mg.Visibility{All: true}})
+	require.NoError(t, err)
+	found := false
+	for _, doc := range docs {
+		var a mg.Audit
+		require.NoError(t, json.Unmarshal(doc.Data, &a))
+		if a.ResourceID == task.ID && a.Operation == "cancel" {
+			found = true
+			require.Equal(t, h.actor, a.Actor)
+			require.Equal(t, "放弃核对", a.Reason)
+		}
+	}
+	require.True(t, found, "审计记录取消人")
+
+	next := h.wait(h.submit("next").ID, mg.Succeeded)
+	require.Equal(t, int32(1), write.calls.Load())
+	requests := model.Requests()
+	for _, m := range requests[len(requests)-1].Messages {
+		require.Empty(t, m.ToolCalls, "新任务的请求中不能有悬空的工具调用")
+		require.Empty(t, m.ToolCallID)
+	}
+	require.NotEqual(t, task.ID, next.ID)
 }

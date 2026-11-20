@@ -15,7 +15,6 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
-	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/adapters"
 	mt "github.com/kart-io/goagent/management/internal/managementtest"
@@ -431,12 +430,7 @@ func TestBuildRetryAttentionCancelStillInspectsCompletedEvidence(t *testing.T) {
 	task := offlineExecutionSubmit(t, f, se, "task")
 	attention := offlineExecutionWaitTask(t, f, task.ID, mg.Attention)
 	require.False(t, attention.RecoveryNeeded, "测试必须覆盖无 RecoveryNeeded 的真实 Attention")
-	_, err := f.Service.CancelTask(ctx, f.Actor, mg.CancelTaskRequest{IdempotencyKey: "cancel-before-reconcile", TaskID: task.ID, ExpectedRevision: attention.Revision})
-	require.ErrorIs(t, err, agentErrors.ErrManagementConflict, "没有核对命令时必须拒绝取消，保留人工恢复入口")
-	unchanged, err := f.Service.GetTask(ctx, f.Actor, task.ID)
-	require.NoError(t, err, "读取未取消状态失败")
-	require.False(t, unchanged.CancelRequested, "拒绝取消不能封死 ResumeTask")
-	require.Equal(t, attention.Revision, unchanged.Revision, "拒绝操作不得改变任务修订号")
+	// 没有核对命令时 Attention 可直接取消（见 TestCancelAttentionTask）；这里覆盖已接纳核对命令后的取消。
 	versions := offlineExecutionDocuments(t, f, "versions", mg.Query{AgentID: se.AgentID})
 	require.Len(t, versions, 1, "应存在唯一版本")
 	var version mg.Version

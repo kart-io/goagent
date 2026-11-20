@@ -26,6 +26,16 @@ func (failingRuntime) Run(context.Context, mg.RunSpec) (mg.RunResult, error) {
 	return mg.RunResult{}, errors.New("执行失败")
 }
 
+type attentionRuntime struct{}
+
+func (attentionRuntime) Inspect(context.Context, mg.RunSpec) (mg.RunEvidence, error) {
+	return mg.RunEvidence{State: "absent"}, nil
+}
+
+func (attentionRuntime) Run(context.Context, mg.RunSpec) (mg.RunResult, error) {
+	return mg.RunResult{Outcome: "attention", ErrorKind: "unknown_effect"}, nil
+}
+
 // terminalFixture 准备好会话后停掉 worker，由用例决定何时启动。
 func terminalFixture(t *testing.T, build func(context.Context, mg.Resources) (mg.Binding, error)) (*mt.Fixture, mg.Session) {
 	t.Helper()
@@ -94,6 +104,14 @@ func TestEveryTerminalTransitionEmitsOneDelivery(t *testing.T) {
 			task.Revision++
 			require.NoError(t, f.Store.Put(context.Background(), "tasks", task))
 			f.StartWorker(t)
+			return f, se, task.ID
+		}},
+		{"取消 Attention", mg.Canceled, func(t *testing.T) (*mt.Fixture, mg.Session, string) {
+			f, se := terminalFixture(t, staticBinding(attentionRuntime{}))
+			f.StartWorker(t)
+			task := offlineExecutionSubmit(t, f, se, "task")
+			offlineExecutionWaitTask(t, f, task.ID, mg.Attention)
+			require.Equal(t, mg.Canceled, cancelTask(t, f, task.ID).State)
 			return f, se, task.ID
 		}},
 		{"worker 成功", mg.Succeeded, func(t *testing.T) (*mt.Fixture, mg.Session, string) {
