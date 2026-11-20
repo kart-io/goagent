@@ -234,7 +234,7 @@ func TestModelResendIsNotInheritedByChildAgent(t *testing.T) {
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("丢失", 7), answerTurn("不应发出", 7))}
 	child, err := NewSimpleBuilder(model).WithDurableScope("resend").Build()
 	require.NoError(t, err)
-	ctx := withInterruptedModelResend(f.ctx, true)
+	ctx := withInterruptedModelResend(f.ctx, 2)
 
 	*f.crash = true
 	_, err = child.AsRunnable().Invoke(ctx, "q")

@@ -70,7 +70,7 @@ func TestOnResultReplayOrderAfterConcurrentRun(t *testing.T) {
 	process := func() *arrivalLedger {
 		ledger := &arrivalLedger{refs: map[string]string{}}
 		reg := tools.NewRegistry()
-		require.NoError(t, reg.Register(tool))
+		require.NoError(t, reg.Register(concurrentBase{tool}))
 		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 4, OnResult: ledger.record})
 		require.NoError(t, err)
 		agent, err := NewSimpleBuilder(model).WithDurableScope("p").WithTools(d.Tools()...).WithParallelToolCalls(5).WithMaxIterations(3).Build()

@@ -22,12 +22,13 @@ func New(c Config) (*Service, error) {
 	if c.Store == nil || c.Sessions == nil || c.HistoryReader == nil || c.Authorizer == nil || len(c.Factories) == 0 {
 		return nil, agentErrors.ErrManagementInvalid
 	}
-	defaults := DefaultLimits()
-	if c.Limits == (Limits{}) {
-		c.Limits = defaults
+	limits, err := c.Limits.normalize()
+	if err != nil {
+		return nil, err
 	}
-	if c.Limits.Workers < 1 || c.Limits.MaxPending < 1 || c.Limits.PageSize < 1 || c.Limits.MaxPageSize < c.Limits.PageSize || c.Limits.MaxPageSize > 200 || c.Limits.MaxInputBytes < 1 || c.Limits.MaxOutputBytes < 1 || c.Limits.IdempotencyRetention <= 0 || c.Limits.TaskRetention <= 0 || c.Limits.AuditRetention <= 0 {
-		return nil, agentErrors.ErrManagementInvalid
+	c.Limits = limits
+	if err := c.DefaultTaskBudget.validate(); err != nil {
+		return nil, err
 	}
 	if _, err := execution.NewScope(execution.Config{RunID: "management/config-validation", Tracer: c.Tracer}); err != nil {
 		return nil, agentErrors.ErrManagementInvalid
@@ -88,7 +89,9 @@ func read[T any](ctx context.Context, r Reader, kind, tenant, id string) (v T, e
 	return
 }
 
-func all[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]T, error) {
+// page reads one Store page as given. Callers that modify the rows they read
+// so that they leave the query set may loop on it from the head.
+func page[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]T, error) {
 	ds, err := r.List(ctx, kind, Selection{TenantID: tenant, Query: q, Visibility: Visibility{All: true}})
 	if err != nil {
 		return nil, err
@@ -102,6 +105,44 @@ func all[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// scanPage bounds one internal Store read; internal scans follow the cursor
+// until the query set is exhausted, so it is not a limit on the result.
+const scanPage = 500
+
+// each walks every matching row with the Store's CreatedAt|ID cursor and stops
+// early when fn returns true. q.Limit and q.Cursor are owned by the walk.
+func each[T any](ctx context.Context, r Reader, kind, tenant string, q Query, fn func(T) (bool, error)) error {
+	q.Limit, q.Cursor = scanPage, ""
+	for {
+		ds, err := r.List(ctx, kind, Selection{TenantID: tenant, Query: q, Visibility: Visibility{All: true}})
+		if err != nil {
+			return err
+		}
+		for _, d := range ds {
+			var v T
+			if err = json.Unmarshal(d.Data, &v); err != nil {
+				return err
+			}
+			stop, err := fn(v)
+			if err != nil || stop {
+				return err
+			}
+		}
+		if len(ds) < q.Limit {
+			return nil
+		}
+		last := ds[len(ds)-1]
+		q.Cursor = last.CreatedAt.Format(time.RFC3339Nano) + "|" + last.ID
+	}
+}
+
+// all returns every matching row; it never truncates at a fixed scan size.
+func all[T any](ctx context.Context, r Reader, kind, tenant string, q Query) ([]T, error) {
+	out := []T{}
+	err := each(ctx, r, kind, tenant, q, func(v T) (bool, error) { out = append(out, v); return false, nil })
+	return out, err
 }
 
 func (s *Service) auth(ctx context.Context, a Actor, action, kind, id string) error {
@@ -145,7 +186,7 @@ func mutate[T any](s *Service, ctx context.Context, a Actor, key, op string, req
 	id := digest([]byte(op + "\x00" + key))
 	err = s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		old, e := read[Idempotency](ctx, tx, "idempotency", a.TenantID, id)
-		if e == nil && old.ExpiresAt.After(s.cfg.Now()) {
+		if e == nil && (old.ExpiresAt.IsZero() || old.ExpiresAt.After(s.cfg.Now())) {
 			if old.Hash != hash {
 				return agentErrors.ErrManagementConflict
 			}
@@ -169,7 +210,11 @@ func mutate[T any](s *Service, ctx context.Context, a Actor, key, op string, req
 		}
 		m := s.meta(a)
 		m.ID = id
-		return insert(ctx, tx, "idempotency", Idempotency{Meta: m, Operation: op, Key: key, Hash: hash, Response: response, ExpiresAt: s.cfg.Now().Add(s.cfg.Limits.IdempotencyRetention)})
+		var expires time.Time
+		if s.cfg.Limits.IdempotencyRetention > 0 {
+			expires = s.cfg.Now().Add(s.cfg.Limits.IdempotencyRetention)
+		}
+		return insert(ctx, tx, "idempotency", Idempotency{Meta: m, Operation: op, Key: key, Hash: hash, Response: response, ExpiresAt: expires})
 	})
 	return
 }

@@ -151,8 +151,8 @@ func TestDefaultAgentConfig(t *testing.T) {
 	config := DefaultAgentConfig()
 
 	require.NotNil(t, config)
-	assert.Equal(t, 10, config.MaxIterations)
-	assert.Equal(t, 5*time.Minute, config.Timeout)
+	assert.Zero(t, config.MaxIterations, "0 = 不限轮次")
+	assert.Zero(t, config.Timeout, "0 = 回合不限时")
 	assert.Zero(t, config.MaxTokens, "未设置时沿用 LLM 客户端配置")
 	assert.False(t, config.TemperatureSet)
 	assert.NotEmpty(t, config.SessionID)
@@ -1103,9 +1103,9 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 
 		assert.Equal(t, 25, builder.config.MaxIterations)
 
-		// Invalid value should be ignored
-		builder.WithMaxIterations(-1)
-		assert.Equal(t, 25, builder.config.MaxIterations) // Should remain unchanged
+		// 负数在 Build 时报错，不再静默忽略
+		_, err := builder.WithMaxIterations(-1).Build()
+		require.Error(t, err)
 	})
 
 	t.Run("WithTimeout", func(t *testing.T) {
@@ -1114,9 +1114,9 @@ func TestAgentBuilder_FineGrainedOptions(t *testing.T) {
 
 		assert.Equal(t, 2*time.Minute, builder.config.Timeout)
 
-		// Invalid value should be ignored
-		builder.WithTimeout(-1 * time.Second)
-		assert.Equal(t, 2*time.Minute, builder.config.Timeout) // Should remain unchanged
+		// 负数在 Build 时报错，不再静默忽略
+		_, err := builder.WithTimeout(-1 * time.Second).Build()
+		require.Error(t, err)
 	})
 
 	t.Run("WithTemperature", func(t *testing.T) {

@@ -65,8 +65,6 @@ type openAICompatibleSpec struct {
 	envAPIKey, envBaseURL, envModel string
 	// apiKeyOptional 用于本地服务：未提供密钥时发送占位值，SDK 要求非空。
 	apiKeyOptional bool
-	// defaultTimeout 仅在调用方未改动默认超时时生效。
-	defaultTimeout time.Duration
 	reasoning      bool
 	// thinkingSwitch 表示服务用 thinking 开关控制推理：effort=none 时按模型改写为 thinking 禁用。
 	thinkingSwitch bool
@@ -107,7 +105,7 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 		return nil, err
 	}
 
-	timeout := compatibleTimeout(base.GetTimeout(), spec.defaultTimeout)
+	timeout := base.GetTimeout()
 
 	clientConfig := openai.DefaultConfig(base.Config.APIKey)
 	if base.Config.BaseURL != "" {
@@ -127,14 +125,6 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 		thinkingSwitch:        spec.thinkingSwitch,
 		imageCompletionTokens: spec.imageCompletionTokens,
 	}, nil
-}
-
-// compatibleTimeout 在调用方保留默认超时时改用服务自身的默认值，显式设置的超时不变。
-func compatibleTimeout(configured, serviceDefault time.Duration) time.Duration {
-	if serviceDefault > 0 && configured == time.Duration(agentllm.DefaultLLMOptions().Timeout)*time.Second {
-		return serviceDefault
-	}
-	return configured
 }
 
 // responseHeaderTimeoutClient 把超时用作拿到响应头的时限：非流式请求在生成完毕后才返回响应头，因而整体受限；

@@ -64,7 +64,7 @@ func main() {
 	}
 
 	// 4. Ollama Provider (新增)
-	if ollamaClient, err := providers.NewOllamaClientSimple("llama2"); err == nil {
+	if ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000)); err == nil {
 		clients = append(clients, ollamaClient)
 		fmt.Println("✅ Ollama Provider 创建成功")
 	}
@@ -188,6 +188,8 @@ func createOpenAIClient() llm.Client {
 	client, _ := providers.NewOpenAIWithOptions(
 		llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
 		llm.WithModel("gpt-3.5-turbo"),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	return client
 }
@@ -197,6 +199,8 @@ func createDeepSeekClient() llm.Client {
 		llm.WithAPIKey(os.Getenv("DEEPSEEK_API_KEY")),
 		llm.WithBaseURL("https://api.deepseek.com"),
 		llm.WithModel("deepseek-chat"),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	return client
 }
@@ -205,11 +209,13 @@ func createGeminiClient() llm.Client {
 	client, _ := providers.NewGeminiWithOptions(
 		llm.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
 		llm.WithModel("gemini-pro"),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	return client
 }
 
 func createOllamaClient() llm.Client {
-	return providers.NewOllamaClientSimple("llama2")
+	return providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 }
 */

@@ -14,7 +14,7 @@ func TestUnifiedDefaultEvidenceAndUnattributed(t *testing.T) {
 	ctx := context.Background()
 	c, e := New(Config{RootKey: "r", Version: "policy", MaxModelRequests: 3})
 	require.NoError(t, e)
-	require.Equal(t, 1000, c.Configuration().MaxAgentCalls)
+	require.Zero(t, c.Configuration().MaxAgentCalls)
 	require.NoError(t, c.ReserveEstimated(ctx, "a", 100))
 	_, e = c.RecordEvidence(ctx, "a", nil, usage.Evidence{KnownFields: usage.Prompt, Tokens: interfaces.TokenUsage{PromptTokens: 10}})
 	require.NoError(t, e)

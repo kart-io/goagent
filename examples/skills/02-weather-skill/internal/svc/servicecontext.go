@@ -52,6 +52,7 @@ func createLLMClient(c *config.Config) llm.Client {
 				llm.WithModel(c.LLM.Model),
 				llm.WithMaxTokens(c.LLM.MaxTokens),
 				llm.WithTemperature(c.LLM.Temperature),
+				llm.WithTimeout(60*time.Second),
 			)
 			if err == nil {
 				return client
@@ -64,6 +65,7 @@ func createLLMClient(c *config.Config) llm.Client {
 				llm.WithModel(c.LLM.Model),
 				llm.WithMaxTokens(c.LLM.MaxTokens),
 				llm.WithTemperature(c.LLM.Temperature),
+				llm.WithTimeout(60*time.Second),
 			)
 			if err == nil {
 				return client

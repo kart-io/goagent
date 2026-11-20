@@ -98,7 +98,7 @@ func newEnv(root, name string, cfg memory.Config) (*env, error) {
 
 // agent 按长期记忆的标准装配构建主 Agent；extra 用于追加模型缓存等选项。
 func (e *env) agent(chat *mocks.ScriptedClient, extra func(*builder.SimpleAgentBuilder) *builder.SimpleAgentBuilder) (*builder.ConfigurableAgent[*core.AgentState], error) {
-	b := builder.NewSimpleBuilder(cachedClient{chat}).
+	b := builder.NewSimpleBuilder(cachedClient{chat}).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSessionLog(e.sessions).
 		WithLongTermMemory(e.mem).
 		WithTools(e.mem.Tools()...)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/execution"
@@ -37,7 +38,7 @@ func run(ctx context.Context) (err error) {
 	model := mocks.NewScriptedClient(mocks.ToolCallReply("读取", mocks.ToolCall("c1", "lookup", "{}")), mocks.TextReply("答复", "回执"))
 	effects := 0
 	for round := range 2 {
-		controller, e := budget.NewDurable(budget.Config{RootKey: "demo", Version: "v1", MaxModelRequests: 2, MaxToolCalls: 1}, journal)
+		controller, e := budget.NewDurable(budget.Config{RootKey: "demo", Version: "v1", MaxModelRequests: 2, MaxToolCalls: 1, MaxAgentCalls: constants.DefaultMaxAgentCalls}, journal)
 		if e != nil {
 			return e
 		}
@@ -53,6 +54,7 @@ func run(ctx context.Context) (err error) {
 			return e
 		}
 		b, report, e := execution.NewGovernedBuilder(model, scope, "assistant", registry, tools.DispatchConfig{
+			MaxConcurrency: 4, Timeout: 30 * time.Second,
 			MaxAdmissionConcurrency: 2, MaxQueued: 8,
 			Authorize: func(_ context.Context, name string, _ *interfaces.ToolInput) error {
 				if name != "lookup" {

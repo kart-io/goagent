@@ -14,9 +14,9 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultClientConfig()
 
 	assert.Equal(t, shared2.ProviderCustom, config.Provider)
-	assert.Equal(t, 2000, config.MaxTokens)
+	assert.Zero(t, config.MaxTokens, "默认不发送 max_tokens")
 	assert.Equal(t, 0.7, config.Temperature)
-	assert.Equal(t, 60, config.Timeout)
+	assert.Zero(t, config.Timeout, "默认不限时")
 	assert.Equal(t, 1.0, config.TopP)
 }
 
@@ -132,11 +132,11 @@ func TestValidation(t *testing.T) {
 	)
 	assert.Equal(t, 0.8, config5.TopP)
 
-	// MaxTokens 应该大于 0
+	// 负数原样保存：Anthropic 构造时报错，其他 provider 不发送
 	config6 := NewLLMOptionsWithOptions(
-		WithMaxTokens(-100), // 无效，应该被忽略
+		WithMaxTokens(-100),
 	)
-	assert.Equal(t, 2000, config6.MaxTokens) // 使用默认值
+	assert.Equal(t, -100, config6.MaxTokens)
 
 	config7 := NewLLMOptionsWithOptions(
 		WithMaxTokens(5000), // 有效

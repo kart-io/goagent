@@ -235,7 +235,7 @@ func (p *GeminiProvider) stream(ctx context.Context, req *agentllm.CompletionReq
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, p.GetTimeout())
+	ctx, cancel := p.WithTimeout(ctx)
 	next, stop := iter.Pull2(p.client.Models.GenerateContentStream(ctx, p.GetModel(req.Model), contents, cfg))
 	first, err, ok := geminiSDKNext(next)
 	if err != nil || !ok {

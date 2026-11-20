@@ -22,6 +22,14 @@ type Selection struct {
 	Query      Query
 	Visibility Visibility
 }
+
+// Reader reads management documents.
+//
+// List returns rows ordered by CreatedAt then ID, starting after
+// Query.Cursor ("<RFC3339Nano CreatedAt>|<ID>") when set. Query.Limit 0 means
+// no limit: the Store returns every matching row and the caller pages with
+// the cursor. A Store must not impose its own cap or default page size;
+// negative limits are invalid. management/storetest checks this contract.
 type Reader interface {
 	Get(context.Context, string, string, string) (Document, error)
 	List(context.Context, string, Selection) ([]Document, error)

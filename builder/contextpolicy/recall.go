@@ -2,6 +2,7 @@ package contextpolicy
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -19,25 +20,54 @@ import (
 // request context (tools.WithSessionID; the Builder fills in the WithSessionID
 // value by default), so only this session can be read.
 type RecallTool struct {
-	store session.Store
+	store  session.Store
+	config RecallConfig
+}
+
+// RecallConfig limits what one recall_history call returns. Limits are caller
+// policy: 0 means unlimited, negative values are rejected.
+type RecallConfig struct {
+	// MaxLimit caps the number of messages the model may ask for in one call;
+	// a call without limit still returns constants.DefaultRecallHistoryLimit.
+	MaxLimit int
+	// MaxRunes truncates each returned message, marking the cut.
+	MaxRunes int
 }
 
 // NewRecallTool returns a recall tool that reads session logs from store; it
-// must use the same store as WithSessionLog.
+// must use the same store as WithSessionLog. It keeps the fixed caps it always
+// had (constants.MaxRecallHistoryLimit messages, constants.MaxRecallHistoryRunes
+// per message); use NewRecallToolConfig to choose them.
 func NewRecallTool(store session.Store) (*RecallTool, error) {
+	return NewRecallToolConfig(store, RecallConfig{MaxLimit: constants.MaxRecallHistoryLimit, MaxRunes: constants.MaxRecallHistoryRunes})
+}
+
+// NewRecallToolConfig is NewRecallTool with caller-owned limits.
+func NewRecallToolConfig(store session.Store, cfg RecallConfig) (*RecallTool, error) {
 	if store == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "recall_history 需要会话日志存储").WithComponent("builder/contextpolicy").WithOperation("new_recall_tool")
 	}
-	return &RecallTool{store: store}, nil
+	if cfg.MaxLimit < 0 || cfg.MaxRunes < 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "recall_history 的上限不能为负").WithComponent("builder/contextpolicy").WithOperation("new_recall_tool")
+	}
+	return &RecallTool{store: store, config: cfg}, nil
 }
 
 func (r *RecallTool) Name() string { return constants.ToolRecallHistory }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: a recall
+// only reads the session log.
+func (r *RecallTool) SupportsConcurrentCalls() bool { return true }
 func (r *RecallTool) Description() string {
 	return "取回本会话中已被压缩为摘要的原始消息。query 按子串过滤；before 只返回序号小于它的消息，用上次结果的 next_before 向前翻页；limit 默认 20。"
 }
 
 func (r *RecallTool) ArgsSchema() string {
-	return `{"type":"object","properties":{"query":{"type":"string"},"before":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}`
+	limit := `{"type":"integer","minimum":1}`
+	if r.config.MaxLimit > 0 {
+		limit = fmt.Sprintf(`{"type":"integer","minimum":1,"maximum":%d}`, r.config.MaxLimit)
+	}
+	return `{"type":"object","properties":{"query":{"type":"string"},"before":{"type":"integer","minimum":1},"limit":` + limit + `},"additionalProperties":false}`
 }
 
 type recalled struct {
@@ -64,7 +94,9 @@ func (r *RecallTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*
 	if limit <= 0 {
 		limit = constants.DefaultRecallHistoryLimit
 	}
-	limit = min(limit, constants.MaxRecallHistoryLimit)
+	if r.config.MaxLimit > 0 {
+		limit = min(limit, int64(r.config.MaxLimit))
+	}
 	events, err := r.store.Read(ctx, id, 0)
 	if err != nil {
 		return nil, err
@@ -84,7 +116,10 @@ func (r *RecallTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (*
 			next = out[len(out)-1].Seq
 			break
 		}
-		item := recalled{Seq: e.Seq, Role: e.Message.Role, Content: truncateRunes(e.Message.Content, constants.MaxRecallHistoryRunes)}
+		item := recalled{Seq: e.Seq, Role: e.Message.Role, Content: e.Message.Content}
+		if r.config.MaxRunes > 0 {
+			item.Content = truncateRunes(item.Content, r.config.MaxRunes)
+		}
 		if e.Tool != nil {
 			item.Tool = e.Tool.Name
 		}

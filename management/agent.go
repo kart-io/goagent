@@ -32,7 +32,7 @@ func (s *Service) SaveVersion(ctx context.Context, a Actor, r SaveVersionRequest
 		return Version{}, agentErrors.ErrManagementInvalid
 	}
 	raw, err := CanonicalJSON(r.Config)
-	if err != nil || len(raw) > s.cfg.Limits.MaxInputBytes {
+	if err != nil || over(len(raw), s.cfg.Limits.MaxInputBytes) {
 		return Version{}, agentErrors.ErrManagementInvalid
 	}
 	r.Config = raw

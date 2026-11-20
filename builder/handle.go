@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
@@ -59,6 +59,8 @@ type inbox struct {
 	followups []followupItem
 	// durable 非 nil 时，输入写入持久收件箱后才算接受。
 	durable *durable.Inbox
+	// writeTimeout 是单次收件箱写入的时限，来自 WithPersistTimeout。
+	writeTimeout time.Duration
 	// seen 是非持久运行的 SteerOnce 去重键；持久运行的键随收件箱落盘。
 	seen map[string]struct{}
 	// cancelModel 只在模型请求进行中且允许重定向时非空。
@@ -80,12 +82,12 @@ func inboxFrom(ctx context.Context) *inbox {
 
 // persist 把输入写入持久收件箱，返回序号；非持久运行为 0。调用方持有 b.mu：
 // 写入期间不能结束收件箱，否则已落盘的输入会同时收到 ErrHandleDone。
-// persist 在持有 b.mu 时写盘，写入时间不超过 DefaultInboxWriteTimeout，调用方取消时提前返回。
+// persist 在持有 b.mu 时写盘，写入时间不超过 writeTimeout，调用方取消时提前返回。
 func (b *inbox) persist(ctx context.Context, kind, text string) (uint64, error) {
 	if b.durable == nil {
 		return 0, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, constants.DefaultInboxWriteTimeout)
+	ctx, cancel := context.WithTimeout(ctx, b.writeTimeout)
 	defer cancel()
 	return b.durable.Append(ctx, kind, text)
 }
@@ -113,7 +115,7 @@ func (b *inbox) ack(seqs []uint64) error {
 	if b == nil || b.durable == nil || len(seqs) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), constants.DefaultInboxWriteTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), b.writeTimeout)
 	defer cancel()
 	if err := b.durable.Ack(ctx, seqs...); err != nil {
 		return err
@@ -240,7 +242,7 @@ type Handle struct {
 // recorded batches; the host need not rebuild it and should not resubmit.
 func (a *ConfigurableAgent[S]) Start(ctx context.Context, input string) *Handle {
 	ctx, cancel := context.WithCancelCause(ctx)
-	h := &Handle{inbox: &inbox{}, cancel: cancel, done: make(chan struct{})}
+	h := &Handle{inbox: &inbox{writeTimeout: a.config.persistTimeout()}, cancel: cancel, done: make(chan struct{})}
 	fail := func(err error) *Handle {
 		h.err = err
 		h.inbox.done = true
@@ -397,7 +399,7 @@ func (h *Handle) SteerOnce(ctx context.Context, key, msg string) error {
 	}
 	var seq uint64
 	if b.durable != nil {
-		ctx, cancel := context.WithTimeout(ctx, constants.DefaultInboxWriteTimeout)
+		ctx, cancel := context.WithTimeout(ctx, b.writeTimeout)
 		defer cancel()
 		var duplicate bool
 		var err error

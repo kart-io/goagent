@@ -109,11 +109,13 @@ func initializeLLMClient() (llm.Client, error) {
 		fmt.Printf("Using Ollama with model: %s\n", ollamaModel)
 		return providers.NewOllamaWithOptions(
 			llm.WithModel(ollamaModel),
+			llm.WithTimeout(120*time.Second),
+			llm.WithMaxTokens(2000),
 		)
 	}
 
 	// Check if Ollama is available (try default)
-	ollamaClient, _ := providers.NewOllamaClientSimple("llama2")
+	ollamaClient, _ := providers.NewOllamaWithOptions(llm.WithModel("llama2"), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	// Test connection by checking if Ollama is running
 	if testOllamaConnection(ollamaClient) {
 		fmt.Println("Using Ollama with default model: llama2")
@@ -123,7 +125,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 2: Try OpenAI
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		fmt.Println("Using OpenAI GPT-3.5-turbo")
-		provider, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-3.5-turbo"), llm.WithMaxTokens(2000), llm.WithTemperature(0.7))
+		provider, err := providers.NewOpenAIWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gpt-3.5-turbo"), llm.WithMaxTokens(2000), llm.WithTemperature(0.7), llm.WithTimeout(60*time.Second))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI client: %w", err)
 		}
@@ -133,7 +135,7 @@ func initializeLLMClient() (llm.Client, error) {
 	// Priority 3: Try Gemini
 	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
 		fmt.Println("Using Google Gemini")
-		provider, err := providers.NewGeminiWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gemini-pro"), llm.WithTemperature(0.7), llm.WithMaxTokens(2000))
+		provider, err := providers.NewGeminiWithOptions(llm.WithAPIKey(apiKey), llm.WithModel("gemini-pro"), llm.WithTemperature(0.7), llm.WithMaxTokens(2000), llm.WithTimeout(60*time.Second))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
@@ -178,7 +180,7 @@ When given a task:
 Always call the appropriate tools and return their results.`
 
 	// Build the agent using the builder pattern
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -211,7 +213,7 @@ When creating a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).
@@ -246,7 +248,7 @@ When executing a strategy:
 
 Always call the appropriate tools and return their results.`
 
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt(systemPrompt).
 		WithTools(registry.List()...).
 		WithState(core.NewAgentState()).

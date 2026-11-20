@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/observe"
@@ -55,8 +54,8 @@ func withRequestRecovery(ctx context.Context, r requestRecovery) context.Context
 type modelResendKey struct{}
 
 // withInterruptedModelResend 与 withRequestRecovery 一样由每条请求路径安装，子 Agent 不继承。
-func withInterruptedModelResend(ctx context.Context, on bool) context.Context {
-	return context.WithValue(ctx, modelResendKey{}, on)
+func withInterruptedModelResend(ctx context.Context, resends int) context.Context {
+	return context.WithValue(ctx, modelResendKey{}, resends)
 }
 
 // replanRequest 是要求替换消息或客户端的恢复决定：须在模型操作之外重新组装请求。
@@ -257,8 +256,8 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 	}
 	attempted, hit := false, false
 	policy := durable.OperationPolicy{}
-	if on, _ := ctx.Value(modelResendKey{}).(bool); on {
-		policy = durable.OperationPolicy{MaxAttempts: constants.DefaultModelResendAttempts, RetryInterrupted: true}
+	if resends, _ := ctx.Value(modelResendKey{}).(int); resends > 0 {
+		policy = durable.OperationPolicy{MaxAttempts: resends + 1, RetryInterrupted: true}
 	}
 	record, opErr := durable.Do(ctx, id, intent, policy, func(callCtx context.Context) (json.RawMessage, error) {
 		attempted = true

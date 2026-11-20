@@ -3,6 +3,7 @@ package constants
 import "time"
 
 // 持久模型及收件箱策略：改变重发次数会使已有运行的操作策略校验失败。
+// DefaultModelResendAttempts 是已弃用的 WithInterruptedModelResend 的发送次数；DefaultInboxWriteTimeout 是 WithPersistTimeout 的默认值。
 const (
 	DefaultModelResendAttempts = 3
 	DefaultInboxWriteTimeout   = 5 * time.Second

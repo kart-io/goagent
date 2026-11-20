@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -150,7 +149,7 @@ func publishModelUsage(ctx context.Context, operation, key string, attempt int, 
 		return agentErrors.Wrap(err, code, "模型用量证据无效").WithComponent("builder").WithOperation("publish_model_usage")
 	}
 	if c, ok := budget.FromContext(ctx); ok {
-		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeoutFrom(ctx))
 		defer cancel()
 		var committed usage.Evidence
 		committed, err = c.RecordEvidence(saveCtx, key, usage.Lineage(ctx), e)

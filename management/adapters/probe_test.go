@@ -58,18 +58,23 @@ func (p *probe) CompleteToolsStream(_ context.Context, r *llm.CompletionRequest,
 	return ch, nil
 }
 
+// concurrentTool 让探针的并行审批真正并发：Dispatcher 只转述内层工具的并发声明。
+type concurrentTool struct{ *tools.BaseTool }
+
+func (concurrentTool) SupportsConcurrentCalls() bool { return true }
+
 func (p *probe) run(ctx context.Context, inputs map[string]string) (*builder.AgentOutput, error) {
 	ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "probe-run"), session.DurableStore(p.store, "probe-session"))
 	for key, input := range inputs {
 		ctx = durable.WithResume(ctx, key, input)
 	}
 	reg := tools.NewRegistry()
-	if err := reg.Register(tools.NewBaseTool("effect", "操作", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	if err := reg.Register(concurrentTool{tools.NewBaseTool("effect", "操作", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		p.mu.Lock()
 		p.effects++
 		p.mu.Unlock()
 		return &interfaces.ToolOutput{Success: true, Result: "已执行"}, nil
-	})); err != nil {
+	})}); err != nil {
 		return nil, err
 	}
 	d, err := tools.NewDispatcher(reg, tools.DispatchConfig{Pipeline: &tools.Pipeline{

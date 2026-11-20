@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
@@ -106,7 +107,7 @@ func initializeLLM() llm.Client {
 	}
 
 	fmt.Printf("Checking Ollama with model '%s'...\n", ollamaModel)
-	ollamaClient, err := providers.NewOllamaClientSimple(ollamaModel)
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel(ollamaModel), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
 		return nil
@@ -125,6 +126,7 @@ func initializeLLM() llm.Client {
 			llm.WithModel("gpt-3.5-turbo"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
+			llm.WithTimeout(60*time.Second),
 		)
 		if err == nil {
 			fmt.Println("✓ Using OpenAI provider")
@@ -139,6 +141,7 @@ func initializeLLM() llm.Client {
 			llm.WithModel("gemini-pro"),
 			llm.WithMaxTokens(1000),
 			llm.WithTemperature(0.7),
+			llm.WithTimeout(60*time.Second),
 		)
 		if err == nil {
 			fmt.Println("✓ Using Gemini provider")

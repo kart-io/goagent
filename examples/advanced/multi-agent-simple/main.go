@@ -246,7 +246,7 @@ func main() {
 	}
 
 	fmt.Printf("Checking Ollama with model '%s'...\n", ollamaModel)
-	ollamaClient, err := providers.NewOllamaClientSimple(ollamaModel)
+	ollamaClient, err := providers.NewOllamaWithOptions(llm.WithModel(ollamaModel), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 	if err != nil {
 		fmt.Printf("⚠️  Error creating Ollama client: %v\n", err)
 	} else if ollamaHasModel(ollamaClient, ollamaModel) {
@@ -264,6 +264,7 @@ func main() {
 				llm.WithModel("gpt-3.5-turbo"),
 				llm.WithMaxTokens(500),
 				llm.WithTemperature(0.7),
+				llm.WithTimeout(60*time.Second),
 			)
 			if err == nil {
 				fmt.Println("✓ Using OpenAI provider")
@@ -279,6 +280,7 @@ func main() {
 					llm.WithModel("gemini-pro"),
 					llm.WithMaxTokens(500),
 					llm.WithTemperature(0.7),
+					llm.WithTimeout(60*time.Second),
 				)
 				if err == nil {
 					fmt.Println("✓ Using Gemini provider")

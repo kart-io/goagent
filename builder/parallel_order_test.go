@@ -36,7 +36,7 @@ func runOrder(t *testing.T, parallel *int, viaDispatcher bool) ([]string, []stri
 	var ts []interfaces.Tool
 	if viaDispatcher {
 		reg := tools.NewRegistry()
-		require.NoError(t, reg.Register(tool))
+		require.NoError(t, reg.Register(concurrentBase{tool}))
 		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 1})
 		require.NoError(t, err)
 		ts = d.Tools()

@@ -18,19 +18,26 @@ import (
 
 // CompactionConfig configures conversation compaction. When the estimated
 // length exceeds MaxTokens, the messages after system and before roughly the
-// last KeepTokens are replaced with one summary.
+// last KeepTokens are replaced with one summary. Limits are caller policy: 0
+// means unlimited, negative values are rejected.
 type CompactionConfig struct {
 	// ID and Version identify the configuration; functions such as Keep and
 	// Annotate cannot be compared, so Version must change when their behavior
 	// changes.
 	ID      string `json:"id"`
 	Version string `json:"version"`
-	// MaxTokens is the estimated token count that triggers compaction; default
-	// 100000.
+	// MaxTokens is the estimated token count that triggers compaction. 0 never
+	// compacts proactively; Recover still compacts after a context overflow.
+	// Before limits became caller-owned 0 meant 100000.
 	MaxTokens int `json:"max_tokens"`
 	// KeepTokens is the estimated token count of recent messages kept verbatim;
-	// default MaxTokens/4, and it must be less than MaxTokens.
+	// it must be less than MaxTokens. 0 means MaxTokens/4, so it is required
+	// when MaxTokens is 0.
 	KeepTokens int `json:"keep_tokens"`
+	// MaxRenderedRunes caps one message in the summary request so a single huge
+	// tool result cannot fill the summary model's context; 0 sends messages
+	// whole. Before limits became caller-owned it was fixed at 4000.
+	MaxRenderedRunes int `json:"max_rendered_runes,omitzero"`
 	// Instructions are additional requirements for the summary, such as
 	// information that must be preserved.
 	Instructions string `json:"instructions"`
@@ -82,8 +89,6 @@ const (
 const (
 	// summaryOutputTokens 是预留预算时为摘要输出估计的 token 数。
 	summaryOutputTokens = 2048
-	// maxRenderedRunes 是摘要请求中单条消息的上限，避免个别超长的工具结果撑满摘要模型的上下文。
-	maxRenderedRunes = 4000
 )
 
 // NewCompaction validates the configuration and fills in defaults.
@@ -94,14 +99,11 @@ func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 	if cfg.Version == "" {
 		cfg.Version = "v1"
 	}
-	if cfg.MaxTokens == 0 {
-		cfg.MaxTokens = 100000
-	}
 	if cfg.KeepTokens == 0 {
 		cfg.KeepTokens = cfg.MaxTokens / 4
 	}
-	if cfg.MaxTokens < 0 || cfg.KeepTokens < 0 || cfg.KeepTokens >= cfg.MaxTokens {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compaction 需要 0 <= keep_tokens < max_tokens").WithComponent("builder/contextpolicy").WithOperation("new_compaction")
+	if cfg.MaxTokens < 0 || cfg.KeepTokens < 0 || (cfg.MaxTokens == 0 && cfg.KeepTokens == 0) || (cfg.MaxTokens > 0 && cfg.KeepTokens >= cfg.MaxTokens) || cfg.MaxRenderedRunes < 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compaction 需要 0 < keep_tokens，设置 max_tokens 时 keep_tokens < max_tokens，且上限不能为负").WithComponent("builder/contextpolicy").WithOperation("new_compaction")
 	}
 	if cfg.Estimate == nil {
 		cfg.Estimate = EstimateTokens
@@ -115,7 +117,8 @@ func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 		ID, Version, Instructions string
 		Max, Keep                 int
 		Model                     bool
-	}{cfg.ID, cfg.Version, cfg.Instructions, cfg.MaxTokens, cfg.KeepTokens, cfg.Model != nil})
+		Render                    int `json:",omitzero"`
+	}{cfg.ID, cfg.Version, cfg.Instructions, cfg.MaxTokens, cfg.KeepTokens, cfg.Model != nil, cfg.MaxRenderedRunes})
 	return &Compaction{config: cfg, identity: cfg.ID + ":" + cfg.Version + ":" + digest(fingerprint)}, nil
 }
 
@@ -128,7 +131,7 @@ func (c *Compaction) Identity() string { return c.identity }
 // number of inputs newly received this step at the end, and those messages are
 // always kept verbatim.
 func (c *Compaction) Reduce(ctx context.Context, messages []llm.Message, inputs int) ([]llm.Message, error) {
-	if c.estimate(messages) <= c.config.MaxTokens {
+	if c.config.MaxTokens == 0 || c.estimate(messages) <= c.config.MaxTokens {
 		return messages, nil
 	}
 	out, _, err := c.compact(ctx, messages, inputs, c.config.KeepTokens)
@@ -205,7 +208,7 @@ func (c *Compaction) summarize(ctx context.Context, span []llm.Message) (string,
 	}
 	msgs := []llm.Message{
 		llm.SystemMessage(strings.TrimSpace(compactionPrompt + "\n" + c.config.Instructions)),
-		llm.UserMessage(transcriptOpen + renderTranscript(span) + transcriptClose + fmt.Sprintf("摘要不超过 %d 字，篇幅紧张时只留仍影响后续工作的信息。", c.config.KeepTokens/2)),
+		llm.UserMessage(transcriptOpen + renderTranscript(span, c.config.MaxRenderedRunes) + transcriptClose + fmt.Sprintf("摘要不超过 %d 字，篇幅紧张时只留仍影响后续工作的信息。", c.config.KeepTokens/2)),
 	}
 	ctrl, metered := budget.FromContext(ctx)
 	// 每次请求用新键：同一键不能重复预留。
@@ -327,7 +330,14 @@ func KeepUserMessages(span []llm.Message, limit int, estimate func(llm.Message) 
 }
 
 // renderTranscript 把消息写成纯文本交给摘要模型，不依赖提供方对工具调用消息的支持。
-func renderTranscript(messages []llm.Message) string {
+// limit 是单条消息的字数上限，0 = 不截断。
+func renderTranscript(messages []llm.Message, limit int) string {
+	clip := func(s string) string {
+		if limit > 0 {
+			return truncateRunes(s, limit)
+		}
+		return s
+	}
 	var sb strings.Builder
 	for _, m := range messages {
 		content := m.Content
@@ -335,11 +345,11 @@ func renderTranscript(messages []llm.Message) string {
 		if IsSummary(m) {
 			content = SummaryPrefix + SummaryBody(content)
 		} else {
-			content = truncateRunes(content, maxRenderedRunes)
+			content = clip(content)
 		}
 		fmt.Fprintf(&sb, "[%s]\n%s\n", m.Role, content)
 		for _, tc := range m.ToolCalls {
-			fmt.Fprintf(&sb, "调用工具 %s：%s\n", tc.Function.Name, truncateRunes(tc.Function.Arguments, maxRenderedRunes))
+			fmt.Fprintf(&sb, "调用工具 %s：%s\n", tc.Function.Name, clip(tc.Function.Arguments))
 		}
 		sb.WriteString("\n")
 	}

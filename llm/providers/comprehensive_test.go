@@ -102,7 +102,7 @@ func TestDeepSeekProvider_Initialization(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
 				assert.Equal(t, shared.ProviderDeepSeek, provider.Provider())
-				assert.NotZero(t, provider.GetMaxTokens(0))
+				assert.Equal(t, tt.config.MaxTokens, provider.GetMaxTokens(0), "未设置时不发送 max_tokens")
 				assert.NotZero(t, provider.GetTemperature(0))
 			}
 		})
@@ -120,7 +120,7 @@ func TestDeepSeekProvider_DefaultValues(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "deepseek-chat", provider.GetModel(""))
-	assert.Equal(t, 2000, provider.GetMaxTokens(0))
+	assert.Zero(t, provider.GetMaxTokens(0))
 	assert.Equal(t, 0.7, provider.GetTemperature(0))
 	assert.Equal(t, "https://api.deepseek.com/v1", provider.baseURL)
 }

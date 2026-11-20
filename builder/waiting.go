@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kart-io/goagent/core/durable"
@@ -42,20 +43,33 @@ func (e *WaitingError) Unwrap() []error {
 	return errs
 }
 
-// parallelFailure 只处理同一轮并发调用中出现等待的情况：同时有真正的失败时按模型顺序返回第一个失败，
-// 不让等待掩盖它；全部是等待时返回包含全部等待的 WaitingError。没有等待时返回 nil，交由原流程处理。
+// parallelFailure 汇总同一轮并发调用的失败，按以下顺序返回：
+//   - 按模型顺序的第一个失败需要宿主处理（ErrOperationAttention）且这类失败不止一个时，返回 errors.Join
+//     合并的全部这类失败（无论有没有等待），宿主一次核对覆盖整组未决操作；
+//   - 没有等待时返回 nil，交由原流程处理（原流程返回第一个失败）；
+//   - 有等待也有真正的失败时返回第一个失败，不让等待掩盖它；
+//   - 全部是等待时返回包含全部等待的 WaitingError。
 func parallelFailure(results []toolCallResult) error {
 	var waits []*durable.WaitError
 	var failure error
+	var attention []error
 	for _, r := range results {
 		if r.err == nil {
 			continue
 		}
 		if w := durable.Waits(r.err); w != nil {
 			waits = append(waits, w...)
-		} else if failure == nil {
+			continue
+		}
+		if failure == nil {
 			failure = r.err
 		}
+		if errors.Is(r.err, agentErrors.ErrOperationAttention) {
+			attention = append(attention, r.err)
+		}
+	}
+	if len(attention) > 1 && errors.Is(failure, agentErrors.ErrOperationAttention) {
+		return errors.Join(attention...)
 	}
 	switch {
 	case len(waits) == 0:

@@ -91,7 +91,7 @@ func runnableLookup(t *testing.T, resumable bool, calls *atomic.Int32) interface
 		calls.Add(1)
 		return "已发货", nil
 	}), tools.RunnableToolConfig[string, string]{
-		Name: "lookup", Description: "查询订单", Version: "v1", Resumable: resumable,
+		Name: "lookup", Description: "查询订单", Version: "v1", Resumable: resumable, MaxAttempts: 3,
 		ArgsSchema: `{"type":"object","properties":{}}`,
 		Decode:     func(map[string]any) (string, error) { return "", nil },
 		Encode:     func(s string) (any, error) { return s, nil },

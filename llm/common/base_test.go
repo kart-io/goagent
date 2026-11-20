@@ -210,14 +210,10 @@ func TestGetMaxTokens(t *testing.T) {
 	// Falls back to config
 	assert.Equal(t, 100, bp.GetMaxTokens(0))
 
-	// 测试默认值回退 - common.NewBaseProvider() 使用 DefaultLLMOptions()，该函数设置 MaxTokens 为 2000
-	bp2 := common.NewBaseProvider()
-	assert.Equal(t, 2000, bp2.GetMaxTokens(0))
-
-	// 测试零配置时的兜底默认值（应使用 constants.DefaultMaxTokens）
-	// 需要创建一个空配置（不使用 DefaultLLMOptions）
-	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
-	assert.Equal(t, shared.DefaultProviderMaxTokens, bp3.GetMaxTokens(0))
+	// 未设置时为 0，表示不发送 max_tokens，不再兜底 2000/1000
+	assert.Zero(t, common.NewBaseProvider().GetMaxTokens(0))
+	assert.Zero(t, (&common.BaseProvider{Config: &agentllm.LLMOptions{}}).GetMaxTokens(0))
+	assert.Zero(t, common.NewBaseProvider(agentllm.WithMaxTokens(-1)).GetMaxTokens(0))
 }
 
 func TestGetTemperature(t *testing.T) {
@@ -243,14 +239,9 @@ func TestGetTimeout(t *testing.T) {
 	timeout := bp.GetTimeout()
 	assert.Equal(t, 30*time.Second, timeout)
 
-	// 测试默认值回退 - common.NewBaseProvider() 使用 DefaultLLMOptions()，该函数设置 Timeout 为 60
-	bp2 := common.NewBaseProvider()
-	assert.Equal(t, 60*time.Second, bp2.GetTimeout())
-
-	// 测试零配置时的兜底默认值（应使用 constants.DefaultTimeout）
-	// 需要创建一个空配置（不使用 DefaultLLMOptions）
-	bp3 := &common.BaseProvider{Config: &agentllm.LLMOptions{}}
-	assert.Equal(t, shared.DefaultProviderTimeout, bp3.GetTimeout())
+	// 未设置或 0 表示不限，不再回落到 60s/30s
+	assert.Zero(t, common.NewBaseProvider().GetTimeout())
+	assert.Zero(t, common.NewBaseProvider(agentllm.WithTimeout(0)).GetTimeout())
 }
 
 func TestGetTopP(t *testing.T) {

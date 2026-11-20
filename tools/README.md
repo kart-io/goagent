@@ -94,8 +94,8 @@ There are also `Names`, `Size`, and `Clear`.
 
 ```go
 d, err := tools.NewDispatcher(registry, tools.DispatchConfig{
-    MaxConcurrency:       4,                // default 4
-    Timeout:              30 * time.Second, // default timeout per call, 30 seconds by default
+    MaxConcurrency:       4,                // 0 = unlimited
+    Timeout:              30 * time.Second, // per-call timeout; 0 = no deadline
     ReturnArgumentErrors: true,             // hand argument errors back to the model to correct instead of aborting
     Pipeline: &tools.Pipeline{
         Pre:  []tools.PreHook{(&policy.Policy{Default: policy.Allow}).Hook()},

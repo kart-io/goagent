@@ -88,6 +88,7 @@ func runBasicAgentBuilder(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -96,7 +97,7 @@ func runBasicAgentBuilder(apiKey string) error {
 	// 步骤 2: 使用 AgentBuilder 创建 Agent
 	fmt.Println("🔨 使用 AgentBuilder 构建 Agent...")
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个友好的 AI 助手，擅长用简洁明了的语言回答问题。").
 		WithState(agentstate.NewAgentState()).
 		Build()
@@ -132,6 +133,7 @@ func runAgentBuilderWithTools(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
 		llm.WithMaxTokens(2000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -146,7 +148,7 @@ func runAgentBuilderWithTools(apiKey string) error {
 	// 使用 AgentBuilder 创建带工具的 Agent
 	fmt.Println("🔨 构建带工具的 Agent...")
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个智能助手，可以使用工具来帮助用户完成任务。").
 		WithTools(calculatorTool, weatherTool, timeTool).
 		WithState(agentstate.NewAgentState()).
@@ -183,6 +185,8 @@ func runAgentBuilderWithMiddleware(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.7),
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -198,7 +202,7 @@ func runAgentBuilderWithMiddleware(apiKey string) error {
 	// 使用 AgentBuilder 创建带中间件和回调的 Agent
 	fmt.Println("🔨 构建 Agent...")
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个专业的 AI 助手。").
 		WithState(agentstate.NewAgentState()).
 		WithCallbacks(costTracker).
@@ -239,6 +243,7 @@ func runAgentBuilderWithConfig(apiKey string) error {
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.3), // 低温度，更加准确
 		llm.WithMaxTokens(1000),
+		llm.WithTimeout(60*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -257,7 +262,7 @@ func runAgentBuilderWithConfig(apiKey string) error {
 	// 使用 AgentBuilder 创建 Agent
 	fmt.Println("🔨 构建 Agent...")
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5*time.Minute).
 		WithSystemPrompt("你是一个专业的技术文档写作助手，专注于准确性和清晰度。").
 		WithState(agentstate.NewAgentState()).
 		WithMaxIterations(customConfig.MaxIterations).
@@ -296,6 +301,8 @@ func runChatbotAgent(apiKey string) error {
 		llm.WithAPIKey(apiKey),
 		llm.WithModel("deepseek-chat"),
 		llm.WithTemperature(0.8), // 更高的温度，更有创造性
+		llm.WithTimeout(60*time.Second),
+		llm.WithMaxTokens(2000),
 	)
 	if err != nil {
 		return fmt.Errorf("创建 DeepSeek 客户端失败: %w", err)
@@ -304,7 +311,7 @@ func runChatbotAgent(apiKey string) error {
 	// 使用聊天机器人预设配置
 	fmt.Println("🤖 创建聊天机器人 Agent...")
 	//nolint:staticcheck // Example demonstrates old API for backward compatibility
-	agent, err := builder.NewAgentBuilder[core.State](llmClient).
+	agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个友好、幽默的聊天机器人，喜欢用轻松的语气与用户交流。").
 		WithState(agentstate.NewAgentState()).
 		ConfigureForChatbot(). // 使用聊天机器人预设配置
@@ -525,6 +532,8 @@ llmClient, err := providers.NewDeepSeekWithOptions(
     llm.WithAPIKey(apiKey),
     llm.WithModel("deepseek-chat"),
     llm.WithTemperature(0.7),
+    llm.WithTimeout(60*time.Second),
+    llm.WithMaxTokens(2000),
 )
 
 // 使用 AgentBuilder 构建 Agent（agentstate = "github.com/kart-io/goagent/core/state"）

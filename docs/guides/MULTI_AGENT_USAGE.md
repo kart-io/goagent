@@ -18,7 +18,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 每个 Agent 自动建立调用身份；WithAgentID 显式命名角色，未设置时为 anonymous。子 Agent 使用独立实例/会话和传入 context，继承根预算及 Observer。持久调用仍需 WithDurableScope；AgentID 不替代它。`execution.ConfigureBuilder` 会设置 SessionID、DurableScope 和 AgentID。
 
-MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间 Agent；为0时使用 DefaultMaxAgentCalls=1000，负值拒绝。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
+MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间 Agent；为0时不限制，负值拒绝；在途账本按 DefaultMaxAgentCalls=1000 写入的须继续显式传 1000，否则配置变化被拒绝。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
 
 不经统一入口的隐藏 SDK 请求不会自动计量。ModelInvoking=true 是可信宿主声明，不是模型调用探测器。完整钩子覆盖 ExecuteStream、AsRunnable 和 Start，即 Builder 的全部执行入口。
 

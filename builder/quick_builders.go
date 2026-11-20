@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/middleware"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -15,9 +16,25 @@ import (
 // 快速构建函数
 // 本文件包含快速创建预配置 Agent 的便捷函数
 
-// QuickAgent creates a simple agent with minimal configuration.
-func QuickAgent(llmClient llm.Client, systemPrompt string) (*SimpleAgent, error) {
+// quickBuilder 给预设 Agent 显式带上限额默认值改为调用方所有之前的取值，预设行为不变。
+func quickBuilder(llmClient llm.Client) *SimpleAgentBuilder {
 	return NewSimpleBuilder(llmClient).
+		WithMaxIterations(shared.DefaultAgentMaxIterations).
+		WithTimeout(shared.DefaultAgentExecutionTimeout)
+}
+
+// presetRetrieval 是 RAGAgent 沿用的检索篇数与字数上限。
+var presetRetrieval = RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000}
+
+// QuickAgent creates a simple agent with minimal configuration.
+//
+// Like every quick constructor in this file it keeps the limits presets had
+// before limits became caller-owned: shared.DefaultAgentMaxIterations rounds
+// (unless the preset documents another value) and a
+// shared.DefaultAgentExecutionTimeout turn timeout. Use NewSimpleBuilder to
+// choose limits yourself.
+func QuickAgent(llmClient llm.Client, systemPrompt string) (*SimpleAgent, error) {
+	return quickBuilder(llmClient).
 		WithSystemPrompt(systemPrompt).
 		WithState(core.NewAgentState()).
 		Build()
@@ -27,7 +44,7 @@ func QuickAgent(llmClient llm.Client, systemPrompt string) (*SimpleAgent, error)
 // a retriever exposing Retrieve, or a VectorStore (top 4 results).
 // A nil retriever preserves the legacy prompt-only preset.
 func RAGAgent(llmClient llm.Client, retriever interface{}) (*SimpleAgent, error) {
-	b := NewSimpleBuilder(llmClient).
+	b := quickBuilder(llmClient).
 		WithSystemPrompt("You are a helpful assistant. Answer questions based on the provided context.").
 		ConfigureForRAG().
 		WithState(core.NewAgentState()).
@@ -40,15 +57,15 @@ func RAGAgent(llmClient llm.Client, retriever interface{}) (*SimpleAgent, error)
 	}
 	switch r := retriever.(type) {
 	case interfaces.DocumentRetriever:
-		b.WithRetriever(r)
+		b.WithRetriever(r, presetRetrieval)
 	case interface {
 		Retrieve(context.Context, string) ([]*interfaces.Document, error)
 	}:
-		b.WithRetriever(documentRetrieverFunc(r.Retrieve))
+		b.WithRetriever(documentRetrieverFunc(r.Retrieve), presetRetrieval)
 	case interfaces.VectorStore:
 		b.WithRetriever(documentRetrieverFunc(func(ctx context.Context, query string) ([]*interfaces.Document, error) {
 			return r.SimilaritySearch(ctx, query, 4)
-		}))
+		}), presetRetrieval)
 	default:
 		return nil, agentErrors.NewInvalidConfigError("builder", "retriever", "expected DocumentRetriever, Retrieve method, or VectorStore")
 	}
@@ -60,7 +77,7 @@ func ChatAgent(llmClient llm.Client, userName string) (*SimpleAgent, error) {
 	state := core.NewAgentState()
 	state.Set("user_name", userName)
 
-	return NewSimpleBuilder(llmClient).
+	return quickBuilder(llmClient).
 		WithSystemPrompt(fmt.Sprintf("You are a helpful assistant chatting with %s.", userName)).
 		WithState(state).
 		ConfigureForChatbot().
@@ -86,7 +103,7 @@ func AnalysisAgent(llmClient llm.Client, dataSource interface{}) (*SimpleAgent, 
 		state.Set("data_source", dataSource)
 	}
 
-	return NewSimpleBuilder(llmClient).
+	return quickBuilder(llmClient).
 		WithSystemPrompt("You are a data analysis expert. Analyze data thoroughly and provide structured, accurate insights.").
 		WithState(state).
 		ConfigureForAnalysis().
@@ -112,7 +129,7 @@ func WorkflowAgent(llmClient llm.Client, workflows map[string]interface{}) (*Sim
 		state.Set("workflow_status", "initialized")
 	}
 
-	return NewSimpleBuilder(llmClient).
+	return quickBuilder(llmClient).
 		WithSystemPrompt("You are a workflow orchestrator. Execute tasks systematically, validate results, and handle errors gracefully.").
 		WithState(state).
 		WithMaxIterations(15).
@@ -149,7 +166,7 @@ func MonitoringAgent(llmClient llm.Client, checkInterval time.Duration) (*Simple
 	state.Set("last_check", time.Now())
 	state.Set("monitoring_status", "active")
 
-	return NewSimpleBuilder(llmClient).
+	return quickBuilder(llmClient).
 		WithSystemPrompt("You are a system monitoring expert. Observe metrics, detect anomalies, and alert on issues promptly.").
 		WithState(state).
 		WithMaxIterations(100). // 长时间运行监控
@@ -185,7 +202,7 @@ func ResearchAgent(llmClient llm.Client, sources []string) (*SimpleAgent, error)
 	}
 	state.Set("research_status", "initialized")
 
-	return NewSimpleBuilder(llmClient).
+	return quickBuilder(llmClient).
 		WithSystemPrompt("You are a research expert. Gather information from multiple sources, synthesize findings, and provide comprehensive, well-cited reports.").
 		WithState(state).
 		WithMaxTokens(4000).
