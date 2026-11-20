@@ -106,7 +106,7 @@ func Run(ctx context.Context, cfg Config) (report Report, err error) {
 	if err != nil {
 		return report, err
 	}
-	dispatcher, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 1})
+	dispatcher, err := tools.NewDispatcher(reg, tools.DispatchConfig{Timeout: 30 * time.Second, MaxConcurrency: 1})
 	if err != nil {
 		return report, err
 	}

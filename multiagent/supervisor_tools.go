@@ -15,6 +15,7 @@ type Member struct {
 	Name, Description, Version string
 	Factory                    AgentFactory
 	Resumable                  bool
+	MaxAttempts                int           // 见 tools.RunnableToolConfig.MaxAttempts：0 = 中断后不重入
 	Timeout                    time.Duration // 0 继承 Dispatcher 默认；< 0 构造报错；只在经 Dispatcher 调用时生效
 }
 
@@ -42,7 +43,7 @@ func SupervisorTools(members ...Member) ([]interfaces.Tool, error) {
 		tool, err := tools.NewRunnableToolFactory(m.Factory, tools.RunnableToolConfig[any, *builder.AgentOutput]{
 			Name: m.Name, Description: m.Description, ArgsSchema: memberArgsSchema, Version: m.Version,
 			Decode: decodeTask, Encode: encodeAgentResult,
-			ModelInvoking: true, Resumable: m.Resumable, Timeout: m.Timeout,
+			ModelInvoking: true, Resumable: m.Resumable, MaxAttempts: m.MaxAttempts, Timeout: m.Timeout,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("成员 %q: %w", m.Name, err)

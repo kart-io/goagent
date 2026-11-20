@@ -72,6 +72,7 @@ func verify(ctx context.Context, client llm.ToolStreamClient) (got result, err e
 			return got, e
 		}
 		b, _, e := execution.NewGovernedBuilder(model, scope, "assistant", registry, tools.DispatchConfig{
+			MaxConcurrency: 4, Timeout: 30 * time.Second,
 			MaxAdmissionConcurrency: 1, MaxQueued: 1,
 			Authorize: func(_ context.Context, name string, in *interfaces.ToolInput) error {
 				if name != "verify" {

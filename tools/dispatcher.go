@@ -35,8 +35,14 @@ type DispatchConfig struct {
 	// effect, so non-idempotent tools (sending email, placing orders, etc.)
 	// should declare Reconcile, or leave RetryInterrupted unset and let the
 	// host handle them.
-	MaxAttempts    int `json:"max_attempts"`
-	MaxConcurrency int `json:"max_concurrency"` // defaults to 4; limits execution concurrency; waiting for approval does not hold an execution slot
+	//
+	// The default of 3 is kept rather than becoming "0 = no resume": it is
+	// recorded in each call's journal, so changing it would fail policy checks
+	// on runs already in flight.
+	MaxAttempts int `json:"max_attempts"`
+	// MaxConcurrency limits execution concurrency; 0 means unlimited (it
+	// previously meant 4). Waiting for approval does not hold an execution slot.
+	MaxConcurrency int `json:"max_concurrency"`
 	// MaxAdmissionConcurrency independently limits validation and pipeline
 	// admission concurrency. Zero means unlimited admission; waiting for
 	// approval does not occupy an execution slot.
@@ -45,9 +51,10 @@ type DispatchConfig struct {
 	// stages; zero means unlimited. Calls that immediately obtain a free slot
 	// do not consume queue quota.
 	MaxQueued int `json:"max_queued"`
-	// Timeout is the default per-call timeout, 30 seconds by default; tools
-	// that implement DispatchTimeoutProvider replace it with their own value,
-	// longer or shorter. Validation, authorization, journaling and execution
+	// Timeout is the default per-call timeout; 0 means no per-call timeout (it
+	// previously meant 30 seconds), negative values are rejected. Tools that
+	// implement DispatchTimeoutProvider replace it with their own positive
+	// value, longer or shorter. Validation, authorization, journaling and execution
 	// share the clock; admission and both queueing stages pause it, and waiting
 	// is bounded only by the host and root budget ctx.
 	Timeout time.Duration `json:"timeout"`
@@ -142,21 +149,18 @@ func NewDispatcher(registry *Registry, cfg DispatchConfig) (dispatcher *Dispatch
 			WithComponent("dispatcher").
 			WithOperation("initialize")
 	}
-	if cfg.MaxConcurrency == 0 {
-		cfg.MaxConcurrency = shared.DefaultDispatcherConcurrency
-	}
 	if cfg.MaxAttempts == 0 {
 		cfg.MaxAttempts = shared.DefaultDispatcherAttempts
 	}
-	if cfg.Timeout == 0 {
-		cfg.Timeout = shared.DefaultToolTimeout
-	}
-	if cfg.MaxConcurrency < 1 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 || cfg.MaxAdmissionConcurrency < 0 || cfg.MaxQueued < 0 {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "positive tool concurrency and timeout required").
+	if cfg.MaxConcurrency < 0 || cfg.Timeout < 0 || cfg.MaxAttempts < 1 || cfg.MaxAdmissionConcurrency < 0 || cfg.MaxQueued < 0 || (cfg.Pipeline != nil && cfg.Pipeline.ApprovalTimeout < 0) {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool concurrency, timeout and queue limits must not be negative").
 			WithComponent("dispatcher").
 			WithOperation("initialize")
 	}
-	d := &Dispatcher{entries: map[string]dispatchEntry{}, config: cfg, slots: make(chan struct{}, cfg.MaxConcurrency)}
+	d := &Dispatcher{entries: map[string]dispatchEntry{}, config: cfg}
+	if cfg.MaxConcurrency > 0 {
+		d.slots = make(chan struct{}, cfg.MaxConcurrency)
+	}
 	if cfg.MaxAdmissionConcurrency > 0 {
 		d.admissionSlots = make(chan struct{}, cfg.MaxAdmissionConcurrency)
 	}
@@ -362,8 +366,11 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		resultCtx = caller
 	}
 	// 单次超时约束校验、授权、日志读写与执行，在管线准入阶段（含等待人工审批）暂停计时。
-	deadline := time.Now().Add(entry.timeout)
-	vctx, cancel := context.WithDeadline(ctx, deadline)
+	var deadline time.Time
+	if entry.timeout > 0 {
+		deadline = time.Now().Add(entry.timeout)
+	}
+	vctx, cancel := withCallDeadline(ctx, deadline)
 	defer cancel()
 	if err = vctx.Err(); err != nil {
 		return nil, err
@@ -418,18 +425,18 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 	releaseAdmission()
 	// 在进入 durable.Do 前等待：排队取消不应留下 pending 操作；日志回放和拒绝不占执行槽位。
 	if argResult == nil && admitted != nil && admitted.rejected == nil {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return nil, context.DeadlineExceeded
+		resume, pauseErr := pauseClock(&deadline)
+		if pauseErr != nil {
+			return nil, pauseErr
 		}
 		releaseExecution, waitErr := d.acquireSlot(ctx, d.slots)
 		if waitErr != nil {
 			return nil, waitErr
 		}
 		defer releaseExecution()
-		deadline = time.Now().Add(remaining)
+		resume()
 	}
-	ectx, ecancel := context.WithDeadline(ctx, deadline)
+	ectx, ecancel := withCallDeadline(ctx, deadline)
 	defer ecancel()
 	invoke := func(callCtx context.Context) (*interfaces.ToolOutput, error) {
 		if err := callCtx.Err(); err != nil {
@@ -584,12 +591,12 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 	}
 	// 仅管线准入暂停原超时计时；替代目标的校验、授权仍消耗原调用的剩余额度。
 	gate := func(call *Call, allowSubstitution bool) (*interfaces.ToolOutput, *Substitution, error) {
-		remaining := time.Until(*deadline)
-		if remaining <= 0 {
-			return nil, nil, context.DeadlineExceeded
+		resume, err := pauseClock(deadline)
+		if err != nil {
+			return nil, nil, err
 		}
 		rejected, sub, err := p.gate(ctx, call, allowSubstitution)
-		*deadline = time.Now().Add(remaining)
+		resume()
 		return rejected, sub, err
 	}
 	rejected, sub, err := gate(a.call, true)
@@ -612,7 +619,7 @@ func (d *Dispatcher) admit(ctx context.Context, entry dispatchEntry, input inter
 			WithContext("substitute", sub.Tool)
 	}
 	input.Args = sub.Args
-	vctx, cancel := context.WithDeadline(ctx, *deadline)
+	vctx, cancel := withCallDeadline(ctx, *deadline)
 	defer cancel()
 	if err = d.checkSubstitute(vctx, target, &input); err != nil {
 		return nil, fmt.Errorf("tool %q substitution %q: %w", entry.name, sub.Tool, err)
@@ -954,6 +961,26 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 // concurrently.
 func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
 func (t *dispatchedTool) EmitsToolEvents() bool         { return true }
+
+// withCallDeadline 绑定单次调用的截止时间；零值表示不限时，只受 ctx 约束。
+func withCallDeadline(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc) {
+	if deadline.IsZero() {
+		return context.WithCancel(ctx)
+	}
+	return context.WithDeadline(ctx, deadline)
+}
+
+// pauseClock 暂停单次超时计时，resume 按剩余时长顺延；零值截止时间不计时。
+func pauseClock(deadline *time.Time) (resume func(), err error) {
+	if deadline.IsZero() {
+		return func() {}, nil
+	}
+	remaining := time.Until(*deadline)
+	if remaining <= 0 {
+		return nil, context.DeadlineExceeded
+	}
+	return func() { *deadline = time.Now().Add(remaining) }, nil
+}
 
 // acquireSlot 仅在不能立即取得槽位时计入排队。取得槽位后重查取消，
 // 避免空闲槽位与 ctx 取消竞争时迟到执行；释放函数幂等，支持提前交接阶段。

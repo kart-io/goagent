@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -165,8 +164,10 @@ func (f ApproverFunc) Approve(ctx context.Context, req ApprovalRequest) (Approva
 type Pipeline struct {
 	Pre      []PreHook
 	Approver Approver
-	// ApprovalTimeout bounds a single wait for approval, 10 minutes by
-	// default; after it expires, a late approval is still treated as denied.
+	// ApprovalTimeout bounds a single wait for approval; after it expires, a
+	// late approval is still treated as denied. 0 means no timeout, so the wait
+	// ends only with the call's context (it previously meant 10 minutes);
+	// NewDispatcher rejects negative values.
 	ApprovalTimeout time.Duration
 	// GrantTTL bounds the validity of new session grants from the time of
 	// approval; zero or less means they never expire.
@@ -347,13 +348,12 @@ func (p *Pipeline) leadApproval(ctx context.Context, key string, pending *pendin
 	return pending.result, pending.err
 }
 
-// askApprover 在 ApprovalTimeout 内等待答复。审批人不响应 ctx 时也按时返回，迟到的答复被丢弃。
+// askApprover 在 ApprovalTimeout 内等待答复（0 = 只受 ctx 约束）。审批人不响应 ctx 时也按时返回，迟到的答复被丢弃。
 func (p *Pipeline) askApprover(ctx context.Context, req ApprovalRequest) (ApprovalResult, error) {
-	timeout := p.ApprovalTimeout
-	if timeout <= 0 {
-		timeout = constants.DefaultApprovalTimeout
+	actx, cancel := context.WithCancel(ctx)
+	if p.ApprovalTimeout > 0 {
+		actx, cancel = context.WithTimeout(ctx, p.ApprovalTimeout)
 	}
-	actx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	type answer struct {
 		result ApprovalResult

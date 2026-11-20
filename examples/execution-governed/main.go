@@ -54,6 +54,7 @@ func run(ctx context.Context) (err error) {
 			return e
 		}
 		b, report, e := execution.NewGovernedBuilder(model, scope, "assistant", registry, tools.DispatchConfig{
+			MaxConcurrency: 4, Timeout: 30 * time.Second,
 			MaxAdmissionConcurrency: 2, MaxQueued: 8,
 			Authorize: func(_ context.Context, name string, _ *interfaces.ToolInput) error {
 				if name != "lookup" {

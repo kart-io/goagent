@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,15 +31,45 @@ import (
 // Store is a spill directory. Spill files are grouped into per-session
 // directories, and file names are made of the tool name and call ID.
 type Store struct {
-	fs       *env.LocalFS
-	maxBytes int
+	fs  *env.LocalFS
+	cfg Config
+}
+
+// Config sets when results spill and how much of them the model sees.
+// MaxBytes is required: results whose text form exceeds it are spilled.
+// PreviewRunes truncates the preview returned in place of a spilled result,
+// MaxLineRunes truncates each line read_spill returns, and ReadLimitLines is
+// how many lines read_spill returns when the model passes no limit; for all
+// three, 0 means no truncation (read to the end). Negative values are
+// rejected.
+type Config struct {
+	MaxBytes       int
+	PreviewRunes   int
+	MaxLineRunes   int
+	ReadLimitLines int
 }
 
 // New uses dir as the spill directory (creating it if missing); results whose
-// text form exceeds maxBytes bytes are spilled.
+// text form exceeds maxBytes bytes are spilled. It keeps the preset preview of
+// constants.SpillPreviewRunes runes, line cap of constants.SpillMaxLineRunes
+// runes and default read of constants.DefaultSpillReadLimitLines lines; use
+// NewWithConfig to choose them.
 func New(dir string, maxBytes int) (*Store, error) {
-	if maxBytes <= 0 {
+	return NewWithConfig(dir, Config{
+		MaxBytes:       maxBytes,
+		PreviewRunes:   constants.SpillPreviewRunes,
+		MaxLineRunes:   constants.SpillMaxLineRunes,
+		ReadLimitLines: constants.DefaultSpillReadLimitLines,
+	})
+}
+
+// NewWithConfig uses dir as the spill directory (creating it if missing).
+func NewWithConfig(dir string, cfg Config) (*Store, error) {
+	if cfg.MaxBytes <= 0 {
 		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "spill max bytes must be positive").WithComponent("spill").WithOperation("new_store")
+	}
+	if cfg.PreviewRunes < 0 || cfg.MaxLineRunes < 0 || cfg.ReadLimitLines < 0 {
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "spill preview, line and read limits must not be negative").WithComponent("spill").WithOperation("new_store")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -47,7 +78,7 @@ func New(dir string, maxBytes int) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{fs: local, maxBytes: maxBytes}, nil
+	return &Store{fs: local, cfg: cfg}, nil
 }
 
 // Dir returns the spill directory.
@@ -63,12 +94,12 @@ func (s *Store) Hook() tools.PostHook {
 			return tools.PostDecision{}, nil
 		}
 		data, err := spillText(out.Result)
-		if err != nil || len(data) <= s.maxBytes {
+		if err != nil || len(data) <= s.cfg.MaxBytes {
 			return tools.PostDecision{}, nil
 		}
 		preview := []rune(string(data))
-		if len(preview) > constants.SpillPreviewRunes {
-			preview = preview[:constants.SpillPreviewRunes]
+		if n := s.cfg.PreviewRunes; n > 0 && len(preview) > n {
+			preview = preview[:n]
 		}
 		result := map[string]any{"truncated": true, "bytes": len(data), "preview": string(preview)}
 		name, err := s.write(ctx, call, data)
@@ -126,6 +157,10 @@ func (s *Store) Prune(olderThan time.Duration) error {
 // ReadTool returns the read_spill tool, which can only read spill files in
 // this directory.
 func (s *Store) ReadTool() interfaces.Tool {
+	limitDoc := "默认读到文件末尾"
+	if s.cfg.ReadLimitLines > 0 {
+		limitDoc = fmt.Sprintf("默认 %d", s.cfg.ReadLimitLines)
+	}
 	return tools.NewBaseTool(constants.ToolReadSpill,
 		"读取被截断的工具结果的完整内容，path 为截断结果中的 spill_path。返回带行号的内容（格式为 行号<TAB>内容），用 offset 与 limit 分段读取。",
 		fmt.Sprintf(`{
@@ -133,14 +168,17 @@ func (s *Store) ReadTool() interfaces.Tool {
 			"properties": {
 				"path": {"type": "string", "description": "截断结果中的 spill_path"},
 				"offset": {"type": "integer", "minimum": 1, "description": "起始行号，从 1 开始，默认 1"},
-				"limit": {"type": "integer", "minimum": 1, "description": "最多读取的行数，默认 %d"}
+				"limit": {"type": "integer", "minimum": 1, "description": "最多读取的行数，%s"}
 			},
 			"required": ["path"],
 			"additionalProperties": false
-		}`, constants.DefaultSpillReadLimitLines),
+		}`, limitDoc),
 		func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			name, _ := input.Args["path"].(string)
-			offset, limit := intArg(input.Args["offset"], 1), intArg(input.Args["limit"], constants.DefaultSpillReadLimitLines)
+			offset, limit := intArg(input.Args["offset"], 1), intArg(input.Args["limit"], s.cfg.ReadLimitLines)
+			if _, given := input.Args["limit"]; !given && limit == 0 {
+				limit = math.MaxInt
+			}
 			if offset < 1 || limit < 1 {
 				return tools.Rejected("offset and limit must be integers >= 1", nil), nil
 			}
@@ -155,12 +193,14 @@ func (s *Store) ReadTool() interfaces.Tool {
 			if offset > len(lines) {
 				return tools.Rejected(fmt.Sprintf("offset %d exceeds total lines %d", offset, len(lines)), nil), nil
 			}
-			end := min(len(lines), offset-1+limit)
+			end := offset - 1 + min(len(lines)-offset+1, limit)
 			var sb strings.Builder
 			for i := offset - 1; i < end; i++ {
 				line := lines[i]
-				if r := []rune(line); len(r) > constants.SpillMaxLineRunes {
-					line = string(r[:constants.SpillMaxLineRunes]) + "…"
+				if n := s.cfg.MaxLineRunes; n > 0 {
+					if r := []rune(line); len(r) > n {
+						line = string(r[:n]) + "…"
+					}
 				}
 				fmt.Fprintf(&sb, "%6d\t%s\n", i+1, line)
 			}

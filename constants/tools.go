@@ -19,6 +19,8 @@ const (
 
 // 共享默认策略与协议值；领域实现直接引用本包。
 const (
+	// DefaultApprovalTimeout 与 DefaultResumableToolAttempts 是旧默认值，tools 不再自动套用；
+	// 宿主要保留旧行为时显式传入（Pipeline.ApprovalTimeout、RunnableToolConfig.MaxAttempts）。
 	DefaultApprovalTimeout       = 10 * time.Minute
 	DefaultResumableToolAttempts = 3
 	ToolReadSpill                = "read_spill"

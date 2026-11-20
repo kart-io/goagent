@@ -500,7 +500,7 @@ func TestAPITool_BaseURLRestrictsHost(t *testing.T) {
 // 响应体超过上限时报错，不把无界内容读进内存。
 func TestAPITool_ResponseBodyLimited(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(make([]byte, maxResponseBodyBytes+1))
+		_, _ = w.Write(make([]byte, DefaultMaxResponseBytes+1))
 	}))
 	defer server.Close()
 

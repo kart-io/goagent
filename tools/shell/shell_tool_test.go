@@ -557,8 +557,8 @@ func TestShellTool_OutputLimited(t *testing.T) {
 		t.Fatalf("Expected success, got: %v", err)
 	}
 	result := out.Result.(map[string]interface{})
-	if got := len(result["output"].(string)); got != maxOutputBytes {
-		t.Errorf("Expected output truncated to %d bytes, got %d", maxOutputBytes, got)
+	if got := len(result["output"].(string)); got != DefaultMaxOutputBytes {
+		t.Errorf("Expected output truncated to %d bytes, got %d", DefaultMaxOutputBytes, got)
 	}
 	if result["truncated"] != true {
 		t.Error("Expected truncated flag")

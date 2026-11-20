@@ -80,7 +80,7 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 		if e != nil {
 			return got, e
 		}
-		b, _, e := execution.NewGovernedBuilder(model, scope, shared.RoleAssistant, registry, tools.DispatchConfig{MaxAdmissionConcurrency: 1, MaxQueued: 2, Authorize: func(context.Context, string, *interfaces.ToolInput) error { return nil }})
+		b, _, e := execution.NewGovernedBuilder(model, scope, shared.RoleAssistant, registry, tools.DispatchConfig{MaxConcurrency: 4, Timeout: 30 * time.Second, MaxAdmissionConcurrency: 1, MaxQueued: 2, Authorize: func(context.Context, string, *interfaces.ToolInput) error { return nil }})
 		if e != nil {
 			return got, e
 		}
@@ -169,7 +169,7 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 	if err = cancelRegistry.Register(effect); err != nil {
 		return got, err
 	}
-	dispatcher, err := tools.NewDispatcher(cancelRegistry, tools.DispatchConfig{})
+	dispatcher, err := tools.NewDispatcher(cancelRegistry, tools.DispatchConfig{MaxConcurrency: 4, Timeout: 30 * time.Second})
 	if err != nil {
 		return got, err
 	}

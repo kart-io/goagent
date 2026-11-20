@@ -51,6 +51,26 @@ type cacheEntry struct {
 	tags      []string
 }
 
+// expiry 返回 ttl 对应的到期时刻；ttl 为 0 时返回零值，表示不过期。
+func expiry(ttl time.Duration) time.Time {
+	if ttl <= 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(ttl)
+}
+
+func (e *cacheEntry) expired(now time.Time) bool {
+	return !e.expiresAt.IsZero() && now.After(e.expiresAt)
+}
+
+// cleanupInterval 在默认 ttl 为 0 时仍按固定间隔回收单独指定了 ttl 的条目，避免 0 间隔空转。
+func (c *SimpleCache) cleanupInterval() time.Duration {
+	if c.ttl <= 0 {
+		return time.Minute
+	}
+	return max(c.ttl/2, time.Nanosecond)
+}
+
 // SimpleCacheOption 配置缓存的清理生命周期。
 type (
 	SimpleCacheOption func(*simpleCacheConfig)
@@ -73,10 +93,9 @@ func WithMaxEntries(n int) SimpleCacheOption {
 }
 
 // NewSimpleCache 创建简化缓存。默认启用后台清理，调用方须关闭它。
+// ttl 是 Set 未给 ttl 时的默认过期时间；0 表示条目不过期（以前表示 5 分钟），负数按 0 处理。
 func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
-	if ttl <= 0 {
-		ttl = 5 * time.Minute
-	}
+	ttl = max(ttl, 0)
 
 	var cfg simpleCacheConfig
 	for _, opt := range opts {
@@ -92,7 +111,7 @@ func NewSimpleCache(ttl time.Duration, opts ...SimpleCacheOption) *SimpleCache {
 		tags:       make(map[string]map[string]struct{}),
 	}
 
-	c.nextCleanup.Store(time.Now().Add(max(ttl/2, time.Nanosecond)).UnixNano())
+	c.nextCleanup.Store(time.Now().Add(c.cleanupInterval()).UnixNano())
 	if !c.lazy {
 		c.wg.Add(1)
 		go c.cleanup()
@@ -110,7 +129,7 @@ func (c *SimpleCache) Get(ctx context.Context, key string) (interface{}, error) 
 	}
 
 	entry := v.(*cacheEntry)
-	if time.Now().After(entry.expiresAt) {
+	if entry.expired(time.Now()) {
 		c.remove(key, v)
 		c.misses.Add(1)
 		return nil, agentErrors.ErrCacheMiss
@@ -144,7 +163,7 @@ func (c *SimpleCache) Set(ctx context.Context, key string, value interface{}, tt
 	if ttl <= 0 {
 		ttl = c.ttl
 	}
-	old, loaded := c.data.Swap(key, &cacheEntry{value: value, expiresAt: time.Now().Add(ttl)})
+	old, loaded := c.data.Swap(key, &cacheEntry{value: value, expiresAt: expiry(ttl)})
 	if loaded && len(old.(*cacheEntry).tags) > 0 {
 		c.tagMu.Lock()
 		c.untagStale(key, old.(*cacheEntry).tags)
@@ -163,7 +182,7 @@ func (c *SimpleCache) set(key string, value interface{}, ttl time.Duration, tags
 	c.tagMu.Lock()
 	old, loaded := c.data.Swap(key, &cacheEntry{
 		value:     value,
-		expiresAt: time.Now().Add(ttl),
+		expiresAt: expiry(ttl),
 		tags:      tags,
 	})
 	if loaded {
@@ -185,7 +204,7 @@ func (c *SimpleCache) afterInsert(key string, loaded bool) {
 	if c.lazy {
 		now := time.Now()
 		due := c.nextCleanup.Load()
-		if now.UnixNano() >= due && c.nextCleanup.CompareAndSwap(due, now.Add(max(c.ttl/2, time.Nanosecond)).UnixNano()) {
+		if now.UnixNano() >= due && c.nextCleanup.CompareAndSwap(due, now.Add(c.cleanupInterval()).UnixNano()) {
 			c.cleanupExpired()
 		}
 	}
@@ -220,7 +239,7 @@ func (c *SimpleCache) Has(ctx context.Context, key string) (bool, error) {
 	}
 
 	entry := v.(*cacheEntry)
-	if time.Now().After(entry.expiresAt) {
+	if entry.expired(time.Now()) {
 		c.remove(key, v)
 		return false, nil
 	}
@@ -265,7 +284,7 @@ func (c *SimpleCache) Close() {
 func (c *SimpleCache) cleanup() {
 	defer c.wg.Done()
 
-	ticker := time.NewTicker(max(c.ttl/2, time.Nanosecond))
+	ticker := time.NewTicker(c.cleanupInterval())
 	defer ticker.Stop()
 
 	for {
@@ -283,7 +302,7 @@ func (c *SimpleCache) cleanupExpired() {
 	now := time.Now()
 	c.data.Range(func(key, value interface{}) bool {
 		entry := value.(*cacheEntry)
-		if now.After(entry.expiresAt) {
+		if entry.expired(now) {
 			c.remove(key, value)
 		}
 		return true

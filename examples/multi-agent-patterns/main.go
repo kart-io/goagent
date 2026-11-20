@@ -73,7 +73,7 @@ func (k *kit) agent(client *mocks.ScriptedClient, scope string, list ...interfac
 				return nil, err
 			}
 		}
-		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
+		d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 4, Timeout: 30 * time.Second})
 		if err != nil {
 			return nil, err
 		}

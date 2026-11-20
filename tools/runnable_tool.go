@@ -50,12 +50,22 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // DurableGraph.AsChildRunnable) it can resume, and after an interrupted
 // execution it can be re-entered. When enabled, it must be called through a
 // journaled Dispatcher, otherwise it fails before starting the subflow.
+// MaxAttempts bounds how many times a Resumable call is entered in total,
+// counting the first; 0 and 1 both mean an interrupted call is not re-entered
+// (it previously meant 3). The value is recorded in the journal, so changing
+// it makes journaled calls fail with a policy conflict: hosts that already
+// have journals must pass constants.DefaultResumableToolAttempts to keep them.
+// It is ignored when Resumable is false. Negative values are rejected.
+// MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
+// policy limit, because recursive delegation would otherwise never stop: 0
+// means DefaultRunnableMaxDepth and UnlimitedRunnableDepth removes the cap.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
 	Encode                                 func(O) (any, error)
 	ModelInvoking                          bool
 	Resumable                              bool
+	MaxAttempts                            int
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
 	Timeout                                time.Duration
@@ -66,6 +76,13 @@ type runnableTool[I, O any] struct {
 	schema  *jsonschema.Resolved
 	factory func(context.Context) (OwnedRunnable[I, O], error)
 }
+
+const (
+	// DefaultRunnableMaxDepth is the nesting cap used when MaxDepth is 0.
+	DefaultRunnableMaxDepth = 8
+	// UnlimitedRunnableDepth passed as MaxDepth removes the nesting cap.
+	UnlimitedRunnableDepth = -1
+)
 
 // NewRunnableTool adapts a fixed runnable without taking ownership of its resources.
 func NewRunnableTool[I, O any](run core.Runnable[I, O], cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
@@ -118,8 +135,8 @@ func nilRunnable(value any) bool {
 }
 
 func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O], error) {
-	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxDepth < 0 || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid depth, cleanup timeout and timeout").
+	if cfg.Name == "" || strings.TrimSpace(cfg.Name) != cfg.Name || cfg.Version == "" || cfg.Decode == nil || cfg.Encode == nil || cfg.MaxAttempts < 0 || cfg.MaxDepth < UnlimitedRunnableDepth || cfg.CleanupTimeout < 0 || cfg.Timeout < 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool requires name, version, codecs, valid attempts, depth, cleanup timeout and timeout").
 			WithComponent("runnable_tool").
 			WithOperation("initialize").
 			WithContext("tool_name", cfg.Name)
@@ -139,7 +156,10 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 		return nil, err
 	}
 	if cfg.MaxDepth == 0 {
-		cfg.MaxDepth = 8
+		cfg.MaxDepth = DefaultRunnableMaxDepth
+	}
+	if cfg.MaxAttempts == 0 {
+		cfg.MaxAttempts = 1
 	}
 	if cfg.CleanupTimeout == 0 {
 		cfg.CleanupTimeout = shared.DefaultSessionCleanupTimeout
@@ -152,7 +172,7 @@ func (t *runnableTool[I, O]) ArgsSchema() string           { return t.config.Arg
 func (t *runnableTool[I, O]) DurableIntentVersion() string { return t.config.Version }
 func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 	if t.config.Resumable {
-		return durable.OperationPolicy{MaxAttempts: shared.DefaultResumableToolAttempts, Resumable: true}
+		return durable.OperationPolicy{MaxAttempts: t.config.MaxAttempts, Resumable: true}
 	}
 	return durable.OperationPolicy{MaxAttempts: 1}
 }

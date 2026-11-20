@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -20,7 +19,7 @@ func TestDispatchGovernanceReturnsIndependentValues(t *testing.T) {
 	report := d.Governance()
 	require.Equal(t, []string{"lookup"}, report.ToolNames)
 	require.True(t, report.AuthorizationConfigured)
-	require.Equal(t, 30*time.Second, report.Timeout)
+	require.Zero(t, report.Timeout, "Timeout 0 表示不限")
 	report.ToolNames[0] = "被修改"
 	require.Equal(t, []string{"lookup"}, d.Governance().ToolNames)
 	var absent *Dispatcher
