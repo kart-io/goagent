@@ -532,6 +532,8 @@ llmClient, err := providers.NewDeepSeekWithOptions(
     llm.WithAPIKey(apiKey),
     llm.WithModel("deepseek-chat"),
     llm.WithTemperature(0.7),
+    llm.WithTimeout(60*time.Second),
+    llm.WithMaxTokens(2000),
 )
 
 // 使用 AgentBuilder 构建 Agent（agentstate = "github.com/kart-io/goagent/core/state"）

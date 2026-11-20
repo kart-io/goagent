@@ -321,6 +321,8 @@ func demonstrateAgentWithLLM() {
 llmClient, err := providers.NewOpenAIWithOptions(
     llm.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
     llm.WithModel("gpt-4"), // 或使用其他 LLM
+    llm.WithTimeout(60*time.Second),
+    llm.WithMaxTokens(2000),
 )
 if err != nil {
     log.Fatal(err)

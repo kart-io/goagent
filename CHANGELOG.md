@@ -63,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `core` `Batch` 并发（`BaseRunnable`、`RunnablePipe`、`RunnableSequence`） | 10 | 0 = 不限 | 设置 `MaxConcurrency: 10` |
 | `core/flow` `AsRunnable` 条目上限 | 0 → 1024 | 0 = 不限 | `MaxItems: 1024` |
 
-仓库内 `examples/` 中依赖客户端默认值的构造调用已显式传入旧值（`llm.WithTimeout(60*time.Second)`，Ollama 为 120s；`llm.WithMaxTokens(2000)`，Anthropic 除外），行为不变。
+仓库内 `examples/` 中依赖客户端默认值的构造调用（含注释掉的参考代码与打印出的示例片段）已显式传入旧值（`llm.WithTimeout(60*time.Second)`，Ollama 为 120s；`llm.WithMaxTokens(2000)`，Anthropic 除外），原先调用 `NewOllamaClientSimple` 的位置改用 `NewOllamaWithOptions`，行为不变。`NewOllamaClientSimple` 只设置模型，不再带超时与 max_tokens，需要时改用 `NewOllamaWithOptions`。
 
 外部仓库：goagent-harness、goagent-examples 依赖上述默认值的调用方须显式传入（随本版本发布跟进），contrib 的 pgstore 需跑 `storetest.RunListConformance` 并去掉 10001 行上限。
 

@@ -53,7 +53,9 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 }
 
 // NewOllamaClientSimple creates an Ollama client for the given model with the
-// default configuration.
+// default configuration, which sets no timeout and no max_tokens. Callers that
+// need either use NewOllamaWithOptions with llm.WithTimeout and
+// llm.WithMaxTokens.
 func NewOllamaClientSimple(model string) (*OpenAIProvider, error) {
 	return NewOllamaWithOptions(agentllm.WithModel(model))
 }

@@ -588,6 +588,8 @@ func runMockExample() {
    llmClient, _ := providers.NewKimiWithOptions(
        llm.WithAPIKey(apiKey),
        llm.WithModel("moonshot-v1-8k"),
+       llm.WithTimeout(60*time.Second),
+       llm.WithMaxTokens(2000),
    )
    agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
        WithSystemPrompt("你是 Kimi，一个友好的 AI 助手").
@@ -608,6 +610,8 @@ func runMockExample() {
    llmClient, _ := providers.NewKimiWithOptions(
        llm.WithAPIKey(apiKey),
        llm.WithModel("moonshot-v1-128k"), // 超长上下文
+       llm.WithTimeout(60*time.Second),
+       llm.WithMaxTokens(2000),
    )
 `)
 	fmt.Println("4. 预设 Agent 类型:")

@@ -228,7 +228,7 @@ func listOllamaModels() {
 // 额外的辅助函数：拉取模型（如果需要） - kept for reference
 /*
 func pullModelIfNeeded(modelName string) error {
-	client := providers.NewOllamaClientSimple(modelName)
+	client := providers.NewOllamaWithOptions(llm.WithModel(modelName), llm.WithTimeout(120*time.Second), llm.WithMaxTokens(2000))
 
 	// 检查模型是否已存在
 	models, err := client.ListModels()
