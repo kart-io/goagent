@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -89,4 +90,34 @@ func TestUsageHookWithoutBudgetCancellationAndPanicIsolation(t *testing.T) {
 	require.True(t, called)
 	ctx = WithUsageHook(ctx, nil)
 	require.False(t, HasUsageHook(ctx))
+}
+
+func TestUsageHookTimeoutIsRequiredValue(t *testing.T) {
+	_, err := WithUsageHookTimeout(context.Background(), -time.Second)
+	require.Error(t, err)
+	for _, tc := range []struct {
+		name string
+		set  time.Duration
+		want time.Duration
+	}{
+		{"未设置用默认", -1, DefaultUsageHookTimeout},
+		{"零用默认", 0, DefaultUsageHookTimeout},
+		{"显式值", time.Minute, time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.set >= 0 {
+				var err error
+				ctx, err = WithUsageHookTimeout(ctx, tc.set)
+				require.NoError(t, err)
+			}
+			var left time.Duration
+			NotifyUsage(WithUsageHook(ctx, func(ctx context.Context, _ UsageEvent) {
+				deadline, ok := ctx.Deadline()
+				require.True(t, ok)
+				left = time.Until(deadline)
+			}), usage.ModelEvidence{}, "")
+			require.InDelta(t, tc.want, left, float64(time.Second))
+		})
+	}
 }

@@ -21,9 +21,34 @@ type UsageEvent struct {
 // UsageHook is a read-only notification, including failures and replay. It must
 // support concurrent calls and return promptly. Panics cannot fail execution.
 type (
-	UsageHook    func(context.Context, UsageEvent)
-	usageHookKey struct{}
+	UsageHook           func(context.Context, UsageEvent)
+	usageHookKey        struct{}
+	usageHookTimeoutKey struct{}
 )
+
+// DefaultUsageHookTimeout bounds one statistics query plus hook call when the
+// caller does not choose a timeout.
+const DefaultUsageHookTimeout = 5 * time.Second
+
+// WithUsageHookTimeout sets how long NotifyUsage may spend on one statistics
+// query plus hook call; children inherit it. 0 selects DefaultUsageHookTimeout
+// and negative values are rejected. It cannot mean unlimited: the call runs on
+// a context detached from execution cancellation, so a hung hook would never
+// be released.
+func WithUsageHookTimeout(ctx context.Context, d time.Duration) (context.Context, error) {
+	if d < 0 {
+		return ctx, agentErrors.Newf(agentErrors.CodeInvalidInput, "usage hook timeout must not be negative").WithComponent("budget").WithOperation("usage_hook_timeout")
+	}
+	return context.WithValue(ctx, usageHookTimeoutKey{}, d), nil
+}
+
+func usageHookTimeout(ctx context.Context) time.Duration {
+	d, _ := ctx.Value(usageHookTimeoutKey{}).(time.Duration)
+	if d <= 0 {
+		return DefaultUsageHookTimeout
+	}
+	return d
+}
 
 // WithUsageHook binds the single inherited usage sink. A child may replace it;
 // nil explicitly clears it. It does not replace an Observer or create a ledger.
@@ -38,7 +63,7 @@ func HasUsageHook(ctx context.Context) bool {
 }
 
 // NotifyUsage delivers a copy after accounting, outside ledger locks. The
-// statistics query and callback get a bounded context detached from execution
+// statistics query and callback get a context bounded by WithUsageHookTimeout and detached from execution
 // cancellation so completed usage can still be observed after cancellation.
 // Hook/query failures never change the business outcome. Hooks are not durable
 // delivery: reconcile projections from Attribution using attempt keys/revisions.
@@ -48,7 +73,7 @@ func NotifyUsage(ctx context.Context, model usage.ModelEvidence, errorKind strin
 		return
 	}
 	defer func() { _ = recover() }()
-	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	callCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), usageHookTimeout(ctx))
 	defer cancel()
 	event := UsageEvent{Model: model, ErrorKind: errorKind}
 	if c, ok := FromContext(ctx); ok {
