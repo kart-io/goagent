@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 
+- `skills`（非破坏）：新增 `DiscoverFS(ctx, fsys, source, opts)`，可从 `embed.FS`、`os.Root.FS()` 等通用 `fs.FS` 发现技能，符号链接是否跟随由传入的 `fs.FS` 决定；新增 `DiscoverWithOptions` 与 `DiscoverOptions`（`MaxFileBytes`、`MaxTotalBytes`、`MaxFiles`、`MaxDescription`、`MaxDepth`，0 为默认，`skills.Unlimited` 为不限，其他负数报错），`Discover` 行为不变；新增 `Catalog.Select(names...)`（子目录与父目录共享句柄，仅父目录 `Close` 释放）与 `Catalog.Prompt()`（按名称排序列出 `name: description`，跳过 `DisableModelInvocation`）。
 - `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
 - `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
 - `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。

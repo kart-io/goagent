@@ -28,9 +28,12 @@ func TestDiscoverListedDirectoryReplacedByFIFO(t *testing.T) {
 	require.NoError(t, syscall.Mkfifo(name, 0o600))
 	done := make(chan error, 1)
 	go func() {
-		_, retained, err := discoverSkill(root, listed[0].Name())
+		l, err := DiscoverOptions{}.resolve()
+		require.NoError(t, err)
+		total := l.totalBytes
+		_, retained, err := discoverSkill(&rootSource{root: root}, listed[0].Name(), l, &total)
 		if retained != nil {
-			_ = retained.Close()
+			_ = retained.close()
 		}
 		done <- err
 	}()
