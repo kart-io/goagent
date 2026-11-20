@@ -528,7 +528,7 @@ llmClient, err := providers.NewDeepSeekWithOptions(
 )
 
 // 使用 AgentBuilder 构建 Agent（agentstate = "github.com/kart-io/goagent/core/state"）
-agent, err := builder.NewAgentBuilder[core.State](llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+agent, err := builder.NewAgentBuilder[core.State](llmClient).
     WithSystemPrompt("你是一个友好的 AI 助手").
     WithTools(calculatorTool, weatherTool).
     WithState(agentstate.NewAgentState()).

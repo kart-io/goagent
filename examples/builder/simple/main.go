@@ -191,7 +191,7 @@ func example3ConfiguredAgent(apiKey, providerName string) {
 	timeTool := createTimeTool()
 
 	// 配置 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithTimeout(5 * time.Minute).
 		WithSystemPrompt("你是一个时间助手，可以告诉用户当前时间。").
 		WithTools(timeTool).
 		WithMaxIterations(15).                           // 允许更多推理步骤（默认 10）

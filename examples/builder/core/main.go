@@ -117,7 +117,7 @@ func example1AgentWithMonitoring(apiKey, providerName string) {
 	stdoutCallback := core.NewStdoutCallback(true) // 打印详细日志
 
 	// 配置带监控的 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithTimeout(5 * time.Minute).
 		// Simple API
 		WithSystemPrompt("你是一个数学助手").
 		WithTools(calculator).
@@ -162,7 +162,7 @@ func example2AgentWithPerformanceControl(apiKey, providerName string) {
 	calculator := createCalculatorTool()
 
 	// 配置带性能控制的 Agent
-	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+	agent, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).
 		// Simple API
 		WithSystemPrompt("你是一个高效的助手").
 		WithTools(calculator).
@@ -419,7 +419,7 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 
 	// 5.1 JSON 格式 + 性能优化（适合 API 响应）
 	fmt.Println("\n5.1 JSON 格式 + 性能优化:")
-	agent1, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+	agent1, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).
 		WithSystemPrompt("你是一个 API 数据助手").
 		WithOutputFormat(builder.OutputFormatJSON).
 		// Core API - 性能配置
@@ -435,7 +435,7 @@ func example5OutputFormatWithPerformance(apiKey, providerName string) {
 
 	// 5.2 自定义格式 + 详细日志（适合调试）
 	fmt.Println("\n5.2 自定义格式 + 详细日志:")
-	agent2, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).WithTimeout(5 * time.Minute).
+	agent2, err := builder.NewSimpleBuilder(llmClient).WithMaxIterations(10).
 		WithSystemPrompt("你是一个代码审查助手").
 		WithCustomOutputFormat("请按以下格式回复：\n[问题] 发现的问题\n[建议] 改进建议\n[示例] 代码示例").
 		// Core API - 调试配置

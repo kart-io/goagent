@@ -233,7 +233,7 @@ func runGoAgent(ctx context.Context, baseURL string, cfg Config, c Case, t *look
 	if c.Lookup != nil {
 		instruction = strings.Replace(instruction, "该无参数工具每题只需查询一次", "根据用户问题填写工具参数，每题只需查询一次", 1)
 	}
-	b := builder.NewSimpleBuilder(client).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithSystemPrompt(instruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
+	b := builder.NewSimpleBuilder(client).WithSystemPrompt(instruction).WithMaxIterations(cfg.Budget.MaxCalls).WithMaxTokens(cfg.Budget.MaxOutputTokens).WithTemperature(cfg.Budget.Temperature).WithTimeout(cfg.Timeout)
 	if hasLookupTool(c) {
 		b.WithTools(t)
 		if cfg.DirectTools {

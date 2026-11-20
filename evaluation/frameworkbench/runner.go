@@ -111,7 +111,7 @@ func newGoAgent(scenario string) (*Runner, error) {
 	}
 	c := &counts{}
 	m := &goModel{counts: c, scenario: scenario}
-	b := builder.NewSimpleBuilder(m).WithMaxIterations(10).WithTimeout(5 * time.Minute).WithMaxIterations(2)
+	b := builder.NewSimpleBuilder(m).WithTimeout(5 * time.Minute).WithMaxIterations(2)
 	if scenario == "agent_tool" {
 		b = b.WithTools(tools.NewFunctionTool("lookup", "Look up refund_days for an order", ToolSchema, func(_ context.Context, args map[string]any) (any, error) {
 			if err := validateArgs(args); err != nil {
