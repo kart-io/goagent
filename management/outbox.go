@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -35,6 +36,8 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 	}()
 	tick := time.NewTicker(d.s.cfg.Limits.OutboxPollInterval)
 	defer tick.Stop()
+	// saveFailures 统计连续的结果保存失败：单条失败不让投递器退出，按退避等待后整轮重试。
+	saveFailures := 0
 	for {
 		items, e := all[Delivery](ctx, d.s.cfg.Store, "outbox", "", Query{Statuses: []string{"pending", "applying"}})
 		if e != nil && ctx.Err() == nil {
@@ -69,7 +72,7 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 			if d.s.cfg.Limits.DeliveryTimeout > 0 {
 				call, cancel = context.WithTimeout(ctx, d.s.cfg.Limits.DeliveryTimeout)
 			}
-			deliveryErr := d.s.cfg.Delivery.Accept(call, item)
+			deliveryErr := d.accept(call, item)
 			cancel()
 			save, cancel := d.owner.persistCtx(ctx)
 			err = d.s.cfg.Store.WithinTx(save, func(tx Tx) error {
@@ -89,15 +92,37 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 			})
 			cancel()
 			if err != nil {
-				return err
+				if ctx.Err() != nil {
+					return nil
+				}
+				d.owner.report("outbox_save", err)
+				saveFailures++
+				break
 			}
+			saveFailures = 0
+		}
+		wait, stop := tick.C, func() bool { return false }
+		if saveFailures > 0 {
+			timer := time.NewTimer(redeliveryDelay(saveFailures-1, d.s.cfg.Limits.DeliveryBackoffMax))
+			wait, stop = timer.C, timer.Stop
 		}
 		select {
 		case <-ctx.Done():
+			stop()
 			return nil
-		case <-tick.C:
+		case <-wait:
 		}
 	}
+}
+
+// accept 把接收端的 panic 计为一次投递失败，投递器继续运行。
+func (d *OutboxDispatcher) accept(ctx context.Context, item Delivery) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("delivery sink panic: %v", r)
+		}
+	}()
+	return d.s.cfg.Delivery.Accept(ctx, item)
 }
 
 // redeliveryDelay doubles from one second per attempt and stops at ceiling.

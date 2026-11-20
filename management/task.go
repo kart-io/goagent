@@ -113,13 +113,7 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 		if t.State == Running || t.State == Canceling {
 			t.State = Canceling
 		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
-			t.State = Canceled
-			now := s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if e = s.releaseSession(ctx, tx, t); e != nil {
-				return t, e
-			}
-			if e = s.supersedeApprovals(ctx, tx, t); e != nil {
+			if e = s.finishTerminal(ctx, tx, &t, Canceled); e != nil {
 				return t, e
 			}
 		}

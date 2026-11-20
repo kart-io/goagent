@@ -490,14 +490,11 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		}
 		if task.CancelRequested && canCancelWithoutInspection(task.State, task.RecoveryNeeded) {
 			old := task.Revision
-			task.State = Canceled
 			task.Revision++
-			now := w.s.cfg.Now().UTC()
-			task.FinishedAt = &now
-			if e = update(ctx, tx, "tasks", task, old); e != nil {
+			if e = w.s.finishTerminal(ctx, tx, &task, Canceled); e != nil {
 				return e
 			}
-			if e = w.s.releaseSession(ctx, tx, task); e != nil {
+			if e = update(ctx, tx, "tasks", task, old); e != nil {
 				return e
 			}
 			old = cur.Revision
@@ -967,16 +964,7 @@ func (w *Worker) finish(ctx context.Context, c Command, original Task, attempt A
 			}
 		}
 		if t.State.Terminal() {
-			now := w.s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if e = w.s.releaseSession(ctx, tx, t); e != nil {
-				return e
-			}
-			if e = w.s.supersedeApprovals(ctx, tx, t); e != nil {
-				return e
-			}
-			raw, _ := encode(map[string]any{"task_id": t.ID, "state": t.State})
-			if e = insert(ctx, tx, "outbox", Delivery{Meta: w.s.meta(t.Actor), Kind: "task." + string(t.State), ResourceID: t.ID, Payload: raw, State: "pending", AvailableAt: now}); e != nil {
+			if e = w.s.finishTerminal(ctx, tx, &t, t.State); e != nil {
 				return e
 			}
 		}

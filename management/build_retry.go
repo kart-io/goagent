@@ -90,21 +90,8 @@ func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attem
 		canceled := t.CancelRequested && canCancelWithoutInspection(claim.state, claim.recoveryNeeded)
 		if canceled {
 			// 已知等待点或未开始的新任务可完成取消；旧 attempt 待核对时绝不能走此分支。
-			t.State = Canceled
 			t.Waits = nil
-			now := w.s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if err = w.s.releaseSession(ctx, tx, t); err != nil {
-				return err
-			}
-			if err = w.s.supersedeApprovals(ctx, tx, t); err != nil {
-				return err
-			}
-			raw, err := encode(map[string]any{"task_id": t.ID, "state": t.State})
-			if err != nil {
-				return err
-			}
-			if err = insert(ctx, tx, "outbox", Delivery{Meta: w.s.meta(t.Actor), Kind: "task." + string(t.State), ResourceID: t.ID, Payload: raw, State: "pending", AvailableAt: now}); err != nil {
+			if err = w.s.finishTerminal(ctx, tx, &t, Canceled); err != nil {
 				return err
 			}
 		}
