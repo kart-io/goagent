@@ -47,7 +47,6 @@ func NewOllamaWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error
 		envBaseURL:     shared.EnvOllamaBaseURL,
 		envModel:       shared.EnvOllamaModel,
 		apiKeyOptional: true,
-		defaultTimeout: shared.DefaultOllamaTimeout,
 		capabilities:   openAICompatibleCapabilities,
 	}, opts...)
 }

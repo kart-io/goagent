@@ -220,7 +220,7 @@ func (p *GeminiProvider) EmbedBatch(ctx context.Context, texts []string) ([][]fl
 		dims := int32(n)
 		config = &genai.EmbedContentConfig{OutputDimensionality: &dims}
 	}
-	ctx, cancel := context.WithTimeout(ctx, p.GetTimeout())
+	ctx, cancel := p.WithTimeout(ctx)
 	defer cancel()
 	response, err := geminiSDKEmbed(func() (*genai.EmbedContentResponse, error) {
 		return p.client.Models.EmbedContent(ctx, p.Config.EmbeddingModel, contents, config)

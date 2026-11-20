@@ -70,8 +70,11 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 	if config.DisableStreamUsage {
 		opts = append(opts, agentllm.WithStreamUsage(false))
 	}
-	if config.MaxTokens > 0 {
+	if config.MaxTokens != 0 {
 		opts = append(opts, agentllm.WithMaxTokens(config.MaxTokens))
+	}
+	if config.EmbeddingRetries != 0 {
+		opts = append(opts, agentllm.WithEmbeddingRetries(config.EmbeddingRetries))
 	}
 	if config.TemperatureSet || config.Temperature > 0 {
 		opts = append(opts, agentllm.WithTemperature(config.Temperature))
@@ -136,15 +139,14 @@ func (b *BaseProvider) GetModel(reqModel string) string {
 	return b.Config.Model
 }
 
-// GetMaxTokens returns the max tokens value with fallback to default.
+// GetMaxTokens returns the request's max tokens, else the configured value;
+// 0 means none is set and max_tokens should not be sent (it previously fell
+// back to 1000).
 func (b *BaseProvider) GetMaxTokens(reqMaxTokens int) int {
 	if reqMaxTokens > 0 {
 		return reqMaxTokens
 	}
-	if b.Config.MaxTokens > 0 {
-		return b.Config.MaxTokens
-	}
-	return shared2.DefaultProviderMaxTokens
+	return max(b.Config.MaxTokens, 0)
 }
 
 // GetTemperature returns the temperature parameter with fallback to default value.
@@ -170,12 +172,19 @@ func (b *BaseProvider) ResolveTemperature(req *agentllm.CompletionRequest) float
 	return b.GetTemperature(req.Temperature)
 }
 
-// GetTimeout returns the timeout duration with fallback to default value.
+// GetTimeout returns the configured request timeout; 0 means no timeout (it
+// previously fell back to 30 seconds).
 func (b *BaseProvider) GetTimeout() time.Duration {
-	if b.Config.Timeout > 0 {
-		return time.Duration(b.Config.Timeout) * time.Second
+	return time.Duration(max(b.Config.Timeout, 0)) * time.Second
+}
+
+// WithTimeout bounds ctx by the configured timeout, or only by ctx when none
+// is set.
+func (b *BaseProvider) WithTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if timeout := b.GetTimeout(); timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
 	}
-	return shared2.DefaultProviderTimeout
+	return context.WithCancel(ctx)
 }
 
 // GetTopP returns the TopP parameter with fallback to default value.
@@ -250,7 +259,14 @@ func (b *BaseProvider) NewHTTPClient(cfg HTTPClientConfig) *httpclient.Client {
 
 // RetryConfig holds configuration for retry behavior.
 type RetryConfig struct {
-	// MaxAttempts is the maximum number of retry attempts
+	// Retries is how many times a retryable failure is retried, not counting
+	// the first attempt; 0 means no retry.
+	Retries int `json:"retries,omitzero"`
+	// MaxAttempts is the total number of attempts, where 0 or less means 3.
+	// It is used only when Retries is 0; setting both is rejected.
+	//
+	// Deprecated: use Retries, where 0 means no retry. MaxAttempts keeps its
+	// old meaning so existing callers do not lose their retries silently.
 	MaxAttempts int `json:"max_attempts"`
 	// BaseDelay is the initial delay between retries
 	BaseDelay time.Duration `json:"base_delay"`
@@ -261,10 +277,28 @@ type RetryConfig struct {
 // DefaultRetryConfig returns the default retry configuration.
 func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{
-		MaxAttempts: shared2.DefaultMaxAttempts,
-		BaseDelay:   shared2.DefaultBaseDelay,
-		MaxDelay:    shared2.DefaultMaxDelay,
+		Retries:   shared2.DefaultMaxAttempts - 1,
+		BaseDelay: shared2.DefaultBaseDelay,
+		MaxDelay:  shared2.DefaultMaxDelay,
 	}
+}
+
+// attempts 把 Retries 与已弃用的 MaxAttempts 换算成总尝试次数：只设 MaxAttempts 时保留旧语义
+// （≤0 为 3 次），只设 Retries 或两者都为 0 时按新语义（0 = 不重试），两者都为正时报错。
+func (cfg RetryConfig) attempts(providerName string) (int, error) {
+	switch {
+	case cfg.Retries < 0:
+		return 0, agentErrors.NewInvalidConfigError(providerName, "retries", "重试次数不能为负数")
+	case cfg.Retries > 0 && cfg.MaxAttempts > 0:
+		return 0, agentErrors.NewInvalidConfigError(providerName, "retries", "Retries 与已弃用的 MaxAttempts 只能设置一个")
+	case cfg.Retries > 0:
+		return cfg.Retries + 1, nil
+	case cfg.MaxAttempts > 0:
+		return cfg.MaxAttempts, nil
+	case cfg.MaxAttempts < 0:
+		return shared2.DefaultMaxAttempts, nil
+	}
+	return 1, nil
 }
 
 // ExecuteFunc is a function type for executing a single request.
@@ -287,9 +321,9 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 		baseDelay = 10 * time.Millisecond
 	}
 
-	maxAttempts := cfg.MaxAttempts
-	if maxAttempts <= 0 {
-		maxAttempts = shared2.DefaultMaxAttempts
+	maxAttempts, err := cfg.attempts(providerName)
+	if err != nil {
+		return zero, err
 	}
 
 	delay := baseDelay

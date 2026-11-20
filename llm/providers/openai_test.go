@@ -118,7 +118,7 @@ func TestOpenAI_ProviderInfo(t *testing.T) {
 
 	assert.Equal(t, "openai", string(provider.Provider()))
 	assert.Equal(t, "gpt-4-turbo", provider.ModelName())
-	assert.Greater(t, provider.MaxTokens(), 0)
+	assert.Zero(t, provider.MaxTokens(), "默认不发送 max_tokens")
 }
 
 // mockTool 是用于测试的 mock tool

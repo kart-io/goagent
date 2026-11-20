@@ -28,6 +28,9 @@ type DeepSeekProvider struct {
 func NewDeepSeekWithOptions(opts ...agentllm.ClientOption) (*DeepSeekProvider, error) {
 	// 创建 common.BaseProvider，统一处理 Options
 	base := common.NewBaseProvider(opts...)
+	if base.Config.EmbeddingRetries < 0 {
+		return nil, agentErrors.NewInvalidConfigError(string(shared.ProviderDeepSeek), "embedding_retries", "deepseek embedding retries must not be negative")
+	}
 
 	// 应用 Provider 特定的默认值
 	base.ApplyProviderDefaults(
@@ -138,9 +141,9 @@ func (p *DeepSeekProvider) callAPI(ctx context.Context, endpoint string, payload
 
 	// Use the shared retry logic from common.BaseProvider
 	retryConfig := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   1 * time.Second,
-		MaxDelay:    10 * time.Second,
+		Retries:   p.Config.EmbeddingRetries,
+		BaseDelay: 1 * time.Second,
+		MaxDelay:  10 * time.Second,
 	}
 
 	return common.ExecuteWithRetry(ctx, retryConfig, p.ProviderName(), func(ctx context.Context) (*resty.Response, error) {

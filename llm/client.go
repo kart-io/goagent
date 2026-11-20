@@ -101,6 +101,9 @@ type LLMOptions struct {
 	EmbeddingModel string          `json:"embedding_model,omitempty"` // Separate embedding model, used by OpenAI and Gemini.
 	// EmbeddingDimensions requests a vector size from OpenAI-family and Gemini embeddings; 0 leaves it to the model.
 	EmbeddingDimensions int `json:"embedding_dimensions,omitempty"`
+	// EmbeddingRetries is set by WithEmbeddingRetries; negative values are
+	// rejected at construction by providers that use it.
+	EmbeddingRetries int `json:"embedding_retries,omitempty"`
 
 	// Generation parameters.
 	MaxTokens      int             `json:"max_tokens"`               // default maximum tokens
@@ -130,13 +133,12 @@ type LLMOptions struct {
 	HTTPClient *http.Client `json:"-"`
 }
 
-// DefaultLLMOptions returns the default configuration.
+// DefaultLLMOptions returns the default configuration. It sets no max_tokens
+// and no timeout; see WithMaxTokens and WithTimeout.
 func DefaultLLMOptions() *LLMOptions {
 	return &LLMOptions{
 		Provider:    shared.ProviderOpenAI,
-		MaxTokens:   shared.DefaultClientMaxTokens,
 		Temperature: shared.DefaultTemperature,
-		Timeout:     shared.DefaultLLMTimeoutSeconds,
 		TopP:        shared.DefaultTopP,
 	}
 }
