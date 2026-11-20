@@ -40,7 +40,7 @@ role := shared.RoleAssistant
 
 - 只依赖标准库，禁止导入框架实现或第三方 SDK；由 `scripts/apicheck` 检查。
 - 共享协议值、公开扩展约定和默认策略放在本目录。模块专用枚举、状态机内部标记、持久格式版本与测试夹具留在所属包。
-- 数字相同不代表语义相同。Provider 兜底 `DefaultProviderMaxTokens=1000`、旧补全接口 `DefaultCompletionMaxTokens=2048`、Client 默认 `DefaultClientMaxTokens=2000` 仍分别管理。
+- 数字相同不代表语义相同。旧补全接口 `DefaultCompletionMaxTokens=2048` 与 Anthropic 必填 `max_tokens` 的默认 `DefaultClientMaxTokens=2000` 分别管理；`DefaultProviderMaxTokens=1000` 只为旧值保留，provider 不再套用。限额类常量（如 `DefaultAgentMaxIterations`、`DefaultDispatcherConcurrency`、`DefaultMaxAgentCalls`）记录 v0.60 之前的默认值，框架不再自动填入，调用方需要时显式传。
 - 显式区分单位：`DefaultToolTimeoutSeconds` 是整数秒，`DefaultToolTimeout` 是 `time.Duration`，原接口类型不变。
 - 不为每个字面量创建通用常量，也不按相同字符串强行合并不同领域概念。迁移验证保留精确值、单位与调用行为，并单独检查 Provider 具名类型位置的有意变化。
 - `BudgetUnlimited` 保留 `math.MaxInt`，随目标架构确定上限；不得固化为 64 位十进制字面量。`DefaultApprovalTimeout`、`DefaultInboxWriteTimeout`、`MaxModelRetryAfter` 等仍为 `time.Duration`。

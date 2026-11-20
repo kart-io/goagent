@@ -94,8 +94,8 @@ all := registry.List()
 
 ```go
 d, err := tools.NewDispatcher(registry, tools.DispatchConfig{
-    MaxConcurrency:       4,                // 默认 4
-    Timeout:              30 * time.Second, // 单次调用默认超时，默认 30 秒
+    MaxConcurrency:       4,                // 0 = 不限
+    Timeout:              30 * time.Second, // 单次调用超时，0 = 不设截止时间
     ReturnArgumentErrors: true,             // 参数错误交还模型改正，而不是中止
     Pipeline: &tools.Pipeline{
         Pre:  []tools.PreHook{(&policy.Policy{Default: policy.Allow}).Hook()},

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 破坏性变更：限额改由调用方配置
+
+限额是宿主策略，框架写死后宿主无法表达“不限”或自己的约束（例如推理模型被 2000 token 截断、接入工具后第 10 轮被悄悄去工具、10000 行扫描静默漏掉审批与清理对象）。本版本按三类语义统一处理（PR 需加 `breaking-change` 标签）：
+
+- **限额类**（次数上限、预算、迭代、超时、并发、分页、保留期、截断）：不配置或 0 = 不限制，负数报错。原先“0 = 用默认值”的字段直接改语义。
+- **重试类**（模型请求恢复、中断重发、Resumable 续跑、Embed 重试）：0 = 不重试，字段表示首次之后的重试/重发次数。
+- **必需值与防滥用上限**（worker 数、轮询间隔、落盘超时、Anthropic `max_tokens`、入站请求大小、http/shell/skill 大小与深度）：0 = 合理默认，负数报错；防滥用上限另有显式“不限”常量。
+
+不变（已持久化的协议值）：`tools.DispatchConfig.MaxAttempts` 默认 3、durable 中断重放 3 次、去重窗口 256；执行闸门容量 1、单 worker 槽与全局 advisory lock（见 [management 已知限制](management/README.md#已知限制)）。`scripts/check_api_compat.sh` 相对 v0.59.2 无签名不兼容；变化全部是语义变化。
+
+迁移表（字段 → 旧默认 → 新语义 → 要保持旧行为应传的值）：
+
+| 字段 | 旧默认 | 新语义 | 保持旧行为 |
+| --- | --- | --- | --- |
+| `budget.Config.MaxAgentCalls` | 0 → 1000 | 0 = 不限 | `constants.DefaultMaxAgentCalls`（1000）；**在途账本必须传**，否则配置变化被拒绝 |
+| `budget.Config.MaxModelRequests` | 0 报错（须 ≥1） | 0 = 不限，`Remaining` 返回 `BudgetUnlimited` | 原值 |
+| `budget` 用量回调超时 | 固定 5s | `budget.WithUsageHookTimeout(ctx, d)`，0 = 5s，负数报错 | 不传 |
+| `management.Config.Limits` | 全零 → 旧默认；部分设置时每个字段都必须为正 | 每个字段独立解释，见 [management 限额配置](management/README.md#限额配置) | `management.DefaultLimits()` |
+| `Limits.MaxPageSize` | 200（且不得超过 200） | 0 = 不限；去掉 200 上限 | 200 |
+| `Limits.MaxInputBytes` / `MaxOutputBytes` | 1 MiB / 4 MiB | 0 = 不限 | `1<<20` / `4<<20` |
+| `Limits.MaxPending` | 10000 | 0 = 不限；有值时按租户分页计数 | 10000 |
+| `Limits.IdempotencyRetention` / `TaskRetention` / `AuditRetention` | 30d / 90d / 180d | 0 = 永不清理（幂等记录 `ExpiresAt` 写零值） | `30*24h` / `90*24h` / `180*24h` |
+| `Limits.DeliveryTimeout`（新） | 固定 5s | 0 = 只受 ctx 约束 | `5*time.Second` |
+| `Limits.Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`（后五个新增） | 4 / 20ms / 100ms / 5s / 256s / 1s | 必需值：0 = 同名 `Default*`，负数报错 | 不传 |
+| 任务预算（`SubmitTaskRequest.Budget`、`Config.DefaultTaskBudget`，新） | 固定 100 次模型请求、1000 次工具调用、1000 次智能体调用、24h | 0 = 不限；计入幂等哈希，以 `management/v2` 持久化；v1 任务解码时补 `MaxAgentCalls=1000` | `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}` |
+| `httpapi`/`a2a`/`mcpserver` `MaxInputBytes` | 0 → 1 MiB，且不得超过 1 MiB | 防滥用上限：0 = `DefaultMaxRequestBytes`，`UnlimitedRequestBytes` 不限，可超过 1 MiB；mcpserver 工具参数同受此上限 | 不传 |
+| `Store.List` / `History` 的 `limit` | 未写明 | 0 = 不限，由调用方分页；`management/storetest.RunListConformance` 校验 | 自定义 Store 跑一致性测试 |
+| `builder` `MaxIterations` | 0 → 10 | 0 = 不限；“最后一轮去工具”只在设置上限时生效 | `WithMaxIterations(10)` |
+| `builder` `Timeout` | 0 → 5min | 0 = 回合不限时 | `WithTimeout(5*time.Minute)` |
+| `WithRequestError(maxRecoveries, ...)`、`plugin` `MaxRecoveries` | 0 → 3 | 0 = 不恢复；`WithCompaction` 的溢出后压缩重试同样计入，不再隐式开启 3 次 | `WithRequestError(3, hooks...)` |
+| `WithInterruptedModelResend()` | 最多发送 3 次 | 弃用，行为不变；新增 `WithInterruptedModelResends(n)`，n 为重发次数，0 = 不重发 | `WithInterruptedModelResends(2)` |
+| `WithPersistTimeout(d)`（新） | 固定 5s | 必需值：0 = 5s，负数报错 | 不传 |
+| `RetrievalConfig.MaxDocuments` / `MaxContextRunes` | 0 → 4 / 12000 | 0 = 不限 | `RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000}`（`NewRAGAgent` 仍用此值） |
+| `contextpolicy.CompactionConfig.MaxTokens` | 0 → 100000 | 0 = 不主动压缩（溢出恢复仍压缩），此时 `KeepTokens` 必填 | `100000` |
+| `CompactionConfig.MaxRenderedRunes`（新） | 固定 4000 | 0 = 摘要请求不截断单条消息 | `4000` |
+| `contextpolicy.OffloadConfig.ReadPageRunes` | 0 → 1024，最大 16384 | 0 = 一页返回剩余全部；去掉 16384 上限 | `1024` |
+| recall_history 上限 | 固定 100 条、每条截断 | `NewRecallToolConfig(store, RecallConfig{MaxLimit, MaxRunes})`，0 = 不限；`NewRecallTool` 保留原上限 | 继续用 `NewRecallTool` |
+| 快捷构造（`NewChatAgent`、`NewRAGAgent` 等） | 10 轮 / 5min | 不变，显式套用旧值 | — |
+| `tools.DispatchConfig.MaxConcurrency` | 0 → 4 | 0 = 不限 | `constants.DefaultDispatcherConcurrency`（4） |
+| `tools.DispatchConfig.Timeout` | 0 → 30s | 0 = 不设截止时间；`DispatchTimeoutProvider` 返回 0 仍沿用 Dispatcher 超时 | `constants.DefaultToolTimeout`（30s） |
+| `tools.Pipeline.ApprovalTimeout` | 0 → 10min | 0 = 只受 ctx 约束，负数在 `NewDispatcher` 报错 | `constants.DefaultApprovalTimeout` |
+| `tools.RunnableToolConfig.MaxAttempts`（新）、`multiagent.Member.MaxAttempts`（新） | Resumable 时固定 3 次 | 总尝试次数，0 或 1 = 中断后不重入；**写入日志**，已有日志的宿主必须传 3，否则重放报 attempt policy changed | `constants.DefaultResumableToolAttempts`（3） |
+| `tools.RunnableToolConfig.MaxDepth` | 0 → 8 | 防滥用上限：0 = `DefaultRunnableMaxDepth`，新增 `UnlimitedRunnableDepth`，其他负数报错 | 不传 |
+| `tools/http` 响应体、重定向 | 固定 10 MiB / 10 次 | 防滥用上限：`WithMaxResponseBytes`、`WithMaxRedirects`，0 = 默认，`http.Unlimited` 不限 | 不传 |
+| `tools/shell` 输出 | 固定 1 MiB | 防滥用上限：`WithMaxOutputBytes`，0 = 默认，`shell.UnlimitedOutput` 不限 | 不传 |
+| `tools/spill` 预览、单行截断、读取行数 | 固定 1500 / 2000 / 2000 | `spill.NewWithConfig(dir, Config{...})`，0 = 不截断 / 读到末尾；`spill.New` 保留旧预设 | 继续用 `spill.New` |
+| `tools/middleware` 缓存 TTL / 容量 | 5min / 10000 | 0 = 不过期 / 不限；新增 `WithCacheMaxEntries` | `WithTTL(5*time.Minute)`、`WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)` |
+| `cache.NewSimpleCache(ttl)` | ttl ≤ 0 → 5min | 0 = 不过期（清理每分钟一次）；`DefaultCacheConfig` 仍为 5min | `5*time.Minute` |
+| `llm` `MaxTokens`（`DefaultClientConfig`、`DefaultLLMOptions`、`WithMaxTokens(0)`） | 发送 2000，provider 兜底 1000 | 0 = 不发送 `max_tokens` | `llm.WithMaxTokens(2000)` |
+| Anthropic `max_tokens` | 2000 | 必需值：0 = `providers.DefaultAnthropicMaxTokens`（2000），负数构造时报错 | 不传 |
+| `llm` `Timeout` | 0 → 60s（provider 内 30s，Ollama 120s） | 0 = 不限时（Gemini 以 ctx 计时） | `llm.WithTimeout(60*time.Second)` |
+| `common.RetryConfig` | `MaxAttempts` 0 → 3 | 新增 `Retries`（0 = 不重试）；`MaxAttempts` 弃用保留原义；两者都 > 0 报错 | 继续只设 `MaxAttempts` |
+| DeepSeek `Embed` 重试 | 固定 3 次尝试 | 新增 `WithEmbeddingRetries(n)`，0 = 不重试 | `llm.WithEmbeddingRetries(2)` |
+| `core` `Batch` 并发（`BaseRunnable`、`RunnablePipe`、`RunnableSequence`） | 10 | 0 = 不限 | 设置 `MaxConcurrency: 10` |
+| `core/flow` `AsRunnable` 条目上限 | 0 → 1024 | 0 = 不限 | `MaxItems: 1024` |
+
+外部仓库：goagent-harness、goagent-examples 依赖上述默认值的调用方须显式传入（随本版本发布跟进），contrib 的 pgstore 需跑 `storetest.RunListConformance` 并去掉 10001 行上限。
+
 ### 新增
 
 - `skills`（非破坏）：新增 `DiscoverFS(ctx, fsys, source, opts)`，可从 `embed.FS`、`os.Root.FS()` 等通用 `fs.FS` 发现技能，符号链接是否跟随由传入的 `fs.FS` 决定；新增 `DiscoverWithOptions` 与 `DiscoverOptions`（`MaxFileBytes`、`MaxTotalBytes`、`MaxFiles`、`MaxDescription`、`MaxDepth`，0 为默认，`skills.Unlimited` 为不限，其他负数报错），`Discover` 行为不变；新增 `Catalog.Select(names...)`（子目录与父目录共享句柄，仅父目录 `Close` 释放）与 `Catalog.Prompt()`（按名称排序列出 `name: description`，跳过 `DisableModelInvocation`）。

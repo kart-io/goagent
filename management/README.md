@@ -25,6 +25,22 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - JSON 使用 codec/json，精确保留数字并拒绝重复键；HTTP DTO 使用 Strict 规则，拒绝未知字段、非法 UTF-8 和不匹配大小写的字段名。
 - 查询只读取已存在的日志/用量证据，未知消耗保留未知；运行汇总不把查询页大小当作总量限制。
 
+## 限额配置
+
+限额属于宿主策略，`Config.Limits` 的每个字段按类别独立解释，不再有“全零才套默认”：
+
+- 限额类：`MaxPageSize`、`MaxPending`（按租户分页计数，到上限即停）、`MaxInputBytes`、`MaxOutputBytes`、`IdempotencyRetention`、`TaskRetention`、`AuditRetention`，0 表示不限制或永不清理。保留期在写入时算出 `ExpiresAt`，改配置只影响新行。`PageSize` 为 0 时取 `DefaultPageSize`（50），`DeliveryTimeout` 为 0 时只受 ctx 约束。
+- 必需值：`Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`，0 取同名 `Default*` 常量，负数报错。
+- 任务预算：`Config.DefaultTaskBudget` 与 `SubmitTaskRequest.Budget`（`MaxModelRequests`、`MaxToolCalls`、`MaxAgentCalls`、`Timeout`），0 表示不限，计入幂等哈希并随 Task 以 `management/v2` 持久化；`management/v1` 任务解码时把 `MaxAgentCalls` 补成 1000。
+- 入站请求大小（`httpapi`、`a2a`、`mcpserver` 的 `MaxInputBytes`）是防滥用上限：0 取 `DefaultMaxRequestBytes`（1 MiB），`UnlimitedRequestBytes` 显式取消。
+
+`DefaultLimits()` 返回旧版本在 `Limits` 全零时套用的取值，需要保持旧行为时显式传入。
+
+## 已知限制
+
+- 单 worker 槽：同一 Store 只允许一个活动 Worker，`Limits.Workers` 只是该进程内的并发数，不是多实例分片；没有心跳超时自动接管，回收须由 `Config.ConfirmWorkerStopped` 确认旧进程停止后调用 `RecoverWorkerSlot`。
+- 全局 advisory lock：contrib 的 PostgreSQL Store 在每个管理写事务和迁移中取同一把 `pg_advisory_xact_lock`，所有管理写入串行。多实例部署的分片与锁粒度另行设计，本版本不处理。
+
 领域错误直接使用 `github.com/kart-io/goagent/errors` 中的 `ErrManagement*`，不在本包维护旧错误别名。迁移说明和完整对应关系见 [核心迁移指南](../docs/guides/MANAGEMENT_MIGRATION.md)。
 
 ## 本地验证
