@@ -54,7 +54,7 @@ func refundToolWith(t *testing.T, graph *workflow.DurableGraph[refundState], nam
 	tool, err := tools.NewRunnableToolFactory(func(context.Context) (tools.OwnedRunnable[refundState, refundState], error) {
 		return tools.OwnedRunnable[refundState, refundState]{Runnable: graph.AsChildRunnable(), Close: func(context.Context) error { return nil }}, nil
 	}, tools.RunnableToolConfig[refundState, refundState]{
-		Name: name, Description: "退款流程", Version: "v1", Resumable: resumable, MaxAttempts: constants.DefaultResumableToolAttempts,
+		Name: name, Description: "退款流程", Version: "v1", Resumable: resumable,
 		ArgsSchema: `{"type":"object","properties":{"order_id":{"type":"string"}},"required":["order_id"]}`,
 		Decode: func(args map[string]any) (refundState, error) {
 			return refundState{OrderID: args["order_id"].(string)}, nil

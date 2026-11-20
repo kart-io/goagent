@@ -262,11 +262,13 @@ type RetryConfig struct {
 	// Retries is how many times a retryable failure is retried, not counting
 	// the first attempt; 0 means no retry.
 	Retries int `json:"retries,omitzero"`
-	// MaxAttempts is the total number of attempts, where 0 or less means 3.
-	// It is used only when Retries is 0; setting both is rejected.
+	// MaxAttempts is the total number of attempts when positive; a negative
+	// value means 3. It is used only when Retries is 0, and setting both is
+	// rejected. With both fields 0 there is one attempt and no retry; this
+	// used to mean 3 attempts.
 	//
-	// Deprecated: use Retries, where 0 means no retry. MaxAttempts keeps its
-	// old meaning so existing callers do not lose their retries silently.
+	// Deprecated: use Retries, where 0 means no retry. A positive MaxAttempts
+	// keeps its old meaning so callers that set it keep their retries.
 	MaxAttempts int `json:"max_attempts"`
 	// BaseDelay is the initial delay between retries
 	BaseDelay time.Duration `json:"base_delay"`

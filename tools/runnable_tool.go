@@ -51,10 +51,11 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // execution it can be re-entered. When enabled, it must be called through a
 // journaled Dispatcher, otherwise it fails before starting the subflow.
 // MaxAttempts bounds how many times a Resumable call is entered in total,
-// counting the first; 0 and 1 both mean an interrupted call is not re-entered
-// (it previously meant 3). The value is recorded in the journal, so changing
-// it makes journaled calls fail with a policy conflict: hosts that already
-// have journals must pass constants.DefaultResumableToolAttempts to keep them.
+// counting the first, like DispatchConfig.MaxAttempts: 0 means
+// constants.DefaultResumableToolAttempts (3) and 1 means an interrupted call
+// is not re-entered. It is a persisted protocol value rather than a caller
+// limit: the journal records it and replay rejects a changed value, so its
+// default cannot move without failing calls journaled before an upgrade.
 // It is ignored when Resumable is false. Negative values are rejected.
 // MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
 // policy limit, because recursive delegation would otherwise never stop: 0
@@ -159,7 +160,7 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 		cfg.MaxDepth = DefaultRunnableMaxDepth
 	}
 	if cfg.MaxAttempts == 0 {
-		cfg.MaxAttempts = 1
+		cfg.MaxAttempts = shared.DefaultResumableToolAttempts
 	}
 	if cfg.CleanupTimeout == 0 {
 		cfg.CleanupTimeout = shared.DefaultSessionCleanupTimeout

@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/interfaces"
@@ -120,29 +121,82 @@ func TestDispatchConfigDefaultMaxAttemptsStillThree(t *testing.T) {
 	require.EqualValues(t, 3, calls.Load(), "持久化的默认尝试次数仍为 3")
 }
 
-func TestRunnableToolZeroAttemptsNoRetry(t *testing.T) {
-	cfg := func(attempts int) RunnableToolConfig[string, string] {
-		return RunnableToolConfig[string, string]{
-			Name: "child", Version: "v1", ArgsSchema: emptySchema, Resumable: true, MaxAttempts: attempts,
-			Decode: func(map[string]any) (string, error) { return "", nil },
-			Encode: func(s string) (any, error) { return s, nil },
-		}
+func resumableConfig(attempts int) RunnableToolConfig[string, string] {
+	return RunnableToolConfig[string, string]{
+		Name: "child", Version: "v1", ArgsSchema: emptySchema, Resumable: true, MaxAttempts: attempts,
+		Decode: func(map[string]any) (string, error) { return "", nil },
+		Encode: func(s string) (any, error) { return s, nil },
 	}
+}
+
+func TestRunnableToolZeroAttemptsDefaultsToThree(t *testing.T) {
 	run := core.NewRunnableFunc(func(context.Context, string) (string, error) { return "ok", nil })
-	for _, tc := range []struct {
-		attempts, want int
-	}{
-		{0, 1},
-		{1, 1},
-		{3, 3},
-	} {
-		tool, err := NewRunnableTool(run, cfg(tc.attempts))
+	for _, attempts := range []int{0, constants.DefaultResumableToolAttempts} {
+		tool, err := NewRunnableTool(run, resumableConfig(attempts))
 		require.NoError(t, err)
 		policy := tool.(DurablePolicyProvider).DurableOperationPolicy()
-		require.Equal(t, durable.OperationPolicy{MaxAttempts: tc.want, Resumable: true}, policy, "MaxAttempts=%d", tc.attempts)
+		require.Equal(t, durable.OperationPolicy{MaxAttempts: 3, Resumable: true}, policy, "MaxAttempts=%d", attempts)
 	}
-	_, err := NewRunnableTool(run, cfg(-1))
+	_, err := NewRunnableTool(run, resumableConfig(-1))
 	require.Error(t, err)
+}
+
+func TestRunnableToolOneAttemptNoReentry(t *testing.T) {
+	tool, err := NewRunnableTool(core.NewRunnableFunc(func(context.Context, string) (string, error) { return "ok", nil }), resumableConfig(1))
+	require.NoError(t, err)
+	require.Equal(t, durable.OperationPolicy{MaxAttempts: 1, Resumable: true}, tool.(DurablePolicyProvider).DurableOperationPolicy())
+}
+
+// crashStore 在 crashed 置位后拒绝写入，模拟进程在子流程中途退出：调用记录停在 pending。
+type crashStore struct {
+	durable.Store
+	crashed atomic.Bool
+}
+
+func (s *crashStore) Save(ctx context.Context, id string, snap *durable.Snapshot) error {
+	if s.crashed.Load() {
+		return errors.New("进程已退出")
+	}
+	return s.Store.Save(ctx, id, snap)
+}
+
+// 升级前写入的日志记录的是默认 3 次；不传 MaxAttempts 的新工具必须仍能续跑这些调用。
+func TestRunnableToolDefaultReplaysJournalRecordedUnderOldDefault(t *testing.T) {
+	inner, err := durable.NewFileStore(t.TempDir())
+	require.NoError(t, err)
+	store := &crashStore{Store: inner}
+	ctx := durable.WithJournal(durable.WithExecutionKey(context.Background(), "parent"), store)
+	req := ToolRequest{Name: "child", Input: &interfaces.ToolInput{CallID: "c1", Args: map[string]any{}}}
+
+	old, err := NewRunnableTool(core.NewRunnableFunc(func(context.Context, string) (string, error) {
+		store.crashed.Store(true)
+		return "lost", nil
+	}), resumableConfig(constants.DefaultResumableToolAttempts))
+	require.NoError(t, err)
+	_, err = dispatcherWith(t, DispatchConfig{}, old).Invoke(ctx, req)
+	require.ErrorContains(t, err, "进程已退出")
+	store.crashed.Store(false)
+
+	for _, tc := range []struct {
+		name     string
+		attempts int
+		conflict bool
+	}{
+		{"改成 1 次会被日志拒绝", 1, true},
+		{"默认值沿用日志中的 3 次", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tool, err := NewRunnableTool(core.NewRunnableFunc(func(context.Context, string) (string, error) { return "ok", nil }), resumableConfig(tc.attempts))
+			require.NoError(t, err)
+			out, err := dispatcherWith(t, DispatchConfig{}, tool).Invoke(ctx, req)
+			if tc.conflict {
+				require.ErrorContains(t, err, "attempt policy changed")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, "ok", out.Result)
+		})
+	}
 }
 
 func TestRunnableDepthAntiAbuseCap(t *testing.T) {

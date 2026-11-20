@@ -12,10 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 限额是宿主策略，框架写死后宿主无法表达“不限”或自己的约束（例如推理模型被 2000 token 截断、接入工具后第 10 轮被悄悄去工具、10000 行扫描静默漏掉审批与清理对象）。本版本按三类语义统一处理（PR 需加 `breaking-change` 标签）：
 
 - **限额类**（次数上限、预算、迭代、超时、并发、分页、保留期、截断）：不配置或 0 = 不限制，负数报错。原先“0 = 用默认值”的字段直接改语义。
-- **重试类**（模型请求恢复、中断重发、Resumable 续跑、Embed 重试）：0 = 不重试，字段表示首次之后的重试/重发次数。
+- **重试类**（模型请求恢复、中断重发、Embed 重试）：0 = 不重试，字段表示首次之后的重试/重发次数。
 - **必需值与防滥用上限**（worker 数、轮询间隔、落盘超时、Anthropic `max_tokens`、入站请求大小、http/shell/skill 大小与深度）：0 = 合理默认，负数报错；防滥用上限另有显式“不限”常量。
 
-不变（已持久化的协议值）：`tools.DispatchConfig.MaxAttempts` 默认 3、durable 中断重放 3 次、去重窗口 256；执行闸门容量 1、单 worker 槽与全局 advisory lock（见 [management 已知限制](management/README.md#已知限制)）。`scripts/check_api_compat.sh` 相对 v0.59.2 无签名不兼容；变化全部是语义变化。
+不变（已持久化的协议值）：`tools.DispatchConfig.MaxAttempts` 默认 3、`RunnableToolConfig.MaxAttempts`/`multiagent.Member.MaxAttempts` 默认 3（写入日志、重放时校验，改默认会让升级前的等待中调用报 attempt policy changed）、durable 中断重放 3 次、去重窗口 256；执行闸门容量 1、单 worker 槽与全局 advisory lock（见 [management 已知限制](management/README.md#已知限制)）。`scripts/check_api_compat.sh` 相对 v0.59.2 无签名不兼容；变化全部是语义变化。
 
 迁移表（字段 → 旧默认 → 新语义 → 要保持旧行为应传的值）：
 
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `tools.DispatchConfig.MaxConcurrency` | 0 → 4 | 0 = 不限 | `constants.DefaultDispatcherConcurrency`（4） |
 | `tools.DispatchConfig.Timeout` | 0 → 30s | 0 = 不设截止时间；`DispatchTimeoutProvider` 返回 0 仍沿用 Dispatcher 超时 | `constants.DefaultToolTimeout`（30s） |
 | `tools.Pipeline.ApprovalTimeout` | 0 → 10min | 0 = 只受 ctx 约束，负数在 `NewDispatcher` 报错 | `constants.DefaultApprovalTimeout` |
-| `tools.RunnableToolConfig.MaxAttempts`（新）、`multiagent.Member.MaxAttempts`（新） | Resumable 时固定 3 次 | 总尝试次数，0 或 1 = 中断后不重入；**写入日志**，已有日志的宿主必须传 3，否则重放报 attempt policy changed | `constants.DefaultResumableToolAttempts`（3） |
+| `tools.RunnableToolConfig.MaxAttempts`（新）、`multiagent.Member.MaxAttempts`（新） | Resumable 时固定 3 次 | 已持久化的协议值，默认不变：总尝试次数（同 `DispatchConfig.MaxAttempts`），0 = 3，1 = 中断后不重入，负数报错 | 无需改动 |
 | `tools.RunnableToolConfig.MaxDepth` | 0 → 8 | 防滥用上限：0 = `DefaultRunnableMaxDepth`，新增 `UnlimitedRunnableDepth`，其他负数报错 | 不传 |
 | `tools/http` 响应体、重定向 | 固定 10 MiB / 10 次 | 防滥用上限：`WithMaxResponseBytes`、`WithMaxRedirects`，0 = 默认，`http.Unlimited` 不限 | 不传 |
 | `tools/shell` 输出 | 固定 1 MiB | 防滥用上限：`WithMaxOutputBytes`，0 = 默认，`shell.UnlimitedOutput` 不限 | 不传 |
@@ -58,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `llm` `MaxTokens`（`DefaultClientConfig`、`DefaultLLMOptions`、`WithMaxTokens(0)`） | 发送 2000，provider 兜底 1000 | 0 = 不发送 `max_tokens` | `llm.WithMaxTokens(2000)` |
 | Anthropic `max_tokens` | 2000 | 必需值：0 = `providers.DefaultAnthropicMaxTokens`（2000），负数构造时报错 | 不传 |
 | `llm` `Timeout` | 0 → 60s（provider 内 30s，Ollama 120s） | 0 = 不限时（Gemini 以 ctx 计时） | `llm.WithTimeout(60*time.Second)` |
-| `common.RetryConfig` | `MaxAttempts` 0 → 3 | 新增 `Retries`（0 = 不重试）；`MaxAttempts` 弃用保留原义；两者都 > 0 报错 | 继续只设 `MaxAttempts` |
+| `common.RetryConfig` | `MaxAttempts` 0 → 3 | 新增 `Retries`（0 = 不重试）；`MaxAttempts` 弃用，> 0 时保留原义（负数仍为 3 次）；两者都 > 0 报错。**`MaxAttempts` 与 `Retries` 都为 0 时不再重试**（原先是 3 次尝试） | 继续只设 `MaxAttempts: 3`，或 `Retries: 2` |
 | DeepSeek `Embed` 重试 | 固定 3 次尝试 | 新增 `WithEmbeddingRetries(n)`，0 = 不重试 | `llm.WithEmbeddingRetries(2)` |
 | `core` `Batch` 并发（`BaseRunnable`、`RunnablePipe`、`RunnableSequence`） | 10 | 0 = 不限 | 设置 `MaxConcurrency: 10` |
 | `core/flow` `AsRunnable` 条目上限 | 0 → 1024 | 0 = 不限 | `MaxItems: 1024` |

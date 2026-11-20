@@ -15,7 +15,7 @@ type Member struct {
 	Name, Description, Version string
 	Factory                    AgentFactory
 	Resumable                  bool
-	MaxAttempts                int           // 见 tools.RunnableToolConfig.MaxAttempts：0 = 中断后不重入
+	MaxAttempts                int           // 见 tools.RunnableToolConfig.MaxAttempts：0 = 默认 3 次（日志协议值），1 = 中断后不重入
 	Timeout                    time.Duration // 0 继承 Dispatcher 默认；< 0 构造报错；只在经 Dispatcher 调用时生效
 }
 
