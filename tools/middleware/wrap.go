@@ -75,6 +75,13 @@ func (w *WrappedTool) Invoke(ctx context.Context, input *interfaces.ToolInput) (
 	return w.invoker(ctx, input)
 }
 
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool by
+// forwarding the wrapped tool's declaration; undeclared tools stay serial.
+func (w *WrappedTool) SupportsConcurrentCalls() bool {
+	c, ok := w.tool.(interfaces.ConcurrentCallTool)
+	return ok && c.SupportsConcurrentCalls()
+}
+
 // Unwrap returns the original wrapped tool.
 //
 // This allows access to the original tool's methods or checking its type.
