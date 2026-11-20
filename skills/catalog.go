@@ -21,6 +21,11 @@ import (
 
 // Unlimited disables a DiscoverOptions limit. Zero keeps the package default;
 // any other negative value is rejected.
+//
+// The limits are anti-abuse caps. Zero is the zero value of every field, so a
+// forgotten or default-constructed DiscoverOptions must stay safe: 0 means
+// "use the default cap", and lifting a cap requires an explicit Unlimited.
+// MaxTotalBytes is the one exception, see its documentation.
 const Unlimited = -1
 
 // DiscoverOptions overrides the abuse limits applied while discovering and
@@ -31,8 +36,9 @@ type DiscoverOptions struct {
 	// MaxFileBytes caps one SKILL.md and one reference file. The defaults are
 	// constants.SkillMaxDocumentBytes and constants.SkillMaxReferenceBytes.
 	MaxFileBytes int64
-	// MaxTotalBytes caps the SKILL.md bytes read in one discovery. There is no
-	// default cap.
+	// MaxTotalBytes caps the SKILL.md bytes read in one discovery. Unlike the
+	// other fields, 0 means no cap (same as Unlimited): no total cap existed
+	// before this option, so the default must keep that behavior.
 	MaxTotalBytes int64
 	// MaxFiles caps directory entries listed per discovery and per Load
 	// (default constants.SkillMaxEntries).
@@ -40,6 +46,8 @@ type DiscoverOptions struct {
 	// MaxDescription caps the description length in characters (default 1024).
 	MaxDescription int
 	// MaxDepth caps resource directory nesting (default constants.SkillMaxResourceDepth).
+	// Setting both MaxDepth and MaxFiles to Unlimited on an fs.FS that follows
+	// symbolic links may not terminate on a link cycle.
 	MaxDepth int
 }
 
@@ -334,7 +342,7 @@ func (c *Catalog) lookup(ctx context.Context, name string) (entry, error) {
 }
 
 // Close 释放所有保留的技能目录句柄，可重复调用。已关闭的 Catalog 不再读文件。
-// Select 返回的子目录不拥有句柄，其 Close 为空操作。
+// A Catalog returned by Select owns no handles; its Close is a no-op.
 func (c *Catalog) Close() error {
 	if !c.owner {
 		return nil
