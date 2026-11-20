@@ -22,7 +22,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - Agent 停用后拒绝新 Session（包括 Fork）和新 Task；重新启用后可重试先前被拒绝的请求。
 - 任务取消在生产者实际退出后确认。未知外部效果保持 attention，须提供可信核对证据，不能直接重新执行。
 - 每条终态路径（直接取消、认领时取消、取消 Attention、worker 收尾、构建阻塞时取消）都在同一事务内释放会话、作废待决审批，并写恰好一条 `task.<state>` 投递（payload `{"task_id","state"}`）。
-- Attention 任务没有已接纳的恢复命令时可直接取消：转为 `canceled`，保留原 `ErrorKind` 与未决 `Operations`（不替宿主定案），审计记录取消人。已有恢复命令时仍由该命令先核对。模型请求中断引起的 attention 没有 `Operations`，无法核对，只能取消。被取消的轮次在会话日志中被下一轮整轮遮蔽，后续任务的模型看不到它。
+- Attention 任务没有已接纳的恢复命令时可直接取消：转为 `canceled`，保留原 `ErrorKind` 与未决 `Operations`（不替宿主定案），审计记录取消人。已有恢复命令时仍由该命令先核对。模型请求中断引起的 attention 没有 `Operations`，无法核对，只能取消；`mcp/remote` 工具内层的远程调用（`mcp/call/N`，只执行一次）中断后同样产生没有 `Operations` 的 attention，只能取消。被取消的轮次在会话日志中被下一轮整轮遮蔽，后续任务的模型看不到它。
 
 ## 原生运行时的核对
 
@@ -30,6 +30,8 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 
 - `Inspect` 对本轮中断的工具记录一律返回 `absent`，只统计本任务所在轮次；续跑中的 `durable.Do` 按工具策略处理。默认策略（`MaxAttempts` 3、`RetryInterrupted`）的工具自动重跑；声明 `{MaxAttempts: 1}` 的工具先调用 `tools.ReconcilableTool.Reconcile`，查到结果即定案，查不到才进入 attention，`Task.Operations` 只列出这些调用（`tool/` 前缀，带 `ParentKey`）。
 - 宿主核对后以 `ResumeTask{ReconciliationRef}` 续跑。`Reconcile` 要求 `OperationRefs` 恰好覆盖本轮未决的工具调用，否则返回 `ErrManagementConflict`；通过后返回 `absent`，worker 带着结论调用 `Run`。结论对整组统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时工具结果为 `operation was verified as applied; output unavailable`；`not_applied` 记为业务拒绝 `operation was not applied; call again if still needed`，不调用工具 `Reconcile`、不重跑。未列入的调用照常按策略执行。需要逐个给结论时，宿主应让写工具串行，使未决调用最多一项。
+- 子智能体（RunnableTool、Supervisor 成员）内层工具未决时，外层调用记录保持 pending、不消耗尝试次数；续跑时无论外层是否 `Resumable` 都重新进入，只回放内层已完成的步骤，核对结论直接作用于内层记录。
+- `Task.Operations` 是历史记录：核对成功、任务之后成功或被取消都不清空，表示最近一次进入 attention 时的未决操作。
 - 审批等待的 `Wait.Info` 带 `arguments`（工具调用参数），供审批人判断。
 - 审批必须经 DecideApproval；决定和续跑命令原子持久化，普通 ResumeTask 不能绕过审批。
 - JSON 使用 codec/json，精确保留数字并拒绝重复键；HTTP DTO 使用 Strict 规则，拒绝未知字段、非法 UTF-8 和不匹配大小写的字段名。
