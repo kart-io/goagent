@@ -24,15 +24,17 @@ type (
 		Agents           []Agent
 		ActorFromRequest func(context.Context, *mcp.CallToolRequest) (mg.Actor, error)
 		PollInterval     time.Duration
-		// MaxInputBytes caps one HTTP request body for NewHTTPHandler
-		// (0 = mg.DefaultMaxRequestBytes, mg.UnlimitedRequestBytes = no cap).
+		// MaxInputBytes caps one HTTP request body for NewHTTPHandler and the
+		// arguments of one tool call (0 = mg.DefaultMaxRequestBytes,
+		// mg.UnlimitedRequestBytes = no cap).
 		MaxInputBytes int64
 	}
 )
 type server struct {
-	service *protocol.Service
-	cfg     Config
-	agents  map[string]bool
+	service  *protocol.Service
+	cfg      Config
+	agents   map[string]bool
+	argBytes int64
 }
 
 // NewHTTPHandler 使用支持 MCP 2026-07-28 多轮输入的无状态 HTTP transport。
@@ -55,11 +57,15 @@ func New(s *mg.Service, c Config) (*mcp.Server, error) {
 	if c.ActorFromRequest == nil || len(c.Agents) == 0 {
 		return nil, agentErrors.ErrManagementInvalid
 	}
+	argBytes, err := mg.RequestBytes(c.MaxInputBytes)
+	if err != nil {
+		return nil, err
+	}
 	p, err := protocol.New(s, c.PollInterval)
 	if err != nil {
 		return nil, err
 	}
-	h := &server{service: p, cfg: c, agents: map[string]bool{}}
+	h := &server{service: p, cfg: c, agents: map[string]bool{}, argBytes: argBytes}
 	names := map[string]bool{"task_get": true, "task_wait": true, "task_cancel": true, "task_respond": true}
 	validName := regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	for _, a := range c.Agents {
@@ -77,7 +83,7 @@ func New(s *mg.Service, c Config) (*mcp.Server, error) {
 				SessionID string          `json:"session_id,omitempty"`
 				Input     json.RawMessage `json:"input"`
 			}
-			if err := decode(req, &in); err != nil {
+			if err := h.decode(req, &in); err != nil {
 				return nil, err
 			}
 			t, err := p.Start(ctx, actor, protocol.StartRequest{AgentID: a.ID, MessageID: in.MessageID, SessionID: in.SessionID, Input: in.Input})
@@ -90,7 +96,7 @@ func New(s *mg.Service, c Config) (*mcp.Server, error) {
 	for _, name := range []string{"task_get", "task_wait"} {
 		srv.AddTool(&mcp.Tool{Name: name, Description: map[string]string{"task_get": "查询共同任务状态、输入和审批请求", "task_wait": "等待任务完成或通过人工输入与审批继续运行"}[name], InputSchema: schema(map[string]any{"task_id": textSchema()}, "task_id")}, h.handle(func(ctx context.Context, a mg.Actor, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			var in taskInput
-			if err := decode(req, &in); err != nil {
+			if err := h.decode(req, &in); err != nil {
 				return nil, err
 			}
 			t, err := h.get(ctx, a, in.TaskID)
@@ -110,7 +116,7 @@ func New(s *mg.Service, c Config) (*mcp.Server, error) {
 			ExpectedRevision int64  `json:"expected_revision"`
 			Reason           string `json:"reason,omitempty"`
 		}
-		if err := decode(req, &in); err != nil {
+		if err := h.decode(req, &in); err != nil {
 			return nil, err
 		}
 		t, err := h.get(ctx, a, in.TaskID)
@@ -131,7 +137,7 @@ func New(s *mg.Service, c Config) (*mcp.Server, error) {
 			TaskID   string            `json:"task_id"`
 			Response protocol.Response `json:"response"`
 		}
-		if err := decode(req, &in); err != nil {
+		if err := h.decode(req, &in); err != nil {
 			return nil, err
 		}
 		t, err := h.get(ctx, a, in.TaskID)
@@ -201,8 +207,8 @@ func (h *server) invoke(ctx context.Context, a mg.Actor, req *mcp.CallToolReques
 	}
 }
 
-func decode(req *mcp.CallToolRequest, out any) error {
-	if req == nil || req.Params == nil || len(req.Params.Arguments) > 1<<20 {
+func (h *server) decode(req *mcp.CallToolRequest, out any) error {
+	if req == nil || req.Params == nil || (h.argBytes != mg.UnlimitedRequestBytes && int64(len(req.Params.Arguments)) > h.argBytes) {
 		return agentErrors.ErrManagementInvalid
 	}
 	if err := json.Unmarshal(req.Params.Arguments, out, json.Strict, json.UseNumber); err != nil {
