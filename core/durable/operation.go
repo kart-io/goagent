@@ -105,7 +105,7 @@ type OperationRecord struct {
 	// ParentKey is the execution key the operation ran under (ExecutionKey of
 	// the ctx passed to Do); together with ID it forms the OperationRef a host
 	// reconciles. Records written before it existed leave it empty.
-	ParentKey string `json:",omitempty"`
+	ParentKey string `json:"parent_key,omitempty"`
 	Replayed  bool   `json:"-"`
 }
 
@@ -133,7 +133,7 @@ var ErrEffectUnknown = errors.New("durable operation effect is unknown")
 // ParentKey and ID identify it as a durable.OperationRef.
 type OperationError struct {
 	ID, Kind  string
-	ParentKey string `json:",omitempty"`
+	ParentKey string `json:"parent_key,omitempty"`
 }
 
 func (e *OperationError) Error() string {
