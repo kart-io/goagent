@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/interfaces"
@@ -100,8 +101,8 @@ func TestUsageHookTimeoutIsRequiredValue(t *testing.T) {
 		set  time.Duration
 		want time.Duration
 	}{
-		{"未设置用默认", -1, DefaultUsageHookTimeout},
-		{"零用默认", 0, DefaultUsageHookTimeout},
+		{"未设置用默认", -1, constants.DefaultUsageHookTimeout},
+		{"零用默认", 0, constants.DefaultUsageHookTimeout},
 		{"显式值", time.Minute, time.Minute},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

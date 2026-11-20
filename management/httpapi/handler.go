@@ -19,7 +19,7 @@ import (
 
 type Config struct {
 	ActorFromRequest func(*http.Request) (mg.Actor, error)
-	// MaxInputBytes caps one request body (0 = mg.DefaultMaxRequestBytes,
+	// MaxInputBytes caps one request body (0 = constants.DefaultManagementMaxRequestBytes,
 	// mg.UnlimitedRequestBytes = no cap).
 	MaxInputBytes int64
 }

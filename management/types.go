@@ -364,26 +364,15 @@ type Limits struct {
 	BuildRetryDelay time.Duration
 }
 
-// Defaults for required Limits values.
-const (
-	DefaultPageSize           = 50
-	DefaultWorkers            = 4
-	DefaultPollInterval       = 20 * time.Millisecond
-	DefaultOutboxPollInterval = 100 * time.Millisecond
-	DefaultPersistTimeout     = 5 * time.Second
-	DefaultDeliveryBackoffMax = 256 * time.Second
-	DefaultBuildRetryDelay    = time.Second
-)
-
 // DefaultLimits returns the limits that applied when Config.Limits was left
 // zero before limits became caller-owned. Pass it explicitly to keep them.
 func DefaultLimits() Limits {
 	return Limits{
-		PageSize: DefaultPageSize, MaxPageSize: 200, MaxInputBytes: 1 << 20, MaxOutputBytes: 4 << 20,
-		Workers: DefaultWorkers, MaxPending: 10000,
+		PageSize: constants.DefaultManagementPageSize, MaxPageSize: 200, MaxInputBytes: 1 << 20, MaxOutputBytes: 4 << 20,
+		Workers: constants.DefaultManagementWorkers, MaxPending: 10000,
 		IdempotencyRetention: 30 * 24 * time.Hour, TaskRetention: 90 * 24 * time.Hour, AuditRetention: 180 * 24 * time.Hour,
-		PollInterval: DefaultPollInterval, OutboxPollInterval: DefaultOutboxPollInterval, PersistTimeout: DefaultPersistTimeout,
-		DeliveryBackoffMax: DefaultDeliveryBackoffMax, BuildRetryDelay: DefaultBuildRetryDelay,
+		PollInterval: constants.DefaultManagementPollInterval, OutboxPollInterval: constants.DefaultManagementOutboxPollInterval, PersistTimeout: constants.DefaultManagementPersistTimeout,
+		DeliveryBackoffMax: constants.DefaultManagementDeliveryBackoffMax, BuildRetryDelay: constants.DefaultManagementBuildRetryDelay,
 	}
 }
 
@@ -402,36 +391,34 @@ func (l Limits) normalize() (Limits, error) {
 		return l, agentErrors.ErrManagementInvalid
 	}
 	if l.PageSize == 0 {
-		l.PageSize = DefaultPageSize
+		l.PageSize = constants.DefaultManagementPageSize
 		if l.MaxPageSize > 0 {
 			l.PageSize = min(l.PageSize, l.MaxPageSize)
 		}
 	}
-	l.Workers = cmp.Or(l.Workers, DefaultWorkers)
-	l.PollInterval = cmp.Or(l.PollInterval, DefaultPollInterval)
-	l.OutboxPollInterval = cmp.Or(l.OutboxPollInterval, DefaultOutboxPollInterval)
-	l.PersistTimeout = cmp.Or(l.PersistTimeout, DefaultPersistTimeout)
-	l.DeliveryBackoffMax = cmp.Or(l.DeliveryBackoffMax, DefaultDeliveryBackoffMax)
-	l.BuildRetryDelay = cmp.Or(l.BuildRetryDelay, DefaultBuildRetryDelay)
+	l.Workers = cmp.Or(l.Workers, constants.DefaultManagementWorkers)
+	l.PollInterval = cmp.Or(l.PollInterval, constants.DefaultManagementPollInterval)
+	l.OutboxPollInterval = cmp.Or(l.OutboxPollInterval, constants.DefaultManagementOutboxPollInterval)
+	l.PersistTimeout = cmp.Or(l.PersistTimeout, constants.DefaultManagementPersistTimeout)
+	l.DeliveryBackoffMax = cmp.Or(l.DeliveryBackoffMax, constants.DefaultManagementDeliveryBackoffMax)
+	l.BuildRetryDelay = cmp.Or(l.BuildRetryDelay, constants.DefaultManagementBuildRetryDelay)
 	return l, nil
 }
 
 // Inbound request size caps shared by the httpapi, a2a and mcpserver
 // adapters. The cap is an abuse guard for untrusted clients, so a zero
-// MaxInputBytes takes DefaultMaxRequestBytes instead of meaning unlimited;
+// MaxInputBytes takes constants.DefaultManagementMaxRequestBytes instead of
+// meaning unlimited;
 // pass UnlimitedRequestBytes to remove the cap explicitly. Other negative
 // values are invalid.
-const (
-	DefaultMaxRequestBytes int64 = 1 << 20
-	UnlimitedRequestBytes  int64 = -1
-)
+const UnlimitedRequestBytes int64 = -1
 
 // RequestBytes resolves an adapter MaxInputBytes setting: 0 becomes
-// DefaultMaxRequestBytes, UnlimitedRequestBytes stays, other negatives fail.
+// constants.DefaultManagementMaxRequestBytes, UnlimitedRequestBytes stays, other negatives fail.
 func RequestBytes(n int64) (int64, error) {
 	switch {
 	case n == 0:
-		return DefaultMaxRequestBytes, nil
+		return constants.DefaultManagementMaxRequestBytes, nil
 	case n == UnlimitedRequestBytes || n > 0:
 		return n, nil
 	}

@@ -27,15 +27,9 @@ import (
 // limits: the URL and so the response come from the model, and an unbounded
 // body or redirect chain lets one call exhaust memory or loop forever. For
 // that reason 0 means the default here, not "unlimited".
-const (
-	// DefaultMaxResponseBytes is the response body cap used when none is set;
-	// a larger body fails the request.
-	DefaultMaxResponseBytes = 10 << 20
-	// DefaultMaxRedirects matches the net/http default redirect cap.
-	DefaultMaxRedirects = 10
-	// Unlimited passed to WithMaxResponseBytes or WithMaxRedirects removes that cap.
-	Unlimited = -1
-)
+//
+// Unlimited passed to WithMaxResponseBytes or WithMaxRedirects removes that cap.
+const Unlimited = -1
 
 type apiLimits struct{ responseBytes, redirects int }
 
@@ -54,8 +48,8 @@ func (l apiLimits) resolve() (apiLimits, error) {
 		return v, nil
 	}
 	var err1, err2 error
-	l.responseBytes, err1 = pick(l.responseBytes, DefaultMaxResponseBytes)
-	l.redirects, err2 = pick(l.redirects, DefaultMaxRedirects)
+	l.responseBytes, err1 = pick(l.responseBytes, shared.DefaultAPIToolMaxResponseBytes)
+	l.redirects, err2 = pick(l.redirects, shared.DefaultAPIToolMaxRedirects)
 	return l, errors.Join(err1, err2)
 }
 
@@ -459,14 +453,14 @@ func (b *APIToolBuilder) WithPrivateNetwork() *APIToolBuilder {
 }
 
 // WithMaxResponseBytes caps the response body; 0 means
-// DefaultMaxResponseBytes and Unlimited removes the cap. Other negative values
+// constants.DefaultAPIToolMaxResponseBytes and Unlimited removes the cap. Other negative values
 // make every call fail with an invalid-config error.
 func (b *APIToolBuilder) WithMaxResponseBytes(n int) *APIToolBuilder {
 	b.limits.responseBytes = n
 	return b
 }
 
-// WithMaxRedirects caps followed redirects; 0 means DefaultMaxRedirects and
+// WithMaxRedirects caps followed redirects; 0 means constants.DefaultAPIToolMaxRedirects and
 // Unlimited removes the cap. Other negative values make every call fail with
 // an invalid-config error.
 func (b *APIToolBuilder) WithMaxRedirects(n int) *APIToolBuilder {

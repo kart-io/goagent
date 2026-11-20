@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
@@ -26,12 +27,8 @@ type (
 	usageHookTimeoutKey struct{}
 )
 
-// DefaultUsageHookTimeout bounds one statistics query plus hook call when the
-// caller does not choose a timeout.
-const DefaultUsageHookTimeout = 5 * time.Second
-
 // WithUsageHookTimeout sets how long NotifyUsage may spend on one statistics
-// query plus hook call; children inherit it. 0 selects DefaultUsageHookTimeout
+// query plus hook call; children inherit it. 0 selects constants.DefaultUsageHookTimeout
 // and negative values are rejected. It cannot mean unlimited: the call runs on
 // a context detached from execution cancellation, so a hung hook would never
 // be released.
@@ -45,7 +42,7 @@ func WithUsageHookTimeout(ctx context.Context, d time.Duration) (context.Context
 func usageHookTimeout(ctx context.Context) time.Duration {
 	d, _ := ctx.Value(usageHookTimeoutKey{}).(time.Duration)
 	if d <= 0 {
-		return DefaultUsageHookTimeout
+		return constants.DefaultUsageHookTimeout
 	}
 	return d
 }

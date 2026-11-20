@@ -30,7 +30,7 @@ type Config struct {
 	Description      string
 	ActorFromRequest func(*http.Request) (mg.Actor, error)
 	PollInterval     time.Duration
-	// MaxInputBytes caps one request body (0 = mg.DefaultMaxRequestBytes,
+	// MaxInputBytes caps one request body (0 = constants.DefaultManagementMaxRequestBytes,
 	// mg.UnlimitedRequestBytes = no cap).
 	MaxInputBytes int64
 }

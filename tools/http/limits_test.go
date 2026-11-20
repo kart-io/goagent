@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -18,7 +19,7 @@ func TestAPIToolAntiAbuseCaps(t *testing.T) {
 			http.Redirect(w, r, "/?hop="+strconv.Itoa(n-1), http.StatusFound)
 			return
 		}
-		_, _ = w.Write(make([]byte, DefaultMaxResponseBytes+1))
+		_, _ = w.Write(make([]byte, constants.DefaultAPIToolMaxResponseBytes+1))
 	}))
 	defer server.Close()
 	call := func(b *APIToolBuilder, query string) error {

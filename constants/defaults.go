@@ -10,6 +10,9 @@ const (
 	// DefaultAgentExecutionTimeout 与 DefaultAgentMaxIterations 不再由 builder 自动套用（0 = 不限），只供预设与需要旧取值的调用方显式传入。
 	DefaultAgentExecutionTimeout = 5 * time.Minute
 	DefaultSessionCleanupTimeout = 5 * time.Second
+	// DefaultUsageHookTimeout bounds one budget usage statistics query plus
+	// hook call when the caller does not choose a timeout.
+	DefaultUsageHookTimeout = 5 * time.Second
 )
 
 // 不同调用层的默认策略独立命名，不因当前数值相同而合并。

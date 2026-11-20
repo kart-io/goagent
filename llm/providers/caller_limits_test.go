@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	agentllm "github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/llm/common"
 )
@@ -79,7 +80,7 @@ func TestAnthropicMaxTokensRequiredDefault(t *testing.T) {
 			require.Equal(t, tc.want, params.MaxTokens)
 		})
 	}
-	require.EqualValues(t, 2000, DefaultAnthropicMaxTokens)
+	require.EqualValues(t, 2000, constants.DefaultClientMaxTokens)
 	_, err := NewAnthropicWithOptions(agentllm.WithAPIKey("k"), agentllm.WithMaxTokens(-1))
 	require.Error(t, err)
 }
