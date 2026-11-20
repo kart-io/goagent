@@ -64,7 +64,7 @@ func exercise(ctx context.Context, directory string) (got cycleResult, err error
 	}
 	for round := range 2 {
 		journal := session.DurableStore(sessions, "session")
-		ctrl, e := budget.NewDurable(budget.Config{RootKey: "run", Version: "v1", MaxModelRequests: 2, MaxToolCalls: 1}, journal)
+		ctrl, e := budget.NewDurable(budget.Config{RootKey: "run", Version: "v1", MaxModelRequests: 2, MaxToolCalls: 1, MaxAgentCalls: shared.DefaultMaxAgentCalls}, journal)
 		if e != nil {
 			return got, e
 		}

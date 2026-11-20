@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/evaluation/agentbench"
@@ -51,7 +52,7 @@ func verify(ctx context.Context, client llm.ToolStreamClient) (got result, err e
 	contract := agentbench.ToolContract{ID: "9007199254740993", Rate: "0.1234567890123456789", Label: "<核验&>", Receipt: "minimax-probe-ok", StringNumbers: true}
 	for round := range 2 {
 		beforeRequests, beforeEffects := int(model.requests.Load()), got.Effects
-		ctrl, e := budget.NewDurable(budget.Config{RootKey: "minimax-probe", Version: "v1", MaxModelRequests: 3, MaxToolCalls: 1}, store)
+		ctrl, e := budget.NewDurable(budget.Config{RootKey: "minimax-probe", Version: "v1", MaxModelRequests: 3, MaxToolCalls: 1, MaxAgentCalls: constants.DefaultMaxAgentCalls}, store)
 		if e != nil {
 			return got, e
 		}

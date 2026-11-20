@@ -112,7 +112,7 @@ func (k *kit) texts(clients map[string]*mocks.ScriptedClient, names ...string) (
 
 // budgetFor 返回根预算上下文；持久运行的预算与图共用存储，RootKey 与运行 ID 一致。
 func budgetFor(ctx context.Context, runID string, store durable.Store) (context.Context, error) {
-	cfg := budget.Config{RootKey: runID, Version: "v1", MaxModelRequests: 20}
+	cfg := budget.Config{RootKey: runID, Version: "v1", MaxModelRequests: 20, MaxAgentCalls: constants.DefaultMaxAgentCalls}
 	var c *budget.Controller
 	var err error
 	if store == nil {

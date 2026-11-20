@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/builder"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/execution"
 	"github.com/kart-io/goagent/llm"
@@ -22,7 +23,7 @@ func main() {
 
 func run(ctx context.Context) error {
 	const runID = "offline-scope-demo"
-	controller, err := budget.New(budget.Config{RootKey: runID, Version: "demo-v1", MaxModelRequests: 2})
+	controller, err := budget.New(budget.Config{RootKey: runID, Version: "demo-v1", MaxModelRequests: 2, MaxAgentCalls: constants.DefaultMaxAgentCalls})
 	if err != nil {
 		return err
 	}

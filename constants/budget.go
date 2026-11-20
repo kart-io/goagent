@@ -6,6 +6,8 @@ import "math"
 const (
 	// BudgetUnlimited 是未绑定预算时 Remaining 返回的余量，可直接参与大小比较。
 	BudgetUnlimited = math.MaxInt
-	// DefaultMaxAgentCalls 限制宿主未指定上限时的拓扑调用数量。
+	// DefaultMaxAgentCalls is the agent-call limit that budget.Config filled in
+	// for 0 before limits became caller-owned. budget no longer applies it; it
+	// is kept for ledgers and management/v1 tasks that persisted this value.
 	DefaultMaxAgentCalls = 1000
 )

@@ -14,12 +14,12 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
-func TestConfigurationNormalizesDefaultCallLimit(t *testing.T) {
+func TestConfigurationKeepsZeroCallLimit(t *testing.T) {
 	c, e := New(Config{RootKey: "root", Version: "policy", MaxModelRequests: 3})
 	require.NoError(t, e)
 	data, e := json.Marshal(c.Configuration())
 	require.NoError(t, e)
-	require.JSONEq(t, `{"RootKey":"root","Version":"policy","MaxModelRequests":3,"MaxAgentCalls":1000}`, string(data))
+	require.JSONEq(t, `{"RootKey":"root","Version":"policy","MaxModelRequests":3}`, string(data))
 }
 
 func TestTokenAndToolLimitsRemainConservativeAcrossRestart(t *testing.T) {

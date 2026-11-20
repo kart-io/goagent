@@ -13,6 +13,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -74,7 +75,7 @@ func Run(ctx context.Context, cfg Config) (report Report, err error) {
 	}
 	var controller *budget.Controller
 	var dir string
-	bc := budget.Config{RootKey: "executionbench", Version: "synthetic-v1", MaxModelRequests: cfg.Operations, MaxToolCalls: cfg.Operations}
+	bc := budget.Config{RootKey: "executionbench", Version: "synthetic-v1", MaxModelRequests: cfg.Operations, MaxToolCalls: cfg.Operations, MaxAgentCalls: constants.DefaultMaxAgentCalls}
 	switch cfg.Mode {
 	case "memory":
 		controller, err = budget.New(bc)

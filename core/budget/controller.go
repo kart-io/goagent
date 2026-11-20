@@ -25,6 +25,12 @@ import (
 const ledgerFormat = "goagent-model-budget"
 
 // Config is supplied by the host. RootKey identifies one logical run.
+//
+// Every limit is owned by the caller: MaxModelRequests, MaxReservedTokens,
+// MaxToolCalls, MaxAgentCalls and DeadlineUnixMilli mean "unlimited" when 0.
+// The configuration is persisted with a durable ledger and must not change for
+// the lifetime of RootKey, so a ledger written while 0 was filled with a
+// default must keep passing that default explicitly.
 type Config struct {
 	RootKey, Version   string
 	MaxModelRequests   int
@@ -63,14 +69,11 @@ type Controller struct {
 
 // New creates an in-memory request budget.
 func New(config Config) (*Controller, error) {
-	if config.RootKey == "" || config.Version == "" || config.MaxModelRequests < 1 || config.MaxReservedTokens < 0 || config.MaxToolCalls < 0 || config.DeadlineUnixMilli < 0 || (config.MaxReservedTokens > 0 && config.TokenPolicyVersion == "") {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "budget requires root key, version and positive request limit").WithComponent("budget").WithOperation("new")
+	if config.RootKey == "" || config.Version == "" || config.MaxModelRequests < 0 || config.MaxReservedTokens < 0 || config.MaxToolCalls < 0 || config.DeadlineUnixMilli < 0 || (config.MaxReservedTokens > 0 && config.TokenPolicyVersion == "") {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "budget requires root key, version and non-negative limits").WithComponent("budget").WithOperation("new")
 	}
 	if config.MaxAgentCalls < 0 {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "negative agent call limit").WithComponent("budget").WithOperation("new")
-	}
-	if config.MaxAgentCalls == 0 {
-		config.MaxAgentCalls = constants.DefaultMaxAgentCalls
 	}
 	return &Controller{config: config, memory: ledger{Config: config, Entries: map[string]entry{}}}, nil
 }
@@ -151,7 +154,7 @@ func (c *Controller) transaction(ctx context.Context, write bool, fn func(*ledge
 			}
 		}
 	}
-	if l.Config != c.config || l.Entries == nil || len(l.Entries) > c.config.MaxModelRequests {
+	if l.Config != c.config || l.Entries == nil || exceeds(len(l.Entries), c.config.MaxModelRequests) {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "budget configuration or record changed").WithComponent("budget").WithOperation("transaction")
 	}
 	for key, item := range l.Entries {
@@ -214,14 +217,18 @@ func (c *Controller) Reserve(ctx context.Context, key string) error {
 // a durable budget is read under the Store lock and counts reservations from
 // other processes. The result is only a point-in-time snapshot and concurrent
 // reservations may consume the remainder immediately; admission is still
-// decided by Reserve. A nil receiver means no budget is bound and returns
-// constants.BudgetUnlimited, so it can be used directly with FromContext.
+// decided by Reserve. A nil receiver or MaxModelRequests 0 means no request
+// limit and returns constants.BudgetUnlimited, so it can be used directly with
+// FromContext.
 func (c *Controller) Remaining(ctx context.Context) (remaining int, err error) {
 	if c == nil {
 		return constants.BudgetUnlimited, nil
 	}
 	err = c.transaction(ctx, false, func(l *ledger) error {
-		remaining = c.config.MaxModelRequests - len(l.Entries)
+		remaining = constants.BudgetUnlimited
+		if c.config.MaxModelRequests > 0 {
+			remaining = c.config.MaxModelRequests - len(l.Entries)
+		}
 		return nil
 	})
 	return
@@ -316,3 +323,6 @@ func reservedTokens(l *ledger) (int, error) {
 	}
 	return total, nil
 }
+
+// exceeds reports whether n is above limit, where limit 0 means unlimited.
+func exceeds(n, limit int) bool { return limit > 0 && n > limit }

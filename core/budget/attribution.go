@@ -39,7 +39,7 @@ func validOwner(o usage.Owner) bool {
 }
 
 func (c *Controller) register(l *ledger, chain []usage.Owner) error {
-	if len(chain) == 0 || len(chain) > c.config.MaxAgentCalls {
+	if len(chain) == 0 || exceeds(len(chain), c.config.MaxAgentCalls) {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid attribution lineage").WithComponent("budget").WithOperation("register")
 	}
 	seen := map[string]bool{}
@@ -57,7 +57,7 @@ func (c *Controller) register(l *ledger, chain []usage.Owner) error {
 			added++
 		}
 	}
-	if len(l.AgentCalls)+added > c.config.MaxAgentCalls {
+	if exceeds(len(l.AgentCalls)+added, c.config.MaxAgentCalls) {
 		return agentErrors.Newf(agentErrors.CodeExecutionLimit, "agent call limit exceeded").WithComponent("budget").WithOperation("register")
 	}
 	if l.AgentCalls == nil {
@@ -92,7 +92,7 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 		if _, ok := l.Entries[key]; ok {
 			return agentErrors.ErrReservationExists
 		}
-		if len(l.Entries) >= c.config.MaxModelRequests {
+		if exceeds(len(l.Entries)+1, c.config.MaxModelRequests) {
 			return agentErrors.ErrModelBudgetExceeded
 		}
 		n, e := reservedTokens(l)
@@ -145,7 +145,7 @@ func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []u
 }
 
 func (c *Controller) validateAttribution(l *ledger) error {
-	if len(l.AgentCalls) > c.config.MaxAgentCalls {
+	if exceeds(len(l.AgentCalls), c.config.MaxAgentCalls) {
 		return agentErrors.Newf(agentErrors.CodeStateValidation, "agent call limit exceeded").WithComponent("budget").WithOperation("validate_attribution")
 	}
 	for key, o := range l.AgentCalls {
