@@ -9,7 +9,7 @@ import (
 	mg "github.com/kart-io/goagent/management"
 )
 
-// History 读取会话日志，并遵守业务历史隐藏内部事件的边界。
+// History 读取会话日志，并遵守业务历史隐藏内部事件的边界。limit 为 0 时不限条数，由调用方分页。
 type History struct{ Sessions session.Store }
 
 func (h History) History(ctx context.Context, id string, after int64, limit int, types []string) (mg.HistoryPage, error) {

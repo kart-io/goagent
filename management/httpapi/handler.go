@@ -19,7 +19,9 @@ import (
 
 type Config struct {
 	ActorFromRequest func(*http.Request) (mg.Actor, error)
-	MaxInputBytes    int64
+	// MaxInputBytes caps one request body (0 = mg.DefaultMaxRequestBytes,
+	// mg.UnlimitedRequestBytes = no cap).
+	MaxInputBytes int64
 }
 type Handler struct {
 	s   *mg.Service
@@ -33,12 +35,11 @@ func New(s *mg.Service, c Config) (*Handler, error) {
 	if s == nil || c.ActorFromRequest == nil {
 		return nil, agentErrors.ErrManagementInvalid
 	}
-	if c.MaxInputBytes == 0 {
-		c.MaxInputBytes = 1 << 20
+	limit, err := mg.RequestBytes(c.MaxInputBytes)
+	if err != nil {
+		return nil, err
 	}
-	if c.MaxInputBytes < 1 || c.MaxInputBytes > 1<<20 {
-		return nil, agentErrors.ErrManagementInvalid
-	}
+	c.MaxInputBytes = limit
 	h := &Handler{s: s, cfg: c, mux: http.NewServeMux()}
 	h.register()
 	return h, nil
@@ -50,7 +51,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, limit int64, dst any) error {
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	body := r.Body
+	if limit != mg.UnlimitedRequestBytes {
+		body = http.MaxBytesReader(w, r.Body, limit)
+	}
+	raw, err := io.ReadAll(body)
 	if err != nil {
 		return err
 	}

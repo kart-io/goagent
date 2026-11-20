@@ -24,6 +24,9 @@ type (
 		Agents           []Agent
 		ActorFromRequest func(context.Context, *mcp.CallToolRequest) (mg.Actor, error)
 		PollInterval     time.Duration
+		// MaxInputBytes caps one HTTP request body for NewHTTPHandler
+		// (0 = mg.DefaultMaxRequestBytes, mg.UnlimitedRequestBytes = no cap).
+		MaxInputBytes int64
 	}
 )
 type server struct {
@@ -35,11 +38,16 @@ type server struct {
 // NewHTTPHandler 使用支持 MCP 2026-07-28 多轮输入的无状态 HTTP transport。
 // 认证中间件仍由宿主装配；每次工具调用均通过 Config.ActorFromRequest 获取身份。
 func NewHTTPHandler(s *mg.Service, c Config) (http.Handler, error) {
+	limit, err := mg.RequestBytes(c.MaxInputBytes)
+	if err != nil {
+		return nil, err
+	}
 	srv, err := New(s, c)
 	if err != nil {
 		return nil, err
 	}
-	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: true, MaxRequestBodyBytes: 1 << 20}), nil
+	// The SDK reads a negative MaxRequestBodyBytes as "no limit".
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: true, MaxRequestBodyBytes: limit}), nil
 }
 
 // New 不启动 Worker 或监听端口；同一个管理服务可同时交给 HTTP/A2A 适配器。

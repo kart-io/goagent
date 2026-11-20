@@ -27,16 +27,16 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 		return err
 	}
 	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		cleanup, cancel := d.owner.persistCtx(ctx)
 		defer cancel()
 		if e := d.owner.owner(cleanup, true); err == nil {
 			err = e
 		}
 	}()
-	tick := time.NewTicker(100 * time.Millisecond)
+	tick := time.NewTicker(d.s.cfg.Limits.OutboxPollInterval)
 	defer tick.Stop()
 	for {
-		items, e := all[Delivery](ctx, d.s.cfg.Store, "outbox", "", Query{Statuses: []string{"pending", "applying"}, Limit: 10000})
+		items, e := all[Delivery](ctx, d.s.cfg.Store, "outbox", "", Query{Statuses: []string{"pending", "applying"}})
 		if e != nil && ctx.Err() == nil {
 			return e
 		}
@@ -65,10 +65,13 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 			if err != nil {
 				continue
 			}
-			call, cancel := context.WithTimeout(ctx, 5*time.Second)
+			call, cancel := ctx, context.CancelFunc(func() {})
+			if d.s.cfg.Limits.DeliveryTimeout > 0 {
+				call, cancel = context.WithTimeout(ctx, d.s.cfg.Limits.DeliveryTimeout)
+			}
 			deliveryErr := d.s.cfg.Delivery.Accept(call, item)
 			cancel()
-			save, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			save, cancel := d.owner.persistCtx(ctx)
 			err = d.s.cfg.Store.WithinTx(save, func(tx Tx) error {
 				cur, e := read[Delivery](save, tx, "outbox", item.TenantID, item.ID)
 				if e != nil {
@@ -80,8 +83,7 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 					cur.State = "done"
 				} else {
 					cur.State = "pending"
-					delay := time.Second * time.Duration(1<<min(cur.Attempts, 8))
-					cur.AvailableAt = d.s.cfg.Now().Add(delay)
+					cur.AvailableAt = d.s.cfg.Now().Add(redeliveryDelay(cur.Attempts, d.s.cfg.Limits.DeliveryBackoffMax))
 				}
 				return update(save, tx, "outbox", cur, old)
 			})
@@ -96,4 +98,13 @@ func (d *OutboxDispatcher) Run(ctx context.Context) (err error) {
 		case <-tick.C:
 		}
 	}
+}
+
+// redeliveryDelay doubles from one second per attempt and stops at ceiling.
+func redeliveryDelay(attempts int, ceiling time.Duration) time.Duration {
+	delay := time.Second
+	for i := 0; i < attempts && delay < ceiling; i++ {
+		delay *= 2
+	}
+	return min(delay, ceiling)
 }

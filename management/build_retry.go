@@ -47,7 +47,7 @@ func nextAttemptNumber(ctx context.Context, reader Reader, task Task) (int, erro
 	query := Query{TaskID: task.ID, Limit: 200}
 	maximum := 0
 	for {
-		attempts, err := all[Attempt](ctx, reader, "attempts", task.TenantID, query)
+		attempts, err := page[Attempt](ctx, reader, "attempts", task.TenantID, query)
 		if err != nil {
 			return 0, err
 		}
@@ -117,7 +117,7 @@ func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attem
 		cmd.State = "blocked"
 		cmd.ErrorKind = kind
 		// 持续的构建故障不能在每次轮询中产生一个新 attempt。
-		cmd.AvailableAt = w.s.cfg.Now().Add(time.Second).UTC()
+		cmd.AvailableAt = w.s.cfg.Now().Add(w.s.cfg.Limits.BuildRetryDelay).UTC()
 		if canceled {
 			cmd.State = "applied"
 			cmd.ErrorKind = ""

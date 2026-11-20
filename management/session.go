@@ -70,14 +70,15 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 		if !agent.Enabled {
 			return Session{}, agentErrors.ErrManagementConflict
 		}
-		tasks, err := all[Task](ctx, tx, "tasks", a.TenantID, Query{SessionID: source.ID, Limit: s.cfg.Limits.MaxPending + 1})
-		if err != nil {
+		busy := false
+		if err = each(ctx, tx, "tasks", a.TenantID, Query{SessionID: source.ID}, func(t Task) (bool, error) {
+			busy = !t.State.Terminal()
+			return busy, nil
+		}); err != nil {
 			return Session{}, err
 		}
-		for _, t := range tasks {
-			if !t.State.Terminal() {
-				return Session{}, agentErrors.ErrManagementConflict
-			}
+		if busy {
+			return Session{}, agentErrors.ErrManagementConflict
 		}
 		v, err := read[Version](ctx, tx, "versions", a.TenantID, versionID(source.AgentID, source.Version))
 		if err != nil {

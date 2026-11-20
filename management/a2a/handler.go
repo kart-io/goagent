@@ -30,7 +30,9 @@ type Config struct {
 	Description      string
 	ActorFromRequest func(*http.Request) (mg.Actor, error)
 	PollInterval     time.Duration
-	MaxInputBytes    int64
+	// MaxInputBytes caps one request body (0 = mg.DefaultMaxRequestBytes,
+	// mg.UnlimitedRequestBytes = no cap).
+	MaxInputBytes int64
 }
 type Handler struct {
 	service *protocol.Service
@@ -51,11 +53,8 @@ func New(s *mg.Service, c Config) (*Handler, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || c.AgentID == "" || c.ActorFromRequest == nil {
 		return nil, agentErrors.ErrManagementInvalid
 	}
-	if c.MaxInputBytes == 0 {
-		c.MaxInputBytes = 1 << 20
-	}
-	if c.MaxInputBytes < 1 || c.MaxInputBytes > 1<<20 {
-		return nil, agentErrors.ErrManagementInvalid
+	if c.MaxInputBytes, err = mg.RequestBytes(c.MaxInputBytes); err != nil {
+		return nil, err
 	}
 	p, err := protocol.New(s, c.PollInterval)
 	if err != nil {
@@ -80,7 +79,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.card.ServeHTTP(w, r)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxInputBytes)
+	if h.cfg.MaxInputBytes != mg.UnlimitedRequestBytes {
+		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxInputBytes)
+	}
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "请求体超出限制或读取失败", http.StatusRequestEntityTooLarge)

@@ -6,7 +6,7 @@ import (
 
 // retryUnconfirmed 处理生产者已退出但管理确认失败的记录；已落盘的完成信封先于业务重入核对。
 func (w *Worker) retryUnconfirmed(ctx context.Context) error {
-	commands, e := all[Command](ctx, w.s.cfg.Store, "commands", "", Query{Statuses: []string{"applying"}, Limit: 10000})
+	commands, e := all[Command](ctx, w.s.cfg.Store, "commands", "", Query{Statuses: []string{"applying"}})
 	if e != nil {
 		return e
 	}
