@@ -246,6 +246,8 @@ type SubmitTaskRequest struct {
 	SessionID      string          `json:"session_id"`
 	Input          json.RawMessage `json:"input"`
 	// Budget overrides Config.DefaultTaskBudget for this task when non-nil.
+	// Only in-process callers can set it: httpapi discards any budget in the
+	// request body so remote clients always run under the host default.
 	Budget *TaskBudget `json:"budget,omitempty"`
 }
 type CancelTaskRequest struct {
@@ -570,7 +572,8 @@ type Config struct {
 	Delivery             DeliverySink
 	Limits               Limits
 	// DefaultTaskBudget applies to tasks submitted without a Budget; its zero
-	// value is unlimited.
+	// value is unlimited. It is also the only budget for tasks submitted over
+	// httpapi, which ignores a budget sent in the request body.
 	DefaultTaskBudget TaskBudget
 	Now               func() time.Time
 	Report            func(string, error)

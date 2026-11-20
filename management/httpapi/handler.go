@@ -323,6 +323,9 @@ func (h *Handler) register() {
 	})
 	post(h, Routes[13], 202, func(c context.Context, a mg.Actor, r *http.Request, in mg.SubmitTaskRequest) (any, error) {
 		in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+		// The budget is host policy: a remote caller holding task.submit must
+		// not lift Config.DefaultTaskBudget, so a client-supplied one is dropped.
+		in.Budget = nil
 		return h.s.SubmitTask(c, a, in)
 	})
 	h.get(Routes[14], func(c context.Context, a mg.Actor, r *http.Request, q mg.Query) (any, error) {

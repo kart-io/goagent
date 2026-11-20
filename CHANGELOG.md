@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `Limits.IdempotencyRetention` / `TaskRetention` / `AuditRetention` | 30d / 90d / 180d | 0 = 永不清理（幂等记录 `ExpiresAt` 写零值） | `30*24h` / `90*24h` / `180*24h` |
 | `Limits.DeliveryTimeout`（新） | 固定 5s | 0 = 只受 ctx 约束 | `5*time.Second` |
 | `Limits.Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`（后五个新增） | 4 / 20ms / 100ms / 5s / 256s / 1s | 必需值：0 = 同名 `Default*`，负数报错 | 不传 |
-| 任务预算（`SubmitTaskRequest.Budget`、`Config.DefaultTaskBudget`，新） | 固定 100 次模型请求、1000 次工具调用、1000 次智能体调用、24h | 0 = 不限；计入幂等哈希，以 `management/v2` 持久化；v1 任务解码时补 `MaxAgentCalls=1000` | `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}` |
+| 任务预算（`SubmitTaskRequest.Budget`、`Config.DefaultTaskBudget`，新） | 固定 100 次模型请求、1000 次工具调用、1000 次智能体调用、24h | 0 = 不限；计入幂等哈希，以 `management/v2` 持久化；v1 任务解码时补 `MaxAgentCalls=1000`；`SubmitTaskRequest.Budget` 只对进程内调用生效，httpapi `POST /v1/tasks` 丢弃请求体中的 `budget`，远程任务一律用 `DefaultTaskBudget` | `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}` |
 | `httpapi`/`a2a`/`mcpserver` `MaxInputBytes` | 0 → 1 MiB，且不得超过 1 MiB | 防滥用上限：0 = `DefaultMaxRequestBytes`，`UnlimitedRequestBytes` 不限，可超过 1 MiB；mcpserver 工具参数同受此上限 | 不传 |
 | `Store.List` / `History` 的 `limit` | 未写明 | 0 = 不限，由调用方分页；`management/storetest.RunListConformance` 校验 | 自定义 Store 跑一致性测试 |
 | `builder` `MaxIterations` | 0 → 10 | 0 = 不限；“最后一轮去工具”只在设置上限时生效 | `WithMaxIterations(10)` |
