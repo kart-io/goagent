@@ -63,10 +63,17 @@ func TestEffectUnknownConsultsReconcile(t *testing.T) {
 	require.JSONEq(t, `"receipt"`, string(record.Value))
 }
 
-// 内层操作需要宿主处理时，外层记录保持 pending 且不消耗尝试次数，恢复时重新进入内层记录。
+// 内层操作需要宿主处理时，外层记录保持 pending 且不消耗尝试次数，恢复时重新进入内层记录；
+// 与外层是否声明 Resumable 无关，否则宿主对内层的核对结论送不到。
 func TestNestedAttentionKeepsOuterPending(t *testing.T) {
+	for _, resumable := range []bool{true, false} {
+		t.Run(fmt.Sprintf("resumable=%v", resumable), func(t *testing.T) { nestedAttentionKeepsOuterPending(t, resumable) })
+	}
+}
+
+func nestedAttentionKeepsOuterPending(t *testing.T, resumable bool) {
 	ctx := operationContext(t)
-	outer := OperationPolicy{MaxAttempts: 1, Resumable: true}
+	outer := OperationPolicy{MaxAttempts: 1, Resumable: resumable}
 	innerRuns := 0
 	run := func(ctx context.Context) (json.RawMessage, error) {
 		_, err := Do(ctx, "inner", json.RawMessage(`{}`), OperationPolicy{}, func(context.Context) (json.RawMessage, error) {

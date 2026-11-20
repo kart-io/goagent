@@ -72,10 +72,12 @@ type OperationPolicy struct {
 	// Resumable declares that all effects of run are recorded under derived
 	// execution keys, so re-entering only replays completed steps: waiting
 	// records are always re-entered without counting an attempt, and pending
-	// records are re-entered within MaxAttempts. A run that stops because an
-	// inner operation returned *OperationError keeps the record pending without
-	// consuming an attempt, and is always re-entered. Only operations that
-	// declare it can record a *WaitError as waiting.
+	// records are re-entered within MaxAttempts. Only operations that declare
+	// it can record a *WaitError as waiting. Independently of Resumable, a run
+	// that stops because an inner operation needs host attention keeps the
+	// record pending without consuming an attempt and is always re-entered, so
+	// that the host's conclusion reaches the inner record; the inner records
+	// are journaled under derived keys and replay instead of rerunning.
 	Resumable bool `json:"resumable"`
 	// RetryInterrupted allows rerunning an interrupted operation within
 	// MaxAttempts: one whose record is stuck in pending (process crash), failed
@@ -356,7 +358,9 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			}
 			absent = true
 		}
-		resume := policy.Resumable && (record.Status == "waiting" || nested || (record.Status == "pending" && record.Attempts < policy.MaxAttempts))
+		// 内层记录按子键写入日志，重新进入只回放它们，不依赖外层是否声明 Resumable；
+		// 否则非 Resumable 的外层挡在前面，宿主对内层的核对结论永远送不到。
+		resume := nested || (policy.Resumable && (record.Status == "waiting" || (record.Status == "pending" && record.Attempts < policy.MaxAttempts)))
 		if record.Status == "waiting" && !resume {
 			record.Replayed = true
 			return record, &OperationError{ID: id, Kind: "not_resumable", ParentKey: parentKey}
@@ -368,7 +372,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 			return record, &OperationError{ID: id, Kind: record.FailureKind, ParentKey: parentKey}
 		}
 		// 从等待或内层待处理中续跑不是新的尝试。
-		if record.Status != "waiting" && !(nested && policy.Resumable) {
+		if record.Status != "waiting" && !nested {
 			record.Attempts++
 		}
 	} else {

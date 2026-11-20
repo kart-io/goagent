@@ -20,6 +20,7 @@ import (
 	"github.com/kart-io/goagent/llm"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/management/memstore"
+	"github.com/kart-io/goagent/multiagent"
 	"github.com/kart-io/goagent/testing/mocks"
 	"github.com/kart-io/goagent/tools"
 )
@@ -572,4 +573,45 @@ func TestCancelAttentionTask(t *testing.T) {
 		require.Empty(t, m.ToolCallID)
 	}
 	require.NotEqual(t, task.ID, next.ID)
+}
+
+// 非 Resumable 的 Supervisor 成员内层写工具结果未知：核对结论必须送达内层记录，
+// 外层成员调用因内层待处理而保持 pending，续跑时重新进入且只回放内层已完成的步骤。
+func TestNestedMemberReconcileReachesInnerWrite(t *testing.T) {
+	for _, tc := range []struct{ resolution, result string }{
+		{"applied", "operation was verified as applied; output unavailable"},
+		{"not_applied", "operation was not applied; call again if still needed"},
+	} {
+		t.Run(tc.resolution, func(t *testing.T) {
+			child := mocks.NewScriptedClient(writeRound("write"), mocks.TextReply("成员结束", "成员完成"))
+			write := writeTool{newFakeTool("write", true, false, effectUnknownOnce)}
+			member := multiagent.Member{Name: "billing", Description: "账单专家", Version: "v1", Factory: func(context.Context) (tools.OwnedRunnable[any, *builder.AgentOutput], error) {
+				reg := tools.NewRegistry()
+				if err := reg.Register(write); err != nil {
+					return tools.OwnedRunnable[any, *builder.AgentOutput]{}, err
+				}
+				d, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
+				if err != nil {
+					return tools.OwnedRunnable[any, *builder.AgentOutput]{}, err
+				}
+				agent, err := builder.NewSimpleBuilder(child).WithDurableScope("billing").WithTools(d.Tools()...).WithMaxIterations(4).Build()
+				if err != nil {
+					return tools.OwnedRunnable[any, *builder.AgentOutput]{}, err
+				}
+				return tools.OwnedRunnable[any, *builder.AgentOutput]{Runnable: agent.AsRunnable(), Close: agent.Shutdown}, nil
+			}}
+			members, err := multiagent.SupervisorTools(member)
+			require.NoError(t, err)
+			parent := mocks.NewScriptedClient(mocks.ToolCallReply("委派", mocks.ToolCall("call-billing", "billing", `{"task":"写入"}`)), mocks.TextReply("结束", "完成"))
+			h := newNativeHarness(t, parent, members, 1, false)
+			task := h.wait(h.submit("task").ID, mg.Attention)
+			require.Len(t, task.Operations, 1)
+			require.True(t, strings.HasSuffix(task.Operations[0].ID, "/call-write"), task.Operations[0].ID)
+
+			h.resolve(task, tc.resolution)
+			h.wait(task.ID, mg.Succeeded)
+			require.Equal(t, int32(1), write.calls.Load(), "写工具只执行一次")
+			require.Contains(t, toolResult(t, child, "call-write"), tc.result)
+		})
+	}
 }
