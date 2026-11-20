@@ -62,7 +62,8 @@ func nextAttemptNumber(ctx context.Context, reader Reader, task Task) (int, erro
 	}
 }
 
-func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attempt Attempt, claim buildClaim) error {
+// kind 区分阻塞原因：build_unavailable 为可重试构建失败，session_locked 为执行锁仍被旧租约占用。
+func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attempt Attempt, claim buildClaim, kind string) error {
 	return w.s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
 		owner, err := read[WorkerOwner](ctx, tx, "workers", "__system", "default")
 		if err != nil || owner.OwnerID != w.id {
@@ -114,7 +115,7 @@ func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attem
 		}
 		old = cmd.Revision
 		cmd.State = "blocked"
-		cmd.ErrorKind = "build_unavailable"
+		cmd.ErrorKind = kind
 		// 持续的构建故障不能在每次轮询中产生一个新 attempt。
 		cmd.AvailableAt = w.s.cfg.Now().Add(time.Second).UTC()
 		if canceled {
@@ -132,6 +133,6 @@ func (w *Worker) blockBuild(ctx context.Context, c Command, original Task, attem
 		if err = update(ctx, tx, "attempts", attempt, attempt.Revision-1); err != nil {
 			return err
 		}
-		return w.s.audit(ctx, tx, t.Actor, "tasks", t.ID, "build_blocked", "build_unavailable")
+		return w.s.audit(ctx, tx, t.Actor, "tasks", t.ID, "build_blocked", kind)
 	})
 }

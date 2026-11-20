@@ -608,18 +608,18 @@ func saveOutcome(ctx context.Context, j durable.Store, t Task, v Version, result
 func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Session, v Version, attempt Attempt, inputs map[string]string, claim buildClaim) {
 	result := RunResult{}
 	var runErr error
-	buildBlocked := false
+	blockKind := ""
 	j := session.DurableStore(w.s.cfg.Sessions, se.LogID)
 	defer func() {
 		if p := recover(); p != nil {
-			buildBlocked = false
+			blockKind = ""
 			runErr = agentErrors.Newf(agentErrors.CodeInternal, "运行回调发生 panic").WithComponent("management")
 			result = RunResult{Outcome: "attention", ErrorKind: "panic"}
 		}
 		doneCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if buildBlocked {
-			if e := w.blockBuild(doneCtx, c, t, attempt, claim); e != nil {
+		if blockKind != "" {
+			if e := w.blockBuild(doneCtx, c, t, attempt, claim, blockKind); e != nil {
 				w.report("build_blocked", e)
 			}
 			return
@@ -633,6 +633,10 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 	unlock, err := w.s.cfg.Sessions.Lock(inspectionCtx, se.LogID, "management/execution")
 	if err != nil {
 		runErr = err
+		// 崩溃进程的租约过期前锁不可用；此时尚未执行任何步骤，按阻塞重排而非终结任务。
+		if errors.Is(err, agentErrors.ErrLockUnavailable) && parent.Err() == nil {
+			blockKind = "session_locked"
+		}
 		return
 	}
 	defer func() { w.report("session_unlock", unlock()) }()
@@ -681,7 +685,9 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 		}
 		runErr = errors.Join(err, cleanupErr)
 		var retryable *RetryableBuildError
-		buildBlocked = binding.Runtime == nil && cleanupErr == nil && errors.As(err, &retryable) && retryable != nil
+		if binding.Runtime == nil && cleanupErr == nil && errors.As(err, &retryable) && retryable != nil {
+			blockKind = "build_unavailable"
+		}
 		return
 	}
 	if binding.Cleanup != nil {
