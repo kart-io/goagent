@@ -210,8 +210,8 @@ func TestRunnableDepthAntiAbuseCap(t *testing.T) {
 		}
 		return nil
 	}
-	require.NoError(t, depthOf(0, DefaultRunnableMaxDepth))
-	require.Error(t, depthOf(DefaultRunnableMaxDepth, DefaultRunnableMaxDepth+1), "0 仍是默认深度 8")
+	require.NoError(t, depthOf(0, constants.DefaultRunnableToolMaxDepth))
+	require.Error(t, depthOf(constants.DefaultRunnableToolMaxDepth, constants.DefaultRunnableToolMaxDepth+1), "0 仍是默认深度 8")
 	require.NoError(t, depthOf(UnlimitedRunnableDepth, 50))
 	_, err := NewRunnableTool(core.NewRunnableFunc(func(context.Context, string) (string, error) { return "", nil }), RunnableToolConfig[string, string]{
 		Name: "x", Version: "v1", ArgsSchema: emptySchema, MaxDepth: -2,

@@ -31,15 +31,10 @@ type AnthropicProvider struct {
 	client anthropic.Client
 }
 
-// DefaultAnthropicMaxTokens is the max_tokens sent to Anthropic when neither
-// the request nor the client sets one. The Messages API requires max_tokens
-// and has no "unlimited" value, so 0 cannot mean "no cap" here; the value
-// matches what every request sent before max_tokens became optional.
-const DefaultAnthropicMaxTokens = shared.DefaultClientMaxTokens
-
 // NewAnthropicWithOptions creates a new Anthropic provider using options
 // pattern. A negative WithMaxTokens is rejected; 0 means
-// DefaultAnthropicMaxTokens.
+// constants.DefaultClientMaxTokens, because the Messages API requires
+// max_tokens and has no "unlimited" value.
 func NewAnthropicWithOptions(opts ...agentllm.ClientOption) (*AnthropicProvider, error) {
 	base := common.NewBaseProvider(opts...)
 	if base.Config.MaxTokens < 0 {
@@ -90,7 +85,7 @@ func (p *AnthropicProvider) params(req *agentllm.CompletionRequest, tools []inte
 	}
 	params := anthropic.MessageNewParams{
 		Model:         p.GetModel(req.Model),
-		MaxTokens:     int64(cmp.Or(p.GetMaxTokens(req.MaxTokens), DefaultAnthropicMaxTokens)),
+		MaxTokens:     int64(cmp.Or(p.GetMaxTokens(req.MaxTokens), shared.DefaultClientMaxTokens)),
 		Messages:      messages,
 		StopSequences: append([]string(nil), req.Stop...),
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -23,7 +24,7 @@ func TestShellOutputAntiAbuseCap(t *testing.T) {
 	}
 	n, err := run(NewShellToolBuilder())
 	require.NoError(t, err)
-	require.Equal(t, DefaultMaxOutputBytes, n, "0 仍是默认 1MiB")
+	require.Equal(t, constants.DefaultShellMaxOutputBytes, n, "0 仍是默认 1MiB")
 	n, err = run(NewShellToolBuilder().WithMaxOutputBytes(UnlimitedOutput))
 	require.NoError(t, err)
 	require.Equal(t, 2000000, n)

@@ -25,7 +25,7 @@ type (
 		ActorFromRequest func(context.Context, *mcp.CallToolRequest) (mg.Actor, error)
 		PollInterval     time.Duration
 		// MaxInputBytes caps one HTTP request body for NewHTTPHandler and the
-		// arguments of one tool call (0 = mg.DefaultMaxRequestBytes,
+		// arguments of one tool call (0 = constants.DefaultManagementMaxRequestBytes,
 		// mg.UnlimitedRequestBytes = no cap).
 		MaxInputBytes int64
 	}

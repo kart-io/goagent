@@ -70,7 +70,7 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	tool := &ShellTool{
 		allowedCommands: whitelist,
 		timeout:         timeout,
-		maxOutput:       DefaultMaxOutputBytes,
+		maxOutput:       shared.DefaultShellMaxOutputBytes,
 	}
 
 	tool.BaseTool = tools.NewBaseTool(
@@ -119,13 +119,9 @@ const shellMetachars = ";|&`$><\n\r"
 // and its arguments come from the model, and unbounded output would be held in
 // memory and returned to it whole. For that reason 0 means the default here,
 // not "unlimited".
-const (
-	// DefaultMaxOutputBytes is how much combined output is kept when no cap
-	// is set; the rest is consumed and dropped.
-	DefaultMaxOutputBytes = 1 << 20
-	// UnlimitedOutput passed to WithMaxOutputBytes keeps all output.
-	UnlimitedOutput = -1
-)
+//
+// UnlimitedOutput passed to WithMaxOutputBytes keeps all output.
+const UnlimitedOutput = -1
 
 // limitedBuffer 只保留前 limit 字节（0 表示不限），其余照常消费，避免子进程因管道写满而阻塞。
 type limitedBuffer struct {
@@ -419,7 +415,7 @@ func (b *ShellToolBuilder) WithEnv(names ...string) *ShellToolBuilder {
 }
 
 // WithMaxOutputBytes caps the combined output kept per call; 0 means
-// DefaultMaxOutputBytes and UnlimitedOutput keeps everything. Other negative
+// constants.DefaultShellMaxOutputBytes and UnlimitedOutput keeps everything. Other negative
 // values make every call fail with an invalid-config error, because Build
 // cannot return one.
 func (b *ShellToolBuilder) WithMaxOutputBytes(n int) *ShellToolBuilder {

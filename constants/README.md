@@ -20,6 +20,7 @@
 | `workflow.go` | 图起止标记、多 Agent 完成标记和续跑拒绝原因 |
 | `memory.go` | 记忆默认配置与长期记忆工具名 |
 | `revisions.go` | Agent 修订归档的大小与数量上限 |
+| `management.go` | management 必需限额默认值与适配器入站请求上限 |
 | `skills.go` | `load_skill` 工具名与技能资源上限 |
 | `doc.go` | 包文档 |
 

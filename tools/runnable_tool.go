@@ -69,7 +69,7 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // It is ignored when Resumable is false. Negative values are rejected.
 // MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
 // policy limit, because recursive delegation would otherwise never stop: 0
-// means DefaultRunnableMaxDepth and UnlimitedRunnableDepth removes the cap.
+// means constants.DefaultRunnableToolMaxDepth and UnlimitedRunnableDepth removes the cap.
 // ConcurrentCalls declares that calls may run in the same parallel round as
 // other concurrent tools (interfaces.ConcurrentCallTool). Only the host knows
 // whether the subflow has side effects, so it defaults to false and the
@@ -93,12 +93,8 @@ type runnableTool[I, O any] struct {
 	factory func(context.Context) (OwnedRunnable[I, O], error)
 }
 
-const (
-	// DefaultRunnableMaxDepth is the nesting cap used when MaxDepth is 0.
-	DefaultRunnableMaxDepth = 8
-	// UnlimitedRunnableDepth passed as MaxDepth removes the nesting cap.
-	UnlimitedRunnableDepth = -1
-)
+// UnlimitedRunnableDepth passed as MaxDepth removes the nesting cap.
+const UnlimitedRunnableDepth = -1
 
 // NewRunnableTool adapts a fixed runnable without taking ownership of its resources.
 func NewRunnableTool[I, O any](run core.Runnable[I, O], cfg RunnableToolConfig[I, O]) (interfaces.Tool, error) {
@@ -172,7 +168,7 @@ func newRunnableTool[I, O any](cfg RunnableToolConfig[I, O]) (*runnableTool[I, O
 		return nil, err
 	}
 	if cfg.MaxDepth == 0 {
-		cfg.MaxDepth = DefaultRunnableMaxDepth
+		cfg.MaxDepth = shared.DefaultRunnableToolMaxDepth
 	}
 	if cfg.MaxAttempts == 0 {
 		cfg.MaxAttempts = shared.DefaultResumableToolAttempts

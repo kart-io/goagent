@@ -62,7 +62,7 @@ func WithEmbeddingDimensions(n int) ClientOption {
 // WithMaxTokens caps the tokens a reply may use. 0, the default, sends no
 // max_tokens so the service's own limit applies (it previously meant 2000).
 // Anthropic requires the field, so there 0 means
-// providers.DefaultAnthropicMaxTokens and a negative value is rejected at
+// constants.DefaultClientMaxTokens and a negative value is rejected at
 // construction; other providers send nothing for a negative value.
 func WithMaxTokens(maxTokens int) ClientOption {
 	return func(c *LLMOptions) {

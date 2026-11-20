@@ -203,7 +203,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				messages = append(messages, llm.UserMessage(msg))
 			}
 			inputs += len(redirected.messages)
-			if a.config.reachedIterations(round+1) {
+			if a.config.reachedIterations(round + 1) {
 				return nil, exhausted()
 			}
 			continue
@@ -250,7 +250,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 			}
 			next := ""
 			if !wake && len(a.config.TurnStopping) > 0 {
-				if a.config.reachedIterations(round+2) {
+				if a.config.reachedIterations(round + 2) {
 					metadata["turn_stopping_skipped"] = true
 				} else if next, err = a.runTurnStopping(ctx, &Stopping{
 					Step: round, Answer: turn.Content,
@@ -396,7 +396,7 @@ func (a *ConfigurableAgent[S]) runToolEvents(ctx context.Context, request *middl
 				return nil, err
 			}
 			if direct && !output.Success {
-				if a.config.reachedIterations(round+1) {
+				if a.config.reachedIterations(round + 1) {
 					return nil, exhausted()
 				}
 				break

@@ -57,7 +57,7 @@ func (s *fsSource) readDir(name string, remaining *int) (_ []fs.DirEntry, err er
 	defer func() { err = errors.Join(err, f.Close()) }()
 	dir, ok := f.(fs.ReadDirFile)
 	if !ok {
-		return nil, &fs.PathError{Op: "readdir", Path: full, Err: errors.New("not a directory")}
+		return nil, &fs.PathError{Op: "readdir", Path: full, Err: agenterrors.New(agenterrors.CodeInvalidInput, "not a directory")}
 	}
 	entries, err := dir.ReadDir(readDirCount(*remaining))
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -93,7 +93,7 @@ func (s *fsSource) openChild(name string) (source, error) {
 		return nil, err
 	}
 	if !info.IsDir() {
-		return nil, &fs.PathError{Op: "open", Path: full, Err: errors.New("not a directory")}
+		return nil, &fs.PathError{Op: "open", Path: full, Err: agenterrors.New(agenterrors.CodeInvalidInput, "not a directory")}
 	}
 	return &fsSource{fsys: s.fsys, dir: full, label: s.label}, nil
 }

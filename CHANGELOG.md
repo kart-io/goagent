@@ -23,16 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | --- | --- | --- | --- |
 | `budget.Config.MaxAgentCalls` | 0 → 1000 | 0 = 不限 | `constants.DefaultMaxAgentCalls`（1000）；**在途账本必须传**，否则配置变化被拒绝 |
 | `budget.Config.MaxModelRequests` | 0 报错（须 ≥1） | 0 = 不限，`Remaining` 返回 `BudgetUnlimited` | 原值 |
-| `budget` 用量回调超时 | 固定 5s | `budget.WithUsageHookTimeout(ctx, d)`，0 = 5s，负数报错 | 不传 |
+| `budget` 用量回调超时 | 固定 5s | `budget.WithUsageHookTimeout(ctx, d)`，0 = `constants.DefaultUsageHookTimeout`（5s），负数报错 | 不传 |
 | `management.Config.Limits` | 全零 → 旧默认；部分设置时每个字段都必须为正 | 每个字段独立解释，见 [management 限额配置](management/README.md#限额配置) | `management.DefaultLimits()` |
 | `Limits.MaxPageSize` | 200（且不得超过 200） | 0 = 不限；去掉 200 上限 | 200 |
 | `Limits.MaxInputBytes` / `MaxOutputBytes` | 1 MiB / 4 MiB | 0 = 不限 | `1<<20` / `4<<20` |
 | `Limits.MaxPending` | 10000 | 0 = 不限；有值时按租户分页计数 | 10000 |
 | `Limits.IdempotencyRetention` / `TaskRetention` / `AuditRetention` | 30d / 90d / 180d | 0 = 永不清理（幂等记录 `ExpiresAt` 写零值） | `30*24h` / `90*24h` / `180*24h` |
 | `Limits.DeliveryTimeout`（新） | 固定 5s | 0 = 只受 ctx 约束 | `5*time.Second` |
-| `Limits.Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`（后五个新增） | 4 / 20ms / 100ms / 5s / 256s / 1s | 必需值：0 = 同名 `Default*`，负数报错 | 不传 |
+| `Limits.Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`（后五个新增） | 4 / 20ms / 100ms / 5s / 256s / 1s | 必需值：0 = `constants.DefaultManagement*`，负数报错 | 不传 |
 | 任务预算（`SubmitTaskRequest.Budget`、`Config.DefaultTaskBudget`，新） | 固定 100 次模型请求、1000 次工具调用、1000 次智能体调用、24h | 0 = 不限；计入幂等哈希，以 `management/v2` 持久化；v1 任务解码时补 `MaxAgentCalls=1000`；`SubmitTaskRequest.Budget` 只对进程内调用生效，httpapi `POST /v1/tasks` 丢弃请求体中的 `budget`，远程任务一律用 `DefaultTaskBudget` | `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}` |
-| `httpapi`/`a2a`/`mcpserver` `MaxInputBytes` | 0 → 1 MiB，且不得超过 1 MiB | 防滥用上限：0 = `DefaultMaxRequestBytes`，`UnlimitedRequestBytes` 不限，可超过 1 MiB；mcpserver 工具参数同受此上限 | 不传 |
+| `httpapi`/`a2a`/`mcpserver` `MaxInputBytes` | 0 → 1 MiB，且不得超过 1 MiB | 防滥用上限：0 = `constants.DefaultManagementMaxRequestBytes`，`UnlimitedRequestBytes` 不限，可超过 1 MiB；mcpserver 工具参数同受此上限 | 不传 |
 | `Store.List` / `History` 的 `limit` | 未写明 | 0 = 不限，由调用方分页；`management/storetest.RunListConformance` 校验 | 自定义 Store 跑一致性测试 |
 | `builder` `MaxIterations` | 0 → 10 | 0 = 不限；“最后一轮去工具”只在设置上限时生效 | `WithMaxIterations(10)` |
 | `builder` `Timeout` | 0 → 5min | 0 = 回合不限时 | `WithTimeout(5*time.Minute)` |
@@ -49,14 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `tools.DispatchConfig.Timeout` | 0 → 30s | 0 = 不设截止时间；`DispatchTimeoutProvider` 返回 0 仍沿用 Dispatcher 超时 | `constants.DefaultToolTimeout`（30s） |
 | `tools.Pipeline.ApprovalTimeout` | 0 → 10min | 0 = 只受 ctx 约束，负数在 `NewDispatcher` 报错 | `constants.DefaultApprovalTimeout` |
 | `tools.RunnableToolConfig.MaxAttempts`（新）、`multiagent.Member.MaxAttempts`（新） | Resumable 时固定 3 次 | 已持久化的协议值，默认不变：总尝试次数（同 `DispatchConfig.MaxAttempts`），0 = 3，1 = 中断后不重入，负数报错 | 无需改动 |
-| `tools.RunnableToolConfig.MaxDepth` | 0 → 8 | 防滥用上限：0 = `DefaultRunnableMaxDepth`，新增 `UnlimitedRunnableDepth`，其他负数报错 | 不传 |
-| `tools/http` 响应体、重定向 | 固定 10 MiB / 10 次 | 防滥用上限：`WithMaxResponseBytes`、`WithMaxRedirects`，0 = 默认，`http.Unlimited` 不限 | 不传 |
-| `tools/shell` 输出 | 固定 1 MiB | 防滥用上限：`WithMaxOutputBytes`，0 = 默认，`shell.UnlimitedOutput` 不限 | 不传 |
+| `tools.RunnableToolConfig.MaxDepth` | 0 → 8 | 防滥用上限：0 = `constants.DefaultRunnableToolMaxDepth`，新增 `UnlimitedRunnableDepth`，其他负数报错 | 不传 |
+| `tools/http` 响应体、重定向 | 固定 10 MiB / 10 次 | 防滥用上限：`WithMaxResponseBytes`、`WithMaxRedirects`，0 = `constants.DefaultAPIToolMaxResponseBytes` / `DefaultAPIToolMaxRedirects`，`http.Unlimited` 不限 | 不传 |
+| `tools/shell` 输出 | 固定 1 MiB | 防滥用上限：`WithMaxOutputBytes`，0 = `constants.DefaultShellMaxOutputBytes`，`shell.UnlimitedOutput` 不限 | 不传 |
 | `tools/spill` 预览、单行截断、读取行数 | 固定 1500 / 2000 / 2000 | `spill.NewWithConfig(dir, Config{...})`，0 = 不截断 / 读到末尾；`spill.New` 保留旧预设 | 继续用 `spill.New` |
 | `tools/middleware` 缓存 TTL / 容量 | 5min / 10000 | 0 = 不过期 / 不限；新增 `WithCacheMaxEntries` | `WithTTL(5*time.Minute)`、`WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)` |
 | `cache.NewSimpleCache(ttl)` | ttl ≤ 0 → 5min | 0 = 不过期（清理每分钟一次）；`DefaultCacheConfig` 仍为 5min | `5*time.Minute` |
 | `llm` `MaxTokens`（`DefaultClientConfig`、`DefaultLLMOptions`、`WithMaxTokens(0)`） | 发送 2000，provider 兜底 1000 | 0 = 不发送 `max_tokens` | `llm.WithMaxTokens(2000)` |
-| Anthropic `max_tokens` | 2000 | 必需值：0 = `providers.DefaultAnthropicMaxTokens`（2000），负数构造时报错 | 不传 |
+| Anthropic `max_tokens` | 2000 | 必需值：0 = `constants.DefaultClientMaxTokens`（2000），负数构造时报错 | 不传 |
 | `llm` `Timeout` | 0 → 60s（provider 内 30s，Ollama 120s） | 0 = 不限时（Gemini 以 ctx 计时） | `llm.WithTimeout(60*time.Second)` |
 | `common.RetryConfig` | `MaxAttempts` 0 → 3 | 新增 `Retries`（0 = 不重试）；`MaxAttempts` 弃用，> 0 时保留原义（负数仍为 3 次）；两者都 > 0 报错。**`MaxAttempts` 与 `Retries` 都为 0 时不再重试**（原先是 3 次尝试） | 继续只设 `MaxAttempts: 3`，或 `Retries: 2` |
 | DeepSeek `Embed` 重试 | 固定 3 次尝试 | 新增 `WithEmbeddingRetries(n)`，0 = 不重试 | `llm.WithEmbeddingRetries(2)` |

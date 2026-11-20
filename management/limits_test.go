@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/constants"
+
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -13,9 +15,9 @@ func TestLimitsFieldsIndependent(t *testing.T) {
 	got, err := Limits{Workers: 1}.normalize()
 	require.NoError(t, err)
 	require.Equal(t, Limits{
-		PageSize: DefaultPageSize, Workers: 1,
-		PollInterval: DefaultPollInterval, OutboxPollInterval: DefaultOutboxPollInterval, PersistTimeout: DefaultPersistTimeout,
-		DeliveryBackoffMax: DefaultDeliveryBackoffMax, BuildRetryDelay: DefaultBuildRetryDelay,
+		PageSize: constants.DefaultManagementPageSize, Workers: 1,
+		PollInterval: constants.DefaultManagementPollInterval, OutboxPollInterval: constants.DefaultManagementOutboxPollInterval, PersistTimeout: constants.DefaultManagementPersistTimeout,
+		DeliveryBackoffMax: constants.DefaultManagementDeliveryBackoffMax, BuildRetryDelay: constants.DefaultManagementBuildRetryDelay,
 	}, got, "caps stay 0 (unlimited), required values take their defaults")
 
 	got, err = Limits{MaxPageSize: 20}.normalize()
@@ -40,13 +42,13 @@ func TestRequiredParamsRejectNegativeAndDefaultOnZero(t *testing.T) {
 		read  func(Limits) int64
 		value int64
 	}{
-		{"Workers", func(l *Limits, n int) { l.Workers = n }, func(l Limits) int64 { return int64(l.Workers) }, DefaultWorkers},
-		{"PollInterval", func(l *Limits, n int) { l.PollInterval = time.Duration(n) }, func(l Limits) int64 { return int64(l.PollInterval) }, int64(DefaultPollInterval)},
-		{"OutboxPollInterval", func(l *Limits, n int) { l.OutboxPollInterval = time.Duration(n) }, func(l Limits) int64 { return int64(l.OutboxPollInterval) }, int64(DefaultOutboxPollInterval)},
-		{"PersistTimeout", func(l *Limits, n int) { l.PersistTimeout = time.Duration(n) }, func(l Limits) int64 { return int64(l.PersistTimeout) }, int64(DefaultPersistTimeout)},
-		{"DeliveryBackoffMax", func(l *Limits, n int) { l.DeliveryBackoffMax = time.Duration(n) }, func(l Limits) int64 { return int64(l.DeliveryBackoffMax) }, int64(DefaultDeliveryBackoffMax)},
-		{"BuildRetryDelay", func(l *Limits, n int) { l.BuildRetryDelay = time.Duration(n) }, func(l Limits) int64 { return int64(l.BuildRetryDelay) }, int64(DefaultBuildRetryDelay)},
-		{"PageSize", func(l *Limits, n int) { l.PageSize = n }, func(l Limits) int64 { return int64(l.PageSize) }, DefaultPageSize},
+		{"Workers", func(l *Limits, n int) { l.Workers = n }, func(l Limits) int64 { return int64(l.Workers) }, constants.DefaultManagementWorkers},
+		{"PollInterval", func(l *Limits, n int) { l.PollInterval = time.Duration(n) }, func(l Limits) int64 { return int64(l.PollInterval) }, int64(constants.DefaultManagementPollInterval)},
+		{"OutboxPollInterval", func(l *Limits, n int) { l.OutboxPollInterval = time.Duration(n) }, func(l Limits) int64 { return int64(l.OutboxPollInterval) }, int64(constants.DefaultManagementOutboxPollInterval)},
+		{"PersistTimeout", func(l *Limits, n int) { l.PersistTimeout = time.Duration(n) }, func(l Limits) int64 { return int64(l.PersistTimeout) }, int64(constants.DefaultManagementPersistTimeout)},
+		{"DeliveryBackoffMax", func(l *Limits, n int) { l.DeliveryBackoffMax = time.Duration(n) }, func(l Limits) int64 { return int64(l.DeliveryBackoffMax) }, int64(constants.DefaultManagementDeliveryBackoffMax)},
+		{"BuildRetryDelay", func(l *Limits, n int) { l.BuildRetryDelay = time.Duration(n) }, func(l Limits) int64 { return int64(l.BuildRetryDelay) }, int64(constants.DefaultManagementBuildRetryDelay)},
+		{"PageSize", func(l *Limits, n int) { l.PageSize = n }, func(l Limits) int64 { return int64(l.PageSize) }, constants.DefaultManagementPageSize},
 		{"DeliveryTimeout", func(l *Limits, n int) { l.DeliveryTimeout = time.Duration(n) }, func(l Limits) int64 { return int64(l.DeliveryTimeout) }, 0},
 	}
 	for _, tt := range tests {
@@ -68,9 +70,9 @@ func TestRequiredParamsRejectNegativeAndDefaultOnZero(t *testing.T) {
 }
 
 func TestRedeliveryDelayHonoursCeiling(t *testing.T) {
-	require.Equal(t, 2*time.Second, redeliveryDelay(1, DefaultDeliveryBackoffMax))
-	require.Equal(t, 256*time.Second, redeliveryDelay(8, DefaultDeliveryBackoffMax))
-	require.Equal(t, 256*time.Second, redeliveryDelay(50, DefaultDeliveryBackoffMax))
+	require.Equal(t, 2*time.Second, redeliveryDelay(1, constants.DefaultManagementDeliveryBackoffMax))
+	require.Equal(t, 256*time.Second, redeliveryDelay(8, constants.DefaultManagementDeliveryBackoffMax))
+	require.Equal(t, 256*time.Second, redeliveryDelay(50, constants.DefaultManagementDeliveryBackoffMax))
 	require.Equal(t, 5*time.Second, redeliveryDelay(50, 5*time.Second))
 }
 
@@ -79,7 +81,7 @@ func TestRequestBytesAntiAbuseCap(t *testing.T) {
 		in, want int64
 		invalid  bool
 	}{
-		{0, DefaultMaxRequestBytes, false},
+		{0, constants.DefaultManagementMaxRequestBytes, false},
 		{64, 64, false},
 		{8 << 20, 8 << 20, false},
 		{UnlimitedRequestBytes, UnlimitedRequestBytes, false},

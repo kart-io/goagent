@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kart-io/goagent/codec/json"
+	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/interfaces"
 )
 
@@ -557,8 +558,8 @@ func TestShellTool_OutputLimited(t *testing.T) {
 		t.Fatalf("Expected success, got: %v", err)
 	}
 	result := out.Result.(map[string]interface{})
-	if got := len(result["output"].(string)); got != DefaultMaxOutputBytes {
-		t.Errorf("Expected output truncated to %d bytes, got %d", DefaultMaxOutputBytes, got)
+	if got := len(result["output"].(string)); got != constants.DefaultShellMaxOutputBytes {
+		t.Errorf("Expected output truncated to %d bytes, got %d", constants.DefaultShellMaxOutputBytes, got)
 	}
 	if result["truncated"] != true {
 		t.Error("Expected truncated flag")

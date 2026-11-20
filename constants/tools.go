@@ -36,5 +36,21 @@ const (
 	MaxRecallHistoryRunes     = 4000
 )
 
+// Anti-abuse caps for tools whose input comes from the model: 0 in the
+// matching option selects these values instead of meaning "unlimited".
+const (
+	// DefaultRunnableToolMaxDepth is the runnable tool nesting cap used when
+	// RunnableToolConfig.MaxDepth is 0.
+	DefaultRunnableToolMaxDepth = 8
+	// DefaultAPIToolMaxResponseBytes is the tools/http response body cap; a
+	// larger body fails the request.
+	DefaultAPIToolMaxResponseBytes = 10 << 20
+	// DefaultAPIToolMaxRedirects matches the net/http default redirect cap.
+	DefaultAPIToolMaxRedirects = 10
+	// DefaultShellMaxOutputBytes is how much combined tools/shell output is
+	// kept; the rest is consumed and dropped.
+	DefaultShellMaxOutputBytes = 1 << 20
+)
+
 // CalculatorMaxNesting 限制计算器表达式的括号与一元负号嵌套深度，防止超长输入耗尽栈。
 const CalculatorMaxNesting = 64
