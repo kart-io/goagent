@@ -6,6 +6,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 )
@@ -44,7 +45,8 @@ func (m *Memory) Tools() []interfaces.Tool {
 			},
 		},
 		&memoryTool{
-			name: constants.ToolMemorySave, desc: "把值得跨会话记住的信息写入长期记忆，如用户明确要求记住的事实或偏好。不要保存凭证。",
+			writes: true,
+			name:   constants.ToolMemorySave, desc: "把值得跨会话记住的信息写入长期记忆，如用户明确要求记住的事实或偏好。不要保存凭证。",
 			schema: `{"type":"object","properties":{"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["content"],"additionalProperties":false}`,
 			run: func(ctx context.Context, args map[string]any) (any, error) {
 				r, err := m.saveFromArgs(ctx, args, "")
@@ -55,7 +57,8 @@ func (m *Memory) Tools() []interfaces.Tool {
 			},
 		},
 		&memoryTool{
-			name: constants.ToolMemoryReplace, desc: "用新内容取代一条已过时或错误的长期记忆，id 取自 memory_search 的结果或召回块。旧记录失效并指向新记录，钉住的旧记录由新记录继承钉住。只在用户明确表示信息已变化或记录有误时使用；用户的说法与记录不一致但没有这样表示时，先向用户指出记录的内容并确认，不要直接取代。",
+			writes: true,
+			name:   constants.ToolMemoryReplace, desc: "用新内容取代一条已过时或错误的长期记忆，id 取自 memory_search 的结果或召回块。旧记录失效并指向新记录，钉住的旧记录由新记录继承钉住。只在用户明确表示信息已变化或记录有误时使用；用户的说法与记录不一致但没有这样表示时，先向用户指出记录的内容并确认，不要直接取代。",
 			schema: `{"type":"object","properties":{"id":{"type":"string","minLength":1},"content":{"type":"string","minLength":1},"kind":{"type":"string","enum":["fact","skill"]},"importance":{"type":"number","minimum":0,"maximum":1},"pinned":{"type":"boolean"}},"required":["id","content"],"additionalProperties":false}`,
 			run: func(ctx context.Context, args map[string]any) (any, error) {
 				id, _ := args["id"].(string)
@@ -70,7 +73,8 @@ func (m *Memory) Tools() []interfaces.Tool {
 			},
 		},
 		&memoryTool{
-			name: constants.ToolMemoryForget, desc: "使一条已过时或错误的长期记忆失效，id 取自 memory_search 的结果。",
+			writes: true,
+			name:   constants.ToolMemoryForget, desc: "使一条已过时或错误的长期记忆失效，id 取自 memory_search 的结果。",
 			schema: `{"type":"object","properties":{"id":{"type":"string","minLength":1}},"required":["id"],"additionalProperties":false}`,
 			run: func(ctx context.Context, args map[string]any) (any, error) {
 				id, _ := args["id"].(string)
@@ -101,7 +105,18 @@ func (m *Memory) saveFromArgs(ctx context.Context, args map[string]any, replaces
 
 type memoryTool struct {
 	name, desc, schema string
+	writes             bool
 	run                func(context.Context, map[string]any) (any, error)
+}
+
+// DurableCallPolicy implements tools.DurableCallPolicyProvider: tools that
+// write memory run at most once, because rerunning after a crash would write
+// the record again; memory_search keeps the Dispatcher default.
+func (t *memoryTool) DurableCallPolicy(map[string]any) (durable.OperationPolicy, bool) {
+	if !t.writes {
+		return durable.OperationPolicy{}, false
+	}
+	return durable.OperationPolicy{MaxAttempts: 1}, true
 }
 
 func (t *memoryTool) Name() string        { return t.name }

@@ -34,6 +34,13 @@ var (
 	ErrLockUnavailable     = newSentinel(CodeLockUnavailable, "持久运行锁不可用")
 	ErrLeaseLost           = newSentinel(CodeLeaseLost, "持久运行锁已失效，拒绝写入")
 	ErrScopeRemoved        = newSentinel(CodeScopeRemoved, "持久作用域已删除，拒绝读写")
+	// ErrEffectUnknown is returned (wrapped) by a durable operation's run
+	// function when it cannot tell whether its effect took place, for example
+	// when a connection drops after the request was sent. durable.Do records it
+	// as failed with FailureKind "effect_unknown", treats it like a crash (an
+	// interrupted record) and returns an *OperationError so the host decides
+	// what happened.
+	ErrEffectUnknown = newSentinel(CodeAttentionRequired, "durable operation effect is unknown")
 	// core。
 	ErrAgentAlreadyExists = newSentinel(CodeAlreadyExists, "agent already exists")
 	ErrNotImplemented     = newSentinel(CodeNotImplemented, "method not implemented")

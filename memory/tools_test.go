@@ -8,8 +8,10 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
+	"github.com/kart-io/goagent/tools"
 )
 
 // memory_replace 在同一提交中取代旧记录：旧记录失效且指向新记录，新记录继承钉住；旧记录不存在、已失效或 id 为空时不写入。
@@ -80,4 +82,27 @@ func memoryToolNamed(m *Memory, name string) interfaces.Tool {
 		}
 	}
 	panic("没有 " + name)
+}
+
+// 写记忆的工具崩溃后不能自动重跑（会重复写入），只读检索沿用 Dispatcher 默认策略。
+func TestMemoryWriteToolsDeclareSingleAttempt(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		declared bool
+	}{
+		{constants.ToolMemorySearch, false},
+		{constants.ToolMemorySave, true},
+		{constants.ToolMemoryReplace, true},
+		{constants.ToolMemoryForget, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, ok := memoryToolNamed(&Memory{}, tc.name).(tools.DurableCallPolicyProvider)
+			require.True(t, ok)
+			policy, declared := p.DurableCallPolicy(map[string]any{})
+			require.Equal(t, tc.declared, declared)
+			if declared {
+				require.Equal(t, durable.OperationPolicy{MaxAttempts: 1}, policy)
+			}
+		})
+	}
 }

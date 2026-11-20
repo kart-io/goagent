@@ -33,6 +33,16 @@ type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy
 }
 
+// DurableCallPolicyProvider declares the journal policy of a single call from
+// its validated arguments, for tools whose side effects depend on them (an
+// HTTP tool that only writes for non-GET methods). When declared is true the
+// policy replaces DurablePolicyProvider and the Dispatcher default for that
+// call. The result must depend only on args: they are part of the journaled
+// intent, so a replay of the same call sees the same policy.
+type DurableCallPolicyProvider interface {
+	DurableCallPolicy(args map[string]any) (policy durable.OperationPolicy, declared bool)
+}
+
 // DispatchTimeoutProvider declares the tool's timeout when called through the
 // Dispatcher; a positive value replaces DispatchConfig.Timeout, and 0 keeps it.
 type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
@@ -60,6 +70,10 @@ type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
 // MaxDepth caps nested runnable tools. It is an anti-abuse cap rather than a
 // policy limit, because recursive delegation would otherwise never stop: 0
 // means constants.DefaultRunnableToolMaxDepth and UnlimitedRunnableDepth removes the cap.
+// ConcurrentCalls declares that calls may run in the same parallel round as
+// other concurrent tools (interfaces.ConcurrentCallTool). Only the host knows
+// whether the subflow has side effects, so it defaults to false and the
+// Dispatcher runs such a round serially.
 type RunnableToolConfig[I, O any] struct {
 	Name, Description, ArgsSchema, Version string
 	Decode                                 func(map[string]any) (I, error)
@@ -70,6 +84,7 @@ type RunnableToolConfig[I, O any] struct {
 	MaxDepth                               int
 	CleanupTimeout                         time.Duration
 	Timeout                                time.Duration
+	ConcurrentCalls                        bool
 }
 type runnableTool[I, O any] struct {
 	config  RunnableToolConfig[I, O]
@@ -175,6 +190,10 @@ func (t *runnableTool[I, O]) DurableOperationPolicy() durable.OperationPolicy {
 }
 
 func (t *runnableTool[I, O]) DispatchTimeout() time.Duration { return t.config.Timeout }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool from
+// RunnableToolConfig.ConcurrentCalls.
+func (t *runnableTool[I, O]) SupportsConcurrentCalls() bool { return t.config.ConcurrentCalls }
 func (t *runnableTool[I, O]) Invoke(ctx context.Context, input *interfaces.ToolInput) (out *interfaces.ToolOutput, err error) {
 	defer func() {
 		if v := recover(); v != nil {

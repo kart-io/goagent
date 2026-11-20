@@ -67,7 +67,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 外部仓库：goagent-harness、goagent-examples 依赖上述默认值的调用方须显式传入（随本版本发布跟进），contrib 的 pgstore 需跑 `storetest.RunListConformance` 并去掉 10001 行上限。
 
+### 破坏性变更：Dispatcher 工具的并发声明跟随内层工具
+
+`Dispatcher.Tools` 返回的包装工具此前一律声明 `SupportsConcurrentCalls() == true`，Builder 因此把写工具（shell、HTTP 写请求、业务写操作）与只读工具并行派发；同一轮的多个结果未知调用只能整体核对。现在包装工具只转述内层工具的声明，未声明的工具串行执行，串行轮次在第一个错误处停止。
+
+迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。子流程工具无法再包一层（会丢掉超时与持久策略），改用新增的 `tools.RunnableToolConfig.ConcurrentCalls` 与 `multiagent.Member.ConcurrentCalls` 声明，默认 false：需要成员或子调查同轮并行的 Supervisor 须显式打开。`tools/middleware.WrappedTool` 转发内层工具的声明。
+
 ### 新增
+
+- `management/adapters`：原生运行时声明 `Capabilities.Reconcile`。结果未知或崩溃后尝试次数用尽的工具调用进入 attention，`Task.Operations` 列出这些调用（`tool/` 前缀、带 `ParentKey`）；宿主以 `ResumeTask{ReconciliationRef}` 续跑，`Reconcile` 要求恰好覆盖本轮未决调用（否则 `ErrManagementConflict`），结论统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时为固定说明文字；`not_applied` 记为业务拒绝，不重跑。模型请求中断引起的 attention 没有 `Operations`，只能取消。见 [management 原生运行时的核对](management/README.md#原生运行时的核对)。
+- `tools`：新增 `Reconciliation` 与 `WithReconciliation(ctx, r)`，Dispatcher 据此为列出的中断调用定案；新增 `DurableCallPolicyProvider`，工具可按校验后的参数声明单次调用的持久策略（结果只能取决于参数）。
+- `core/durable`：新增 `errors.ErrEffectUnknown` 哨兵，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
+- `management/adapters`：原生运行时审批等待的 `Wait.Info` 新增 `arguments`（工具调用参数）。
+- `core/durable`：内层操作需要宿主处理时，外层记录无论是否 `Resumable` 都会在续跑时重新进入（只回放内层），不消耗尝试次数；`ParentKey` 序列化为 `parent_key`。
+- `management`：`Task.Operations` 为历史记录，核对成功后不清空。
 
 - `skills`（非破坏）：新增 `DiscoverFS(ctx, fsys, source, opts)`，可从 `embed.FS`、`os.Root.FS()` 等通用 `fs.FS` 发现技能，符号链接是否跟随由传入的 `fs.FS` 决定；新增 `DiscoverWithOptions` 与 `DiscoverOptions`（`MaxFileBytes`、`MaxTotalBytes`、`MaxFiles`、`MaxDescription`、`MaxDepth`，0 为默认，`skills.Unlimited` 为不限，其他负数报错），`Discover` 行为不变；新增 `Catalog.Select(names...)`（子目录与父目录共享句柄，仅父目录 `Close` 释放）与 `Catalog.Prompt()`（按名称排序列出 `name: description`，跳过 `DisableModelInvocation`）。
 - `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
@@ -89,6 +102,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
 
 ### 行为变化
+
+- `management/adapters`：默认策略（`MaxAttempts` 3）的工具在原生运行时崩溃后由续跑的任务重新执行，此前本轮有 pending 或已取消的工具记录时 `Inspect` 直接返回 attention（`unconfirmed_tool`）。只在声明 `{MaxAttempts: 1}` 且工具自身 `Reconcile` 查不到结果时才进入 attention。崩溃后行为变化的工具：
+  - 改为自动重跑（未声明策略，读或幂等）：`memory_search`、`tools/search` 的搜索工具、`tools/spill` 的 `read_spill`、`tools/compute` 计算器、`tools/skill` 的加载工具、`contextpolicy` 的 recall 与 Offload 读取工具、GET/HEAD 的 `tools/http`、`Resumable` 的 RunnableTool 与 Supervisor 成员，以及所有未声明策略的 `FunctionTool`/`BaseTool` 与自定义工具。**有副作用的自定义工具须声明 `DurableOperationPolicy() {MaxAttempts: 1}`（或按参数实现 `DurableCallPolicyProvider`），否则崩溃后会重复执行。**
+  - 只执行一次、中断后交宿主核对：`tools/shell`、非 GET/HEAD 的 `tools/http`、`memory_save`/`memory_replace`/`memory_forget`（本版本新声明），以及已声明 `MaxAttempts: 1` 的 `a2a/remote`、非 `Resumable` 的 RunnableTool 与 Supervisor 成员（子智能体内层未决时核对作用于内层记录）。
+  - `mcp/remote`：工具本身按默认策略重跑，但内层远程调用 `mcp/call/N` 只执行一次，中断后产生没有 `Operations` 的 attention，只能取消。
+  - 可中断工具（`InterruptibleTool`）：仍为 `Resumable`、`MaxAttempts: 1`，崩溃留下的 pending 交宿主处理。
+- `tools/shell`：命令一律只执行一次（`MaxAttempts` 1），中断后不再重跑，直接交宿主核对。`tools/http`：GET/HEAD 以外的方法只执行一次，GET/HEAD 仍按默认策略。升级前已写入日志、仍在等待中的此类调用会因持久策略变化（3 → 1）报 attempt policy changed。
+- `management`：Attention 任务没有已接纳的恢复命令时，`CancelTask` 直接转为 `canceled`（保留 `ErrorKind` 与 `Operations`），此前被拒绝。被取消的轮次在下一轮整轮遮蔽，模型看不到。
+- `management`：所有终态路径（直接取消 Queued/WaitingApproval/Attention、认领时取消、worker 收尾、构建阻塞时取消）都在同一事务内释放会话、作废待决审批并写恰好一条 `task.<state>` 投递；此前直接取消与认领时取消不写投递。
+- `management`：投递器保存结果失败时经 `Config.Report`（`outbox_save`）上报并按 `DeliveryBackoffMax` 封顶的指数退避重试，不再退出 `Run`；接收端 panic 计为一次投递失败。投递重试仍无次数上限、无死信。
+- `builder`：并行轮次中第一个失败是 attention 时，返回所有 attention 错误的合并，宿主能一次拿到全部未决调用。
 
 - `tools/middleware.NewLoggingMiddleware()` 未传日志时不再自建 kart-io/logger 的 JSON 标准输出日志器，改写入 `slog.Default()`；`WithContextLogger(nil)` 关闭日志。`core/middleware.NewLoggingMiddleware(nil)` 由 `fmt.Println` 写标准输出改为 `slog.Default()` 的 Info 记录。Builder 的模型缓存警告与 `OnError` 回调失败改走 `WithLogger`（未设置时为 `slog.Default()`），回调失败不再写 stderr。缓存与限流中间件经已弃用字段写 kart-io/logger 时改用 `Debugw`/`Warnw` 键值形式。
 

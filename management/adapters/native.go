@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/kart-io/goagent/builder"
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
@@ -32,7 +30,7 @@ func (f NativeFactory) Validate(ctx context.Context, v mg.Version) (mg.Capabilit
 	if f.BuildAgent == nil || f.Check == nil {
 		return mg.Capabilities{}, agentErrors.ErrManagementInvalid
 	}
-	return mg.Capabilities{Approval: true, Fork: true, Input: true}, f.Check(ctx, v)
+	return mg.Capabilities{Reconcile: true, Approval: true, Fork: true, Input: true}, f.Check(ctx, v)
 }
 
 func (f NativeFactory) Build(ctx context.Context, v mg.Version, r mg.Resources) (mg.Binding, error) {
@@ -82,6 +80,9 @@ func (n *native) run(ctx context.Context, spec mg.RunSpec, observe func(context.
 	for k, v := range spec.ResumeInputs {
 		ctx = durable.WithResume(ctx, k, v)
 	}
+	if rec := spec.Reconciliation; rec != nil {
+		ctx = tools.WithReconciliation(ctx, tools.Reconciliation{Resolution: rec.Resolution, Operations: rec.OperationRefs})
+	}
 	input, err := inputValue(spec.Task.Input)
 	if err != nil {
 		return mg.RunResult{}, err
@@ -106,6 +107,9 @@ func (n *native) run(ctx context.Context, spec mg.RunSpec, observe func(context.
 		if waits := durable.Waits(err); waits != nil {
 			return mg.RunResult{Outcome: "waiting", Waits: mg.WaitPoints(waits)}, err
 		}
+		if refs := toolOperations(err); len(refs) > 0 && errors.Is(err, agentErrors.ErrOperationAttention) {
+			return mg.RunResult{Outcome: "attention", Operations: refs}, err
+		}
 		// 取消时终止事件可能被丢弃，按 builder 约定以 ctx.Err() 为准。
 		if cerr := ctx.Err(); cerr != nil && !errors.Is(err, cerr) {
 			err = errors.Join(err, cerr)
@@ -123,64 +127,13 @@ func (n *native) run(ctx context.Context, spec mg.RunSpec, observe func(context.
 }
 
 func (n *native) Inspect(ctx context.Context, spec mg.RunSpec) (mg.RunEvidence, error) {
-	events, err := n.r.Sessions.Read(ctx, n.r.Session.LogID, 0)
+	events, _, completed, err := n.currentTurn(ctx, spec)
 	if err != nil {
 		return mg.RunEvidence{}, err
 	}
-	active := false
-	completed := false
-	tools := map[string]*durable.OperationRecord{}
-	for _, ev := range events {
-		switch ev.Type {
-		case constants.SessionEventTurnStart:
-			var turn session.TurnStart
-			if json.Unmarshal(ev.Data, &turn) != nil {
-				return mg.RunEvidence{}, agentErrors.ErrManagementInvalid
-			}
-			active = turn.ExecutionKey == spec.Task.ExecutionKey
-			completed = false
-			if active {
-				tools = map[string]*durable.OperationRecord{}
-			}
-		case constants.SessionEventBoundarySnapshot:
-			if !active {
-				continue
-			}
-			var boundary session.BoundaryData
-			var snapshot durable.Snapshot
-			if json.Unmarshal(ev.Data, &boundary) != nil || json.Unmarshal(boundary.Snapshot, &snapshot) != nil {
-				return mg.RunEvidence{}, agentErrors.ErrManagementInvalid
-			}
-			var identity struct {
-				ID  string `json:"id"`
-				Key string `json:"key"`
-			}
-			if json.Unmarshal(snapshot.Data, &identity) != nil || !strings.HasPrefix(identity.ID, "tool/") {
-				continue
-			}
-			record, e := durable.DecodeOperationRecord(&snapshot, identity.Key, identity.ID)
-			if e != nil {
-				return mg.RunEvidence{}, e
-			}
-			tools[record.Key] = record
-		case constants.SessionEventTurnEnd:
-			var end session.TurnEnd
-			if json.Unmarshal(ev.Data, &end) != nil {
-				return mg.RunEvidence{}, agentErrors.ErrManagementInvalid
-			}
-			if active && !end.Aborted {
-				completed = true
-			}
-		}
-	}
 	if !completed {
-		// pending 工具可能已写入外部系统。不能依赖通用重试策略把它当作缺失操作重入；
-		// 内置原生适配器没有业务核对协议，此时保留责任并交给宿主处理。
-		for _, record := range tools {
-			if record.Status == "pending" || (record.Status == "failed" && record.FailureKind == "canceled") {
-				return mg.RunEvidence{State: "attention", Result: mg.RunResult{Outcome: "attention", ErrorKind: "unconfirmed_tool"}}, nil
-			}
-		}
+		// 中断的工具记录交给续跑中的 Do 按工具策略处理：可重跑的重跑，只执行一次的先核对，
+		// 核对不出结果才以 OperationError 进入 attention，由 Run 报告具体操作。
 		return mg.RunEvidence{State: "absent"}, nil
 	}
 	// 计量配置属于模型操作意图。保持同一配置，但把回放中的计量补记限制在内存副本。
@@ -216,7 +169,7 @@ func (a approver) Approve(ctx context.Context, req tools.ApprovalRequest) (tools
 		return tools.ApprovalResult{}, err
 	}
 	intentHash := hash(intent)
-	info, err := json.Marshal(map[string]any{"kind": "approval", "intent_hash": intentHash, "tool": req.Call.Tool, "reason": req.Reason})
+	info, err := json.Marshal(map[string]any{"kind": "approval", "intent_hash": intentHash, "tool": req.Call.Tool, "reason": req.Reason, "arguments": req.Call.Args})
 	if err != nil {
 		return tools.ApprovalResult{}, err
 	}

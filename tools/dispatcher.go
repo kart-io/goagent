@@ -476,8 +476,20 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 		if entry.policy != nil {
 			policy = *entry.policy
 		}
+		if p, ok := entry.tool.(DurableCallPolicyProvider); ok && argResult == nil {
+			if callPolicy, declared := p.DurableCallPolicy(input.Args); declared {
+				if callPolicy.MaxAttempts < 1 {
+					return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "tool attempt policy required").
+						WithComponent("dispatcher").
+						WithOperation("invoke").
+						WithContext("tool_name", req.Name)
+				}
+				policy = callPolicy
+			}
+		}
+		var toolReconcile func(context.Context) (*interfaces.ToolOutput, bool, error)
 		if r, ok := entry.tool.(ReconcilableTool); ok && argResult == nil {
-			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
+			toolReconcile = func(callCtx context.Context) (*interfaces.ToolOutput, bool, error) {
 				lookup := input
 				result, found, e := r.Reconcile(callCtx, &lookup)
 				if e != nil || !found {
@@ -489,7 +501,31 @@ func (d *Dispatcher) invoke(ctx context.Context, req ToolRequest, emit func(*cor
 						WithOperation("invoke").
 						WithContext("tool_name", req.Name)
 				}
+				return result, true, nil
+			}
+			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
+				result, found, e := toolReconcile(callCtx)
+				if e != nil || !found {
+					return nil, false, e
+				}
 				data, e := encodeJournaledOutput(result)
+				return data, e == nil, e
+			}
+		}
+		// 宿主核对结论替换工具自己的核对：结论已由人确认，不能再退回 attention。
+		if resolution, listed := reconciliationFor(ctx, durable.ExecutionKey(ctx), "tool/"+input.CallID); listed && argResult == nil {
+			policy.Reconcile = func(callCtx context.Context) (json.RawMessage, bool, error) {
+				if resolution == "not_applied" {
+					data, e := encodeJournaledOutput(Rejected(reconciledNotApplied, nil))
+					return data, e == nil, e
+				}
+				if toolReconcile != nil {
+					if result, found, e := toolReconcile(callCtx); e == nil && found && result.Success {
+						data, e := encodeJournaledOutput(result)
+						return data, e == nil, e
+					}
+				}
+				data, e := encodeJournaledOutput(&interfaces.ToolOutput{Success: true, Result: reconciledAppliedWithoutOutput})
 				return data, e == nil, e
 			}
 		}
@@ -932,6 +968,9 @@ func (d *Dispatcher) AsRunnable() *core.StreamRunnable[ToolRequest, *interfaces.
 
 // Tools returns wrappers suitable for Builder.WithTools. They use the same
 // dispatcher limits, validation and authorization as AsRunnable, without retry.
+// A wrapper supports concurrent calls (Builder.WithParallelToolCalls) only when
+// the registered tool declares interfaces.ConcurrentCallTool; one undeclared
+// tool in a round makes the whole round sequential.
 func (d *Dispatcher) Tools() []interfaces.Tool {
 	if d == nil {
 		return nil
@@ -956,11 +995,15 @@ func (t *dispatchedTool) Invoke(ctx context.Context, in *interfaces.ToolInput) (
 	return t.d.invoke(ctx, ToolRequest{Name: t.entry.name, Input: in}, func(*core.StreamEvent) error { return nil }, t.d.config.ReturnArgumentErrors)
 }
 
-// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: multiple
-// calls in the same round share the MaxConcurrency limit and may run
-// concurrently.
-func (t *dispatchedTool) SupportsConcurrentCalls() bool { return true }
-func (t *dispatchedTool) EmitsToolEvents() bool         { return true }
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool by
+// forwarding the wrapped tool's declaration: it is true only when that tool
+// implements interfaces.ConcurrentCallTool and returns true. Concurrent calls
+// still share the MaxConcurrency limit.
+func (t *dispatchedTool) SupportsConcurrentCalls() bool {
+	c, ok := t.entry.tool.(interfaces.ConcurrentCallTool)
+	return ok && c.SupportsConcurrentCalls()
+}
+func (t *dispatchedTool) EmitsToolEvents() bool { return true }
 
 // withCallDeadline 绑定单次调用的截止时间；零值表示不限时，只受 ctx 约束。
 func withCallDeadline(ctx context.Context, deadline time.Time) (context.Context, context.CancelFunc) {

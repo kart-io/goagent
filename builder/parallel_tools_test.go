@@ -66,10 +66,19 @@ func (p *concurrencyProbe) invoke(ctx context.Context, in *interfaces.ToolInput)
 	return &interfaces.ToolOutput{Success: true, Result: "probe:" + id}, nil
 }
 
+// concurrentBase 与 concurrentFunc 为测试工具声明可并发：Dispatcher 只转述内层工具的声明。
+type concurrentBase struct{ *tools.BaseTool }
+
+func (concurrentBase) SupportsConcurrentCalls() bool { return true }
+
+type concurrentFunc struct{ *tools.FunctionTool }
+
+func (concurrentFunc) SupportsConcurrentCalls() bool { return true }
+
 func probeTools(t *testing.T, probe *concurrencyProbe, maxConcurrency int) []interfaces.Tool {
 	t.Helper()
 	reg := tools.NewRegistry()
-	require.NoError(t, reg.Register(tools.NewBaseTool("probe", "probe", argSchema, probe.invoke)))
+	require.NoError(t, reg.Register(concurrentBase{tools.NewBaseTool("probe", "probe", argSchema, probe.invoke)}))
 	d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: maxConcurrency})
 	require.NoError(t, err)
 	return d.Tools()

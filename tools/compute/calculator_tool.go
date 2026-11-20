@@ -22,6 +22,10 @@ type CalculatorTool struct {
 	*tools.BaseTool
 }
 
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: evaluating
+// an expression has no side effects and shares no mutable state.
+func (c *CalculatorTool) SupportsConcurrentCalls() bool { return true }
+
 // NewCalculatorTool 创建计算器工具
 func NewCalculatorTool() *CalculatorTool {
 	tool := &CalculatorTool{}
@@ -235,6 +239,10 @@ type AdvancedCalculatorTool struct {
 	*tools.BaseTool
 	operations CalculatorOperations
 }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: the
+// operations have no side effects and the operation set is read-only.
+func (c *AdvancedCalculatorTool) SupportsConcurrentCalls() bool { return true }
 
 // NewAdvancedCalculatorTool 创建高级计算器工具
 func NewAdvancedCalculatorTool(operations CalculatorOperations) *AdvancedCalculatorTool {

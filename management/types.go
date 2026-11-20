@@ -101,6 +101,9 @@ type Session struct {
 	ActiveTaskID string `json:"active_task_id,omitempty"`
 }
 type Task struct {
+	// Operations lists the operations that last put the task into attention.
+	// It is historical: a successful reconcile, a later success or a cancel
+	// does not clear it.
 	Operations []durable.OperationRef `json:"operations,omitempty"`
 	Meta
 	RevisionID      string          `json:"revision_id,omitempty"`

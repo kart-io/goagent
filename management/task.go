@@ -89,37 +89,33 @@ func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) 
 		if t.Revision != r.ExpectedRevision {
 			return t, agentErrors.ErrManagementConflict
 		}
+		continuing := false
 		if t.State != Running && t.State != Canceling && !canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
-			// 未知结果只能由已接纳的恢复命令核对；没有命令时拒绝取消，
-			// 否则 CancelRequested 会封死公开 ResumeTask 入口。
-			commands, err := all[Command](ctx, tx, "commands", t.TenantID, Query{TaskID: t.ID, Statuses: []string{"pending", "blocked", "applying"}})
-			if err != nil {
-				return t, err
+			e = each(ctx, tx, "commands", t.TenantID, Query{TaskID: t.ID, Statuses: []string{"pending", "blocked", "applying"}}, func(command Command) (bool, error) {
+				continuing = command.Kind == "start" || command.Kind == "resume"
+				return continuing, nil
+			})
+			if e != nil {
+				return t, e
 			}
-			continuing := false
-			for _, command := range commands {
-				if command.Kind == "start" || command.Kind == "resume" {
-					continuing = true
-					break
-				}
-			}
-			if !continuing {
+			// 未知结果只能由已接纳的恢复命令核对；待恢复任务没有命令时拒绝取消，
+			// 否则 CancelRequested 会封死公开 ResumeTask 入口。Attention 另行处理。
+			if !continuing && t.State != Attention {
 				return t, agentErrors.ErrManagementConflict
 			}
 		}
 		old := t.Revision
 		t.Revision++
 		t.CancelRequested = true
-		if t.State == Running || t.State == Canceling {
-			t.State = Canceling
-		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
-			t.State = Canceled
-			now := s.cfg.Now().UTC()
-			t.FinishedAt = &now
-			if e = s.releaseSession(ctx, tx, t); e != nil {
+		if t.State == Attention && !continuing {
+			// 放弃核对：ErrorKind 与未决 Operations 原样保留，不替宿主定案；被取消的轮次在会话中整轮遮蔽。
+			if e = s.finishTerminal(ctx, tx, &t, Canceled); e != nil {
 				return t, e
 			}
-			if e = s.supersedeApprovals(ctx, tx, t); e != nil {
+		} else if t.State == Running || t.State == Canceling {
+			t.State = Canceling
+		} else if canCancelWithoutInspection(t.State, t.RecoveryNeeded) {
+			if e = s.finishTerminal(ctx, tx, &t, Canceled); e != nil {
 				return t, e
 			}
 		}

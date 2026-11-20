@@ -137,12 +137,12 @@ func TestToolErrorFeedbackDurableUnofferedToolReplays(t *testing.T) {
 
 func TestToolErrorFeedbackParallel(t *testing.T) {
 	reg := tools.NewRegistry()
-	require.NoError(t, reg.Register(tools.NewBaseTool("bad", "失败", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	require.NoError(t, reg.Register(concurrentBase{tools.NewBaseTool("bad", "失败", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return nil, errors.New("连接被拒绝")
-	})))
-	require.NoError(t, reg.Register(tools.NewBaseTool("good", "成功", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	})}))
+	require.NoError(t, reg.Register(concurrentBase{tools.NewBaseTool("good", "成功", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{Success: true, Result: "fine"}, nil
-	})))
+	})}))
 	d, err := tools.NewDispatcher(reg, tools.DispatchConfig{})
 	require.NoError(t, err)
 	model := nativeModel(

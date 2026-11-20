@@ -276,7 +276,8 @@ func (b *AgentBuilder[S]) WithEmptyAnswerRetries(n int) *AgentBuilder[S] {
 //
 // [Advanced] It applies only to the native tool stream. With n>=2, when a round
 // has multiple calls and every called tool implements
-// interfaces.ConcurrentCallTool (such as Dispatcher.Tools), up to n calls run
+// interfaces.ConcurrentCallTool and returns true (Dispatcher.Tools forwards the
+// registered tool's declaration and is false when it has none), up to n calls run
 // concurrently; the actual peak is also bounded by the tool's own throttling
 // (Dispatcher.MaxConcurrency). Pass math.MaxInt for no extra limit. n<2 runs
 // sequentially and negative values are treated as 0; if any tool does not
