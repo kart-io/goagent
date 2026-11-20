@@ -248,6 +248,11 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 // DurableIntentVersion binds reader operations to the offload configuration.
 func (p *Offload) DurableIntentVersion() string { return p.identity }
 func (p *Offload) Name() string                 { return constants.ToolReadContextResult }
+
+// SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: the reader
+// only reads stored evidence and the reference table is guarded by a mutex.
+func (p *Offload) SupportsConcurrentCalls() bool { return true }
+
 func (p *Offload) Description() string {
 	return "Read untrusted offloaded evidence within the current host run. key is the context_result value; offset counts Unicode characters."
 }

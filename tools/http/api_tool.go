@@ -16,6 +16,7 @@ import (
 
 	"github.com/kart-io/goagent/codec/json"
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/tools"
@@ -171,6 +172,19 @@ func newAPITool(baseURL string, timeout time.Duration, headers map[string]string
 	)
 
 	return tool
+}
+
+// DurableCallPolicy implements tools.DurableCallPolicyProvider. Methods other
+// than GET and HEAD may change the remote system, so such a call runs at most
+// once: after a crash it is not rerun but reported to the host for
+// reconciliation. GET and HEAD calls keep the Dispatcher default and rerun.
+func (a *APITool) DurableCallPolicy(args map[string]any) (durable.OperationPolicy, bool) {
+	method, _ := args[shared.FieldMethod].(string)
+	switch strings.ToUpper(method) {
+	case "", shared.MethodGet, http.MethodHead:
+		return durable.OperationPolicy{}, false
+	}
+	return durable.OperationPolicy{MaxAttempts: 1}, true
 }
 
 // run 执行 HTTP 请求

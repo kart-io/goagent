@@ -29,7 +29,7 @@ func TestParallelDeliverFailureStopsRound(t *testing.T) {
 		return &interfaces.ToolOutput{Success: true, Result: "r:" + in.Args["id"].(string)}, nil
 	})
 	reg := tools.NewRegistry()
-	require.NoError(t, reg.Register(tool))
+	require.NoError(t, reg.Register(concurrentBase{tool}))
 	d, err := tools.NewDispatcher(reg, tools.DispatchConfig{MaxConcurrency: 3, OnResult: func(_ context.Context, r tools.DispatchResult) error {
 		id := r.Args["id"].(string)
 		sink.add("on_result(" + id + ")")

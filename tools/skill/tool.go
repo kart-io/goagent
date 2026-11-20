@@ -20,7 +20,7 @@ import (
 // The caller owns catalog and must keep it open while the tool is in use.
 // Metadata does not trigger filtering, authorization, prompting, or execution.
 func New(catalog *skills.Catalog) interfaces.Tool {
-	return tools.NewBaseTool(constants.ToolLoadSkill,
+	return loadTool{tools.NewBaseTool(constants.ToolLoadSkill,
 		"加载技能的完整说明。name 为技能名；说明中提到技能目录里的其他文件时，用 file 读取（相对技能目录的路径）。",
 		`{
 			"type": "object",
@@ -76,8 +76,13 @@ func New(catalog *skills.Catalog) interfaces.Tool {
 				return tools.Rejected(fmt.Sprintf("skill %s file %s is not UTF-8 text", name, file), nil), nil
 			}
 			return resp.Success(map[string]any{"name": name, "file": file, "content": string(data)}, nil)
-		})
+		})}
 }
+
+// loadTool only reads the catalog, which is safe for concurrent use.
+type loadTool struct{ *tools.BaseTool }
+
+func (loadTool) SupportsConcurrentCalls() bool { return true }
 
 func loadError(ctx context.Context, catalog *skills.Catalog, resp *tools.ToolErrorResponse, name, file string, err error) (*interfaces.ToolOutput, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {

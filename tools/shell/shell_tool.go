@@ -13,6 +13,7 @@ import (
 	"time"
 
 	shared "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	"github.com/kart-io/goagent/internal/processgroup"
@@ -102,6 +103,13 @@ func NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool {
 	)
 
 	return tool
+}
+
+// DurableOperationPolicy implements tools.DurablePolicyProvider. A command may
+// change files or other state, so a call runs at most once: after a crash or
+// failure it is not rerun but reported to the host for reconciliation.
+func (s *ShellTool) DurableOperationPolicy() durable.OperationPolicy {
+	return durable.OperationPolicy{MaxAttempts: 1}
 }
 
 // shellMetachars 是 shell 会解释的字符，换行在 bash -c 中等同于命令分隔符

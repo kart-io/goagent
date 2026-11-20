@@ -33,6 +33,16 @@ type DurablePolicyProvider interface {
 	DurableOperationPolicy() durable.OperationPolicy
 }
 
+// DurableCallPolicyProvider declares the journal policy of a single call from
+// its validated arguments, for tools whose side effects depend on them (an
+// HTTP tool that only writes for non-GET methods). When declared is true the
+// policy replaces DurablePolicyProvider and the Dispatcher default for that
+// call. The result must depend only on args: they are part of the journaled
+// intent, so a replay of the same call sees the same policy.
+type DurableCallPolicyProvider interface {
+	DurableCallPolicy(args map[string]any) (policy durable.OperationPolicy, declared bool)
+}
+
 // DispatchTimeoutProvider declares the tool's timeout when called through the
 // Dispatcher; a positive value replaces DispatchConfig.Timeout, and 0 keeps it.
 type DispatchTimeoutProvider interface{ DispatchTimeout() time.Duration }
