@@ -145,17 +145,12 @@ func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionReque
 	}
 	var content strings.Builder
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, bufferedUsage(stream, evidence), err
+		}
 		select {
 		case <-ctx.Done():
-			// 客户端可能在截止后同时交付终止块；保留已送达的用量，不接受其正文。
-			select {
-			case last := <-stream:
-				if last != nil && last.Usage != nil {
-					evidence = chunkEvidence(last.Usage)
-				}
-			default:
-			}
-			return nil, evidence, ctx.Err()
+			return nil, bufferedUsage(stream, evidence), ctx.Err()
 		case chunk, ok := <-stream:
 			if !ok {
 				return nil, evidence, io.ErrUnexpectedEOF
@@ -183,6 +178,22 @@ func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionReque
 		}
 	}
 }
+
+// 取消时只取当时已缓冲的块数；丢弃正文，不等待后续发送或关闭。
+func bufferedUsage(stream <-chan *llm.StreamChunk, evidence usage.Evidence) usage.Evidence {
+	for range len(stream) {
+		select {
+		case chunk := <-stream:
+			if chunk != nil && chunk.Usage != nil {
+				evidence = chunkEvidence(chunk.Usage)
+			}
+		default:
+			return evidence
+		}
+	}
+	return evidence
+}
+
 func (m *Memory) requestEmbedding(ctx context.Context, text string) ([]float32, error) {
 	scope, ok := ctx.Value(maintenanceKey{}).(string)
 	if !ok {

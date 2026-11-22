@@ -12,6 +12,7 @@ import (
 
 	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
+	"github.com/kart-io/goagent/core/usage"
 	"github.com/kart-io/goagent/llm"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +52,8 @@ type lateCompletion struct{}
 func (lateCompletion) Provider() constants.Provider { return "fake" }
 func (lateCompletion) CompleteStream(ctx context.Context, _ *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	<-ctx.Done()
-	ch := make(chan *llm.StreamChunk, 1)
+	ch := make(chan *llm.StreamChunk, 2)
+	ch <- &llm.StreamChunk{Delta: "迟到片段"}
 	ch <- &llm.StreamChunk{Done: true, Content: `{"result":"迟到"}`, Usage: &llm.Usage{TotalTokens: 8, PromptTokens: 6, CompletionTokens: 2}}
 	close(ch)
 	return ch, nil
@@ -211,4 +213,15 @@ func TestPruneDuringReindexPreservesNewRepair(t *testing.T) {
 	k := entityKey(s.Entities["entity"])
 	k.Model = m.modelTag
 	require.Equal(t, []string{k.String()}, keys)
+}
+
+func TestBackgroundDeadlineRetainsUsageAfterBufferedDelta(t *testing.T) {
+	stream := make(chan *llm.StreamChunk, 2)
+	stream <- &llm.StreamChunk{Delta: "忽略正文"}
+	stream <- &llm.StreamChunk{Done: true, Usage: &llm.Usage{TotalTokens: 8, PromptTokens: 6, CompletionTokens: 2}}
+	// 流保持打开，没有后续发送者；返回时须保留终止块中的用量。
+	got := bufferedUsage(stream, usage.Evidence{})
+	require.Equal(t, usage.BasicFields, got.KnownFields)
+	require.Equal(t, 8, got.Tokens.TotalTokens)
+	require.Empty(t, stream)
 }
