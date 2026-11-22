@@ -1,6 +1,6 @@
 # Agent任务执行与记忆增强实施方案
 
-状态：U00–U11已实现并通过专项审核；U12评估接入与U13最终验收进行中。正式核心依赖发布与本地workspace验证分开。
+状态：U00–U12已实现并通过专项审核；U13最终验收进行中。正式核心依赖发布与本地workspace验证分开。
 
 目标：实现目标澄清、结构化计划、依赖调度、成员执行、证据验收和有界重规划；补齐记忆后台重试、成本治理和引用装配。
 
@@ -212,12 +212,12 @@ U01–U05与U06–U08可分线开发。memory.go、worker/state/recall由同一�
 
 文件：H/planning/progress.go；H/examples/planning-agent/main.go、evaluation.go、cmd/eval/main.go、testdata及测试；用户README/指南。
 
-- [ ] 提供dag/replan/wait/sources四种场景；sources用本地合成材料验证并行处理→证据验收→汇总，不绑定财务领域。
-- [ ] 等待示例退出后从同目录恢复，提交答案严格匹配该等待的schema。
-- [ ] TestSourceScenarioCarriesLocators、TestSummaryWaitsForAcceptedEvidence、TestSourceContentChangeInvalidatesReport。
-- [ ] 中英说明状态、权限、成本、删除边界、上限与旧版本恢复。
-- [ ] 增加本地评估入口，按下述契约输出manifest/results.jsonl/summary.json；TestEvaluationKeepsFailuresAndLabelsPrivate、TestEvaluationVariantsHaveEqualLimits、TestEvaluationCountsPhysicalRequests校验离线运行器、失败留存、答案隔离及账本计数。
-- [ ] TestEvaluationManifestIncludesIngestAndGradingFailures覆盖灌入/中途题目/Judge失败：已完成结果保留，失败与未开始项仍进入预登记分母。
+- [x] 提供dag/replan/wait/sources四种场景；sources用本地合成材料验证并行处理→证据验收→汇总，不绑定财务领域。
+- [x] 等待示例退出后从同目录恢复，提交答案严格匹配该等待的schema。
+- [x] TestSourceScenarioCarriesLocators、TestSummaryWaitsForAcceptedEvidence、TestSourceContentChangeInvalidatesReport。
+- [x] 中英说明状态、权限、成本、删除边界、上限与旧版本恢复。
+- [x] 增加本地评估入口，按下述契约输出manifest/results.jsonl/summary.json；TestEvaluationKeepsFailuresAndLabelsPrivate、TestEvaluationVariantsHaveEqualLimits、TestEvaluationCountsPhysicalRequests校验离线运行器、失败留存、答案隔离及账本计数。
+- [x] TestEvaluationManifestIncludesIngestAndGradingFailures覆盖灌入/中途题目/Judge失败：已完成结果保留，失败与未开始项仍进入预登记分母。
 
 评估CLI接受`-dataset PATH -out NEWDIR -backend plan|scripted|live -repeats N`；默认backend=plan、repeats=3，只生成运行计划，scripted使用离线脚本，只有显式live才调用宿主已配置模型。首批12道冻结合成题（简单提取、独立多材料、强依赖、冲突/不足证据各3题），参考答案/评分标签不进入模型请求。manifest固定模型/温度、材料与提示版本、上下文上限、根请求/token限额、重复次数和独立namespace/RunID；每组相同上限，不能给多槽追加额度。三组是现有直接Agent、规划单成员单槽、相同规划配置四槽；单槽仍包含规划/复核成本。每题至少3次，变换组运行顺序，保留失败、超时和额度耗尽于分母；恢复用例另列，不能拿日志回放充作独立试验。
 
