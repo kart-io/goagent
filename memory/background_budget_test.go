@@ -69,11 +69,20 @@ func TestDerivationFailureWithoutNewJobsRemainsDirty(t *testing.T) {
 			now = w.RetryAt
 		}
 	}
-	_, err = m.Remember(ctx, Record{ID: "e2", Kind: KindEpisode, Content: "另一次", Importance: 1})
+	_, before, err := m.read(ctx, testNS)
+	require.NoError(t, err)
+	foreground := durableMemory(t, st, Config{})
+	_, err = foreground.Remember(ctx, Record{ID: "e2", Kind: KindEpisode, Content: "另一次", Importance: 1})
 	require.NoError(t, err)
 	_, err = m.ProcessPending(ctx)
 	require.NoError(t, err)
 	require.Len(t, model.calls, 5)
+	_, after, err := m.read(ctx, testNS)
+	require.NoError(t, err)
+	want := before.Derivations["reflection"]
+	want.DirtySeq++
+	require.Equal(t, want, after.Derivations["reflection"])
+	require.Equal(t, before.RequestSeq, after.RequestSeq)
 }
 func TestOversizedDerivationPausesBeforeRequest(t *testing.T) {
 	st := newHookStore(t)
@@ -455,4 +464,44 @@ func TestStrictRefreshAdoptsExistingGraph(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, s.Communities, 1)
 	require.EqualValues(t, 1, s.RequestSeq)
+}
+
+func TestForegroundWritesTrackRegisteredDerivations(t *testing.T) {
+	st := newHookStore(t)
+	ctx := WithNamespace(context.Background(), testNS...)
+	foreground := durableMemory(t, st, Config{})
+	model := &scriptedModel{reply: func(string, string) (string, error) {
+		return `{"insights":[{"content":"反思"}]}`, nil
+	}}
+	worker := workerMemory(t, Config{Durable: st, Background: maintenanceConfig(t, st, "registered", 10), Model: model, ReflectionThreshold: .5})
+	require.NoError(t, worker.MarkDerivationsDirty(ctx))
+	_, err := worker.ProcessPending(ctx)
+	require.NoError(t, err)
+	requireQueueEmpty(t, worker)
+	require.Empty(t, model.calls)
+
+	_, err = foreground.Remember(ctx, Record{ID: "e", Kind: KindEpisode, Content: "经历", Importance: 1})
+	require.NoError(t, err)
+	_, err = worker.ProcessPending(ctx)
+	require.NoError(t, err)
+	r, err := foreground.Get(ctx, "e")
+	require.NoError(t, err)
+	require.True(t, r.Reflected)
+	_, err = worker.ProcessPending(ctx)
+	require.NoError(t, err)
+	require.Len(t, model.calls, 1)
+	requireQueueEmpty(t, worker)
+}
+
+func TestForegroundWritesWithoutDerivationTracking(t *testing.T) {
+	st := newHookStore(t)
+	ctx := WithNamespace(context.Background(), testNS...)
+	foreground := durableMemory(t, st, Config{})
+	_, err := foreground.Remember(ctx, Record{ID: "e", Kind: KindEpisode, Content: "经历", Importance: 1})
+	require.NoError(t, err)
+	requireQueueEmpty(t, foreground)
+	_, s, err := foreground.read(ctx, testNS)
+	require.NoError(t, err)
+	require.Empty(t, s.Derivations)
+	require.Zero(t, s.RequestSeq)
 }

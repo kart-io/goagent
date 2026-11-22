@@ -272,7 +272,8 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	if t.err != nil {
 		return state{}, head{}, t.err
 	}
-	if m.cfg.Background != nil {
+	// 已登记的命名空间由所有写者跟踪输入，后台执行仍由 Worker 的配置控制。
+	if m.cfg.Background != nil || len(v.cur.Derivations) > 0 {
 		if err := m.dirtyInputs(ctx, v.cur, t); err != nil {
 			return state{}, head{}, err
 		}
