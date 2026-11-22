@@ -234,7 +234,8 @@ type queueReason string
 
 const (
 	// queueJobs：作用域中有待处理的任务。
-	queueJobs queueReason = "jobs"
+	queueJobs        queueReason = "jobs"
+	queueDerivations queueReason = "derivations"
 	// queueIndex：Forget 提交之后可能残留向量，等待维护执行 Reindex(false)。
 	queueIndex queueReason = "index"
 	// queueErase：Forget 或 Rewound 提交之后等待 OnErase 擦除派生副本，维护重做到 Until。
@@ -355,6 +356,8 @@ func (m *Memory) Maintain(ctx context.Context) error {
 		case scope != e.Scope:
 			// 旧作用域的数据与索引由 retiring 清理；不取 state 锁（旧作用域的 Lock 可能已返回 ErrScopeRemoved）。
 			errs = append(errs, m.unregister(ctx, e))
+		case e.Reason == queueDerivations:
+			errs = append(errs, m.settle(ctx, e, hasPendingDerivations))
 		case e.Reason == queueIndex:
 			if err := m.settle(ctx, e, nil); err != nil {
 				errs = append(errs, err)

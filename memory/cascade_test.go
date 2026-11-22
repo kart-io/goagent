@@ -418,7 +418,7 @@ func TestReconcileTransfersDerivations(t *testing.T) {
 	}
 }
 
-// G1 写入的 head 与基础快照（/2）能被读取，包括 head /3 引用基础快照 /2 的状态；新的写入只用 /3。
+// G1 写入的 head 与基础快照（/2）能被读取，包括 新版 head 引用基础快照 /2 的状态；新的写入只用当前格式。
 func TestReadsG1StateFormat(t *testing.T) {
 	ctx := WithNamespace(context.Background(), testNS...)
 	st := newHookStore(t)
@@ -456,7 +456,7 @@ func TestReadsG1StateFormat(t *testing.T) {
 		require.NoError(t, err, msg)
 		require.ElementsMatch(t, []string{"a", "b"}, slices.Collect(maps.Keys(s.Records)), msg)
 	}
-	check("head /3 引用基础快照 /2")
+	check("新版 head 引用基础快照 /2")
 	downgrade(headID, headVersion, headV2)
 	check("head /2")
 
@@ -464,7 +464,7 @@ func TestReadsG1StateFormat(t *testing.T) {
 	require.NoError(t, err)
 	snap, err := sc.Load(ctx, headID)
 	require.NoError(t, err)
-	require.Equal(t, headVersion, snap.Version, "新的写入只用 /3")
+	require.Equal(t, headVersion, snap.Version, "新的写入只用当前格式")
 }
 
 // 性质测试：随机交替写入、派生、合并、遗忘、修改正文、回退与 Prune，每步之后不变量成立（含级联重算已收敛）。
