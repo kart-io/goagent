@@ -8,7 +8,7 @@
 
 `memory.Config.ContextLayout == nil` 保持原有选择方式及 `Identity()`。需要限制钉住记录时，传入 `&memory.ContextLayout{CoreRunes: n}`。`CoreRunes` 在原有 `RecallRunes` 总额内计算完整记录行及分隔符；零值排除所有钉住记录。放不下的钉住记录不能从普通排序通道重新进入；未用额度可供其他召回记录使用。这是字符额度，不能当作token或计费估算。
 
-`Explain(ctx, query)` 使用相同选择过程，报告引用和空间分配，不返回记录正文。`Snapshot` 保存引用；`Hydrate` 根据当前命名空间、scope和正文版本过滤这些引用，不能重新选择替代记忆。命名空间须由受信租户、用户身份绑定。
+`ExplainSnapshot(ctx, query)` 返回 `Snapshot`、`SnapshotExplanation` 和 `error`。解释中记录同一次选择的引用和空间分配，不含记录正文。`Snapshot` 保存引用；`Hydrate` 根据当前命名空间、scope和正文版本过滤这些引用，不能重新选择替代记忆。命名空间须由受信租户、用户身份绑定。
 
 Builder现已支持零工具Agent自动召回。新轮次提交 `plain-memory/1` 或 `plain-none/1`；没有 `RecallMode` 的旧轮次维持原有模型意图，回放不追加记忆操作。已完成请求直接回放，不再访问模型。每次新的物理请求前，包括同轮次可恢复重试，Builder再次还原相同引用，移除已遗忘内容。已经提交给模型的请求无法撤回。
 
