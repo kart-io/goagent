@@ -171,7 +171,7 @@ func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionReque
 					result = content.String()
 				}
 				if utf8.RuneCountInString(result) > m.cfg.Background.MaxOutputRunes {
-					return nil, evidence, fmt.Errorf("后台维护输出超长")
+					return nil, evidence, agentErrors.New(agentErrors.CodeInvalidOutput, "后台维护输出超长").WithComponent("memory").WithOperation("background_chat")
 				}
 				return &llm.CompletionResponse{Content: result, FinishReason: chunk.FinishReason}, evidence, nil
 			}

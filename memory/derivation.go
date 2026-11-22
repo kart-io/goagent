@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-// DerivationWork 保存一个派生类别的输入进度、技术失败和维护预算阻塞状态。
+// DerivationWork records input progress, technical failures, and maintenance
+// budget blocking for one derivation category.
 type DerivationWork struct {
 	DirtySeq, DoneSeq    int64
 	GeneratorVersion     string
@@ -33,7 +34,8 @@ func hasPendingDerivations(t *tx) bool {
 	return false
 }
 
-// MarkDerivationsDirty 为当前命名空间的社区和反思登记新输入，并解除技术暂停。
+// MarkDerivationsDirty registers community and reflection work for the current
+// namespace and explicitly clears technical pauses without resetting budgets.
 func (m *Memory) MarkDerivationsDirty(ctx context.Context) error {
 	ns, err := requireNamespace(ctx)
 	if err != nil {
