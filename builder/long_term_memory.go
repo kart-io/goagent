@@ -27,7 +27,7 @@ import (
 //     references (memory/recall, memory/use/<step>). When each step's request
 //     is assembled, the recall block is inserted as one low-trust user message
 //     before the run context; it does not enter the session history or the
-//     durable journal. It applies only to the native tool stream. Request hooks
+//     durable journal. Both plain chat and native tool streams support recall. Request hooks
 //     must not rewrite or move the recall message; otherwise the intent will
 //     not match when a durable run resumes.
 //   - Formation: at the end of each turn (including aborted turns), an
@@ -77,9 +77,9 @@ func (a *ConfigurableAgent[S]) turnMemory(ctx context.Context, stored json.RawMe
 }
 
 // deriveHistory 从会话日志推导历史；配置长期记忆时去掉升级前写入历史的召回块。
-func (a *ConfigurableAgent[S]) deriveHistory(events []session.Event) ([]llm.Message, error) {
+func (t *sessionTurn) deriveHistory(events []session.Event) ([]llm.Message, error) {
 	history, err := session.DeriveMessages(events)
-	if err != nil || a.config.LongTermMemory == nil {
+	if err != nil || t.memory == nil {
 		return history, err
 	}
 	return slices.DeleteFunc(history, func(msg llm.Message) bool {

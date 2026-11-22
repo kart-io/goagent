@@ -2,11 +2,15 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 )
@@ -91,4 +95,26 @@ func recallIntent(msgs []llm.Message, slot recallSlot) []llm.Message {
 		out = slices.Insert(out, at, llm.UserMessage(slot.placeholder))
 	}
 	return out
+}
+
+// plainRecallSlot 核对新协议的操作顺序；首次请求先记召回引用，恢复时只还原该快照。
+func (a *ConfigurableAgent[S]) plainRecallSlot(ctx context.Context, messages []llm.Message) (recallSlot, error) {
+	if durable.HasJournal(ctx) {
+		if _, err := durable.InspectOperation(ctx, "memory/recall"); errors.Is(err, os.ErrNotExist) {
+			for _, id := range []string{"memory/use/0", "model/answer/0"} {
+				if _, err := durable.InspectOperation(ctx, id); err == nil {
+					return recallSlot{}, agentErrors.Newf(agentErrors.CodeStateValidation, "纯聊天轮次已记录 %s，却缺少 memory/recall", id)
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return recallSlot{}, err
+				}
+			}
+		} else if err != nil {
+			return recallSlot{}, err
+		}
+	}
+	snapshot, err := a.snapshotRecall(ctx, messages, 1)
+	if err != nil {
+		return recallSlot{}, err
+	}
+	return a.hydrateRecall(ctx, snapshot, 0)
 }

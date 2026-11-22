@@ -350,6 +350,10 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 }
 
 func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+	return readPlainModelTurnWithIntent(ctx, id, client, req, req, emit)
+}
+
+func readPlainModelTurnWithIntent(ctx context.Context, id string, client llm.Client, req, intentReq *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}
@@ -362,7 +366,7 @@ func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *
 		intent, err = json.Marshal(struct {
 			Provider string
 			Request  *llm.CompletionRequest
-		}{string(client.Provider()), req})
+		}{string(client.Provider()), intentReq})
 	}
 	if err != nil {
 		return nil, err

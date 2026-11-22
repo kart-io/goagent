@@ -49,6 +49,8 @@ type TurnStart struct {
 	// memory.TurnMemory); it is authoritative when resuming this turn and when
 	// registering tasks for aborted turns.
 	Memory json.RawMessage `json:"memory,omitempty"`
+	// RecallMode identifies the plain-chat recall protocol chosen at turn start.
+	RecallMode string `json:"recall_mode,omitempty"`
 }
 
 // TurnEnd is the data of turn/end.
