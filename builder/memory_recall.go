@@ -18,6 +18,9 @@ import (
 // recallSlot 是一步请求中的召回消息：实际请求带正文，持久意图中换成由日志子集决定的占位消息，
 // 使意图只由日志决定，恢复时引用被删除、召回消息消失也不改变意图。
 type recallSlot struct {
+	// snapshot 与 refs 固定本步采用的引用，纯聊天实际发送前按它们重新还原。
+	snapshot *memory.Snapshot
+	refs     []memory.Ref
 	// text 是插入请求的召回消息正文，为空时请求中没有召回消息。
 	text string
 	// placeholder 是意图中代替召回消息的内容；日志中本步的引用子集为空时为空。
@@ -68,7 +71,7 @@ func (a *ConfigurableAgent[S]) hydrateRecall(ctx context.Context, s *memory.Snap
 		}
 		fresh = &r
 	}
-	slot := recallSlot{text: fresh.Text}
+	slot := recallSlot{text: fresh.Text, snapshot: s, refs: refs}
 	if len(refs) > 0 {
 		digest, err := s.Digest(refs)
 		if err != nil {
@@ -117,4 +120,12 @@ func (a *ConfigurableAgent[S]) plainRecallSlot(ctx context.Context, messages []l
 		return recallSlot{}, err
 	}
 	return a.hydrateRecall(ctx, snapshot, 0)
+}
+
+// withPlainRecall 为一次请求追加低信任消息，不修改会话历史。
+func withPlainRecall(messages []llm.Message, text string) []llm.Message {
+	if text == "" {
+		return messages
+	}
+	return append(slices.Clone(messages), llm.UserMessage(text))
 }

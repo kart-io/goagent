@@ -196,3 +196,40 @@ func TestPlainRecallModeCannotSwitchToNativeOnResume(t *testing.T) {
 	require.ErrorContains(t, err, "纯聊天轮次")
 	require.Len(t, client.Requests(), 1)
 }
+
+func TestPlainRecallRetryHydratesAfterForget(t *testing.T) {
+	for _, journaled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "普通", true: "持久"}[journaled], func(t *testing.T) {
+			ctx := memory.WithNamespace(context.Background(), "t", "alice")
+			m, ids := newTestMemory(t, ctx, "用户喜欢喝美式咖啡")
+			log := session.NewMemoryStore()
+			model := mocks.NewScriptedClient(mocks.ScriptedRule{Name: "暂时失败", Respond: func(context.Context, *llm.CompletionRequest) (mocks.ScriptedReply, error) {
+				return mocks.ScriptedReply{}, errors.New("暂时失败")
+			}}, mocks.TextReply("再次发送", "好"))
+			a, err := NewSimpleBuilder(model).WithSessionID("s").WithSessionLog(log).WithDurableScope("plain").WithLongTermMemory(m).WithRequestError(1, func(ctx context.Context, _ *RequestFailure) (RequestErrorDecision, error) {
+				if err := m.Forget(ctx, ids[0]); err != nil {
+					return RequestErrorDecision{}, err
+				}
+				_, err := m.Remember(ctx, memory.Record{Content: "用户喜欢喝拿铁咖啡", Importance: 0.9})
+				return RequestErrorDecision{Action: RequestRetry}, err
+			}).Build()
+			require.NoError(t, err)
+			if journaled {
+				ctx = durable.WithJournal(durable.WithExecutionKey(ctx, "one"), session.DurableStore(log, "s"))
+			}
+			_, err = a.AsRunnable().Invoke(ctx, plainQuery)
+			require.NoError(t, err)
+			requests := model.Requests()
+			require.Len(t, requests, 2)
+			first, ok := recallIn(requests[0].Messages)
+			require.True(t, ok)
+			require.Contains(t, first.Content, "美式咖啡")
+			require.Equal(t, []llm.Message{llm.UserMessage(plainQuery)}, requests[1].Messages)
+			if journaled {
+				_, err = a.AsRunnable().Invoke(ctx, plainQuery)
+				require.NoError(t, err)
+				require.Len(t, model.Requests(), 2)
+			}
+		})
+	}
+}

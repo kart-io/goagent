@@ -236,13 +236,21 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 			return nil, e
 		}
 		slot.index = len(messages)
-		if slot.text != "" {
-			req.Messages = append(slices.Clone(messages), llm.UserMessage(slot.text))
-		}
+		req.Messages = withPlainRecall(messages, slot.text)
 		intentReq := *req
 		// 从未注入正文的会话消息组成意图，保留用户自己发送的同文消息。
 		intentReq.Messages = recallIntent(messages, recallSlot{index: slot.index, placeholder: slot.placeholder})
-		turn, err = readPlainModelTurnWithIntent(ctx, "model/answer/0", client, req, &intentReq, emit)
+		// 每次实际发送重新核对已采用的引用，RequestError 重试期间可发生删除。
+		currentRequest := func(callCtx context.Context) (*llm.CompletionRequest, error) {
+			r, _, err := a.config.LongTermMemory.Hydrate(callCtx, *slot.snapshot, slot.refs)
+			if err != nil {
+				return nil, fmt.Errorf("还原长期记忆: %w", err)
+			}
+			current := *req
+			current.Messages = withPlainRecall(messages, r.Text)
+			return &current, nil
+		}
+		turn, err = readPlainModelTurnWithIntent(ctx, "model/answer/0", client, req, &intentReq, currentRequest, emit)
 	} else {
 		turn, err = readPlainModelTurn(ctx, "model/answer/0", client, req, emit)
 	}
