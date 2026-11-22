@@ -1,8 +1,8 @@
 # DeepAgent 结构化规划与监督闭环技术设计
 
-日期：2026-11-22。状态：可供实施评审的设计提案，尚未实现。
+日期：2026-11-22。状态：领域能力已在隔离实施分支实现并通过专项审核，最终交付以执行入口的验收清单为准。
 
-代码基线：GoAgent `2449c0d3`；相邻 GoAgent Harness `f7d637c`。本文存放于 GoAgent，主要代码实施位置为 **GoAgent Harness**。下文 `G/` 指 GoAgent 根目录，`H/` 指相邻 `goagent-harness` 根目录。所有 `planning.*` 和 `preset.Planning*` 均为本文提出的新接口，不是现有 API。
+代码基线：GoAgent `2449c0d3`；相邻 GoAgent Harness `f7d637c`。本文存放于 GoAgent，主要代码实施位置为 **GoAgent Harness**。下文 `G/` 指 GoAgent 根目录，`H/` 指相邻 `goagent-harness` 根目录。`planning.*` 和 `preset.Planning*` 为本轮新增的实验性接口，尚未正式发布。
 
 执行入口：[统一实施方案](../plans/2026-11-22-agent-system-execution.md)。本文定义领域接口和行为契约。
 
@@ -159,6 +159,7 @@ type TaskResult struct {
 }
 type Attempt struct {
     TaskID, ExecutionKey, Fingerprint, Status string
+    EffectClass string
     Generation, Number int
     Result *TaskResult
     Review *Review
@@ -265,6 +266,8 @@ type AgentConfig struct { Version string; Factory multiagent.AgentFactory }
 type CandidateError struct { Reason string }
 func (*CandidateError) Error() string
 func NewGraph(Config, Dependencies) (*workflow.Graph[State], error)
+func DurableConfig(Config, Dependencies, durable.Store) (workflow.DurableConfig, error)
+func PrepareInitialState(State, Config) (State, error)
 ```
 
 `State` 由 `model.go` 定义，字段固定为：`Request *GoalRequest; Resolution *GoalResolution; GoalAnswers []GoalAnswer; GoalRounds int; GoalResolutionError string; Goal GoalSpec; GoalDigest string; Candidate *PlanDraft; Plan *Plan; Attempts []Attempt; Accepted []Artifact; Feedback []Review; Wave *Wave; WaveResults []TaskResult; WriteFreeze *WriteFreeze; Replans, Waves, NextTaskID int; PendingAction, ValidationError string; Outcome *Outcome`。规范化函数负责深复制；唯一写入权属于图节点的返回值。ReviewInput 在任务阶段每次只包含一个任务结果与非nil冻结Assignment，按 Slot 顺序逐项 review；final阶段Assignment为nil，Results包含当前计划全部accepted任务的结果，Accepted为它们的有效产物集合，不含superseded结果。图从冻结Attempt/目标产物计算SubjectDigest后写入ReviewInput，Reviewer不得重新依赖可变成员目录计算。模型输入只由已提交State、冻结Assignment及固定Config构造，不读取实时预算用量、当前时间或新检索结果；真实准入仍由Controller负责。PlannerVersion/ReviewerVersion必填；配置GoalResolver时GoalResolverVersion也必填，均进入图Components，恢复不能悄悄替换实现。
@@ -290,6 +293,10 @@ func AttemptKey(rootRunID, taskID string, generation, number int) (string, error
 func Allocate(State, Config, string) (State, error) // 第三个参数为根 RunID
 func AdoptPlan(State, PlanDraft, Config) (State, error)
 func ValidateTaskResult(Assignment, TaskResult, Config) (TaskResult, error)
+func ValidateReview(ReviewInput, Review) (Review, error)
+func ValidateRepair(ReviewInput, Review) error
+func DecodeCandidate([]byte, any) error
+func SourceDigest([]byte) (string, error)
 ```
 
 Draft 校验：重复/未知 ID、自依赖、环、未声明依赖的 InputRef、重复InputRef、不存在的输出名、空任务/局部Criteria、未知成员、RequiredCapabilities不被成员覆盖、GoalInputIDs重复或引用不存在、未知 CriterionID/DeliverableID、验收或交付物覆盖缺失、非法 Priority、超规模。GroupID/ParentID单独校验存在性与父链无环；Group是非执行分组，不占槽、不隐式生成DependsOn。局部Criterion ID在任务内唯一，目标Criterion ID在Goal内唯一；ReviewInput决定其命名空间。Priority 范围 0…100，数值越大越先执行；模型不能覆盖成员目录中的版本、效果类别或资源声明。Kahn 拓扑校验 O(V+E)，最大 64 个任务。
@@ -338,11 +345,15 @@ Artifact.Sources只可引用本Assignment冻结的GoalInputs或ResolvedInput直�
 
 引用存在、摘要相同、位置合法，都不自动证明该来源支持结论；逐项事实与引用内容的一致性由Reviewer承担。确定性领域由业务Reviewer检查计算与维度，不把领域字段强加到通用TaskResult。来源或计算被修正时，产物Digest随之变化，原有fingerprint与传递下游结果失效。
 
+候选EvidenceRef可只给SourceID及定位，SourceDigest/QuoteDigest留空；ValidateTaskResult由宿主解析冻结输入并补齐摘要。非空但不匹配的摘要拒绝，完整引用写回后才计算产物Digest。独立ValidateEvidence用于持久化复验，仍要求两个摘要齐全，不能靠复验重新认证被篡改的来源。
+
 ## 5. 调度、验收与重规划规则
 
 ### 5.1 状态与 ready
 
 任务状态从 Attempt 与计划引用派生：`pending → running → produced → accepted`；另有 `rejected/superseded`。等待和 attention 是当前图/操作的控制状态，不制造新 attempt。只有 Review.accept 才能把产物纳入 Accepted。Attempt.Number在同一TaskID下跨Generation单调递增，合计不得超过MaxTaskAttempts；改变Generation不能重置业务尝试额度。
+
+Attempt.EffectClass由Allocate从分配时受信成员目录冻结；后续重规划不能用新成员反推历史效果类别。尝试代次按TaskID非递减，现存任务的历史代次不得超过当前代次，accepted必须属于当前代次。缺少历史效果类别的未发布实验检查点拒绝恢复，不能猜成只读。状态上限适用于每个新返回状态；若连最小blocked结果也容纳不下，保留原State并返回容量错误，不能删除权威产物或冻结记录以凑上限。
 
 ready 同时要求：当前任务尚未 accepted、无未决 attempt、所有 DependsOn 已 accepted、InputRef 指向仍有效且摘要匹配的产物。Allocate 按 Priority 降序、宿主 TaskID 升序选择不冲突的前 N 个任务；创建 Wave 时冻结实际输入、成员版本、Claims、Fingerprint 和 AttemptKey，Waves 加一。未选中的 ready 任务留待下批。
 
@@ -392,7 +403,7 @@ retry只可指向本次被拒且受信目录声明read_only的任务，write不�
 
 根入口使用现有 `execution.NewScope`：RunID 与 budget.RootKey 相同；持久日志必须配持久预算。management 宿主通过 `adapters.GraphFactory[planning.State]` 接入已提供的 Journal/Budget/Scope，**不在槽内重新 Bind Scope 或新建预算**。
 
-工具选择与运行时分派分开：模型已经给出name的toolcall由现有Dispatcher查已注册工具并执行校验、授权、Pipeline和日志，不新增根据自然语言偷偷换工具的Router。能力检索若需要，应发生在生成call前；未知name返回原错误。现有显式PreSubstitute如被宿主使用，必须按其实际契约重新校验/授权替代工具并保留替换事实，不能把对Search的批准当成对Browser或写工具的批准。Search/Python/SQL/Excel/OCR是扩展工具示例，不代表核心全部内置或自动发现。
+工具选择与运行时分派分开：模型已经给出name的toolcall由现有Dispatcher查已注册工具并执行校验、授权、Pipeline和日志，不新增根据自然语言偷偷换工具的Router。能力检索若需要，应发生在生成call前；未知name返回原错误。普通Dispatcher的显式PreSubstitute保持原契约。规划成员本轮在审批和执行前拒绝父级或成员hook返回的PreSubstitute：现有Dispatcher的持久意图、策略与核对仍取原工具，不能证明替代动作安全恢复。未来支持须先完成实际工具/版本/参数的持久策略绑定与迁移验证，不能把对Search的批准当成对Browser或写工具的批准。Search/Python/SQL/Excel/OCR是扩展工具示例，不代表核心全部内置或自动发现。
 
 任务调用继承根 observe RunID，用冻结 AttemptKey 派生子执行上下文；`durable.WithExecutionKey` 只改变操作键，不改变根运行身份。每个成员经独立 Dispatcher 上的 `tools.NewRunnableToolFactory`（ModelInvoking=true、Resumable=true、显式 MaxAttempts=3）执行；CallID 由宿主固定为 `execute`，不能取模型参数。不要重用任何祖先 Dispatcher。Planner/Reviewer 的模型调用同样注册 Agent 用量，版本与输入需日志化；纯函数 Reviewer 不计 Agent 调用。
 
@@ -479,7 +490,7 @@ planning 成员的审批使用 `durable.AwaitInput` 的持久桥接 Approver，�
 | A19 | Group层级不改变执行依赖；能力不匹配拒绝；角色名称不授予权限 | validate/preset |
 | A20 | 来源ID/摘要/位置或引文不匹配拒绝；恢复不重抓来源；引用存在不等同事实正确 | evidence/review |
 | A21 | Issue/Repair对象必须存在；修复上游使全部依赖失效；不得削弱目标验收或扩权 | repair/integration |
-| A22 | 未知工具不自动猜测替换；显式替换重验授权；修复不能绕过权限拒绝 | tools/preset回归 |
+| A22 | 未知工具不自动猜测替换；规划成员显式替换在效果前拒绝；修复不能绕过权限拒绝 | tools/preset回归 |
 | A23 | 压缩/长期Memory删除不改变权威结果、证据、审批及预算；不跨命名空间读取 | integration/既有memory回归 |
 
 进程测试使用测试二进制 helper 子进程和显式故障栅栏，父进程只在收到“提交完成”标记后终止子进程；不使用随意 sleep 推断崩溃窗口。以文件 Store 验证跨进程读取与锁释放；需要真实外部效果的场景用本地持久计数器/业务去重表，不接生产服务。
@@ -487,3 +498,5 @@ planning 成员的审批使用 `durable.AwaitInput` 的持久桥接 Approver，�
 ## 10. 验证入口
 
 按[统一实施方案](../plans/2026-11-22-agent-system-execution.md)的U00–U13执行。通用离线案例覆盖材料、并行处理、证据验收和汇总，不绑定具体行业。新增API、示例及功能测试只有实现后才能运行，文档检查不算功能验收。
+
+宿主首次调用核心Run前必须执行`PrepareInitialState`，因为初始检查点早于normalize持久化。未提交fresh正文超限可降为最小blocked；已有历史及权威产物不可为适配容量而裁剪。`DurableConfig`固定配置/成员摘要与组件版本；恢复时须保留这些绑定和原预算根。

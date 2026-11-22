@@ -1,6 +1,6 @@
 # Agent任务执行与记忆增强实施方案
 
-状态：设计已审查，实施与功能验收未执行。
+状态：U00–U11已实现并通过专项审核；U12评估接入与U13最终验收进行中。正式核心依赖发布与本地workspace验证分开。
 
 目标：实现目标澄清、结构化计划、依赖调度、成员执行、证据验收和有界重规划；补齐记忆后台重试、成本治理和引用装配。
 
@@ -99,114 +99,114 @@ U01–U05与U06–U08可分线开发。memory.go、worker/state/recall由同一�
 
 文件：H/integration/planning_compatibility_test.go。
 
-- [ ] 记录两仓HEAD、Go版本、GOWORK和Harness核心依赖。
-- [ ] TestPlanningCompatibility覆盖两个固定槽、日志化Agent、人工等待、重建恢复、已完成槽不重跑及根预算不变。
-- [ ] 临时workspace组合通过才继续；独立依赖缺接口记为发布门禁，不提交永久replace。
+- [x] 记录两仓HEAD、Go版本、GOWORK和Harness核心依赖。
+- [x] TestPlanningCompatibility覆盖两个固定槽、日志化Agent、人工等待、重建恢复、已完成槽不重跑及根预算不变。
+- [x] 临时workspace组合通过才继续；独立依赖缺接口记为发布门禁，不提交永久replace。
 
 ### U01：冻结规划类型
 
 文件：H/planning/model.go、api.go、doc.go及测试。
 
-- [ ] 定义Goal/Plan/State/Assignment/Review、Source/Evidence、Group/Capability、Issue/Repair、窄接口和CandidateError。
-- [ ] TestPlanningTypesRoundTripAndClone、TestConfigDefaultsAndBounds验证JSON往返、深复制、默认值和容量上限。
+- [x] 定义Goal/Plan/State/Assignment/Review、Source/Evidence、Group/Capability、Issue/Repair、窄接口和CandidateError。
+- [x] TestPlanningTypesRoundTripAndClone、TestConfigDefaultsAndBounds验证JSON往返、深复制、默认值和容量上限。
 
 ### U02：实现纯校验器
 
 文件：H/planning/validate.go、identity_json.go、evidence.go、review.go、repair.go及测试。
 
-- [ ] 校验严格JSON、Goal参数、DAG、Group父链、能力、输入输出引用、验收及交付物覆盖。
-- [ ] 宿主生成产物身份/摘要；来源仅引用冻结Assignment输入。Review拒绝缺证据、错误SubjectDigest和accept+unknown/fail。
-- [ ] 先校验身份/Outcome；produced要求完整输出，rejected允许空产物，实际保留产物仍全校验；write拒绝不证明无效果。TestRejectedWithoutArtifactsReachesReview、TestOversizeResultIsBoundedRejection、TestWriteRejectionDoesNotProveNoEffect覆盖分流与写屏障。
-- [ ] TestRejectCycleAndUnknownDependency、TestUndeclaredSourceArtifactIsRejected、TestAcceptRejectsFailedUnknownAndRejectedResult、TestRepairTargetsMustMatchVisibleIssue。
+- [x] 校验严格JSON、Goal参数、DAG、Group父链、能力、输入输出引用、验收及交付物覆盖。
+- [x] 宿主生成产物身份/摘要；来源仅引用冻结Assignment输入。Review拒绝缺证据、错误SubjectDigest和accept+unknown/fail。
+- [x] 先校验身份/Outcome；produced要求完整输出，rejected允许空产物，实际保留产物仍全校验；write拒绝不证明无效果。TestRejectedWithoutArtifactsReachesReview、TestOversizeResultIsBoundedRejection、TestWriteRejectionDoesNotProveNoEffect覆盖分流与写屏障。
+- [x] TestRejectCycleAndUnknownDependency、TestUndeclaredSourceArtifactIsRejected、TestAcceptRejectsFailedUnknownAndRejectedResult、TestRepairTargetsMustMatchVisibleIssue。
 
 ### U03：身份与ready分配
 
 文件：H/planning/identity.go、ready.go及测试。
 
-- [ ] 指纹覆盖所选GoalInputIDs/摘要、能力、依赖产物、验收语义及Member.ID/EffectClass；Task.MemberID必须匹配目录身份。Slot/分组/优先级重排不改变旧attempt身份。
-- [ ] TestChangingMemberWithSameTemplateInvalidatesAcceptedResult验证相同Version/Manifest/Claims下换成员不复用，覆盖read_only换write不跳过执行。
-- [ ] GoalDigest覆盖完整GoalSpec，目标文字、约束、交付物或验收项变化均改变摘要；TestGoalDigestIncludesAllGoalFields验证确认/审批封存范围。
-- [ ] Allocate冻结材料、参数、成员版本、Manifest及Claims；冲突写任务不同批。
-- [ ] 宿主冻结无Inputs的GoalContext并核对完整目标投影；TestAssignmentPreservesGoalConstraintsWithoutExtraSources验证Planner遗漏“仅草稿”时执行输入仍带该限制，同时不携带未选材料。
-- [ ] TestAttemptKeyStableAcrossPlanRevision、TestChangingSelectedGoalInputsInvalidatesAttempt、TestConflictingWritesDoNotShareWave。
+- [x] 指纹覆盖所选GoalInputIDs/摘要、能力、依赖产物、验收语义及Member.ID/EffectClass；Task.MemberID必须匹配目录身份。Slot/分组/优先级重排不改变旧attempt身份。
+- [x] TestChangingMemberWithSameTemplateInvalidatesAcceptedResult验证相同Version/Manifest/Claims下换成员不复用，覆盖read_only换write不跳过执行。
+- [x] GoalDigest覆盖完整GoalSpec，目标文字、约束、交付物或验收项变化均改变摘要；TestGoalDigestIncludesAllGoalFields验证确认/审批封存范围。
+- [x] Allocate冻结材料、参数、成员版本、Manifest及Claims；冲突写任务不同批。
+- [x] 宿主冻结无Inputs的GoalContext并核对完整目标投影；TestAssignmentPreservesGoalConstraintsWithoutExtraSources验证Planner遗漏“仅草稿”时执行输入仍带该限制，同时不携带未选材料。
+- [x] TestAttemptKeyStableAcrossPlanRevision、TestChangingSelectedGoalInputsInvalidatesAttempt、TestConflictingWritesDoNotShareWave。
 
 ### U04：计划采纳与失效传播
 
 文件：H/planning/replan.go及测试。
 
-- [ ] 只复用依据仍有效的accepted产物；来源改变使传递下游失效。
-- [ ] 修订中已有ID与`new:<label>`分开；TestReplanNewTaskReferencesAreRewritten验证同候选新增证据任务及其引用一起分配/重写/提交，伪造旧ID拒绝，恢复不重复编号。
-- [ ] 禁止通过新ID、替换写任务或记忆删除绕过写屏障。
-- [ ] 持久WriteFreeze保护尚未就绪write的传递上游契约，已有产物摘要只追加不替换；TestWriteFreezeProtectsUnreadyAncestorAcrossRestart覆盖A已分配、B依赖R尚无产物时，改R必须block。
-- [ ] TestReplanReusesAcceptedArtifact、TestSupersededSourceInvalidatesDependentClaims、TestWriteTaskCannotBeRecreatedWithNewID、TestUnknownEffectCannotCreateAttempt。
+- [x] 只复用依据仍有效的accepted产物；来源改变使传递下游失效。
+- [x] 修订中已有ID与`new:<label>`分开；TestReplanNewTaskReferencesAreRewritten验证同候选新增证据任务及其引用一起分配/重写/提交，伪造旧ID拒绝，恢复不重复编号。
+- [x] 禁止通过新ID、替换写任务或记忆删除绕过写屏障。
+- [x] 持久WriteFreeze保护尚未就绪write的传递上游契约，已有产物摘要只追加不替换；TestWriteFreezeProtectsUnreadyAncestorAcrossRestart覆盖A已分配、B依赖R尚无产物时，改R必须block。
+- [x] TestReplanReusesAcceptedArtifact、TestSupersededSourceInvalidatesDependentClaims、TestWriteTaskCannotBeRecreatedWithNewID、TestUnknownEffectCannotCreateAttempt。
 
 ### U05：固定图与等待恢复
 
 文件：H/planning/graph.go、slots.go、goal_flow.go及测试。
 
-- [ ] 实现目标解析/澄清/确认、规划、校验、select、固定槽execute、review、revise、final_review和终止节点。
-- [ ] Wave先提交后执行；空槽零调用，Clone隔离，全部收敛再Merge；等待不取消兄弟，真实失败优先。
-- [ ] TestSingleMemberSingleSlotCompletesPlanning覆盖默认单成员/单槽的依赖、验收、重规划及恢复；最大活跃Executor为1。并行验收显式配置两槽或四槽。
-- [ ] TestFixedGraphRunsDependencyWaves、TestPartialWaitDoesNotReallocateWave、TestRealFailureWinsOverWait、TestGoalAnswerBindsRequestAndQuestionSet、TestGraphBoundsAllLoops。
+- [x] 实现目标解析/澄清/确认、规划、校验、select、固定槽execute、review、revise、final_review和终止节点。
+- [x] Wave先提交后执行；空槽零调用，Clone隔离，全部收敛再Merge；等待不取消兄弟，真实失败优先。
+- [x] TestSingleMemberSingleSlotCompletesPlanning覆盖默认单成员/单槽的依赖、验收、重规划及恢复；最大活跃Executor为1。并行验收显式配置两槽或四槽。
+- [x] TestFixedGraphRunsDependencyWaves、TestPartialWaitDoesNotReallocateWave、TestRealFailureWinsOverWait、TestGoalAnswerBindsRequestAndQuestionSet、TestGraphBoundsAllLoops。
 
 ### U06：Memory格式与dirty登记
 
 文件：G/memory的durable_state/state_tx/state_codec/state_head/state_cache、job、worker；新增derivation.go及迁移测试。
 
-- [ ] `/4`只包含本次需要的DerivationWork、RequestSeq及原有对象，完整覆盖读写、overlay、压缩、容量、删除和回退；不预建Representation表。
-- [ ] state锁内先登记队列再提交dirty；实现MarkDerivationsDirty，由宿主对已知namespace显式登记升级。
-- [ ] MarkDerivationsDirty显式解除技术暂停；内部输入变更不自动解除。TestExplicitDerivationRetryPreservesBudgetAndRequestSeq验证重试不清维护阻塞/账本/请求序号。
-- [ ] 持久记录BlockedBudgetRootKey、退避和普通失败次数；新增持续模型重试等待U07准入后启用。
-- [ ] TestStateV2AndV3MigrateToV4、TestOldReaderRejectsV4、TestDirtyFieldsSurviveCompaction、TestCrashBetweenQueueAndDirtyCommitLeavesDiscoverableWork。
+- [x] `/4`只包含本次需要的DerivationWork、RequestSeq及原有对象，完整覆盖读写、overlay、压缩、容量、删除和回退；不预建Representation表。
+- [x] state锁内先登记队列再提交dirty；实现MarkDerivationsDirty，由宿主对已知namespace显式登记升级。
+- [x] MarkDerivationsDirty显式解除技术暂停；内部输入变更不自动解除。TestExplicitDerivationRetryPreservesBudgetAndRequestSeq验证重试不清维护阻塞/账本/请求序号。
+- [x] 持久记录BlockedBudgetRootKey、退避和普通失败次数；新增持续模型重试等待U07准入后启用。
+- [x] TestStateV2AndV3MigrateToV4、TestOldReaderRejectsV4、TestDirtyFieldsSurviveCompaction、TestCrashBetweenQueueAndDirtyCommitLeavesDiscoverableWork。
 
 ### U07：后台预算与可靠重试
 
 文件：G/memory/background_budget.go、worker.go、indexing.go、job.go、memory.go、community.go、graph.go及测试。
 
-- [ ] 每次chat/JSON修复/维护embedding在网络调用前预留；使用清洁维护ctx及显式nil lineage，未知用量不退款。
-- [ ] 验证单调用单物理请求客户端、估算器版本、MaxOutputTokens；HTTP计数必须与预留一致。
-- [ ] MaxDerivationsPerPass只在社区/反思单元之间让出；逐社区复核提交，不把JSON修复拆到下一轮。TestCommunityProgressSurvivesPassLimitAndRestart用三社区、每轮一单元验证三轮三次有效请求，重启不重做已存摘要；另以修复响应验证一个单元内仍可多次真实准入。
-- [ ] 完整请求input_oversized在调用前明确暂停，不静默截断；TestOversizedDerivationPausesBeforeRequest覆盖反思超长。窗口耗尽保留未完成Job且不计技术失败；TestBudgetPausePreservesPendingExtraction验证切窗后继续，不清旧费用。
-- [ ] 清理先于付费修补，额度耗尽保留index-repair登记；无新会话也重试dirty，1秒至5分钟退避，普通失败5次暂停。
-- [ ] TestDerivationFailureWithoutNewJobsRemainsDirty、TestBackgroundPhysicalRequestsMatchReservations、TestEraseStillCompletesWhenEmbeddingBudgetExhausted、TestSameMaintenanceWindowCannotResetQuota、TestNewMaintenanceWindowUnblocksBudgetOnly。
+- [x] 每次chat/JSON修复/维护embedding在网络调用前预留；使用清洁维护ctx及显式nil lineage，未知用量不退款。
+- [x] 验证单调用单物理请求客户端、估算器版本、MaxOutputTokens；HTTP计数必须与预留一致。
+- [x] MaxDerivationsPerPass只在社区/反思单元之间让出；逐社区复核提交，不把JSON修复拆到下一轮。TestCommunityProgressSurvivesPassLimitAndRestart用三社区、每轮一单元验证三轮三次有效请求，重启不重做已存摘要；另以修复响应验证一个单元内仍可多次真实准入。
+- [x] 完整请求input_oversized在调用前明确暂停，不静默截断；TestOversizedDerivationPausesBeforeRequest覆盖反思超长。窗口耗尽保留未完成Job且不计技术失败；TestBudgetPausePreservesPendingExtraction验证切窗后继续，不清旧费用。
+- [x] 清理先于付费修补，额度耗尽保留index-repair登记；无新会话也重试dirty，1秒至5分钟退避，普通失败5次暂停。
+- [x] TestDerivationFailureWithoutNewJobsRemainsDirty、TestBackgroundPhysicalRequestsMatchReservations、TestEraseStillCompletesWhenEmbeddingBudgetExhausted、TestSameMaintenanceWindowCannotResetQuota、TestNewMaintenanceWindowUnblocksBudgetOnly。
 
 ### U08：引用装配与纯聊天兼容
 
 文件：G/memory/memory.go、recall.go；G/core/session/event.go；G/builder/events.go、memory_recall.go、capabilities.go及测试。
 
-- [ ] ContextLayout限制Pinned预算，ExplainSnapshot解释同一次选择且不含正文；Hydrate保持原Refs顺序，不重选。
-- [ ] Config.ContextLayout采用context_layout,omitempty；TestContextLayoutBoundsAndZero、TestPinnedCannotBypassCoreLimitThroughRecall验证零值/越界及分区不能被回流绕过。
-- [ ] TurnStart新增omitempty RecallMode；新plain-memory/1或plain-none/1，旧纯聊天不新增召回操作或改变请求意图。
-- [ ] 新协议区分首次请求尚未创建引用与已有model/use却缺recall，后者报错而非降级。
-- [ ] TestExplainUsesSameSelectionAndContainsNoBody、TestNilLayoutPreservesOldIdentity、TestLegacyPlainCompletedTurnReplaysWithoutMemoryOps、TestLegacyPlainInterruptedTurnKeepsOriginalIntent、TestNewPlainRecallProtocolMissingRecordCannotFallback。
+- [x] ContextLayout限制Pinned预算，ExplainSnapshot解释同一次选择且不含正文；Hydrate保持原Refs顺序，不重选。
+- [x] Config.ContextLayout采用context_layout,omitempty；TestContextLayoutBoundsAndZero、TestPinnedCannotBypassCoreLimitThroughRecall验证零值/越界及分区不能被回流绕过。
+- [x] TurnStart新增omitempty RecallMode；新plain-memory/1或plain-none/1，旧纯聊天不新增召回操作或改变请求意图。
+- [x] 新协议区分首次请求尚未创建引用与已有model/use却缺recall，后者报错而非降级。
+- [x] TestExplainUsesSameSelectionAndContainsNoBody、TestNilLayoutPreservesOldIdentity、TestLegacyPlainCompletedTurnReplaysWithoutMemoryOps、TestLegacyPlainInterruptedTurnKeepsOriginalIntent、TestNewPlainRecallProtocolMissingRecordCannotFallback。
 
 ### U09：解析、规划与复核Agent
 
 文件：H/planning/agent.go、agent_goal.go、agent_planner.go、agent_review.go及测试。
 
-- [ ] 实现NewAgentGoalResolver/Planner/Reviewer：fresh会话、稳定scope/版本、日志化调用后解码、CandidateError与技术错误分流。
-- [ ] 请求输入只由已提交State与固定Config构建，不附实时预算Usage；TestPlannerReplayIgnoresLiveBudgetChanges覆盖模型完成但节点未提交的崩溃窗，恢复意图一致且模型不重发。
-- [ ] Resolver仅选择宿主实际提供的材料；缺输入/口径时澄清，Reviewer按证据验收。
-- [ ] U08后证明零工具Agent实际收到非空记忆，再Forget验证后续请求移除；宿主不复制自动召回正文进PlanningInput。
-- [ ] TestResolverReplayDoesNotCallModel、TestReviewerSubjectDigestMustMatchFrozenAttempt、TestPlannerPlainMemoryIsActuallyInjectedThenRevoked、TestModelInterruptDefaultNeedsAttention。
+- [x] 实现NewAgentGoalResolver/Planner/Reviewer：fresh会话、稳定scope/版本、日志化调用后解码、CandidateError与技术错误分流。
+- [x] 请求输入只由已提交State与固定Config构建，不附实时预算Usage；TestPlannerReplayIgnoresLiveBudgetChanges覆盖模型完成但节点未提交的崩溃窗，恢复意图一致且模型不重发。
+- [x] Resolver仅选择宿主实际提供的材料；缺输入/口径时澄清，Reviewer按证据验收。
+- [x] U08后证明零工具Agent实际收到非空记忆，再Forget验证后续请求移除；宿主不复制自动召回正文进PlanningInput。
+- [x] TestResolverReplayDoesNotCallModel、TestReviewerSubjectDigestMustMatchFrozenAttempt、TestPlannerPlainMemoryIsActuallyInjectedThenRevoked、TestModelInterruptDefaultNeedsAttention。
 
 ### U10：preset成员装配
 
 文件：H/preset/planning.go、child.go、build.go、subagent.go及测试。
 
-- [ ] 实现planning-members、受信Host成员目录/Factory及Assembly访问器；PlanningBuilderFactory保留Journal且默认关闭中断模型重发。
-- [ ] 继承父权限和沙箱上限，PinManifest，fresh资源与关闭；首轮仅支持宿主持久工作目录。
-- [ ] 标准Executor把冻结GoalContext提供给执行Agent，不只传Task.Instruction；TestExecutorReceivesFrozenGoalContext验证实际请求含目标约束，不能用Planner复述替代宿主传递。
-- [ ] 审批绑定Goal/Plan/Attempt及具体动作；未知工具不暗换，显式替换重新授权。
-- [ ] TestPlanningExecutorPreservesJournal、TestPlanningPermissionRevokedBeforeWrite、TestPlanningApprovalBindsGoalPlanAndAttempt、TestUnknownToolDoesNotGuessSubstitute。
+- [x] 实现planning-members、受信Host成员目录/Factory及Assembly访问器；PlanningBuilderFactory保留Journal且默认关闭中断模型重发。
+- [x] 继承父权限和沙箱上限，PinManifest，fresh资源与关闭；首轮仅支持宿主持久工作目录。
+- [x] 标准Executor把冻结GoalContext提供给执行Agent，不只传Task.Instruction；TestExecutorReceivesFrozenGoalContext验证实际请求含目标约束，不能用Planner复述替代宿主传递。
+- [x] 审批绑定Goal/Plan/Attempt及具体动作；未知工具不暗换，规划成员显式替换在审批/效果前拒绝（现有Dispatcher不能安全绑定替代工具持久策略）。
+- [x] TestPlanningExecutorPreservesJournal、TestPlanningPermissionRevokedBeforeWrite、TestPlanningApprovalBindsGoalPlanAndAttempt、TestUnknownToolDoesNotGuessSubstitute。
 
 ### U11：联合与进程验收
 
 文件：H/integration/planning_test.go、planning_process_test.go、planning_memory_test.go。
 
-- [ ] 执行第5节全部联合测试，不以没有实际注入/调用的空路径证明成功。
-- [ ] 子进程通过明确栅栏覆盖Wave提交、分支提交、部分回答、效果已发生但回执未落盘；相同目录重启，检查键、预算、效果次数和等待点。
-- [ ] 独立模拟在线查询/写记忆embedding，证明各自实际调用且不借维护额度；普通离线案例关闭Index/Embedder。
+- [x] 执行第5节全部联合测试，不以没有实际注入/调用的空路径证明成功。
+- [x] 子进程通过明确栅栏覆盖Wave提交、分支提交、部分回答、效果已发生但回执未落盘；相同目录重启，检查键、预算、效果次数和等待点。
+- [x] 独立模拟在线查询/写记忆embedding，证明各自实际调用且不借维护额度；普通离线案例关闭Index/Embedder。
 
 ### U12：通用离线案例与文档
 

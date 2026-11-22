@@ -1,6 +1,6 @@
 # 记忆后台整理与上下文装配设计
 
-状态：增补提案，尚未实现。执行入口：[统一实施方案](../superpowers/plans/2026-11-22-agent-system-execution.md)。现有协议以[删除治理](MEMORY_GOVERNANCE.md)、[G2派生](MEMORY_G2_DERIVATION.md)及当前代码为准。
+状态：本地实现与专项验收已完成，正式版本发布另设依赖门禁。使用方式见[运行与恢复指南](../guides/MEMORY_RUNTIME_CN.md)。执行入口：[统一实施方案](../superpowers/plans/2026-11-22-agent-system-execution.md)。现有协议以[删除治理](MEMORY_GOVERNANCE.md)、[G2派生](MEMORY_G2_DERIVATION.md)及当前代码为准。
 
 ## 1. 图示与现状
 
@@ -11,7 +11,7 @@
 | Representations | 时序图谱、社区摘要、跨会话反思 | 不另建存储；overview保留为后续候选 |
 | Injected context | Pinned/查询召回、Snapshot/Hydrate | 补预算分区、选取解释和纯聊天支持 |
 
-现有Worker已能整理跨会话记录。会话压缩处理上下文长度，长期抽取形成记录，两者职责不同。自动注入目前限原生工具流：每turn Snapshot一次，每步Hydrate；Pinned仍受RecallRunes总量限制。
+现有Worker已能整理跨会话记录。会话压缩处理上下文长度，长期抽取形成记录，两者职责不同。改动前的自动注入限原生工具流：每turn Snapshot一次，每步Hydrate；Pinned仍受RecallRunes总量限制。
 
 ## 2. 后台派生重试
 
@@ -42,7 +42,7 @@ MarkDerivationsDirty也是宿主修复输入/配置/生成器后的显式技术�
 
 ## 3. 后台成本与清理
 
-当前chatJSON直接调用llm.Chat，维护embedding也直接调用Client，不自动消费Agent根预算。新增可选Config.Background，JSON标记`-`，不改变Memory.Identity：
+改动前chatJSON直接调用llm.Chat，维护embedding也直接调用Client，不自动消费Agent根预算。本次增加可选Config.Background，JSON标记`-`，不改变Memory.Identity：
 
 ```go
 type BackgroundConfig struct {
@@ -91,7 +91,7 @@ ContextLayout非nil时要求`0 <= CoreRunes <= RecallRunes-固定块头字符数
 
 ## 5. 删除与业务数据边界
 
-自动注入只持久引用，正文作为低信任消息按请求Hydrate。删除、失效、正文变更、scope切换或越权引用退出后续请求；恢复不重新检索替换旧引用。RequestHook不能改写或移动这条消息。
+自动注入只持久引用，正文作为低信任消息按请求Hydrate。删除、失效、正文变更、scope切换或越权引用退出后续请求；恢复不重新检索替换旧引用。宿主不得配置改写或移动召回消息的RequestHook：新纯聊天保持禁止RequestHook；原生工具流沿用恢复时检测意图变化的既有防护，本次不新增其首次请求拦截保证。
 
 宿主不直接复制召回块进PlanningInput/State/system。独立授权的业务来源、模型已生成的Plan/Artifact/回答按业务契约保存，Forget不改写这些输出或撤销外部效果。完整擦除需要宿主另行管理会话/运行与外部副本。
 
