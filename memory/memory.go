@@ -41,6 +41,12 @@ type Retention struct {
 	InvalidRetention time.Duration `json:"invalid_retention"`
 }
 
+// ContextLayout limits the space available to pinned records during snapshot selection.
+type ContextLayout struct {
+	// CoreRunes caps complete pinned lines including separators. Zero excludes all pinned records.
+	CoreRunes int `json:"core_runes"`
+}
+
 // Config 配置长期记忆。Durable 必填：记录、图谱与抽取任务都存于其中。
 // Index 与 Embedder 同时提供时启用向量召回，否则只按文本重合召回；Model 与 Sessions 同时提供时 Worker 才能抽取。
 type Config struct {
@@ -87,13 +93,15 @@ type Config struct {
 
 	RecallK int `json:"recall_k"`
 	// RecallRunes 是整个召回块的字符上限，含块头（约 60 个字符）与换行；小于块头时召回块总为空。
-	RecallRunes         int           `json:"recall_runes"`
-	Weights             Weights       `json:"weights"`
-	HalfLife            time.Duration `json:"half_life"`
-	ReconcileCandidates int           `json:"reconcile_candidates"`
-	ReflectionThreshold float64       `json:"reflection_threshold"`
-	JobAttempts         int           `json:"job_attempts"`
-	Retention           Retention     `json:"retention"`
+	RecallRunes int `json:"recall_runes"`
+	// ContextLayout optionally limits pinned records within RecallRunes.
+	ContextLayout       *ContextLayout `json:"context_layout,omitempty"`
+	Weights             Weights        `json:"weights"`
+	HalfLife            time.Duration  `json:"half_life"`
+	ReconcileCandidates int            `json:"reconcile_candidates"`
+	ReflectionThreshold float64        `json:"reflection_threshold"`
+	JobAttempts         int            `json:"job_attempts"`
+	Retention           Retention      `json:"retention"`
 
 	// Now 是时钟，nil 时用 time.Now；评测与回放注入固定时间，使新近性不随运行耗时变化。不进入 Identity。
 	// 对话时间（抽取提示中的日期、记录的 ValidFrom、关系的生效时间）取会话事件的 Time，不受它控制，只在事件缺少时间时回退到它。
@@ -171,6 +179,13 @@ func New(cfg Config) (*Memory, error) {
 		if d.zero {
 			d.set()
 		}
+	}
+	if cfg.ContextLayout != nil {
+		layout := *cfg.ContextLayout
+		if layout.CoreRunes < 0 || layout.CoreRunes > cfg.RecallRunes-recallHeaderRunes {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "核心记忆额度 %d 超出召回块可用范围", layout.CoreRunes).WithComponent("memory").WithOperation("new")
+		}
+		cfg.ContextLayout = &layout
 	}
 	// Purge 之后旧作用域只在 RetireGrace 内重复擦除，短于 EraseWithin 时擦除窗口会提前结束。
 	if cfg.OnErase != nil && cfg.RetireGrace < cfg.EraseWithin {
