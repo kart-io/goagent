@@ -44,6 +44,8 @@ type Retention struct {
 // Config 配置长期记忆。Durable 必填：记录、图谱与抽取任务都存于其中。
 // Index 与 Embedder 同时提供时启用向量召回，否则只按文本重合召回；Model 与 Sessions 同时提供时 Worker 才能抽取。
 type Config struct {
+	// Background enables durable admission and retries for maintenance work.
+	Background *BackgroundConfig `json:"-"`
 	// Durable 是记忆数据的持久存储，须同时实现 durable.Scoped（作用域用于 Purge 的整体删除）。
 	Durable durable.Store `json:"-"`
 	// MaxStateBytes 是一个命名空间的数据（state）解压后的上限，默认 8 MiB；删除类操作不受限制。存储设置不进入 Identity。
@@ -131,6 +133,13 @@ type Memory struct {
 // 不运行 Worker（Run 或 ProcessPending）的部署必须运行 RunMaintenance（或定期调用 Maintain）：
 // 否则 Purge 中断后的旧作用域与 Forget 之后残留的向量不会被清理。
 func New(cfg Config) (*Memory, error) {
+	if err := cfg.Background.validate(); err != nil {
+		return nil, err
+	}
+	if cfg.Background != nil {
+		b := *cfg.Background
+		cfg.Background = &b
+	}
 	if cfg.Durable == nil || (cfg.Index == nil) != (cfg.Embedder == nil) || (cfg.Communities && !cfg.Graph) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆需要 Durable；Index 与 Embedder 须同时提供；Communities 需要 Graph").WithComponent("memory").WithOperation("new")
 	}
@@ -819,6 +828,9 @@ func (m *Memory) Prune(ctx context.Context) error {
 	scope, err := m.currentScope(ctx, ns)
 	if err != nil {
 		return err
+	}
+	if m.cfg.Background != nil {
+		ctx = m.maintenanceContext(ctx, ns, scope)
 	}
 	var access map[string]accessEntry
 	if m.cfg.TrackAccess {

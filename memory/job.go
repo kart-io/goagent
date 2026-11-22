@@ -38,6 +38,8 @@ type Job struct {
 	From      int64    `json:"from"`
 	To        int64    `json:"to"`
 	Aborted   bool     `json:"aborted,omitzero"`
+	// BlockedBudgetRootKey identifies the maintenance window that denied admission.
+	BlockedBudgetRootKey string `json:"blocked_budget_root_key,omitempty"`
 	// Scope 与 TurnSeq 取自轮次绑定（TurnMemory.Scope、Seq）：任务只写入登记时的作用域，
 	// 登记之后作用域内发生过遗忘（LastForgetSeq > TurnSeq）或遮蔽本轮消息的回退时丢弃，避免重新学回被遗忘或回退的内容。
 	Scope     string    `json:"scope,omitempty"`
@@ -195,7 +197,10 @@ func (m *Memory) finishJob(ctx context.Context, j Job, result error) error {
 		if !ok || cur.Status != JobPending {
 			return errNoChange
 		}
+		cur.BlockedBudgetRootKey = ""
 		switch {
+		case errors.Is(result, errBackgroundBudget):
+			cur.BlockedBudgetRootKey = m.cfg.Background.Budget.Configuration().RootKey
 		case result == nil:
 			t.Jobs.Delete(j.Key)
 			t.DoneJobs.Put(j.Key, now)
@@ -244,9 +249,11 @@ const (
 
 // queueEntry 是 queue 分片中的一条登记。
 type queueEntry struct {
-	Namespace []string    `json:"namespace"`
-	Scope     string      `json:"scope"`
-	Reason    queueReason `json:"reason"`
+	// 仅用于索引修补；同窗仍做免费清理。
+	BlockedBudgetRootKey string      `json:"blocked_budget_root_key,omitempty"`
+	Namespace            []string    `json:"namespace"`
+	Scope                string      `json:"scope"`
+	Reason               queueReason `json:"reason"`
 	// Until 只用于 queueErase：开始时刻不早于它的一次擦除成功后才注销。
 	Until time.Time `json:"until,omitzero"`
 }
@@ -338,6 +345,7 @@ func (m *Memory) queued(ctx context.Context) ([]queueEntry, error) {
 // 每 ReindexEvery 轮对有登记的命名空间执行 Reindex(false)，并回收超过 MemoryTombstoneRetention 的墓碑。
 // Worker 每轮先调用它；不运行 Worker 的部署须运行 RunMaintenance。各步的错误合并返回，不影响其余步骤。
 func (m *Memory) Maintain(ctx context.Context) error {
+	ctx = m.maintenanceParent(ctx)
 	errs := []error{m.cleanupRetiring(ctx)}
 	entries, err := m.queued(ctx)
 	if err != nil {
@@ -359,9 +367,11 @@ func (m *Memory) Maintain(ctx context.Context) error {
 		case e.Reason == queueDerivations:
 			errs = append(errs, m.settle(ctx, e, hasPendingDerivations))
 		case e.Reason == queueIndex:
-			if err := m.settle(ctx, e, nil); err != nil {
-				errs = append(errs, err)
-				continue
+			if m.cfg.Background == nil {
+				if err := m.settle(ctx, e, nil); err != nil {
+					errs = append(errs, err)
+					continue
+				}
 			}
 			reindex[key] = e.Namespace
 		case e.Reason == queueErase:

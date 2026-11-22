@@ -272,6 +272,11 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	if t.err != nil {
 		return state{}, head{}, t.err
 	}
+	if m.cfg.Background != nil {
+		if err := m.dirtyInputs(ctx, v.cur, t); err != nil {
+			return state{}, head{}, err
+		}
+	}
 	if !t.changed() {
 		return v.cur, h, nil
 	}

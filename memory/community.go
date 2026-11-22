@@ -160,6 +160,34 @@ func (m *Memory) RefreshCommunities(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if m.cfg.Background != nil {
+		unlock, err := m.cfg.Durable.Lock(ctx, workerID)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = unlock() }()
+		scope, err := m.currentScope(ctx, ns)
+		if err != nil {
+			return err
+		}
+		e := queueEntry{Namespace: ns, Scope: scope, Reason: queueDerivations}
+		_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+			w, _ := t.Derivations.Get("community")
+			if w.DirtySeq > w.DoneSeq {
+				return errNoChange
+			}
+			if err := m.register(ctx, e); err != nil {
+				return err
+			}
+			w.DirtySeq++
+			t.Derivations.Put("community", w)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return m.runDerivationKinds(ctx, e, []string{"community"})
+	}
 	return m.syncCommunities(ctx, ns)
 }
 
@@ -190,11 +218,17 @@ func (m *Memory) syncCommunities(ctx context.Context, ns []string) error {
 	}
 	current := map[string]bool{}
 	var fresh []summarized
+	started := 0
+	_, bounded := ctx.Value(derivationKey{}).(derivationUnit)
 	for _, c := range detectCommunities(ns, edges, names) {
 		current[c.ID] = true
 		if old, ok := s.Communities[c.ID]; ok && old.Fingerprint == c.Fingerprint {
 			continue
 		}
+		if bounded && started >= m.cfg.Background.MaxDerivationsPerPass {
+			return errPassLimit
+		}
+		started++
 		facts := communityEdges(c.Members, edges)
 		basis := make(map[string][2]int64, 3*len(facts))
 		for _, e := range facts {
@@ -207,7 +241,21 @@ func (m *Memory) syncCommunities(ctx context.Context, ns []string) error {
 		if err := m.summarizeCommunity(ctx, &c, facts, names); err != nil {
 			return err
 		}
-		fresh = append(fresh, summarized{c: c, basis: basis})
+		item := summarized{c: c, basis: basis}
+		if bounded {
+			_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+				if err := currentDerivation(ctx, t); err != nil {
+					return err
+				}
+				syncCommunitiesTx(t, ns, []summarized{item})
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		} else {
+			fresh = append(fresh, item)
+		}
 	}
 	stale := false
 	for id := range s.Communities {
@@ -217,6 +265,9 @@ func (m *Memory) syncCommunities(ctx context.Context, ns []string) error {
 		return nil
 	}
 	_, err = m.mutate(ctx, ns, scope, func(t *tx) error {
+		if err := currentDerivation(ctx, t); err != nil {
+			return err
+		}
 		syncCommunitiesTx(t, ns, fresh)
 		return nil
 	})

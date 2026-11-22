@@ -302,7 +302,9 @@ var communityKind = kind[Community]{
 var jobKind = kind[Job]{
 	clone:     func(j Job) Job { return j },
 	normalize: func(j *Job, ns []string) bool { return normNS(&j.Namespace, ns) },
-	size:      func(_ string, j Job) int { return 64 + len(j.Key) + len(j.Session) + len(j.Status) + len(j.Error) },
+	size: func(_ string, j Job) int {
+		return 64 + len(j.Key) + len(j.Session) + len(j.Status) + len(j.Error) + len(j.BlockedBudgetRootKey)
+	},
 }
 
 var doneKind = kind[time.Time]{
