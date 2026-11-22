@@ -46,7 +46,7 @@ func TestSameMaintenanceWindowCannotResetQuota(t *testing.T) {
 
 func TestDerivationFailureWithoutNewJobsRemainsDirty(t *testing.T) {
 	st := newHookStore(t)
-	now := time.Now()
+	now := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
 	model := &scriptedModel{reply: func(string, string) (string, error) { return "", errors.New("失败") }}
 	m := workerMemory(t, Config{Durable: st, Model: model, Now: func() time.Time { return now }, ReflectionThreshold: .5, Background: maintenanceConfig(t, st, "retry", 20)})
 	ctx := WithNamespace(context.Background(), testNS...)
