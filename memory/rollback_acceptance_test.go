@@ -1,7 +1,6 @@
 package memory_test
 
 import (
-	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/memory"
 )
