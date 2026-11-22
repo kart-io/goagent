@@ -47,9 +47,17 @@ func (m *Memory) dirtyInputs(ctx context.Context, old state, t *tx) error {
 	}
 	_, maintaining := ctx.Value(maintenanceKey{}).(string)
 	repair := false
+	if maintaining && m.cfg.Index != nil {
+		for id := range t.Records.changes {
+			if activeRecordKey(old.Records[id]) != activeRecordKey(t.Records.m[id]) {
+				repair = true
+				break
+			}
+		}
+	}
 	for id := range t.Entities.changes {
 		a, b := old.Entities[id], t.Entities.m[id]
-		if maintaining && m.cfg.Index != nil && a.ID != "" && b.ID != "" && a.Name != b.Name {
+		if maintaining && m.cfg.Index != nil && entityKey(a) != entityKey(b) {
 			repair = true
 		}
 		if a.Name != b.Name || a.Incarnation != b.Incarnation || a.ContentRev != b.ContentRev {

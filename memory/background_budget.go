@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/kart-io/goagent/core/budget"
@@ -89,7 +90,9 @@ func (m *Memory) reserveBackground(ctx context.Context, scope string, estimate i
 	}
 	key := fmt.Sprintf("memory/%s/%d", scopeName(ns, scope), seq)
 	err = m.cfg.Background.Budget.ReserveAttributed(ctx, key, estimate, nil)
-	if errors.Is(err, agentErrors.ErrModelBudgetExceeded) || errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+	deadline := m.cfg.Background.Budget.Configuration().DeadlineUnixMilli
+	windowExpired := errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && deadline > 0 && time.Now().UnixMilli() >= deadline
+	if errors.Is(err, agentErrors.ErrModelBudgetExceeded) || windowExpired {
 		return "", errors.Join(errBackgroundBudget, err)
 	}
 	return key, err
@@ -122,9 +125,11 @@ func (m *Memory) backgroundChat(ctx context.Context, msgs []llm.Message) (*llm.C
 	callCtx, cancel := budget.Bind(ctx, b.Budget)
 	defer cancel()
 	resp, evidence, err := m.collectBackground(callCtx, req)
-	err = windowDeadline(ctx, callCtx, err)
 	_, recordErr := b.Budget.RecordEvidence(context.WithoutCancel(ctx), key, nil, evidence)
-	return resp, errors.Join(err, recordErr)
+	if err = windowDeadline(ctx, callCtx, errors.Join(err, recordErr)); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionRequest) (*llm.CompletionResponse, usage.Evidence, error) {
 	var evidence usage.Evidence
@@ -142,6 +147,14 @@ func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionReque
 	for {
 		select {
 		case <-ctx.Done():
+			// 客户端可能在截止后同时交付终止块；保留已送达的用量，不接受其正文。
+			select {
+			case last := <-stream:
+				if last != nil && last.Usage != nil {
+					evidence = chunkEvidence(last.Usage)
+				}
+			default:
+			}
 			return nil, evidence, ctx.Err()
 		case chunk, ok := <-stream:
 			if !ok {
@@ -151,7 +164,7 @@ func (m *Memory) collectBackground(ctx context.Context, req *llm.CompletionReque
 				continue
 			}
 			if chunk.Usage != nil {
-				evidence = usage.Evidence{Tokens: chunk.Usage.Tokens(), KnownFields: chunk.Usage.Fields(), Source: "provider"}
+				evidence = chunkEvidence(chunk.Usage)
 			}
 			if chunk.Error != nil {
 				return nil, evidence, chunk.Error
@@ -190,14 +203,23 @@ func (m *Memory) requestEmbedding(ctx context.Context, text string) ([]float32, 
 	callCtx, cancel := budget.Bind(ctx, b.Budget)
 	defer cancel()
 	vec, err := m.cfg.Embedder.Embed(callCtx, text)
-	err = windowDeadline(ctx, callCtx, err)
 	_, recordErr := b.Budget.RecordEvidence(context.WithoutCancel(ctx), key, nil, usage.Evidence{})
-	return vec, errors.Join(err, recordErr)
+	if err = windowDeadline(ctx, callCtx, errors.Join(err, recordErr)); err != nil {
+		return nil, err
+	}
+	return vec, nil
+}
+
+func chunkEvidence(u *llm.Usage) usage.Evidence {
+	return usage.Evidence{Tokens: u.Tokens(), KnownFields: u.Fields(), Source: "provider"}
 }
 
 func windowDeadline(parent, call context.Context, err error) error {
-	if err != nil && parent.Err() == nil && errors.Is(call.Err(), context.DeadlineExceeded) {
-		return errors.Join(errBackgroundBudget, err)
+	if parent.Err() != nil {
+		return errors.Join(err, parent.Err())
 	}
-	return err
+	if errors.Is(call.Err(), context.DeadlineExceeded) {
+		return errors.Join(errBackgroundBudget, context.DeadlineExceeded, err)
+	}
+	return errors.Join(err, call.Err())
 }

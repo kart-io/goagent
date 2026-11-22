@@ -268,10 +268,39 @@ func (m *Memory) Reindex(ctx context.Context, force bool) error {
 	}
 	if m.cfg.Background != nil {
 		return m.settle(ctx, e, func(t *tx) bool {
-			return t.scalars.LastForgetSeq != s.LastForgetSeq || t.scalars.LastRewindSeq != s.LastRewindSeq
+			return t.scalars.LastForgetSeq != s.LastForgetSeq || t.scalars.LastRewindSeq != s.LastRewindSeq || !sameIndexInputs(s, t.working())
 		})
 	}
 	return nil
+}
+
+// 只比较索引采用的版本；预算序号和访问统计不影响本轮修补结算。
+func sameIndexInputs(before, after state) bool {
+	if len(before.Entities) != len(after.Entities) {
+		return false
+	}
+	for id, e := range before.Entities {
+		if entityKey(e) != entityKey(after.Entities[id]) {
+			return false
+		}
+	}
+	for id, r := range before.Records {
+		if activeRecordKey(r) != activeRecordKey(after.Records[id]) {
+			return false
+		}
+	}
+	for id, r := range after.Records {
+		if _, exists := before.Records[id]; !exists && r.Valid() {
+			return false
+		}
+	}
+	return true
+}
+func activeRecordKey(r Record) indexKey {
+	if !r.Valid() {
+		return indexKey{}
+	}
+	return recordKey(r)
 }
 
 func (m *Memory) reindex(ctx context.Context, ns []string, scope string, s state, sp indexSpace, force, blocked bool) error {
