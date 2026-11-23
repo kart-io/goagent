@@ -35,6 +35,9 @@ func New(s *mg.Service, c Config) (*Handler, error) {
 	if s == nil || c.ActorFromRequest == nil {
 		return nil, agentErrors.ErrManagementInvalid
 	}
+	if err := s.ValidateRemoteTaskBudget(); err != nil {
+		return nil, err
+	}
 	limit, err := mg.RequestBytes(c.MaxInputBytes)
 	if err != nil {
 		return nil, err

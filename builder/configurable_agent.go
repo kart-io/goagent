@@ -33,6 +33,7 @@ type ConfigurableAgent[S core.State] struct {
 	retrievalConfig RetrievalConfig
 	mu              sync.RWMutex
 	executionGate   chan struct{}
+	unboundedWarned sync.Once
 	// initialState 是构建时状态的编码；stateSession/stateSeq 是当前状态对应的会话与 turn/end 序号。
 	// 进行中的轮次 stateSeq 为 -1，stateBase/stateBaseSeq 是它开始前的状态与对应序号，用于撤回失败轮次的修改。
 	// 这些字段只在 executionGate 内读写。

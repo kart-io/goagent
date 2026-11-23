@@ -61,7 +61,7 @@ func NewFixture(t testing.TB) *Fixture {
 }
 
 func (f *Fixture) Config() mg.Config {
-	return mg.Config{Store: f.Store, Sessions: f.Sessions, HistoryReader: History{Sessions: f.Sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"offline": f.Factory}}
+	return mg.Config{Store: f.Store, Sessions: f.Sessions, HistoryReader: History{Sessions: f.Sessions}, Authorizer: mg.TenantAuthorizer{}, Factories: map[string]mg.Factory{"offline": f.Factory}, UnlimitedRemoteTaskBudget: true}
 }
 
 func (f *Fixture) Register(t testing.TB) (mg.Agent, mg.Version) {
