@@ -1,6 +1,6 @@
 # Agent任务执行与记忆增强实施方案
 
-状态：U00–U12已实现，U13本地工程验收与整体复审通过；核心v0.61.0正式发布及Harness独立公开依赖门禁尚待完成。未推送、合并或发布。
+状态：第二轮专业审核为CHANGES REQUESTED，撤回上一轮工程放行结论。新增M1/M2/E1/E2/E3与验收工具V1六项待处理问题，见第8节。此前174条映射是历史通过记录；新增5项运行代码回归尚未实现或通过。未推送、合并或发布。
 
 目标：实现目标澄清、结构化计划、依赖调度、成员执行、证据验收和有界重规划；补齐记忆后台重试、成本治理和引用装配。
 
@@ -165,9 +165,9 @@ U01–U05与U06–U08可分线开发。memory.go、worker/state/recall由同一�
 
 - [x] 每次chat/JSON修复/维护embedding在网络调用前预留；使用清洁维护ctx及显式nil lineage，未知用量不退款。
 - [x] 验证单调用单物理请求客户端、估算器版本、MaxOutputTokens；HTTP计数必须与预留一致。
-- [x] MaxDerivationsPerPass只在社区/反思单元之间让出；逐社区复核提交，不把JSON修复拆到下一轮。TestCommunityProgressSurvivesPassLimitAndRestart用三社区、每轮一单元验证三轮三次有效请求，重启不重做已存摘要；另以修复响应验证一个单元内仍可多次真实准入。
+- [ ] MaxDerivationsPerPass只在社区/反思单元之间让出；逐社区复核提交，不把JSON修复拆到下一轮。TestCommunityProgressSurvivesPassLimitAndRestart用三社区、每轮一单元验证三轮三次有效请求，重启不重做已存摘要；另以修复响应验证一个单元内仍可多次真实准入。
 - [x] 完整请求input_oversized在调用前明确暂停，不静默截断；TestOversizedDerivationPausesBeforeRequest覆盖反思超长。窗口耗尽保留未完成Job且不计技术失败；TestBudgetPausePreservesPendingExtraction验证切窗后继续，不清旧费用。
-- [x] 清理先于付费修补，额度耗尽保留index-repair登记；无新会话也重试dirty，1秒至5分钟退避，普通失败5次暂停。
+- [ ] 清理先于付费修补，额度耗尽保留index-repair登记；无新会话也重试dirty，1秒至5分钟退避，普通失败5次暂停。
 - [x] TestDerivationFailureWithoutNewJobsRemainsDirty、TestBackgroundPhysicalRequestsMatchReservations、TestEraseStillCompletesWhenEmbeddingBudgetExhausted、TestSameMaintenanceWindowCannotResetQuota、TestNewMaintenanceWindowUnblocksBudgetOnly。
 
 ### U08：引用装配与纯聊天兼容
@@ -216,8 +216,8 @@ U01–U05与U06–U08可分线开发。memory.go、worker/state/recall由同一�
 - [x] 等待示例退出后从同目录恢复，提交答案严格匹配该等待的schema。
 - [x] TestSourceScenarioCarriesLocators、TestSummaryWaitsForAcceptedEvidence、TestSourceContentChangeInvalidatesReport。
 - [x] 中英说明状态、权限、成本、删除边界、上限与旧版本恢复。
-- [x] 增加本地评估入口，按下述契约输出manifest/results.jsonl/summary.json；TestEvaluationKeepsFailuresAndLabelsPrivate、TestEvaluationVariantsHaveEqualLimits、TestEvaluationCountsPhysicalRequests校验离线运行器、失败留存、答案隔离及账本计数。
-- [x] TestEvaluationManifestIncludesIngestAndGradingFailures覆盖灌入/中途题目/Judge失败：已完成结果保留，失败与未开始项仍进入预登记分母。
+- [ ] 增加本地评估入口，按下述契约输出manifest/results.jsonl/summary.json；TestEvaluationKeepsFailuresAndLabelsPrivate、TestEvaluationVariantsHaveEqualLimits、TestEvaluationCountsPhysicalRequests校验离线运行器、失败留存、答案隔离及账本计数。
+- [ ] TestEvaluationManifestIncludesIngestAndGradingFailures覆盖灌入/中途题目/Judge失败：已完成结果保留，失败与未开始项仍进入预登记分母。
 
 评估CLI接受`-dataset PATH -out NEWDIR -backend plan|scripted|live -repeats N`；默认backend=plan、repeats=3，只生成运行计划，scripted使用离线脚本，只有显式live才调用宿主已配置模型。首批12道冻结合成题（简单提取、独立多材料、强依赖、冲突/不足证据各3题），参考答案/评分标签不进入模型请求。manifest固定模型/温度、材料与提示版本、上下文上限、根请求/token限额、重复次数和独立namespace/RunID；每组相同上限，不能给多槽追加额度。三组是现有直接Agent、规划单成员单槽、相同规划配置四槽；单槽仍包含规划/复核成本。每题至少3次，变换组运行顺序，保留失败、超时和额度耗尽于分母；恢复用例另列，不能拿日志回放充作独立试验。
 
@@ -231,7 +231,7 @@ manifest预列全部`experiment/variant/case/question/repeat`试验键及数据�
 
 - [x] 执行第6节核心与跨仓检查，并按下述验收映射逐项核对日志；不能只看命令退出码。
 - [x] 在`.claude/agent-system-checks/required-tests.json`记录`{acceptance_id, repo, package, test, log}`条目：覆盖U00–U12所有指定测试、规划设计A01–A23及I01–I07；一项可映射多个测试，同一测试可支撑多项，但必须核对具体断言覆盖该情景。实现时冻结清单，新增或改名测试同步更新。
-- [x] 保存核心与Harness所属包、完整检查及独立依赖检查的`go test -json -count=1`日志。执行Agent逐条核对清单：匹配仓库、Package和完整Test名，必须有pass；缺失、skip（含子测试）、fail、非零退出或非法日志均失败。独立依赖日志单独核验，不借workspace记录。没有完整映射及通过证据不得勾选U13。
+- [ ] 保存核心与Harness所属包、完整检查及独立依赖检查的`go test -json -count=1`日志。执行Agent逐条核对清单：匹配仓库、Package和完整Test名，必须有pass；缺失、skip（含子测试）、fail、非零退出或非法日志均失败。独立依赖日志单独核验，不借workspace记录。没有完整映射及通过证据不得勾选U13。
 - [ ] 核心所需API发布版本可获取后，Harness更新go.mod/go.sum并GOWORK=off测试/构建/vet；本地workspace通过不能替代独立依赖通过。
 - [x] 合成存储验证`/2`、`/3`迁移、停旧写者、备份与删除日志回放。回退不得只替换二进制；旧图、审批、预算和attention保留处置入口。
 - [x] 分开记录工程契约验收与模型效果评估。真实模型对照未执行时明确“控制流/恢复契约通过，模型质量收益未验证”；不阻塞离线工程验收，也不得对外宣称更好或更省。
@@ -320,8 +320,27 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go -C ../goagent-harness vet ./...
 ## 7. 完成条件
 
 - [ ] U00–U13、A01–A23及I01–I07有对应文件、验收映射、检查命令和实际通过记录；必需测试缺失、skip或只有包通过均不算完成，联合脚本通过不代表整体完成。
-- [x] 核心迁移/擦除/旧协议、后台成本/重试、权限和未知写屏障回归通过。
+- [ ] 核心迁移/擦除/旧协议、后台成本/重试、权限和未知写屏障回归通过。
 - [ ] Harness组合检查与独立依赖检查均通过，用户文档与实际能力一致。
 - [x] 没有将静态文档检查、离线脚本结果或未执行的效果实验写成产品收益。
 
-本地验收记录：核心全量make test后，最终跨实例修复再次执行完整memory/...（429个测试及子测试）与builder相关回归（48个）；核心build/vet/API/imports及独立frameworkbench通过。Harness workspace全量通过；以当前核心源码生成本地模块后，GOWORK=off全量race 607个测试及子测试、17包通过，build/vet通过。174条必需测试映射全部通过且无必需skip。上述本地打包模块不是正式发布：当前公开v0.60.0独立依赖验证失败，待批准发布v0.61.0、更新Harness go.mod/go.sum后重新完成正式独立检查。可选Docker/SSH、Linux专属和性能套件未计为通过；真实模型质量/费用收益未验证。
+上一轮本地验收记录（历史，不构成本轮放行）：核心全量make test后，最终跨实例修复再次执行完整memory/...（429个测试及子测试）与builder相关回归（48个）；核心build/vet/API/imports及独立frameworkbench通过。Harness workspace全量通过；以当前核心源码生成本地模块后，GOWORK=off全量race 607个测试及子测试、17包通过，build/vet通过。174条必需测试映射全部通过且无必需skip。上述本地打包模块不是正式发布：当前公开v0.60.0独立依赖验证失败，待批准发布v0.61.0、更新Harness go.mod/go.sum后重新完成正式独立检查。可选Docker/SSH、Linux专属和性能套件未计为通过；真实模型质量/费用收益未验证。
+
+## 8. 第二轮专业审核后的待修复清单
+
+2026-11-23，对G `30819cb8`、H `513f3f0`作独立专项复核。规划/权限域38项探针及定向测试通过，未确认新Critical/Important。Memory和评估入口分别确认以下边界；没有改动运行代码或既有测试。复现probe的PASS表示成功观察到错误行为，不能计为修复通过。
+
+| 编号 | 位置与已复现后果 | 最小修改范围 | 必需回归 |
+|---|---|---|---|
+| [ ] M1，高 | G/memory/derivation_worker.go:142–150：state满容量，失败元数据增长被拒；同一时钟7轮付费请求但Attempts仍0，无退避 | 只允许有界控制状态结算保存，复用现有shrinking或显式预留控制空间；正文继续受容量限制 | TestDerivationFailureAtStateCapacityPersistsBackoff：满容量保留失败次数/RetryAt/Paused，未到重试时间零新请求，正文上限仍有效 |
+| [ ] M2，高 | G/memory/derivation_worker.go:130–163：未开社区能力的同版Worker把no-op记Done并清队列；有能力实例后续零社区 | 不支持的类别不得被当作完成，保留dirty交给有能力实例；若选择禁止异构配置须显式校验拒绝 | TestCommunityWorkerDoesNotAcknowledgeUnsupportedWork：两种先后顺序正确收敛，默认未启用零付费且不空转 |
+| [ ] E1，中 | H/examples/planning-agent/cmd/eval/main.go:14、59：首个请求后Ctrl-C，36项计划只有0条结果且summary缺失 | 复用memory-eval的signal.NotifyContext，ctx贯穿Write，等待调用/结算收尾再退出 | TestInterruptWritesAllPlannedTrialTerminals：localhost栅栏后SIGINT，planned所有键恰有一个终态，成本与分母保留 |
+| [ ] E2，中 | H/examples/planning-agent/internal/memoryeval/meter.go:74–86：Usage已在buffer公布，取消分支随机丢失已知5 tokens | 有界收集已发布用量，取消仍作为错误；结算不受已取消ctx阻断，禁止无限等流 | TestCancellationRetainsBufferedUsageEvidence：同样已发布证据在取消时稳定记录5 tokens，准入仍1次 |
+| [ ] E3，中 | H/examples/planning-agent/internal/memoryeval/run.go:123–135：重复session ID导致第二段被Job幂等跳过，off与两memory组历史不等价却都completed | 创建目录、调用模型前校验每case的session ID非空且唯一；不偷偷合并或改ID | TestDuplicateSessionIDsRejectedBeforeFormation：空/重复键均拒绝，零目录产物及模型调用 |
+| [ ] V1，中 | G私有verify_acceptance.py：绿色test/package JSON加exit=1，校验器仍报告通过，因为未读取退出状态 | 每次命令保留真实exit，缺失/非零/非法都失败；不能从package pass倒推或补造exit0 | 自动负例：绿色JSON+非零exit必须失败，缺失exit也失败；完成后重核全部映射 |
+
+执行顺序：先M1/M2，再E1/E2/E3，再V1和整体验收。五个新增Go回归已登记为pending；必须先编写正确行为断言，证明旧行为失败，再做修复与定向race。只有对应完整Test名实际pass、所属包完整pass、命令exit0且无必需skip才可勾选；“no tests to run”不能算通过。本轮仅审核与文档更新，没有执行这些运行代码修复。
+
+低优先说明：physical_requests目前实际为Client提交数；非法URL可出现transport=0而计数=1，这是测量命名问题，预算保守预留仍正确。优先准确标为provider submissions；若需真实HTTP数，单列独立transport观察，不能释放预留来凑相等。默认12次形成请求限制应在跑长历史前配置，不是预算绕过。MaxArtifactTotalBytes按单次TaskResult正文合计，Goal.Inputs另用相同值，整个含历史State由MaxStateBytes控制；双语README已澄清。来源校验两个入口均有保护意义，本轮不为去重而删除校验或引入新框架。
+
+正式公开依赖门禁继续未通过；本轮还存在上述工程问题，不建议合并或发布。旧报告和失败日志保留，详细专业报告及复现源存放本机`.claude/reviews/2026-11-23-second-audit/`，不另建公共过程报告。
