@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-11-23
+
 ### 记忆可靠性与引用装配
 
 - 新增可选后台维护预算及逐物理请求准入，派生工作持久记录进度、技术重试与预算阻塞；新窗口不重置技术失败。
@@ -1562,7 +1564,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.60.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.61.0...HEAD
+[0.61.0]: https://github.com/kart-io/goagent/compare/v0.60.1...v0.61.0
 [0.60.1]: https://github.com/kart-io/goagent/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/kart-io/goagent/compare/v0.59.2...v0.60.0
 [0.59.2]: https://github.com/kart-io/goagent/compare/v0.59.1...v0.59.2
