@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.60.1] - 2026-11-23
+
+### 破坏性变更：远程入口要求配置任务预算
+
+`Config.DefaultTaskBudget` 改为零值不限后，远程调用方（客户端提交的预算会被丢弃）默认就能提交模型请求、工具调用与时长都不受限的任务。`httpapi.New`、`a2a.New`、`mcpserver.New`/`NewHTTPHandler`（经 `protocol.New`）现在在 `DefaultTaskBudget` 为零值时返回 `ErrManagementInvalid`。
+
+迁移：为 `Config.DefaultTaskBudget` 设置上限，要保持升级前的远程默认值传 `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}`；确需远程任务不限时设置 `Config.UnlimitedRemoteTaskBudget = true`。自建远程入口在构造时调用新增的 `Service.ValidateRemoteTaskBudget()`。
+
+### 新增
+
+- `builder`：带工具的 Agent 既未设置 `MaxIterations`、`Timeout`，ctx 也没有截止时间或预算时，首次执行回合经 `WithLogger`（未设置时为 `slog.Default()`）写一条警告，每个 Agent 一次；行为不变。
+
+## [0.60.0] - 2026-11-20
+
 ### 破坏性变更：限额改由调用方配置
 
 限额是宿主策略，框架写死后宿主无法表达“不限”或自己的约束（例如推理模型被 2000 token 截断、接入工具后第 10 轮被悄悄去工具、10000 行扫描静默漏掉审批与清理对象）。本版本按三类语义统一处理（PR 需加 `breaking-change` 标签）：
@@ -73,40 +87,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。子流程工具无法再包一层（会丢掉超时与持久策略），改用新增的 `tools.RunnableToolConfig.ConcurrentCalls` 与 `multiagent.Member.ConcurrentCalls` 声明，默认 false：需要成员或子调查同轮并行的 Supervisor 须显式打开。`tools/middleware.WrappedTool` 转发内层工具的声明。
 
-### 破坏性变更：远程入口要求配置任务预算
-
-`Config.DefaultTaskBudget` 改为零值不限后，远程调用方（客户端提交的预算会被丢弃）默认就能提交模型请求、工具调用与时长都不受限的任务。`httpapi.New`、`a2a.New`、`mcpserver.New`/`NewHTTPHandler`（经 `protocol.New`）现在在 `DefaultTaskBudget` 为零值时返回 `ErrManagementInvalid`。
-
-迁移：为 `Config.DefaultTaskBudget` 设置上限，要保持升级前的远程默认值传 `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}`；确需远程任务不限时设置 `Config.UnlimitedRemoteTaskBudget = true`。自建远程入口在构造时调用新增的 `Service.ValidateRemoteTaskBudget()`。
-
 ### 新增
 
-- `builder`：带工具的 Agent 既未设置 `MaxIterations`、`Timeout`，ctx 也没有截止时间或预算时，首次执行回合经 `WithLogger`（未设置时为 `slog.Default()`）写一条警告，每个 Agent 一次；行为不变。
 - `management/adapters`：原生运行时声明 `Capabilities.Reconcile`。结果未知或崩溃后尝试次数用尽的工具调用进入 attention，`Task.Operations` 列出这些调用（`tool/` 前缀、带 `ParentKey`）；宿主以 `ResumeTask{ReconciliationRef}` 续跑，`Reconcile` 要求恰好覆盖本轮未决调用（否则 `ErrManagementConflict`），结论统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时为固定说明文字；`not_applied` 记为业务拒绝，不重跑。模型请求中断引起的 attention 没有 `Operations`，只能取消。见 [management 原生运行时的核对](management/README.md#原生运行时的核对)。
 - `tools`：新增 `Reconciliation` 与 `WithReconciliation(ctx, r)`，Dispatcher 据此为列出的中断调用定案；新增 `DurableCallPolicyProvider`，工具可按校验后的参数声明单次调用的持久策略（结果只能取决于参数）。
 - `core/durable`：新增 `errors.ErrEffectUnknown` 哨兵，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
 - `management/adapters`：原生运行时审批等待的 `Wait.Info` 新增 `arguments`（工具调用参数）。
 - `core/durable`：内层操作需要宿主处理时，外层记录无论是否 `Resumable` 都会在续跑时重新进入（只回放内层），不消耗尝试次数；`ParentKey` 序列化为 `parent_key`。
 - `management`：`Task.Operations` 为历史记录，核对成功后不清空。
-
 - `skills`（非破坏）：新增 `DiscoverFS(ctx, fsys, source, opts)`，可从 `embed.FS`、`os.Root.FS()` 等通用 `fs.FS` 发现技能，符号链接是否跟随由传入的 `fs.FS` 决定；新增 `DiscoverWithOptions` 与 `DiscoverOptions`（`MaxFileBytes`、`MaxTotalBytes`、`MaxFiles`、`MaxDescription`、`MaxDepth`，0 为默认，`skills.Unlimited` 为不限，其他负数报错），`Discover` 行为不变；新增 `Catalog.Select(names...)`（子目录与父目录共享句柄，仅父目录 `Close` 释放）与 `Catalog.Prompt()`（按名称排序列出 `name: description`，跳过 `DisableModelInvocation`）。
-- `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
-- `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
-- `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
-- `llm/providers`：新增 MiniMax 预设 `NewMiniMaxWithOptions`（`constants.ProviderMiniMax`，环境变量 `MINIMAX_API_KEY`/`MINIMAX_BASE_URL`/`MINIMAX_MODEL`，默认模型 `minimax-m2.7`），走 OpenAI 兼容协议，支持视觉与原生工具流。推理强度为 `none` 时，M3 系列改发 `thinking: {"type":"disabled"}`，M2.x 不接受该开关，`none` 被忽略（两者都不再发送 `reasoning_effort`）。
-- `llm`：新增批量 embedding：`BatchEmbeddingClient.EmbedBatch(ctx, texts)` 一次请求返回按输入顺序排列的向量，`AsBatchEmbedder(client)` 在客户端无 embedding 能力或未实现时返回 nil；OpenAI 兼容族与 Gemini 已实现，`Embed` 改为经 `EmbedBatch` 处理单条。空列表、空文本、返回数量或索引不符均返回错误。新增 `WithEmbeddingDimensions(n)`（OpenAI 兼容族与 Gemini 的输出维度，0 不发送，负数在构造时报错），`ConfigToOptions` 同步透传 `EmbeddingDimensions`。
-- API 稳定性政策：`scripts/stable-packages.txt` 列出承诺兼容的稳定包（builder、core 执行子包、workflow、llm、tools 治理子包、interfaces、errors、execution、mcp/remote），其余为实验性。稳定包的破坏性变更须先弃用并至少保留一个次版本；`scripts/check_api_compat.sh` 用 apidiff 与最近 tag 比较，PR 流水线中稳定包出现不兼容变更即失败，`breaking-change` 标签可放行。见 [API 稳定性政策](docs/API_STABILITY_CN.md)。
-- 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
-- `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
-
-- `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
-
-- 日志接口：新增稳定包 `core/logging`，定义与 `*slog.Logger` 方法签名一致的 `Logger`（`DebugContext`/`InfoContext`/`WarnContext`/`ErrorContext`），`*slog.Logger` 与 `*slogx.Logger` 可直接传入，库本身不依赖 slogx；`Default()` 每次调用读取 `slog.Default()` 并把来源记为调用方，`Discard()` 丢弃全部记录。`core/observe` 新增 `NewLogObserver`（每个事件写一条结构化记录，只含元数据、不带来源位置，不含输入输出与供应商错误文本；执行失败与 panic 为 Error，其他失败与模型重试为 Warn，结束、重放、等待为 Info，其余为 Debug）与 `AddObserver`（与已绑定观察者并存，各自隔离 panic）。`builder` 新增 `WithLogger`，把运行生命周期写入日志，Builder 的警告、回调失败与 `WithVerbose` 输出也写入它；嵌套 Agent 只由最外层记录。`core` 新增 `NewContextLoggingCallback`，`tools/middleware` 新增 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。接入 slogx（建议 v0.2.2 及以上）见 [宿主集成指南](docs/guides/HOST_INTEGRATION_CN.md#日志)。
-- `builder`：`WithTools` 注册的普通工具此前不发 tool 观测事件（只有 Dispatcher 派发的工具发），宿主观察者与日志都看不到这类工具调用。现在 Builder 为它们发出 `tool_start`、`tool_end`、`tool_error`（panic 记为 `panic` 类别，照常上抛）。新增 `interfaces.ObservedCallTool`：`Dispatcher.Tools` 声明自己发出这些事件，Builder 不再重复；包装 Dispatcher 工具的包装器须转发它，否则每次调用记两次。
-
-### 弃用
-
-- `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
 
 ### 行为变化
 
@@ -121,7 +110,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `management`：投递器保存结果失败时经 `Config.Report`（`outbox_save`）上报并按 `DeliveryBackoffMax` 封顶的指数退避重试，不再退出 `Run`；接收端 panic 计为一次投递失败。投递重试仍无次数上限、无死信。
 - `builder`：并行轮次中第一个失败是 attention 时，返回所有 attention 错误的合并，宿主能一次拿到全部未决调用。
 
+## [0.59.2] - 2026-11-20
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- fix(management): 执行锁被旧租约占用时重排任务而非判失败
+
+## [0.59.1] - 2026-11-20
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- fix(management): 取消运行时以 ctx.Err() 为准，任务记为已取消
+
+## [0.59.0] - 2026-11-19
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- feat(management): 公开内存存储供宿主测试使用
+- feat(management): 向原生宿主暴露实时 Agent 事件
+
+## [0.58.0] - 2026-11-19
+
+### 新增
+
+- `llm`：OpenAI 兼容流式请求（含 DeepSeek）固定发送 `stream_options.include_usage`，one-api、未开 `drop_params` 的 LiteLLM 等严格网关会拒绝该字段。新增 `WithStreamUsage(enabled)` 与 `LLMOptions.DisableStreamUsage`，传 `false` 时不再发送 `stream_options`（此时流通常不带用量）；默认仍发送，`common.ConfigToOptions` 同步透传。
+
+### 修复
+
+- `llm/providers`：DeepSeek 显式推理配置此前一律返回 `CodeInvalidConfig`，调用方无法关闭思考。现在推理强度为 `none` 时发送 `thinking: {"type":"disabled"}`（覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`，不发送 `reasoning_effort`）；其余强度与 thinking budget 仍返回 `CodeInvalidConfig`，未配置推理时请求不变。
+
+## [0.57.1] - 2026-11-19
+
+### 修复
+
+- `llm/providers`：MiniMax 的 OpenAI 兼容视觉接口只读 `max_completion_tokens`、忽略 `max_tokens`，带图片（`Message.Images`）的请求输出上限此前静默失效。现在 MiniMax 预设在请求含图片时改发 `max_completion_tokens`（不再发 `max_tokens`），覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`；纯文本请求与其他提供方不变。
+
+## [0.57.0] - 2026-11-19
+
+### 新增
+
+- `llm`：新增 `WithHTTPClient(*http.Client)` 与 `LLMOptions.HTTPClient`，OpenAI 兼容族、DeepSeek、Anthropic、Gemini 的请求改走注入客户端的 `Transport`（为空时仍用 `http.DefaultTransport`）并沿用其 `CheckRedirect`，宿主据此接入出站安全策略（如 SSRF 防护）。超时与自定义请求头照常生效，`Timeout` 与 `Jar` 被忽略；注入客户端的配置不进入 `utils/httpclient` 的客户端缓存，每次新建。`common.ConfigToOptions` 同步透传该字段。
+- `llm`：`Message` 新增 `Images []ImagePart`（`ImagePart.URL` 为 https 地址或 `data:` URI）。OpenAI 兼容族把文本与图片按多段内容发送；**行为变化**：Anthropic 与 Gemini 遇到带图片的消息返回 `CodeInvalidInput` 错误（`images not supported`），不再静默丢弃图片。
+- `llm/providers`：新增 MiniMax 预设 `NewMiniMaxWithOptions`（`constants.ProviderMiniMax`，环境变量 `MINIMAX_API_KEY`/`MINIMAX_BASE_URL`/`MINIMAX_MODEL`，默认模型 `minimax-m2.7`），走 OpenAI 兼容协议，支持视觉与原生工具流。推理强度为 `none` 时，M3 系列改发 `thinking: {"type":"disabled"}`，M2.x 不接受该开关，`none` 被忽略（两者都不再发送 `reasoning_effort`）。
+- `llm`：新增批量 embedding：`BatchEmbeddingClient.EmbedBatch(ctx, texts)` 一次请求返回按输入顺序排列的向量，`AsBatchEmbedder(client)` 在客户端无 embedding 能力或未实现时返回 nil；OpenAI 兼容族与 Gemini 已实现，`Embed` 改为经 `EmbedBatch` 处理单条。空列表、空文本、返回数量或索引不符均返回错误。新增 `WithEmbeddingDimensions(n)`（OpenAI 兼容族与 Gemini 的输出维度，0 不发送，负数在构造时报错），`ConfigToOptions` 同步透传 `EmbeddingDimensions`。
+
+## [0.56.0] - 2026-11-19
+
+### 新增
+
+- `core/session`：新增 `Validate(events)` 与 `errors.ErrSessionInvalidLog`，校验会话日志的结构不变式（序号连续、已知类型可解码且消息角色相符、轮次开始与结束交替、中止轮次恰好撤销本轮、`Surface` 只出现在改写/退回/中止轮次上且只覆盖之前的事件），防止自定义 Store、Fork 或手写事件让推导出的历史悄悄变形。未知事件类型放行（不能带 `Surface`）；`sessiontest.Run` 对自定义 Store 读回的完整日志执行校验；Builder 不在每轮调用。`management.ForkSession` 在复制前校验源日志前缀，**行为变化**：只写 `turn/end` 而没有对应 `turn/start` 的自定义运行器，其会话不能再 Fork（返回 `ErrManagementInvalid`），须按 Builder 的格式写出完整轮次。
+- 日志接口：新增稳定包 `core/logging`，定义与 `*slog.Logger` 方法签名一致的 `Logger`（`DebugContext`/`InfoContext`/`WarnContext`/`ErrorContext`），`*slog.Logger` 与 `*slogx.Logger` 可直接传入，库本身不依赖 slogx；`Default()` 每次调用读取 `slog.Default()` 并把来源记为调用方，`Discard()` 丢弃全部记录。`core/observe` 新增 `NewLogObserver`（每个事件写一条结构化记录，只含元数据、不带来源位置，不含输入输出与供应商错误文本；执行失败与 panic 为 Error，其他失败与模型重试为 Warn，结束、重放、等待为 Info，其余为 Debug）与 `AddObserver`（与已绑定观察者并存，各自隔离 panic）。`builder` 新增 `WithLogger`，把运行生命周期写入日志，Builder 的警告、回调失败与 `WithVerbose` 输出也写入它；嵌套 Agent 只由最外层记录。`core` 新增 `NewContextLoggingCallback`，`tools/middleware` 新增 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。接入 slogx（建议 v0.2.2 及以上）见 [宿主集成指南](docs/guides/HOST_INTEGRATION_CN.md#日志)。
+- `builder`：`WithTools` 注册的普通工具此前不发 tool 观测事件（只有 Dispatcher 派发的工具发），宿主观察者与日志都看不到这类工具调用。现在 Builder 为它们发出 `tool_start`、`tool_end`、`tool_error`（panic 记为 `panic` 类别，照常上抛）。新增 `interfaces.ObservedCallTool`：`Dispatcher.Tools` 声明自己发出这些事件，Builder 不再重复；包装 Dispatcher 工具的包装器须转发它，否则每次调用记两次。
+
+### 弃用
+
+- `core.Logger`、`core.NewLoggingCallback`，`tools/middleware` 的 `WithLogger`、`WithCacheLogger`、`WithRateLimitLogger` 及 `CachingMiddleware.Logger`、`RateLimitMiddleware.Logger` 字段：改用 `core/logging.Logger` 及上述 `*ContextLogger` 替代。`kart-io/logger` 依赖在这些 API 删除后移除。
+
+### 行为变化
+
 - `tools/middleware.NewLoggingMiddleware()` 未传日志时不再自建 kart-io/logger 的 JSON 标准输出日志器，改写入 `slog.Default()`；`WithContextLogger(nil)` 关闭日志。`core/middleware.NewLoggingMiddleware(nil)` 由 `fmt.Println` 写标准输出改为 `slog.Default()` 的 Info 记录。Builder 的模型缓存警告与 `OnError` 回调失败改走 `WithLogger`（未设置时为 `slog.Default()`），回调失败不再写 stderr。缓存与限流中间件经已弃用字段写 kart-io/logger 时改用 `Debugw`/`Warnw` 键值形式。
+
+### 修复
+
+- `core/session`：推导活动事件（`Derive`、`DeriveMessages`、`Active`、`LastState`、`Archived`）时，每遇到一个中止轮次或退回都把当前整个视图克隆为检查点，分配随日志长度平方增长；Builder 每轮开启要推导两次。按每 10 轮一次中止的客服日志实测，5000 个事件每次推导分配 17MB，20000 个事件 260MB、51ms。现在视图记为保留序号的区间，检查点只复制区间，同样日志降为 0.54MB 与 3.7MB、0.8ms，结果与原实现一致（随机日志差分测试）。
+- `tools`：管线钩子拿到的 `Call.Args` 与工具执行参数是同一个 map，审批人、PreHook、Guard、Around 改写它会让工具执行与审批过的参数不同的调用（批准 `ls`，实际执行改写后的命令）。现在 Dispatcher 在准入结束和工具体执行前比对参数，被改写即返回 `CodeInvalidOutput`，工具不执行。**行为变化**：此前静默生效的原地改写现在会报错；需要改参数的钩子请改用 `PreSubstitute`，替代调用会重新校验、授权并经过准入。
+
+## [0.55.4] - 2026-11-18
+
+### 新增
+
+- API 稳定性政策：`scripts/stable-packages.txt` 列出承诺兼容的稳定包（builder、core 执行子包、workflow、llm、tools 治理子包、interfaces、errors、execution、mcp/remote），其余为实验性。稳定包的破坏性变更须先弃用并至少保留一个次版本；`scripts/check_api_compat.sh` 用 apidiff 与最近 tag 比较，PR 流水线中稳定包出现不兼容变更即失败，`breaking-change` 标签可放行。见 [API 稳定性政策](docs/API_STABILITY_CN.md)。
+- 稳定包的包注释与导出声明的 godoc 改为英文，补齐 `builder`、`core`、`core/middleware`、`llm`、`llm/common`、`llm/providers`、`tools`、`tools/middleware` 缺失或被文件注释占用的包文档；实现注释与错误信息保持中文。
 
 ### 文档
 
@@ -130,16 +195,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 修复
 
-- `llm/providers`：DeepSeek 显式推理配置此前一律返回 `CodeInvalidConfig`，调用方无法关闭思考。现在推理强度为 `none` 时发送 `thinking: {"type":"disabled"}`（覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`，不发送 `reasoning_effort`）；其余强度与 thinking budget 仍返回 `CodeInvalidConfig`，未配置推理时请求不变。
-- `llm/providers`：MiniMax 的 OpenAI 兼容视觉接口只读 `max_completion_tokens`、忽略 `max_tokens`，带图片（`Message.Images`）的请求输出上限此前静默失效。现在 MiniMax 预设在请求含图片时改发 `max_completion_tokens`（不再发 `max_tokens`），覆盖 `Complete`、`CompleteStream` 与 `CompleteToolsStream`；纯文本请求与其他提供方不变。
-- `core/session`：推导活动事件（`Derive`、`DeriveMessages`、`Active`、`LastState`、`Archived`）时，每遇到一个中止轮次或退回都把当前整个视图克隆为检查点，分配随日志长度平方增长；Builder 每轮开启要推导两次。按每 10 轮一次中止的客服日志实测，5000 个事件每次推导分配 17MB，20000 个事件 260MB、51ms。现在视图记为保留序号的区间，检查点只复制区间，同样日志降为 0.54MB 与 3.7MB、0.8ms，结果与原实现一致（随机日志差分测试）。
-- `tools`：管线钩子拿到的 `Call.Args` 与工具执行参数是同一个 map，审批人、PreHook、Guard、Around 改写它会让工具执行与审批过的参数不同的调用（批准 `ls`，实际执行改写后的命令）。现在 Dispatcher 在准入结束和工具体执行前比对参数，被改写即返回 `CodeInvalidOutput`，工具不执行。**行为变化**：此前静默生效的原地改写现在会报错；需要改参数的钩子请改用 `PreSubstitute`，替代调用会重新校验、授权并经过准入。
 - `llm/providers`：`llm.WithResponseFormat` / `WithJSONResponse` 自 `llm.Client` 收敛为流式接口后不再生效，所有提供方都不发送该设置，模型照常返回带说明文字的非 JSON 回复。现在 OpenAI 兼容提供方（含 DeepSeek、Kimi、SiliconFlow、Ollama）发送 `response_format`，Gemini 设置 `responseMimeType`（不支持的类型返回 `CodeInvalidInput`），Anthropic 没有 JSON 模式，构造时对非 `text` 返回 `CodeInvalidInput`。新增离线示例 `examples/llm/json-response`。
+
+## [0.55.3] - 2026-11-18
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- fix(memory): memory_replace 只在用户表示信息已变化或记录有误时使用
+
+## [0.55.2] - 2026-11-18
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- fix(memory): 召回块与 memory_search 显示到秒的生效时间
+
+## [0.55.1] - 2026-11-17
+
+### 提交
+
+本版本发布时 CHANGELOG 未记录条目，以下为发布提交：
+
+- fix(examples/memory): 隔离演示覆盖 memory_replace 工具
+
+## [0.55.0] - 2026-11-17
+
+### 新增
+
+- `memory`：新增长期记忆工具 `memory_replace(id, content, ...)`。模型更正已有记忆时，新记录与旧记录的失效在同一提交中完成：旧记录以 `superseded` 失效、`SupersededBy` 指向新记录，新记录继承旧记录的 `Pinned`，与后台整理的取代一致。此前模型只能先 `memory_forget` 再 `memory_save`，钉住的核心记忆改写后不再钉住。旧记录不存在返回 `CodeStoreNotFound`，已失效返回 `CodeConflict`，均不写入新记录；抽取时与其他记忆工具一样跳过它的调用与结果。没有给 `memory_save` 加参数：真实客服示例中，DeepSeek 在 `memory_save` 多一个可选参数后把工具调用以 DSML 文本输出的比例由 1/16 升到 15/24。
+
+### 修复
+
 - `management`：`Worker.Run` 在认领槽位途中被取消时可能泄漏槽位。服务端已提交认领，本端却只拿到 `context canceled`，没有释放，之后的实例一直报"执行宿主已被占用"。现在认领与释放一样，不随调用方取消，最长 5 秒。
 - `memory`：后台整理合并或否定钉住的记录时，取代它的新记录不再钉住，核心记忆随之从 `Pinned` 与每轮召回块中消失。现在取代者继承被取代记录的 `Pinned`。
 - `llm/providers`：DeepSeek 偶尔不返回 tool_calls，而把工具调用以 `<｜DSML｜…>` 标记写进正文，工具不执行，标记文本却成为答案。现在 `CompleteToolsStream` 会暂存这段正文，正常结束时若整段是合法调用块、工具名都在本轮声明内，就还原为 `ToolCalls`，否则原样补发。本轮没有声明工具时（例如 builder 的最后一轮）不处理；这种情况应给成员留够轮数。
 - `memory`：后台整理时，同一轮中后一条候选否定了前一条候选计划的记录，而该计划记录要取代某条已有记录时，提交空指针 panic，使宿主进程退出；任务未完成，重启后重试同一任务再次崩溃。现在已有记录改由否定者取代。
-
 ## [0.54.1] - 2026-11-16
 
 ### 修复
@@ -1459,7 +1552,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.54.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.60.1...HEAD
+[0.60.1]: https://github.com/kart-io/goagent/compare/v0.60.0...v0.60.1
+[0.60.0]: https://github.com/kart-io/goagent/compare/v0.59.2...v0.60.0
+[0.59.2]: https://github.com/kart-io/goagent/compare/v0.59.1...v0.59.2
+[0.59.1]: https://github.com/kart-io/goagent/compare/v0.59.0...v0.59.1
+[0.59.0]: https://github.com/kart-io/goagent/compare/v0.58.0...v0.59.0
+[0.58.0]: https://github.com/kart-io/goagent/compare/v0.57.1...v0.58.0
+[0.57.1]: https://github.com/kart-io/goagent/compare/v0.57.0...v0.57.1
+[0.57.0]: https://github.com/kart-io/goagent/compare/v0.56.0...v0.57.0
+[0.56.0]: https://github.com/kart-io/goagent/compare/v0.55.4...v0.56.0
+[0.55.4]: https://github.com/kart-io/goagent/compare/v0.55.3...v0.55.4
+[0.55.3]: https://github.com/kart-io/goagent/compare/v0.55.2...v0.55.3
+[0.55.2]: https://github.com/kart-io/goagent/compare/v0.55.1...v0.55.2
+[0.55.1]: https://github.com/kart-io/goagent/compare/v0.55.0...v0.55.1
+[0.55.0]: https://github.com/kart-io/goagent/compare/v0.54.1...v0.55.0
 [0.54.1]: https://github.com/kart-io/goagent/compare/v0.54.0...v0.54.1
 [0.54.0]: https://github.com/kart-io/goagent/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/kart-io/goagent/compare/v0.52.0...v0.53.0
