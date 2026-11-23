@@ -1,6 +1,6 @@
 # Agent任务执行与记忆增强实施方案
 
-状态：第二轮审核的M1/M2/E1/E2/E3/V1六项已修复并通过独立复核，179条本地验收映射通过。按用户授权提交推送功能分支，不合并主分支、不创建发布标签；Harness远端依赖独立验证在推送核心后执行。
+状态：六项修复与179条验收映射均通过独立复核；核心分支已推送，Harness固定真实远端核心伪版本并通过GOWORK=off全仓race/build/vet。按用户授权提交推送功能分支，不合并主分支、不创建发布标签。
 
 目标：实现目标澄清、结构化计划、依赖调度、成员执行、证据验收和有界重规划；补齐记忆后台重试、成本治理和引用装配。
 
@@ -232,7 +232,7 @@ manifest预列全部`experiment/variant/case/question/repeat`试验键及数据�
 - [x] 执行第6节核心与跨仓检查，并按下述验收映射逐项核对日志；不能只看命令退出码。
 - [x] 在`.claude/agent-system-checks/required-tests.json`记录`{acceptance_id, repo, package, test, log}`条目：覆盖U00–U12所有指定测试、规划设计A01–A23及I01–I07；一项可映射多个测试，同一测试可支撑多项，但必须核对具体断言覆盖该情景。实现时冻结清单，新增或改名测试同步更新。
 - [x] 保存核心与Harness所属包、完整检查及独立依赖检查的`go test -json -count=1`日志。执行Agent逐条核对清单：匹配仓库、Package和完整Test名，必须有pass；缺失、skip（含子测试）、fail、非零退出或非法日志均失败。独立依赖日志单独核验，不借workspace记录。没有完整映射及通过证据不得勾选U13。
-- [ ] 核心所需API发布版本可获取后，Harness更新go.mod/go.sum并GOWORK=off测试/构建/vet；本地workspace通过不能替代独立依赖通过。
+- [x] Harness已固定可从远端获取的不可变核心伪版本`v0.60.1-0.20261123132038-4ccdc96483d1`，无本地replace；实际GOWORK=off全仓race/build/vet通过。该开发提交不是正式发布标签，不能将其描述为发布了v0.61.0。
 - [x] 合成存储验证`/2`、`/3`迁移、停旧写者、备份与删除日志回放。回退不得只替换二进制；旧图、审批、预算和attention保留处置入口。
 - [x] 分开记录工程契约验收与模型效果评估。真实模型对照未执行时明确“控制流/恢复契约通过，模型质量收益未验证”；不阻塞离线工程验收，也不得对外宣称更好或更省。
 
@@ -319,12 +319,12 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go -C ../goagent-harness vet ./...
 
 ## 7. 完成条件
 
-- [ ] U00–U13、A01–A23及I01–I07有对应文件、验收映射、检查命令和实际通过记录；必需测试缺失、skip或只有包通过均不算完成，联合脚本通过不代表整体完成。
+- [x] U00–U13、A01–A23及I01–I07有对应文件、179条验收映射、真实退出状态和完整Test通过记录，所有必需项无skip；V1另有17项工具负向及正向测试通过。
 - [x] 核心迁移/擦除/旧协议、后台成本/重试、权限和未知写屏障回归通过。
-- [ ] Harness组合检查与独立依赖检查均通过，用户文档与实际能力一致。
+- [x] Harness workspace组合检查与真实远端伪版本依赖的GOWORK=off独立全仓race/build/vet均通过，用户文档同步为该固定版本。
 - [x] 没有将静态文档检查、离线脚本结果或未执行的效果实验写成产品收益。
 
-上一轮本地验收记录（历史，不构成本轮放行）：核心全量make test后，最终跨实例修复再次执行完整memory/...（429个测试及子测试）与builder相关回归（48个）；核心build/vet/API/imports及独立frameworkbench通过。Harness workspace全量通过；以当前核心源码生成本地模块后，GOWORK=off全量race 607个测试及子测试、17包通过，build/vet通过。174条必需测试映射全部通过且无必需skip。上述本地打包模块不是正式发布：当前公开v0.60.0独立依赖验证失败，待批准发布v0.61.0、更新Harness go.mod/go.sum后重新完成正式独立检查。可选Docker/SSH、Linux专属和性能套件未计为通过；真实模型质量/费用收益未验证。
+上一轮本地验收记录（历史，不构成本轮放行）：核心全量make test后，最终跨实例修复再次执行完整memory/...（429个测试及子测试）与builder相关回归（48个）；核心build/vet/API/imports及独立frameworkbench通过。Harness workspace全量通过；以当前核心源码生成本地模块后，GOWORK=off全量race 607个测试及子测试、17包通过，build/vet通过。174条必需测试映射全部通过且无必需skip。当时的本地打包模块不代表正式发布；随后已按第8节固定真实远端伪版本并完成独立验证，v0.61.0发布标签仍未创建。可选Docker/SSH、Linux专属和性能套件未计为通过；真实模型质量/费用收益未验证。
 
 ## 8. 第二轮专业审核修复记录
 
@@ -343,4 +343,4 @@ env -u GOROOT GOTOOLCHAIN=go1.27.3 GOWORK=off go -C ../goagent-harness vet ./...
 
 低优先说明：physical_requests目前实际为Client提交数；非法URL可出现transport=0而计数=1，这是测量命名问题，预算保守预留仍正确。优先准确标为provider submissions；若需真实HTTP数，单列独立transport观察，不能释放预留来凑相等。默认12次形成请求限制应在跑长历史前配置，不是预算绕过。MaxArtifactTotalBytes按单次TaskResult正文合计，Goal.Inputs另用相同值，整个含历史State由MaxStateBytes控制；双语README已澄清。来源校验两个入口均有保护意义，本轮不为去重而删除校验或引入新框架。
 
-本轮工程修复已复核通过。核心Memory完整race 438项、其余139包race 5260项、Harness全仓race 615项通过；验收器17项子进程测试通过，真实.exit核验179条映射通过。核心build/vet/API/imports、Harness build/vet及frameworkbench均通过。新增回归无skip；可选Docker/SSH/perf跳过仍单列。原始红灯、先前失败和独立复核报告保留于本机`.claude/reviews/2026-11-23-second-audit/`。版本控制入口为`python3 scripts/verify_agent_acceptance.py --root .claude/agent-system-checks`，工具回归为`make test-agent-acceptance`；每份JSONL对应单条命令及同名.exit，拒绝缺失、非零、截断或拼接日志。正式发布标签未创建；推送核心后将尝试使用远端提交的Go伪版本固定Harness依赖并独立复验。
+本轮工程修复已复核通过。核心Memory完整race 438项、其余139包race 5260项、Harness全仓race 615项通过；验收器17项子进程测试通过，真实.exit核验179条映射通过。核心build/vet/API/imports、Harness build/vet及frameworkbench均通过。新增回归无skip；可选Docker/SSH/perf跳过仍单列。原始红灯、先前失败和独立复核报告保留于本机`.claude/reviews/2026-11-23-second-audit/`。版本控制入口为`python3 scripts/verify_agent_acceptance.py --root .claude/agent-system-checks`，工具回归为`make test-agent-acceptance`；每份JSONL对应单条命令及同名.exit，拒绝缺失、非零、截断或拼接日志。正式发布标签未创建。已固定并从远端取得核心伪版本`v0.60.1-0.20261123132038-4ccdc96483d1`，Origin.Hash与实际推送核心提交一致，解析来源是module cache而非相邻源码，未配置replace；Harness当前go.mod的GOWORK=off全仓race 615项及build/vet均通过。
