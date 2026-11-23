@@ -22,6 +22,9 @@ func New(s *mg.Service, interval time.Duration) (*Service, error) {
 	if s == nil || interval < 0 {
 		return nil, agentErrors.ErrManagementInvalid
 	}
+	if err := s.ValidateRemoteTaskBudget(); err != nil {
+		return nil, err
+	}
 	if interval == 0 {
 		interval = 100 * time.Millisecond
 	}

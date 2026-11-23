@@ -73,8 +73,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 迁移：可安全并发的工具实现 `SupportsConcurrentCalls() bool { return true }`。本版本为以下只读工具加了声明：`tools/compute` 的 `CalculatorTool` 与 `AdvancedCalculatorTool`（纯计算）、`contextpolicy` 的 recall 工具（只读会话日志）、`contextpolicy` 的 Offload 读取工具（加锁只读）、`tools/skill` 的加载工具（读写锁保护的目录只读）。子流程工具无法再包一层（会丢掉超时与持久策略），改用新增的 `tools.RunnableToolConfig.ConcurrentCalls` 与 `multiagent.Member.ConcurrentCalls` 声明，默认 false：需要成员或子调查同轮并行的 Supervisor 须显式打开。`tools/middleware.WrappedTool` 转发内层工具的声明。
 
+### 破坏性变更：远程入口要求配置任务预算
+
+`Config.DefaultTaskBudget` 改为零值不限后，远程调用方（客户端提交的预算会被丢弃）默认就能提交模型请求、工具调用与时长都不受限的任务。`httpapi.New`、`a2a.New`、`mcpserver.New`/`NewHTTPHandler`（经 `protocol.New`）现在在 `DefaultTaskBudget` 为零值时返回 `ErrManagementInvalid`。
+
+迁移：为 `Config.DefaultTaskBudget` 设置上限，要保持升级前的远程默认值传 `TaskBudget{MaxModelRequests: 100, MaxToolCalls: 1000, MaxAgentCalls: 1000, Timeout: 24*time.Hour}`；确需远程任务不限时设置 `Config.UnlimitedRemoteTaskBudget = true`。自建远程入口在构造时调用新增的 `Service.ValidateRemoteTaskBudget()`。
+
 ### 新增
 
+- `builder`：带工具的 Agent 既未设置 `MaxIterations`、`Timeout`，ctx 也没有截止时间或预算时，首次执行回合经 `WithLogger`（未设置时为 `slog.Default()`）写一条警告，每个 Agent 一次；行为不变。
 - `management/adapters`：原生运行时声明 `Capabilities.Reconcile`。结果未知或崩溃后尝试次数用尽的工具调用进入 attention，`Task.Operations` 列出这些调用（`tool/` 前缀、带 `ParentKey`）；宿主以 `ResumeTask{ReconciliationRef}` 续跑，`Reconcile` 要求恰好覆盖本轮未决调用（否则 `ErrManagementConflict`），结论统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时为固定说明文字；`not_applied` 记为业务拒绝，不重跑。模型请求中断引起的 attention 没有 `Operations`，只能取消。见 [management 原生运行时的核对](management/README.md#原生运行时的核对)。
 - `tools`：新增 `Reconciliation` 与 `WithReconciliation(ctx, r)`，Dispatcher 据此为列出的中断调用定案；新增 `DurableCallPolicyProvider`，工具可按校验后的参数声明单次调用的持久策略（结果只能取决于参数）。
 - `core/durable`：新增 `errors.ErrEffectUnknown` 哨兵，运行函数返回 wrap 它的错误时记录为 `failed`/`effect_unknown`，按中断处理并返回 `*OperationError`；`OperationRecord` 与 `OperationError` 新增 `ParentKey`（升级前的记录为空）。内层操作需要宿主处理时外层记录保持 pending（`nested_attention`），不消耗尝试次数，恢复时重新进入内层。
