@@ -43,7 +43,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 
 - 限额类：`MaxPageSize`、`MaxPending`（按租户分页计数，到上限即停）、`MaxInputBytes`、`MaxOutputBytes`、`IdempotencyRetention`、`TaskRetention`、`AuditRetention`，0 表示不限制或永不清理。保留期在写入时算出 `ExpiresAt`，改配置只影响新行。`PageSize` 为 0 时取 `constants.DefaultManagementPageSize`（50），`DeliveryTimeout` 为 0 时只受 ctx 约束。
 - 必需值：`Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`，0 取同名 `Default*` 常量，负数报错。
-- 任务预算：`Config.DefaultTaskBudget` 与 `SubmitTaskRequest.Budget`（`MaxModelRequests`、`MaxToolCalls`、`MaxAgentCalls`、`Timeout`），0 表示不限，计入幂等哈希并随 Task 以 `management/v2` 持久化；`management/v1` 任务解码时把 `MaxAgentCalls` 补成 1000。
+- 任务预算：`Config.DefaultTaskBudget` 与 `SubmitTaskRequest.Budget`（`MaxModelRequests`、`MaxToolCalls`、`MaxAgentCalls`、`Timeout`），0 表示不限，计入幂等哈希并随 Task 以 `management/v2` 持久化；`management/v1` 任务解码时把 `MaxAgentCalls` 补成 1000。远程调用方无法自带预算（httpapi、a2a、mcpserver 都丢弃客户端提交的预算），所以 `DefaultTaskBudget` 为零值时这三个入口构造报错；确需远程任务不限时设置 `Config.UnlimitedRemoteTaskBudget`。自建远程入口应在构造时调用 `Service.ValidateRemoteTaskBudget()`。
 - 入站请求大小（`httpapi`、`a2a`、`mcpserver` 的 `MaxInputBytes`）是防滥用上限：0 取 `constants.DefaultManagementMaxRequestBytes`（1 MiB），`UnlimitedRequestBytes` 显式取消。
 
 `DefaultLimits()` 返回旧版本在 `Limits` 全零时套用的取值，需要保持旧行为时显式传入。

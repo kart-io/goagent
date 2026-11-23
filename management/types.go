@@ -563,10 +563,16 @@ type Config struct {
 	Limits               Limits
 	// DefaultTaskBudget applies to tasks submitted without a Budget; its zero
 	// value is unlimited. It is also the only budget for tasks submitted over
-	// httpapi, which ignores a budget sent in the request body.
+	// httpapi, a2a and mcpserver, which ignore a budget sent by the client.
+	// Because remote callers cannot bound their own tasks, those entry points
+	// refuse to start while it is zero unless UnlimitedRemoteTaskBudget is set.
 	DefaultTaskBudget TaskBudget
-	Now               func() time.Time
-	Report            func(string, error)
+	// UnlimitedRemoteTaskBudget lets remote entry points run with a zero
+	// DefaultTaskBudget, so remotely submitted tasks have no model request,
+	// tool call, agent call or time limit. See ValidateRemoteTaskBudget.
+	UnlimitedRemoteTaskBudget bool
+	Now                       func() time.Time
+	Report                    func(string, error)
 }
 
 // HistoryReader reads business-visible session events after a sequence.

@@ -49,6 +49,20 @@ func New(c Config) (*Service, error) {
 	return &Service{c}, nil
 }
 
+// ValidateRemoteTaskBudget reports whether remotely submitted tasks are
+// bounded: it fails when DefaultTaskBudget is zero and
+// UnlimitedRemoteTaskBudget is not set. Remote entry points call it at
+// construction; hosts with their own remote entry point should do the same.
+func (s *Service) ValidateRemoteTaskBudget() error {
+	if s == nil {
+		return agentErrors.ErrManagementInvalid
+	}
+	if s.cfg.DefaultTaskBudget == (TaskBudget{}) && !s.cfg.UnlimitedRemoteTaskBudget {
+		return fmt.Errorf("%w：远程入口要求配置 DefaultTaskBudget，或显式设置 UnlimitedRemoteTaskBudget", agentErrors.ErrManagementInvalid)
+	}
+	return nil
+}
+
 func (s *Service) meta(a Actor) Meta { return Meta{uuid.NewString(), a.TenantID, 1, s.cfg.Now().UTC()} }
 
 func digest(raw []byte) string              { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }

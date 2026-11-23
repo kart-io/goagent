@@ -13,6 +13,8 @@ import (
 )
 
 // 同一个管理服务包含同一个 Store、Authorizer 和执行工厂；宿主另行启动其 Worker。
+// 远程调用方无法自带预算，s 的 Config 须设置 DefaultTaskBudget（或显式设置
+// UnlimitedRemoteTaskBudget），否则下面三个入口构造时报错。
 func Example() {
 	mount := func(s *mg.Service, agentID, publicURL string, authenticate func(*http.Request) (mg.Actor, error)) (http.Handler, error) {
 		a2a, err := a2aserver.New(s, a2aserver.Config{AgentID: agentID, URL: publicURL + "/a2a", ActorFromRequest: authenticate})
