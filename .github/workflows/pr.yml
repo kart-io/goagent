@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0  # Need full history for comparison
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           # 模块缓存由下一步 actions/cache 负责；两者同时恢复同一目录会因 tar 冲突失败。
