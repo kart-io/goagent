@@ -202,6 +202,29 @@ jobs:
           # Show the changelog
           cat changelog.md
 
+      # 把 Unreleased 归入新版本段并提交到 master，tag 打在这个提交上，release.yml 才能抽到本版本说明。
+      # GITHUB_TOKEN 的推送不会再触发本工作流；master 期间已前进导致推送失败时，退回为在原提交上打 tag。
+      - name: Finalize CHANGELOG
+        if: steps.calc-version.outputs.should_release == 'true'
+        run: |
+          new_tag="${{ steps.calc-version.outputs.new_tag }}"
+          latest_tag="${{ steps.get-latest-tag.outputs.latest_tag }}"
+          rc=0
+          bash scripts/finalize_changelog.sh "$new_tag" "$latest_tag" || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            git add CHANGELOG.md
+            git commit -m "docs(changelog): 发布 $new_tag"
+            if git push origin HEAD:master; then
+              echo "CHANGELOG 已归档并推送"
+            else
+              echo "::warning::master 已前进，CHANGELOG 未归档，$new_tag 打在原提交上"
+              git reset --hard HEAD~1
+            fi
+          elif [ "$rc" -ne 3 ]; then
+            echo "::warning::CHANGELOG 归档失败（退出码 $rc），$new_tag 打在原提交上"
+            git checkout -- CHANGELOG.md
+          fi
+
       - name: Create and push tag
         if: steps.calc-version.outputs.should_release == 'true'
         run: |
