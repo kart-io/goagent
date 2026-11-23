@@ -96,6 +96,10 @@ func (m *Memory) runDerivationKinds(ctx context.Context, e queueEntry, kinds []s
 	ctx = m.maintenanceContext(ctx, e.Namespace, e.Scope)
 	var errs []error
 	for _, kind := range kinds {
+		// 能力关闭不代表已完成，保留进度与登记交给支持该类别的实例。
+		if kind == "community" && (!m.cfg.Graph || !m.cfg.Communities) {
+			continue
+		}
 		scope, s, err := m.read(ctx, e.Namespace)
 		if err != nil {
 			return err
@@ -147,7 +151,7 @@ func (m *Memory) runDerivationKinds(ctx context.Context, e queueEntry, kinds []s
 			cur.finish(result, root, m.now())
 			t.Derivations.Put(kind, cur)
 			return nil
-		})
+		}, shrinking()) // 只豁免控制状态结算；派生正文仍经普通容量检查。
 		if !errors.Is(result, errPassLimit) && !errors.Is(result, errBackgroundBudget) {
 			errs = append(errs, result)
 		}

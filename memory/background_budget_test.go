@@ -156,7 +156,7 @@ func TestCommunityProgressSurvivesPassLimitAndRestart(t *testing.T) {
 func TestNewMaintenanceWindowUnblocksBudgetOnly(t *testing.T) {
 	st := newHookStore(t)
 	b := maintenanceConfig(t, st, "first", 1)
-	m := workerMemory(t, Config{Durable: st, Background: b})
+	m := workerMemory(t, Config{Durable: st, Graph: true, Communities: true, Background: b})
 	ctx := WithNamespace(context.Background(), testNS...)
 	require.NoError(t, m.MarkDerivationsDirty(ctx))
 	_, err := m.mutate(ctx, testNS, initialScope, func(x *tx) error {
@@ -173,7 +173,7 @@ func TestNewMaintenanceWindowUnblocksBudgetOnly(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, root := range []string{"first", "second"} {
-		m = workerMemory(t, Config{Durable: st, Background: maintenanceConfig(t, st, root, 1)})
+		m = workerMemory(t, Config{Durable: st, Graph: true, Communities: true, Background: maintenanceConfig(t, st, root, 1)})
 		_, err = m.ProcessPending(ctx)
 		require.NoError(t, err)
 		_, s, err := m.read(ctx, testNS)
@@ -473,7 +473,7 @@ func TestForegroundWritesTrackRegisteredDerivations(t *testing.T) {
 	model := &scriptedModel{reply: func(string, string) (string, error) {
 		return `{"insights":[{"content":"反思"}]}`, nil
 	}}
-	worker := workerMemory(t, Config{Durable: st, Background: maintenanceConfig(t, st, "registered", 10), Model: model, ReflectionThreshold: .5})
+	worker := workerMemory(t, Config{Durable: st, Graph: true, Communities: true, Background: maintenanceConfig(t, st, "registered", 10), Model: model, ReflectionThreshold: .5})
 	require.NoError(t, worker.MarkDerivationsDirty(ctx))
 	_, err := worker.ProcessPending(ctx)
 	require.NoError(t, err)
