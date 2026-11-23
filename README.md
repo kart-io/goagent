@@ -215,7 +215,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 | [llm](llm/) | Client interfaces, options; `llm/providers` implementations |
 | [tools](tools/) | Tool registry, function tools, `Dispatcher`, `Pipeline`; `tools/policy`, `tools/spill` and built-in tools |
 | [mcp](mcp/) | MCP client adapter on the official SDK |
-| [memory](memory/) | Long-term memory, temporal knowledge graphs, cascading invalidation and indexes; [capabilities and migration boundaries](docs/guides/RUNTIME_READINESS.md) |
+| [memory](memory/) | Long-term memory, temporal knowledge graphs, cascading invalidation and indexes; [capabilities and migration boundaries](docs/guides/RUNTIME_READINESS.md), [runtime and recovery](docs/guides/MEMORY_RUNTIME.md) |
 | [harness/env](harness/env/) | File system and command execution interfaces for tools |
 | [observability](observability/) | OpenTelemetry tracing and metrics |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | Reproducible task evaluation |

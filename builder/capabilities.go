@@ -8,9 +8,18 @@ import (
 	"github.com/kart-io/goagent/llm"
 )
 
+// nativeToolLoop 返回实际执行工具循环的客户端；零工具仍走纯聊天。
+func nativeToolLoop(client llm.Client, tools int) llm.ToolStreamClient {
+	native, _ := client.(llm.ToolStreamClient)
+	if tools == 0 {
+		return nil
+	}
+	return native
+}
+
 // validateLoopCapabilities 在初始化或访问宿主资源前拒绝会被执行模式忽略的配置。
 func (b *AgentBuilder[S]) validateLoopCapabilities(toolset []interfaces.Tool) error {
-	if _, native := b.llmClient.(llm.ToolStreamClient); native && len(toolset) > 0 {
+	if nativeToolLoop(b.llmClient, len(toolset)) != nil {
 		return nil
 	}
 	var unavailable []string

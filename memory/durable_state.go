@@ -55,21 +55,23 @@ type retiringState struct {
 
 // state 是一个命名空间、一个作用域的全部数据（还原后的形式）；存储为基础快照加 head 的覆盖层，见 state_head.go。
 type state struct {
-	Seq             int64                   `json:"seq"`
-	CommitID        string                  `json:"commit_id"`
-	NextIncarnation int64                   `json:"next_incarnation"`
-	LastForgetSeq   int64                   `json:"last_forget_seq"`
-	LastRewindSeq   int64                   `json:"last_rewind_seq,omitzero"`
-	MarkerHorizon   int64                   `json:"marker_horizon,omitzero"`
-	MigrationID     string                  `json:"migration_id,omitempty"`
-	Records         map[string]Record       `json:"records"`
-	Entities        map[string]Entity       `json:"entities"`
-	Edges           map[string]Edge         `json:"edges"`
-	Communities     map[string]Community    `json:"communities"`
-	Jobs            map[string]Job          `json:"jobs"`
-	DoneJobs        map[string]time.Time    `json:"done_jobs"`
-	Markers         map[string]rewindMarker `json:"markers"`
-	Finished        map[string]JobStats     `json:"finished"`
+	Seq             int64                     `json:"seq"`
+	CommitID        string                    `json:"commit_id"`
+	NextIncarnation int64                     `json:"next_incarnation"`
+	LastForgetSeq   int64                     `json:"last_forget_seq"`
+	LastRewindSeq   int64                     `json:"last_rewind_seq,omitzero"`
+	MarkerHorizon   int64                     `json:"marker_horizon,omitzero"`
+	RequestSeq      int64                     `json:"request_seq,omitzero"`
+	MigrationID     string                    `json:"migration_id,omitempty"`
+	Records         map[string]Record         `json:"records"`
+	Entities        map[string]Entity         `json:"entities"`
+	Edges           map[string]Edge           `json:"edges"`
+	Communities     map[string]Community      `json:"communities"`
+	Jobs            map[string]Job            `json:"jobs"`
+	DoneJobs        map[string]time.Time      `json:"done_jobs"`
+	Markers         map[string]rewindMarker   `json:"markers"`
+	Derivations     map[string]DerivationWork `json:"derivations"`
+	Finished        map[string]JobStats       `json:"finished"`
 }
 
 // init 补齐空映射，使修改函数不必判空。
@@ -94,6 +96,9 @@ func (s *state) init() {
 	}
 	if s.Markers == nil {
 		s.Markers = map[string]rewindMarker{}
+	}
+	if s.Derivations == nil {
+		s.Derivations = map[string]DerivationWork{}
 	}
 	if s.Finished == nil {
 		s.Finished = map[string]JobStats{}
@@ -267,6 +272,12 @@ func (m *Memory) mutateOnce(ctx context.Context, ns []string, expectScope string
 	if t.err != nil {
 		return state{}, head{}, t.err
 	}
+	// 已登记的命名空间由所有写者跟踪输入，后台执行仍由 Worker 的配置控制。
+	if m.cfg.Background != nil || len(v.cur.Derivations) > 0 {
+		if err := m.dirtyInputs(ctx, v.cur, t); err != nil {
+			return state{}, head{}, err
+		}
+	}
 	if !t.changed() {
 		return v.cur, h, nil
 	}
@@ -329,6 +340,7 @@ func (m *Memory) recordOp(ops map[string]opMark, key string, seq int64) map[stri
 func (s state) clone() state {
 	s.Records, s.Entities, s.Edges = maps.Clone(s.Records), maps.Clone(s.Entities), maps.Clone(s.Edges)
 	s.Communities, s.Jobs, s.DoneJobs, s.Markers = maps.Clone(s.Communities), maps.Clone(s.Jobs), maps.Clone(s.DoneJobs), maps.Clone(s.Markers)
+	s.Derivations = maps.Clone(s.Derivations)
 	s.Finished = maps.Clone(s.Finished)
 	s.init()
 	return s

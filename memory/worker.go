@@ -54,6 +54,7 @@ func (m *Memory) Run(ctx context.Context, onError func(error)) error {
 // 返回本轮取出的待处理任务数，含被丢弃（dropped）与处理失败的任务。任务自身的失败记入任务，不作为返回错误；每个任务之后保存心跳，失去锁时结束本轮并返回 ErrLeaseLost。
 // 没有待处理任务的登记在 state 锁内移除。
 func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
+	ctx = m.maintenanceParent(ctx)
 	if m.cfg.Model == nil || m.cfg.Sessions == nil {
 		return 0, agentErrors.Newf(agentErrors.CodeInvalidConfig, "抽取需要 Model 与 Sessions").WithComponent("memory").WithOperation("process")
 	}
@@ -82,6 +83,15 @@ func (m *Memory) ProcessPending(ctx context.Context) (int, error) {
 		}
 		errs = append(errs, err)
 	}
+	if m.cfg.Background != nil {
+		entries, err := m.queued(ctx)
+		errs = append(errs, err)
+		for _, e := range entries {
+			if e.Reason == queueDerivations {
+				errs = append(errs, m.runDerivations(ctx, e))
+			}
+		}
+	}
 	return n, errors.Join(errs...)
 }
 
@@ -98,6 +108,11 @@ func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
 		return 0, m.unregister(ctx, e)
 	}
 	jobs := pendingJobs(s)
+	if b := m.cfg.Background; b != nil {
+		jobs = slices.DeleteFunc(jobs, func(j Job) bool {
+			return j.BlockedBudgetRootKey == b.Budget.Configuration().RootKey && !jobStale(s, j.Session, j.TurnSeq, j.To)
+		})
+	}
 	for i, j := range jobs {
 		if err := ctx.Err(); err != nil {
 			return i, err
@@ -121,7 +136,9 @@ func (m *Memory) processEntry(ctx context.Context, e queueEntry) (int, error) {
 		}
 	}
 	var errs []error
-	if len(jobs) > 0 {
+	if len(jobs) > 0 && m.cfg.Background != nil {
+		errs = append(errs, m.Prune(WithNamespace(ctx, e.Namespace...)))
+	} else if len(jobs) > 0 {
 		errs = append(errs, m.maintainNamespace(ctx, e.Namespace))
 	}
 	return len(jobs), errors.Join(append(errs, m.settle(ctx, e, hasPending))...)
@@ -159,7 +176,7 @@ func (m *Memory) processInScope(ctx context.Context, j Job) error {
 	if meta.Current != j.Scope {
 		return errScopeChanged
 	}
-	return m.process(context.WithValue(WithNamespace(ctx, j.Namespace...), jobKey{}, jobBinding{scope: j.Scope, session: j.Session, turnSeq: j.TurnSeq, to: j.To}), j)
+	return m.process(context.WithValue(m.maintenanceContext(ctx, j.Namespace, j.Scope), jobKey{}, jobBinding{scope: j.Scope, session: j.Session, turnSeq: j.TurnSeq, to: j.To}), j)
 }
 
 // jobScope 返回 Worker 正在处理的任务的作用域；不在任务中时为空（不限定作用域）。
@@ -829,9 +846,15 @@ func (m *Memory) reflect(ctx context.Context) error {
 	}
 	// 结论与"已反思"标记在同一次提交中。
 	_, err = m.derive(ctx, ns, scope, insights, func(t *tx) ([]Record, error) {
+		if err := currentDerivation(ctx, t); err != nil {
+			return nil, err
+		}
 		for _, e := range episodes {
 			cur, ok := t.Records.Get(e.ID)
 			if !ok || !cur.Valid() || cur.Incarnation != e.Incarnation || cur.Revision != e.Revision {
+				if _, ok := ctx.Value(derivationKey{}).(derivationUnit); ok {
+					return nil, errDerivationChanged
+				}
 				return nil, errNoChange
 			}
 			cur.Reflected = true
@@ -907,7 +930,7 @@ func stableID(parts ...string) string {
 func (m *Memory) chatJSON(ctx context.Context, system, user string, out any) error {
 	msgs := []llm.Message{llm.SystemMessage(system), llm.UserMessage(user)}
 	for attempt := 0; ; attempt++ {
-		resp, err := llm.Chat(ctx, m.cfg.Model, msgs)
+		resp, err := m.backgroundChat(ctx, msgs)
 		if err != nil {
 			return err
 		}

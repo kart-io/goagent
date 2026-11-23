@@ -104,6 +104,7 @@ type tx struct {
 	Jobs        *table[Job]
 	DoneJobs    *table[time.Time]
 	Markers     *table[rewindMarker]
+	Derivations *table[DerivationWork]
 	Finished    *table[JobStats]
 	scalars     stateScalars
 	orig        stateScalars
@@ -124,6 +125,7 @@ func newTx(cur, base state, ns []string) *tx {
 	t.Jobs = &table[Job]{k: jobKind, m: w.Jobs, base: base.Jobs, changes: map[string]change[Job]{}, t: t}
 	t.DoneJobs = &table[time.Time]{k: doneKind, m: w.DoneJobs, base: base.DoneJobs, changes: map[string]change[time.Time]{}, t: t}
 	t.Markers = &table[rewindMarker]{k: markerKind, m: w.Markers, base: base.Markers, changes: map[string]change[rewindMarker]{}, t: t}
+	t.Derivations = &table[DerivationWork]{k: derivationKind, m: w.Derivations, base: base.Derivations, changes: map[string]change[DerivationWork]{}, t: t}
 	t.Finished = &table[JobStats]{k: finishedKind, m: w.Finished, base: base.Finished, changes: map[string]change[JobStats]{}, t: t}
 	return t
 }
@@ -131,7 +133,7 @@ func newTx(cur, base state, ns []string) *tx {
 // incarnation 分配一个实例号（从 1 起），使 NextIncarnation 始终大于已分配的实例号（不变量 1）。
 // changed 报告这次修改是否改动了任何对象或标量。
 func (t *tx) changed() bool {
-	return len(t.Records.changes)+len(t.Entities.changes)+len(t.Edges.changes)+len(t.Communities.changes)+len(t.Jobs.changes)+len(t.DoneJobs.changes)+len(t.Markers.changes)+len(t.Finished.changes) > 0 ||
+	return len(t.Records.changes)+len(t.Entities.changes)+len(t.Edges.changes)+len(t.Communities.changes)+len(t.Jobs.changes)+len(t.DoneJobs.changes)+len(t.Markers.changes)+len(t.Finished.changes)+len(t.Derivations.changes) > 0 ||
 		t.scalars != t.orig
 }
 
@@ -159,9 +161,9 @@ func (t *tx) SetMigrationID(id string)   { t.scalars.MigrationID = id }
 func (t *tx) working() state {
 	return state{
 		Seq: t.scalars.Seq, CommitID: t.scalars.CommitID, NextIncarnation: t.scalars.NextIncarnation,
-		LastForgetSeq: t.scalars.LastForgetSeq, LastRewindSeq: t.scalars.LastRewindSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID,
+		LastForgetSeq: t.scalars.LastForgetSeq, LastRewindSeq: t.scalars.LastRewindSeq, MarkerHorizon: t.scalars.MarkerHorizon, MigrationID: t.scalars.MigrationID, RequestSeq: t.scalars.RequestSeq,
 		Records: t.Records.m, Entities: t.Entities.m, Edges: t.Edges.m, Communities: t.Communities.m, Jobs: t.Jobs.m, DoneJobs: t.DoneJobs.m,
-		Markers: t.Markers.m, Finished: t.Finished.m,
+		Markers: t.Markers.m, Finished: t.Finished.m, Derivations: t.Derivations.m,
 	}
 }
 
@@ -170,7 +172,7 @@ func (t *tx) overlay(seq int64) overlay {
 	return overlay{
 		Records: stamp(t.Records.changes, seq), Entities: stamp(t.Entities.changes, seq), Edges: stamp(t.Edges.changes, seq),
 		Communities: stamp(t.Communities.changes, seq), Jobs: stamp(t.Jobs.changes, seq), DoneJobs: stamp(t.DoneJobs.changes, seq),
-		Markers: stamp(t.Markers.changes, seq), Finished: stamp(t.Finished.changes, seq),
+		Markers: stamp(t.Markers.changes, seq), Finished: stamp(t.Finished.changes, seq), Derivations: stamp(t.Derivations.changes, seq),
 	}
 }
 
@@ -300,7 +302,9 @@ var communityKind = kind[Community]{
 var jobKind = kind[Job]{
 	clone:     func(j Job) Job { return j },
 	normalize: func(j *Job, ns []string) bool { return normNS(&j.Namespace, ns) },
-	size:      func(_ string, j Job) int { return 64 + len(j.Key) + len(j.Session) + len(j.Status) + len(j.Error) },
+	size: func(_ string, j Job) int {
+		return 64 + len(j.Key) + len(j.Session) + len(j.Status) + len(j.Error) + len(j.BlockedBudgetRootKey)
+	},
 }
 
 var doneKind = kind[time.Time]{
@@ -344,6 +348,9 @@ func (s *state) logicalBytes() int {
 	}
 	for k, v := range s.Markers {
 		n += markerKind.size(k, v)
+	}
+	for k, v := range s.Derivations {
+		n += derivationKind.size(k, v)
 	}
 	for k, v := range s.Finished {
 		n += finishedKind.size(k, v)

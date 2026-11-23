@@ -41,9 +41,17 @@ type Retention struct {
 	InvalidRetention time.Duration `json:"invalid_retention"`
 }
 
+// ContextLayout limits the space available to pinned records during snapshot selection.
+type ContextLayout struct {
+	// CoreRunes caps complete pinned lines including separators. Zero excludes all pinned records.
+	CoreRunes int `json:"core_runes"`
+}
+
 // Config 配置长期记忆。Durable 必填：记录、图谱与抽取任务都存于其中。
 // Index 与 Embedder 同时提供时启用向量召回，否则只按文本重合召回；Model 与 Sessions 同时提供时 Worker 才能抽取。
 type Config struct {
+	// Background enables durable admission and retries for maintenance work.
+	Background *BackgroundConfig `json:"-"`
 	// Durable 是记忆数据的持久存储，须同时实现 durable.Scoped（作用域用于 Purge 的整体删除）。
 	Durable durable.Store `json:"-"`
 	// MaxStateBytes 是一个命名空间的数据（state）解压后的上限，默认 8 MiB；删除类操作不受限制。存储设置不进入 Identity。
@@ -85,13 +93,15 @@ type Config struct {
 
 	RecallK int `json:"recall_k"`
 	// RecallRunes 是整个召回块的字符上限，含块头（约 60 个字符）与换行；小于块头时召回块总为空。
-	RecallRunes         int           `json:"recall_runes"`
-	Weights             Weights       `json:"weights"`
-	HalfLife            time.Duration `json:"half_life"`
-	ReconcileCandidates int           `json:"reconcile_candidates"`
-	ReflectionThreshold float64       `json:"reflection_threshold"`
-	JobAttempts         int           `json:"job_attempts"`
-	Retention           Retention     `json:"retention"`
+	RecallRunes int `json:"recall_runes"`
+	// ContextLayout optionally limits pinned records within RecallRunes.
+	ContextLayout       *ContextLayout `json:"context_layout,omitempty"`
+	Weights             Weights        `json:"weights"`
+	HalfLife            time.Duration  `json:"half_life"`
+	ReconcileCandidates int            `json:"reconcile_candidates"`
+	ReflectionThreshold float64        `json:"reflection_threshold"`
+	JobAttempts         int            `json:"job_attempts"`
+	Retention           Retention      `json:"retention"`
 
 	// Now 是时钟，nil 时用 time.Now；评测与回放注入固定时间，使新近性不随运行耗时变化。不进入 Identity。
 	// 对话时间（抽取提示中的日期、记录的 ValidFrom、关系的生效时间）取会话事件的 Time，不受它控制，只在事件缺少时间时回退到它。
@@ -131,6 +141,13 @@ type Memory struct {
 // 不运行 Worker（Run 或 ProcessPending）的部署必须运行 RunMaintenance（或定期调用 Maintain）：
 // 否则 Purge 中断后的旧作用域与 Forget 之后残留的向量不会被清理。
 func New(cfg Config) (*Memory, error) {
+	if err := cfg.Background.validate(); err != nil {
+		return nil, err
+	}
+	if cfg.Background != nil {
+		b := *cfg.Background
+		cfg.Background = &b
+	}
 	if cfg.Durable == nil || (cfg.Index == nil) != (cfg.Embedder == nil) || (cfg.Communities && !cfg.Graph) {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "长期记忆需要 Durable；Index 与 Embedder 须同时提供；Communities 需要 Graph").WithComponent("memory").WithOperation("new")
 	}
@@ -162,6 +179,13 @@ func New(cfg Config) (*Memory, error) {
 		if d.zero {
 			d.set()
 		}
+	}
+	if cfg.ContextLayout != nil {
+		layout := *cfg.ContextLayout
+		if layout.CoreRunes < 0 || layout.CoreRunes > cfg.RecallRunes-recallHeaderRunes {
+			return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "核心记忆额度 %d 超出召回块可用范围", layout.CoreRunes).WithComponent("memory").WithOperation("new")
+		}
+		cfg.ContextLayout = &layout
 	}
 	// Purge 之后旧作用域只在 RetireGrace 内重复擦除，短于 EraseWithin 时擦除窗口会提前结束。
 	if cfg.OnErase != nil && cfg.RetireGrace < cfg.EraseWithin {
@@ -819,6 +843,9 @@ func (m *Memory) Prune(ctx context.Context) error {
 	scope, err := m.currentScope(ctx, ns)
 	if err != nil {
 		return err
+	}
+	if m.cfg.Background != nil {
+		ctx = m.maintenanceContext(ctx, ns, scope)
 	}
 	var access map[string]accessEntry
 	if m.cfg.TrackAccess {

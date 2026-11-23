@@ -22,7 +22,8 @@ import (
 // 增量提交的存储布局与协议，设计见 docs/design/MEMORY_G1_INCREMENTAL.md 第 2～4 节：
 // head 是唯一的提交点，含标量、基础快照指针与按键合并的覆盖层；基础快照在两个槽位间轮换，只由压缩者写入非活动槽位。
 const (
-	headVersion = "memory-head/3"
+	headVersion = "memory-head/4"
+	headV3      = "memory-head/3"
 	headV2      = "memory-head/2" // 与 /3 格式相同，可读取
 	headID      = "memory/head"
 	compactID   = "memory/compact"
@@ -51,11 +52,12 @@ type overlay struct {
 	Jobs        map[string]change[Job]
 	DoneJobs    map[string]change[time.Time]
 	Markers     map[string]change[rewindMarker]
+	Derivations map[string]change[DerivationWork]
 	Finished    map[string]change[JobStats]
 }
 
 func (o overlay) items() int {
-	return len(o.Records) + len(o.Entities) + len(o.Edges) + len(o.Communities) + len(o.Jobs) + len(o.DoneJobs) + len(o.Markers) + len(o.Finished)
+	return len(o.Records) + len(o.Entities) + len(o.Edges) + len(o.Communities) + len(o.Jobs) + len(o.DoneJobs) + len(o.Markers) + len(o.Derivations) + len(o.Finished)
 }
 
 // merge 返回 o ⊕ d（d 中的键覆盖 o）；不修改 o，o 可能与缓存共享。
@@ -63,7 +65,7 @@ func (o overlay) merge(d overlay) overlay {
 	return overlay{
 		Records: mergeMap(o.Records, d.Records), Entities: mergeMap(o.Entities, d.Entities), Edges: mergeMap(o.Edges, d.Edges),
 		Communities: mergeMap(o.Communities, d.Communities), Jobs: mergeMap(o.Jobs, d.Jobs), DoneJobs: mergeMap(o.DoneJobs, d.DoneJobs),
-		Markers: mergeMap(o.Markers, d.Markers), Finished: mergeMap(o.Finished, d.Finished),
+		Markers: mergeMap(o.Markers, d.Markers), Derivations: mergeMap(o.Derivations, d.Derivations), Finished: mergeMap(o.Finished, d.Finished),
 	}
 }
 
@@ -85,7 +87,7 @@ func (o overlay) after(seq int64) overlay {
 	return overlay{
 		Records: filterSeq(o.Records, seq), Entities: filterSeq(o.Entities, seq), Edges: filterSeq(o.Edges, seq),
 		Communities: filterSeq(o.Communities, seq), Jobs: filterSeq(o.Jobs, seq), DoneJobs: filterSeq(o.DoneJobs, seq),
-		Markers: filterSeq(o.Markers, seq), Finished: filterSeq(o.Finished, seq),
+		Markers: filterSeq(o.Markers, seq), Derivations: filterSeq(o.Derivations, seq), Finished: filterSeq(o.Finished, seq),
 	}
 }
 
@@ -101,7 +103,7 @@ func filterSeq[T any](m map[string]change[T], seq int64) map[string]change[T] {
 
 // erasing 报告覆盖层中是否有须从基础快照中擦除的变更。
 func (o overlay) erasing() bool {
-	return anyErase(o.Records) || anyErase(o.Entities) || anyErase(o.Edges) || anyErase(o.Communities) || anyErase(o.Jobs) || anyErase(o.DoneJobs) || anyErase(o.Markers) || anyErase(o.Finished)
+	return anyErase(o.Records) || anyErase(o.Entities) || anyErase(o.Edges) || anyErase(o.Communities) || anyErase(o.Jobs) || anyErase(o.DoneJobs) || anyErase(o.Markers) || anyErase(o.Derivations) || anyErase(o.Finished)
 }
 
 func anyErase[T any](m map[string]change[T]) bool {
@@ -123,6 +125,7 @@ func (o overlay) apply(base state) state {
 	applyMap(s.Jobs, o.Jobs)
 	applyMap(s.DoneJobs, o.DoneJobs)
 	applyMap(s.Markers, o.Markers)
+	applyMap(s.Derivations, o.Derivations)
 	applyMap(s.Finished, o.Finished)
 	return s
 }
@@ -148,6 +151,7 @@ func (o overlay) withNamespace(ns []string) overlay {
 		DoneJobs:    o.DoneJobs,
 		Markers:     o.Markers,
 		Finished:    o.Finished,
+		Derivations: o.Derivations,
 	}
 }
 
@@ -195,7 +199,7 @@ func decodeOverlay(h head, ns []string) (overlay, error) {
 	if o.items() != h.OverlayItems {
 		return overlay{}, badFraming("覆盖层的项数与 head 不符")
 	}
-	for _, seqs := range [][]int64{seqsOf(o.Records), seqsOf(o.Entities), seqsOf(o.Edges), seqsOf(o.Communities), seqsOf(o.Jobs), seqsOf(o.DoneJobs), seqsOf(o.Markers), seqsOf(o.Finished)} {
+	for _, seqs := range [][]int64{seqsOf(o.Records), seqsOf(o.Entities), seqsOf(o.Edges), seqsOf(o.Communities), seqsOf(o.Jobs), seqsOf(o.DoneJobs), seqsOf(o.Markers), seqsOf(o.Finished), seqsOf(o.Derivations)} {
 		for _, seq := range seqs {
 			if seq <= h.Base.Seq || seq > h.Seq {
 				return overlay{}, badFraming("覆盖层的变更不在 (base.seq, head.seq] 之内")
@@ -249,7 +253,7 @@ func loadHead(ctx context.Context, st durable.Store) (head, error) {
 	if err != nil {
 		return head{}, err
 	}
-	if (snap.Version != headVersion && snap.Version != headV2) || snap.Plan != statePlan {
+	if (snap.Version != headVersion && snap.Version != headV3 && snap.Version != headV2) || snap.Plan != statePlan {
 		return head{}, agentErrors.Newf(agentErrors.CodeStateLoad, "长期记忆 head 的版本 %q 无法识别，需要升级", snap.Version).WithComponent("memory").WithOperation("load")
 	}
 	var h head
@@ -325,6 +329,7 @@ func (m *Memory) decode(ctx context.Context, st durable.Store, ns []string, scop
 	if ov.items() > 0 {
 		cur = ov.apply(base)
 	}
+	cur.RequestSeq = h.RequestSeq
 	cur.Seq, cur.CommitID, cur.NextIncarnation, cur.LastForgetSeq, cur.LastRewindSeq, cur.MarkerHorizon, cur.MigrationID = h.Seq, h.CommitID, h.NextIncarnation, h.LastForgetSeq, h.LastRewindSeq, h.MarkerHorizon, h.MigrationID
 	return view{cur: cur, base: base, baseIdx: baseIdx, deps: deps, ov: ov, idx: newRecallIndex(baseIdx, ov)}, nil
 }
@@ -346,7 +351,7 @@ func (m *Memory) loadBase(ctx context.Context, st durable.Store, ns []string, sc
 	if err != nil {
 		return state{}, nil, nil, err
 	}
-	if (snap.Version != stateBlobVersion && snap.Version != stateBlobV2) || snap.Plan != statePlan {
+	if (snap.Version != stateBlobVersion && snap.Version != stateBlobV3 && snap.Version != stateBlobV2) || snap.Plan != statePlan {
 		return state{}, nil, nil, agentErrors.Newf(agentErrors.CodeStateLoad, "长期记忆基础快照的版本 %q 无法识别，需要升级", snap.Version).WithComponent("memory").WithOperation("load")
 	}
 	blob, err := decodeBlob(snap.Data)

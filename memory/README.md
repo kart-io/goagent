@@ -2,6 +2,8 @@
 
 跨会话的长期记忆：记录库保存正文，向量索引是可重建的投影，抽取与整理由 Worker 异步完成。会话内的历史与压缩由会话日志（`core/session`）与 `contextpolicy.Compaction` 负责，不在本包。设计见 [记忆系统设计](../docs/design/MEMORY_DESIGN.md)。
 
+新增后台预算、上下文布局、纯聊天召回与 `/4` 升级的使用边界见 [运行与恢复指南](../docs/guides/MEMORY_RUNTIME_CN.md)（[English](../docs/guides/MEMORY_RUNTIME.md)）。
+
 ## 记录
 
 | 类别 | 含义 | 来源 |

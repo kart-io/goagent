@@ -2,11 +2,15 @@ package builder
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 	"github.com/kart-io/goagent/memory"
 )
@@ -14,6 +18,9 @@ import (
 // recallSlot 是一步请求中的召回消息：实际请求带正文，持久意图中换成由日志子集决定的占位消息，
 // 使意图只由日志决定，恢复时引用被删除、召回消息消失也不改变意图。
 type recallSlot struct {
+	// snapshot 与 refs 固定本步采用的引用，纯聊天实际发送前按它们重新还原。
+	snapshot *memory.Snapshot
+	refs     []memory.Ref
 	// text 是插入请求的召回消息正文，为空时请求中没有召回消息。
 	text string
 	// placeholder 是意图中代替召回消息的内容；日志中本步的引用子集为空时为空。
@@ -64,7 +71,7 @@ func (a *ConfigurableAgent[S]) hydrateRecall(ctx context.Context, s *memory.Snap
 		}
 		fresh = &r
 	}
-	slot := recallSlot{text: fresh.Text}
+	slot := recallSlot{text: fresh.Text, snapshot: s, refs: refs}
 	if len(refs) > 0 {
 		digest, err := s.Digest(refs)
 		if err != nil {
@@ -91,4 +98,34 @@ func recallIntent(msgs []llm.Message, slot recallSlot) []llm.Message {
 		out = slices.Insert(out, at, llm.UserMessage(slot.placeholder))
 	}
 	return out
+}
+
+// plainRecallSlot 核对新协议的操作顺序；首次请求先记召回引用，恢复时只还原该快照。
+func (a *ConfigurableAgent[S]) plainRecallSlot(ctx context.Context, messages []llm.Message) (recallSlot, error) {
+	if durable.HasJournal(ctx) {
+		if _, err := durable.InspectOperation(ctx, "memory/recall"); errors.Is(err, os.ErrNotExist) {
+			for _, id := range []string{"memory/use/0", "model/answer/0"} {
+				if _, err := durable.InspectOperation(ctx, id); err == nil {
+					return recallSlot{}, agentErrors.Newf(agentErrors.CodeStateValidation, "纯聊天轮次已记录 %s，却缺少 memory/recall", id)
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return recallSlot{}, err
+				}
+			}
+		} else if err != nil {
+			return recallSlot{}, err
+		}
+	}
+	snapshot, err := a.snapshotRecall(ctx, messages, 1)
+	if err != nil {
+		return recallSlot{}, err
+	}
+	return a.hydrateRecall(ctx, snapshot, 0)
+}
+
+// withPlainRecall 为一次请求追加低信任消息，不修改会话历史。
+func withPlainRecall(messages []llm.Message, text string) []llm.Message {
+	if text == "" {
+		return messages
+	}
+	return append(slices.Clone(messages), llm.UserMessage(text))
 }

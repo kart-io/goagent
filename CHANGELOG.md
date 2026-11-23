@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 记忆可靠性与引用装配
+
+- 新增可选后台维护预算及逐物理请求准入，派生工作持久记录进度、技术重试与预算阻塞；新窗口不重置技术失败。
+- 新增可选 `ContextLayout` 和无正文的 `ExplainSnapshot`；nil布局保持原有身份。零工具Agent新增引用化自动召回，旧轮次保持原请求意图。
+- Memory写入格式升级 `/4`，可读 `/2`、`/3`。须停止旧写者后整体升级；回退恢复兼容备份并重放删除日志，不能只换旧二进制。详见[升级与恢复](docs/guides/MEMORY_RUNTIME_CN.md)。
+
+### 修复
+
+- `builder.AsRunnable` 在取消或消费者退出后等待事件生产者完成持久化与清理，避免调用已结束仍写入调用方日志存储。
+
 ## [0.60.1] - 2026-11-23
 
 ### 破坏性变更：远程入口要求配置任务预算

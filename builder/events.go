@@ -214,7 +214,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 	if err != nil {
 		return nil, err
 	}
-	if native, ok := client.(llm.ToolStreamClient); ok && len(a.tools) > 0 {
+	if native := nativeToolLoop(client, len(a.tools)); native != nil {
 		return a.runToolEvents(ctx, request, input, native, messages, metadata, emit)
 	}
 	// 纯聊天沿用原模型操作键；日志与工具循环共用轮次协议，不添加占位工具。
@@ -228,7 +228,32 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 	attempt := 0
 	ctx = withInterruptedModelResend(withRequestRecovery(ctx, a.requestRecovery(0, &messages, &attempt)), a.config.interruptedModelResends())
 	before, counted := modelCacheCounts(ctx)
-	turn, err := readPlainModelTurn(ctx, "model/answer/0", client, &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: a.config.TemperatureSet}, emit)
+	req := &llm.CompletionRequest{Reasoning: a.config.Reasoning.Clone(), Messages: messages, MaxTokens: a.config.MaxTokens, Temperature: a.config.Temperature, TemperatureSet: a.config.TemperatureSet}
+	var turn *llm.StreamChunk
+	if slog != nil && slog.recallMode == plainMemoryMode {
+		slot, e := a.plainRecallSlot(ctx, messages)
+		if e != nil {
+			return nil, e
+		}
+		slot.index = len(messages)
+		req.Messages = withPlainRecall(messages, slot.text)
+		intentReq := *req
+		// 从未注入正文的会话消息组成意图，保留用户自己发送的同文消息。
+		intentReq.Messages = recallIntent(messages, recallSlot{index: slot.index, placeholder: slot.placeholder})
+		// 每次实际发送重新核对已采用的引用，RequestError 重试期间可发生删除。
+		currentRequest := func(callCtx context.Context) (*llm.CompletionRequest, error) {
+			r, _, err := a.config.LongTermMemory.Hydrate(callCtx, *slot.snapshot, slot.refs)
+			if err != nil {
+				return nil, fmt.Errorf("还原长期记忆: %w", err)
+			}
+			current := *req
+			current.Messages = withPlainRecall(messages, r.Text)
+			return &current, nil
+		}
+		turn, err = readPlainModelTurnWithIntent(ctx, "model/answer/0", client, req, &intentReq, currentRequest, emit)
+	} else {
+		turn, err = readPlainModelTurn(ctx, "model/answer/0", client, req, emit)
+	}
 	if replan := (*replanRequest)(nil); errors.As(err, &replan) {
 		return nil, fmt.Errorf("RequestError 替换消息或客户端只作用于原生工具流：%w", replan.err)
 	}

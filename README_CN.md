@@ -212,7 +212,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 | [llm](llm/) | 客户端接口与选项；`llm/providers` 为各提供商实现 |
 | [tools](tools/) | 工具注册表、函数工具、`Dispatcher`、`Pipeline`；`tools/policy`、`tools/spill` 与内置工具 |
 | [mcp](mcp/) | 基于官方 SDK 的 MCP 客户端适配 |
-| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md) |
+| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md)、[运行与恢复](docs/guides/MEMORY_RUNTIME_CN.md) |
 | [harness/env](harness/env/) | 供工具使用的文件系统与命令执行接口 |
 | [observability](observability/) | OpenTelemetry 追踪与指标 |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | 可复现的任务评测 |

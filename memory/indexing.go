@@ -133,7 +133,7 @@ func (m *Memory) embed(ctx context.Context, text string) ([]float32, error) {
 	if m.cfg.Index == nil {
 		return nil, nil
 	}
-	vec, err := m.cfg.Embedder.Embed(ctx, text)
+	vec, err := m.requestEmbedding(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("生成记忆向量：%w", err)
 	}
@@ -193,7 +193,7 @@ func (m *Memory) vectorHits(ctx context.Context, ns []string, scope string, s st
 	if m.cfg.Index == nil || strings.TrimSpace(q.Text) == "" {
 		return nil, nil
 	}
-	vec, err := m.cfg.Embedder.Embed(ctx, q.Text)
+	vec, err := m.requestEmbedding(ctx, q.Text)
 	if err != nil {
 		return nil, fmt.Errorf("生成查询向量：%w", err)
 	}
@@ -211,7 +211,7 @@ func (m *Memory) vectorHits(ctx context.Context, ns []string, scope string, s st
 }
 
 // Reindex 重建当前作用域的向量索引（设计 4.2）：为没有可采用键（force 时为全部）的有效记录与实体在锁外嵌入，
-// 写入版本化键并复核，再删除列出的键中确认过期的（对象不存在、已失效、版本或嵌入模型已变化）。不写 state。
+// 写入版本化键并复核，过期键在嵌入前清除。启用后台预算时，每次嵌入前持久登记请求序号。
 // 与并发写入交错时不采用旧键，也不删除别人刚写的当前键。
 func (m *Memory) Reindex(ctx context.Context, force bool) error {
 	ns, err := requireNamespace(ctx)
@@ -225,15 +225,85 @@ func (m *Memory) Reindex(ctx context.Context, force bool) error {
 	if err != nil {
 		return err
 	}
-	for _, sp := range indexSpaces {
-		if err := m.reindex(ctx, ns, scope, s, sp, force); err != nil {
+	e := queueEntry{Namespace: ns, Scope: scope, Reason: queueIndex}
+	blocked := false
+	if m.cfg.Background != nil {
+		ctx = m.maintenanceContext(ctx, ns, scope)
+		_, err = m.mutate(ctx, ns, scope, func(*tx) error { return errNoChange }, withBeforeSave(func(ctx context.Context, _ *tx) error {
+			var q queueState
+			if _, _, err := loadJSON(ctx, m.cfg.Durable, queueID(ns), &q); err != nil {
+				return err
+			}
+			if entry, ok := q.Entries[e.key()]; ok {
+				blocked = entry.BlockedBudgetRootKey == m.cfg.Background.Budget.Configuration().RootKey
+				return nil
+			}
+			return m.register(ctx, e)
+		}))
+		if err != nil {
 			return err
 		}
+	}
+	for _, sp := range indexSpaces {
+		if err := m.cleanIndex(ctx, ns, scope, sp); err != nil {
+			return err
+		}
+	}
+	for _, sp := range indexSpaces {
+		if err := m.reindex(ctx, ns, scope, s, sp, force, blocked); err != nil {
+			if errors.Is(err, errBackgroundBudget) && !blocked {
+				recordErr := editJSON(ctx, m.cfg.Durable, queueID(ns), func(q *queueState) bool {
+					entry, ok := q.Entries[e.key()]
+					if !ok {
+						return false
+					}
+					entry.BlockedBudgetRootKey = m.cfg.Background.Budget.Configuration().RootKey
+					q.Entries[e.key()] = entry
+					return true
+				})
+				return errors.Join(err, recordErr)
+			}
+			return err
+		}
+	}
+	if m.cfg.Background != nil {
+		return m.settle(ctx, e, func(t *tx) bool {
+			return t.scalars.LastForgetSeq != s.LastForgetSeq || t.scalars.LastRewindSeq != s.LastRewindSeq || !sameIndexInputs(s, t.working())
+		})
 	}
 	return nil
 }
 
-func (m *Memory) reindex(ctx context.Context, ns []string, scope string, s state, sp indexSpace, force bool) error {
+// 只比较索引采用的版本；预算序号和访问统计不影响本轮修补结算。
+func sameIndexInputs(before, after state) bool {
+	if len(before.Entities) != len(after.Entities) {
+		return false
+	}
+	for id, e := range before.Entities {
+		if entityKey(e) != entityKey(after.Entities[id]) {
+			return false
+		}
+	}
+	for id, r := range before.Records {
+		if activeRecordKey(r) != activeRecordKey(after.Records[id]) {
+			return false
+		}
+	}
+	for id, r := range after.Records {
+		if _, exists := before.Records[id]; !exists && r.Valid() {
+			return false
+		}
+	}
+	return true
+}
+func activeRecordKey(r Record) indexKey {
+	if !r.Valid() {
+		return indexKey{}
+	}
+	return recordKey(r)
+}
+
+func (m *Memory) reindex(ctx context.Context, ns []string, scope string, s state, sp indexSpace, force, blocked bool) error {
 	ins := sp.namespace(ns, scope)
 	listed, err := m.cfg.Index.IDs(ctx, ins)
 	if err != nil {
@@ -245,19 +315,27 @@ func (m *Memory) reindex(ctx context.Context, ns []string, scope string, s state
 			have[k.ID] = true
 		}
 	}
-	var keys []indexKey
-	var vecs [][]float32
 	for _, o := range sp.objects(s) {
 		if !force && have[o.key.ID] {
 			continue
+		}
+		if blocked {
+			return errBackgroundBudget
 		}
 		vec, err := m.embed(ctx, o.text)
 		if err != nil {
 			return err
 		}
-		keys, vecs = append(keys, o.key), append(vecs, vec)
+		if err := m.writeIndex(ctx, ns, scope, sp, []indexKey{o.key}, [][]float32{vec}); err != nil {
+			return err
+		}
 	}
-	if err := m.writeIndex(ctx, ns, scope, sp, keys, vecs); err != nil {
+	return nil
+}
+func (m *Memory) cleanIndex(ctx context.Context, ns []string, scope string, sp indexSpace) error {
+	ins := sp.namespace(ns, scope)
+	listed, err := m.cfg.Index.IDs(ctx, ins)
+	if err != nil {
 		return err
 	}
 	// 在列出之后重新读取再判定：列出时已存在的键，只有在此后的 state 中仍不可采用才确认过期。

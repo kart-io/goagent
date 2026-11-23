@@ -13,7 +13,8 @@ import (
 // middleware, and usage follow the same path. It requires a StreamClient;
 // buffered models can declare their actual streaming capability. The state and
 // memory of one Builder belong to one session, so the adapter executes
-// serially, and waiting can be canceled.
+// serially, and waiting can be canceled. Completion joins the event producer,
+// including cancellation evidence and cleanup, before releasing its resources.
 func (a *ConfigurableAgent[S]) AsRunnable() *core.StreamRunnable[any, *AgentOutput] {
 	mode := core.StreamModeTokens
 	if capability, ok := a.llmClient.(core.StreamCapability); ok {
@@ -23,10 +24,20 @@ func (a *ConfigurableAgent[S]) AsRunnable() *core.StreamRunnable[any, *AgentOutp
 		}
 	}
 	r := core.NewStreamRunnable(mode, func(ctx context.Context, input any, emit func(core.StreamChunk[*AgentOutput]) error) error {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 		events, err := a.ExecuteStream(ctx, input)
 		if err != nil {
 			return err
 		}
+		// The adapter owns this producer. Cancel when a consumer abandons it
+		// and join it before returning: even after cancellation it may still
+		// be persisting evidence or cleaning up tools using the caller's store.
+		defer func() {
+			cancel()
+			for range events {
+			}
+		}()
 		for {
 			select {
 			case <-ctx.Done():

@@ -350,6 +350,10 @@ func modelOperation(ctx context.Context, id string, intent json.RawMessage, invo
 }
 
 func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *llm.CompletionRequest, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+	return readPlainModelTurnWithIntent(ctx, id, client, req, req, nil, emit)
+}
+
+func readPlainModelTurnWithIntent(ctx context.Context, id string, client llm.Client, req, intentReq *llm.CompletionRequest, currentRequest func(context.Context) (*llm.CompletionRequest, error), emit func(AgentEvent) error) (*llm.StreamChunk, error) {
 	if err := llm.ValidateReasoningRequest(client, req); err != nil {
 		return nil, err
 	}
@@ -362,13 +366,21 @@ func readPlainModelTurn(ctx context.Context, id string, client llm.Client, req *
 		intent, err = json.Marshal(struct {
 			Provider string
 			Request  *llm.CompletionRequest
-		}{string(client.Provider()), req})
+		}{string(client.Provider()), intentReq})
 	}
 	if err != nil {
 		return nil, err
 	}
 	return modelOperation(ctx, id, intent, func(callCtx context.Context, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
-		stream, e := client.CompleteStream(callCtx, req)
+		current := req
+		if currentRequest != nil {
+			var e error
+			current, e = currentRequest(callCtx)
+			if e != nil {
+				return nil, e
+			}
+		}
+		stream, e := client.CompleteStream(callCtx, current)
 		if e != nil {
 			return nil, e
 		}

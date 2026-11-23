@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 // 版本头在前，读写方只解析它就能核对 CommitID；数据块是 gob → zstd → base64 的字符串，按引号定位、不经 JSON 扫描，
 // 分 stateChunks 块并行编解码。版本头与数据块在同一个快照中，一次 Save 原子提交。
 const (
-	stateBlobVersion = "memory-state-blob/3"
+	stateBlobVersion = "memory-state-blob/4"
+	stateBlobV3      = "memory-state-blob/3"
 	// stateBlobV2 是 G1 的格式，仍可读取：gob 忽略已删除的字段，没有派生的关系与没有名称的实体按 G2 规则过滤与清理。
 	stateBlobV2 = "memory-state-blob/2"
 	stateChunks = 16
@@ -32,6 +34,7 @@ type stateScalars struct {
 	LastForgetSeq   int64  `json:"last_forget_seq"`
 	LastRewindSeq   int64  `json:"last_rewind_seq,omitzero"`
 	MarkerHorizon   int64  `json:"marker_horizon,omitzero"`
+	RequestSeq      int64  `json:"request_seq,omitzero"`
 	MigrationID     string `json:"migration_id,omitempty"`
 }
 
@@ -60,6 +63,7 @@ type stateChunk struct {
 	DoneJobs    []doneJob
 	Markers     []rewindMarker
 	Finished    []finishedJob
+	Derivations map[string]DerivationWork
 }
 
 type finishedJob struct {
@@ -93,7 +97,7 @@ func decompress(packed []byte, size int) ([]byte, error) {
 }
 
 func (s *state) scalars() stateScalars {
-	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, LastRewindSeq: s.LastRewindSeq, MarkerHorizon: s.MarkerHorizon, MigrationID: s.MigrationID}
+	return stateScalars{Seq: s.Seq, CommitID: s.CommitID, NextIncarnation: s.NextIncarnation, LastForgetSeq: s.LastForgetSeq, LastRewindSeq: s.LastRewindSeq, MarkerHorizon: s.MarkerHorizon, RequestSeq: s.RequestSeq, MigrationID: s.MigrationID}
 }
 
 // split 把 s 的条目轮流分到 stateChunks 块。state 中的对象都属于它的命名空间（不变量 4），对象的 Namespace 不写入，
@@ -146,6 +150,13 @@ func (s *state) split() []stateChunk {
 	for k, v := range s.Finished {
 		c := next()
 		c.Finished = append(c.Finished, finishedJob{Key: k, Stats: v})
+	}
+	for k, v := range s.Derivations {
+		c := next()
+		if c.Derivations == nil {
+			c.Derivations = map[string]DerivationWork{}
+		}
+		c.Derivations[k] = v
 	}
 	return chunks
 }
@@ -262,7 +273,7 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 	if chunks[0].Scalars == nil || *chunks[0].Scalars != h {
 		return state{}, badFraming("版本头与数据块不一致")
 	}
-	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, LastRewindSeq: h.LastRewindSeq, MarkerHorizon: h.MarkerHorizon, MigrationID: h.MigrationID}
+	s := state{Seq: h.Seq, CommitID: h.CommitID, NextIncarnation: h.NextIncarnation, LastForgetSeq: h.LastForgetSeq, LastRewindSeq: h.LastRewindSeq, MarkerHorizon: h.MarkerHorizon, RequestSeq: h.RequestSeq, MigrationID: h.MigrationID}
 	merges := []func(){
 		func() {
 			s.Records = mergeChunks(chunks, func(c *stateChunk) []Record { return c.Records }, func(v Record) string { return v.ID })
@@ -296,6 +307,10 @@ func decodeState(blob stateBlob, ns []string) (state, error) {
 				s.Finished[k] = v.Stats
 			}
 		},
+	}
+	s.Derivations = map[string]DerivationWork{}
+	for _, c := range chunks {
+		maps.Copy(s.Derivations, c.Derivations)
 	}
 	for _, merge := range merges {
 		wg.Go(merge)

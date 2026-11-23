@@ -128,7 +128,38 @@ type sessionTurn struct {
 	start int64
 	ended func(ctx context.Context, end int64) error
 	// memory 是本轮的长期记忆绑定；未配置长期记忆时为 nil。
-	memory *memory.TurnMemory
+	memory     *memory.TurnMemory
+	recallMode string
+}
+
+const (
+	plainMemoryMode = "plain-memory/1"
+	plainNoneMode   = "plain-none/1"
+)
+
+func (a *ConfigurableAgent[S]) restoreTurnMemory(ctx context.Context, turn *sessionTurn, start session.TurnStart) error {
+	turn.recallMode = start.RecallMode
+	native := nativeToolLoop(a.llmClient, len(a.tools)) != nil
+	if start.RecallMode != "" && native {
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "已开始的纯聊天轮次不能切换为原生工具循环")
+	}
+	switch start.RecallMode {
+	case plainNoneMode:
+		return nil
+	case plainMemoryMode:
+		if a.config.LongTermMemory == nil || len(start.Memory) == 0 {
+			return agentErrors.Newf(agentErrors.CodeStateValidation, "纯聊天轮次缺少长期记忆配置或绑定")
+		}
+	case "":
+		if len(start.Memory) == 0 && !native {
+			return nil
+		}
+	default:
+		return agentErrors.Newf(agentErrors.CodeStateValidation, "未知的纯聊天召回模式 %q", start.RecallMode)
+	}
+	var err error
+	turn.memory, err = a.turnMemory(ctx, start.Memory)
+	return err
 }
 
 func sessionTurnFrom(ctx context.Context) *sessionTurn {
@@ -170,7 +201,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			if err := json.Unmarshal(events[start].Data, &d); err != nil {
 				return nil, nil, err
 			}
-			if turn.memory, err = a.turnMemory(ctx, d.Memory); err != nil {
+			if err = a.restoreTurnMemory(ctx, turn, d); err != nil {
 				return nil, nil, err
 			}
 			turn.ended = a.memoryJob(id, turn.start, false, turn.memory)
@@ -179,7 +210,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			}
 			// 重放期间状态从本轮开始前出发，结束后取本轮记录的状态，与原执行结束时一致。
 			turn.replayed = func() error { return a.restoreSessionState(id, events) }
-			history, err := a.deriveHistory(events[:start])
+			history, err := turn.deriveHistory(events[:start])
 			return turn, history, err
 		}
 	}
@@ -199,14 +230,14 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 					before = append(before, ev)
 				}
 			}
-			if turn.memory, err = a.turnMemory(ctx, d.Memory); err != nil {
+			if err = a.restoreTurnMemory(ctx, turn, d); err != nil {
 				return nil, nil, err
 			}
 			if err := a.restoreSessionState(id, before); err != nil {
 				return nil, nil, err
 			}
 			a.bindSessionTurn(turn, id)
-			history, err := a.deriveHistory(before)
+			history, err := turn.deriveHistory(before)
 			turn.resumed, turn.start = open.Seq, open.Seq
 			turn.ended = a.memoryJob(id, turn.start, false, turn.memory)
 			return turn, history, err
@@ -246,11 +277,17 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 		}
 	}
 	a.bindSessionTurn(turn, id)
-	history, err := a.deriveHistory(rec.Events())
+	history, err := turn.deriveHistory(rec.Events())
 	if err != nil {
 		return nil, nil, err
 	}
-	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key, Memory: binding})
+	if nativeToolLoop(a.llmClient, len(a.tools)) == nil {
+		turn.recallMode = plainNoneMode
+		if turn.memory != nil {
+			turn.recallMode = plainMemoryMode
+		}
+	}
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key, Memory: binding, RecallMode: turn.recallMode})
 	if err != nil {
 		return nil, nil, err
 	}

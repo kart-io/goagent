@@ -34,7 +34,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-example-slogx test-contracts compatibility compatibility-postgres coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-agent-acceptance test-example-slogx test-contracts compatibility compatibility-postgres coverage deps help version
 
 ## help: Display this help message
 help:
@@ -80,6 +80,10 @@ test:
 test-short:
 	@echo "$(YELLOW)Running short tests...$(NC)"
 	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -short ./...
+
+## test-agent-acceptance: 验证验收工具的退出状态、日志与映射核查
+test-agent-acceptance:
+	python3 -m unittest discover -s scripts -p 'test_verify_agent_acceptance.py' -v
 
 ## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
 test-frameworkbench:
