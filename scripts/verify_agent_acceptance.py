@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""核对 Agent 验收映射、完整 Go 测试日志及同名 .exit 文件。"""
+"""核对 Agent 验收映射；每份JSONL须对应单条命令及同名.exit文件。"""
 
 import argparse
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 REQUIRED = ({f"U{i:02}" for i in range(14)} |
             {f"A{i:02}" for i in range(1, 24)} |
             {f"I{i:02}" for i in range(1, 8)})
-ACTIONS = {"start", "run", "pause", "cont", "pass", "fail", "output", "skip", "bench",
+ACTIONS = {"start", "run", "pause", "cont", "pass", "fail", "output", "skip", "bench", "attr", "artifacts",
            "build-start", "build-output", "build-fail"}
 REPOS = {"goagent", "goagent-harness"}
 
@@ -31,10 +31,14 @@ def read_log(root, filename):
         for line in path.read_text(encoding="utf-8").splitlines():
             event = json.loads(line)
             if (not isinstance(event, dict) or not isinstance(event.get("Action"), str) or
-                    event["Action"] not in ACTIONS or
-                    not isinstance(event.get("Package"), str) or not event["Package"] or
-                    ("Test" in event and not isinstance(event["Test"], str))):
+                    event["Action"] not in ACTIONS):
                 raise ValueError("非法Go测试事件")
+            # Go构建事件用ImportPath，测试及属性事件用Package。
+            if event["Action"].startswith("build-"):
+                event["Package"] = event.get("ImportPath", event.get("Package"))
+            if (not isinstance(event.get("Package"), str) or not event["Package"] or
+                    ("Test" in event and not isinstance(event["Test"], str))):
+                raise ValueError("非法Go测试事件的Package或Test")
             events.append(event)
         if not events:
             raise ValueError("空Go测试日志")
@@ -75,11 +79,17 @@ def verify(root):
             for event in events:
                 action, package, name = event["Action"], event["Package"], event.get("Test", "")
                 if action == "start":
+                    if package in packages:
+                        errors.append(f"包重复启动，日志须对应单条命令: {filename}: {package}")
                     packages[package] = None
                 elif not name and action in ("pass", "fail", "skip"):
                     packages[package] = action
                 if name and action in ("run", "pass", "fail", "skip"):
                     tests[(package, name)] = action
+            errors.extend(f"日志中的包未完整结束: {filename}: {package}"
+                          for package, status in packages.items() if status is None)
+            errors.extend(f"日志中的测试未完整结束: {filename}: {package}/{name}"
+                          for (package, name), status in tests.items() if status == "run")
             logs[filename] = events, packages, tests
         events, packages, tests = logs[filename]
         if tests.get((pkg, test)) != "pass":

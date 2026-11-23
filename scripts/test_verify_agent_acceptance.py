@@ -74,6 +74,31 @@ class AcceptanceVerifierTests(unittest.TestCase):
         self.events.append(dict(Action="run", Package=PACKAGE, Test="TestPassed"))
         self.check(False)
 
+    def test_unrelated_incomplete_package_fails(self):
+        package = "github.com/kart-io/goagent/builder"
+        self.events.extend([dict(Action="start", Package=package),
+                            dict(Action="run", Package=package, Test="TestOther")])
+        self.check(False)
+
+    def test_concatenated_commands_cannot_reuse_earlier_test_pass(self):
+        self.events.extend([dict(Action="start", Package=PACKAGE),
+                            dict(Action="run", Package=PACKAGE, Test="TestOther"),
+                            dict(Action="pass", Package=PACKAGE, Test="TestOther"),
+                            dict(Action="pass", Package=PACKAGE)])
+        self.check(False)
+
+    def test_go_metadata_actions_are_supported(self):
+        self.events.insert(2, dict(Action="attr", Package=PACKAGE, Test="TestPassed",
+                                   Key="scenario", Value="fixture"))
+        self.events.insert(3, dict(Action="artifacts", Package=PACKAGE,
+                                   Test="TestPassed", Output="fixture"))
+        self.check(True)
+
+    def test_go_build_event_import_path_is_supported(self):
+        self.events.insert(0, dict(Action="build-output", ImportPath=PACKAGE,
+                                   Output="构建提示\n"))
+        self.check(True)
+
     def test_repository_and_package_must_match(self):
         self.rows[0]["repo"] = "goagent-harness"
         self.check(False)
