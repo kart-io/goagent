@@ -226,3 +226,32 @@ func TestRepositoryRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 提升成员：经未导出内嵌类型提升的方法同样参与发现；实验类型的未导出内嵌须登记，其方法变化由自身事实发现。
+func TestPromotedMembers(t *testing.T) {
+	base := writeTree(t, nil)
+	stable := writeText(t, "stable.txt", "st\n")
+	_, err := run(options{
+		head:     writeTree(t, []edit{{"st/st.go", "func Read(r io.Reader) {}", "func Read(r io.Reader) {}\n\ntype inner struct{}\n\nfunc (inner) Leak() ex.Gone { return ex.Gone{} }\n\ntype Outer struct{ inner }"}}),
+		base:     base,
+		stable:   stable,
+		registry: writeText(t, "registry.txt", baseRegistry),
+	})
+	if err == nil || !strings.Contains(err.Error(), "未登记的传递暴露: ex.Gone（经 st.Outer 暴露）") {
+		t.Fatalf("稳定包经内嵌提升的方法暴露应被发现，错误 = %v", err)
+	}
+
+	embed := []edit{{"ex/ex.go", "type Config struct{ A int }", "type base struct{}\n\nfunc (base) Tag() string { return \"\" }\n\ntype Config struct {\n\tA int\n\tbase\n}"}}
+	changed := append(append([]edit{}, embed...), edit{"ex/ex.go", "func (base) Tag() string", "func (base) Tag(x int) string"})
+	_, err = run(options{head: writeTree(t, embed), stable: stable, registry: writeText(t, "registry.txt", baseRegistry)})
+	if err == nil || !strings.Contains(err.Error(), "未登记的传递暴露: ex.base（经 ex.Config 暴露）") {
+		t.Fatalf("full 类型的未导出内嵌须登记，错误 = %v", err)
+	}
+	missing, err := run(options{head: writeTree(t, changed), base: writeTree(t, embed), stable: stable, registry: writeText(t, "registry.txt", baseRegistry+"ex.base full\n")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(missing, "\n") != "method ex.base.Tag() string on *T\nmethod ex.base.Tag() string on T" {
+		t.Fatalf("提升方法改签名应报出缺失事实，实际:\n%s", strings.Join(missing, "\n"))
+	}
+}
