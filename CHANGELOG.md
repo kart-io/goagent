@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 安全
 
 - `github.com/klauspost/compress` 由 v1.18.0 升到 v1.20.5，修复 GO-2026-6865（两块帧解码 panic）与 GO-2026-5841。`memory` 的状态快照编解码会调用受影响的 zstd 路径，构造的快照可使进程崩溃。
+- `go.mod` 的 `toolchain` 由 go1.27.3 升到 go1.27.4，修复标准库 `net/http` 的 GO-2026-6859；HTTP 客户端、管理面 handler 与 MCP、A2A 适配都会调用受影响路径。`toolchain` 只约束本模块自身的构建，下游二进制须用 go1.27.4 及以上编译。
 
 ### 工程
 
