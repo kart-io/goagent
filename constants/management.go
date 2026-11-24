@@ -1,4 +1,3 @@
-// Management service defaults.
 package constants
 
 import "time"

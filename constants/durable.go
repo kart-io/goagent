@@ -2,18 +2,22 @@ package constants
 
 import "time"
 
-// 续跑种类与输入拒绝原因属于等待协议，不是业务错误码。
+// Durable interrupt protocol values. Continuation kinds and input rejection
+// reasons are part of the wait protocol, not business error codes.
 const (
 	ContinuationKindInterrupt    = "interrupt"
 	InterruptReasonInvalidJSON   = "invalid_json"
 	InterruptReasonValidatePanic = "validate_panic"
 	InterruptReasonRejected      = "rejected"
-	// DefaultInterruptAttempts 允许 pending 与 waiting 之间崩溃后重新进入；中断本身没有副作用。
+	// DefaultInterruptAttempts allows re-entry after a crash between pending and
+	// waiting; an interrupt has no side effects.
 	DefaultInterruptAttempts = 3
 	InterruptMaxReasonRunes  = 200
-	// DurableInboxSeenLimit 仅覆盖投递方崩溃重投窗口，不随运行时长增长。
+	// DurableInboxSeenLimit covers only the redelivery window after a sender
+	// crash and does not grow with run length.
 	DurableInboxSeenLimit = 256
 )
 
-// DurableCompletionSaveTimeout 限制调用方取消后补写执行结果的时间：结果已经产生，不能因取消丢失。
+// DurableCompletionSaveTimeout bounds saving a run result after the caller
+// cancels: the result already exists and must not be lost to cancellation.
 const DurableCompletionSaveTimeout = 5 * time.Second

@@ -1,5 +1,6 @@
 # 覆盖率门槛：<目标> <最低百分比>，由 scripts/coveragecheck 解释。
 # 目标：「*」为整体（不含 examples）；以 .go 结尾为单文件；其余为精确包路径，不含子包。
+# 百分比写「-」表示目标没有可执行语句（如只含常量的包），一旦出现语句即失败。
 # scripts/stable-packages.txt 中每个包都必须在此有条目，否则门禁失败。
 # 初值 = 实测最低值 − max(2pp, 4 条语句对应的百分比)，向下取整（2026-11-24 实测）。
 # 覆盖率提升后可上调（棘轮）；下调须在 PR 说明理由。
@@ -9,6 +10,7 @@
 # 稳定包
 builder                  89
 builder/contextpolicy    77
+constants                -    # 只有常量声明
 core                     84
 core/budget              87
 core/durable             82

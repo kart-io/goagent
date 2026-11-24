@@ -13,7 +13,7 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 - `workflow`
 - `llm`、`llm/common`、`llm/providers`
 - `tools` 及其治理子包（`policy`、`spill`、`toolargs`、`middleware`）
-- `interfaces`、`errors`、`execution`、`mcp/remote`
+- `interfaces`、`errors`、`execution`、`mcp/remote`、`constants`
 
 清单按导入路径精确匹配，子包只有自己被列出时才算稳定。
 
@@ -43,7 +43,7 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 
 ## 传递暴露
 
-稳定包的导出 API 有时会用到实验包的类型，例如 `builder.ModelCache.Cache`（`cache.Bytes`）、`llm.Client.Provider()`（`constants.Provider`）。调用方经稳定包依赖到的部分同样受稳定承诺约束，分三种模式：
+稳定包的导出 API 有时会用到实验包的类型，例如 `builder.WithLongTermMemory`（`*memory.Memory`）、`llm/common.BaseProvider.NewHTTPClient`（`*httpclient.Client`）。调用方经稳定包依赖到的部分同样受稳定承诺约束，分三种模式：
 
 | 模式 | 适用 | 冻结内容 |
 |---|---|---|

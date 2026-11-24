@@ -1,11 +1,13 @@
 package constants
 
-// 图起止和续跑协议值；领域图与路由接口仍由各自包维护。
+// Graph start, end and resume protocol values.
 const (
-	// WorkflowStart 只允许一条普通出边；WorkflowEnd 终止所选路径。
+	// WorkflowStart allows a single plain outgoing edge; WorkflowEnd ends the
+	// selected path.
 	WorkflowStart = "__start__"
 	WorkflowEnd   = "__end__"
-	// MultiagentFinish 是路由函数的完成信号，GuardRoute 将其映射为 WorkflowEnd。
+	// MultiagentFinish is the router completion signal; GuardRoute maps it to
+	// WorkflowEnd.
 	MultiagentFinish               = "FINISH"
 	WorkflowRejectApprovalMismatch = "approval_mismatch"
 	WorkflowRejectBeforeApprove    = "before_approve"

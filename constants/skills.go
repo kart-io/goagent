@@ -1,6 +1,7 @@
 package constants
 
-// Skills 只读加载的工具名与资源上限。上限按字节/条目计，不是模型 token 预算。
+// Skill loading tool name and resource limits. Limits are in bytes or
+// entries, not model tokens.
 const (
 	ToolLoadSkill          = "load_skill"
 	SkillMaxDocumentBytes  = 1 << 20

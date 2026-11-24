@@ -23,6 +23,9 @@ type block struct {
 }
 
 // gate.target：「*」为整体；以 .go 结尾为单文件；其余为精确包路径（不含子包）。
+// noCode 对应门槛文件中的「-」：目标不得含可执行语句，出现语句即失败，迫使补上真实门槛。
+const noCode = -1
+
 type gate struct {
 	target  string
 	minimum float64
@@ -110,8 +113,11 @@ func loadGates(name string) ([]gate, error) {
 		if len(f) != 2 {
 			return nil, fmt.Errorf("门槛条目须为「目标 最低百分比」: %q", strings.Join(f, " "))
 		}
-		minimum, err := strconv.ParseFloat(f[1], 64)
-		if err != nil || minimum < 0 || minimum > 100 {
+		minimum, err := float64(noCode), error(nil)
+		if f[1] != "-" {
+			minimum, err = strconv.ParseFloat(f[1], 64)
+		}
+		if err != nil || f[1] == "-" && f[0] == "*" || f[1] != "-" && (minimum < 0 || minimum > 100) {
 			return nil, fmt.Errorf("门槛 %s 的百分比无效: %q", f[0], f[1])
 		}
 		if seen[f[0]] {
@@ -179,12 +185,24 @@ func check(blocks map[string]block, rules []gate, report, summary io.Writer) err
 		if total > 0 {
 			percent = 100 * float64(covered) / float64(total)
 		}
-		if total == 0 || percent < rule.minimum {
-			status, failed = "失败", true
-		}
 		name := rule.target
 		if name == "*" {
 			name = "整体"
+		}
+		if rule.minimum == noCode {
+			if total > 0 {
+				status, failed = "失败", true
+			}
+			if _, err := fmt.Fprintf(report, "覆盖率 %s: %d 条语句，要求无可执行语句，%s\n", name, total, status); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(summary, "| `%s` | — | 无语句 | %s |\n", name, status); err != nil {
+				return err
+			}
+			continue
+		}
+		if total == 0 || percent < rule.minimum {
+			status, failed = "失败", true
 		}
 		// 行首加「覆盖率 」前缀，避免 setup-go 的问题匹配器把「x.go: ...」当成编译错误注解。
 		if _, err := fmt.Fprintf(report, "覆盖率 %s: %.1f%% (%d/%d)，要求 ≥ %g%%，%s\n", name, percent, covered, total, rule.minimum, status); err != nil {

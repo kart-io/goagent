@@ -59,6 +59,9 @@ func TestRunGatesFromDataFile(t *testing.T) {
 		{"条目字段数错误", "* 1 2\n", "", "门槛条目须为", "", ""},
 		{"重复声明", "* 1\ncore 1\ncore 2\n", "", "重复声明", "", ""},
 		{"门槛目标无数据", "* 0\ntools 1\n", "", "覆盖率检查失败", "(0/0)", ""},
+		{"无语句目标确无语句", "* 0\ntools -\n", "tools\n", "", "覆盖率 tools: 0 条语句，要求无可执行语句，通过", "| `tools` | — | 无语句 | 通过 |"},
+		{"无语句目标出现语句", "* 0\ncore -\n", "", "覆盖率检查失败", "覆盖率 core: 10 条语句，要求无可执行语句，失败", ""},
+		{"整体不能声明无语句", "* -\n", "", "百分比无效", "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -111,7 +114,7 @@ func TestRepositoryGatesAreEnforcedIndependently(t *testing.T) {
 		var data strings.Builder
 		data.WriteString("mode: atomic\n")
 		for _, g := range gates {
-			if g.target == "*" {
+			if g.target == "*" || g.minimum == noCode {
 				continue
 			}
 			file := fileOf(g.target)
@@ -130,7 +133,7 @@ func TestRepositoryGatesAreEnforcedIndependently(t *testing.T) {
 		t.Fatalf("全部覆盖时应通过: %v", err)
 	}
 	for _, g := range gates {
-		if g.target == "*" || g.minimum == 0 {
+		if g.target == "*" || g.minimum <= 0 {
 			continue
 		}
 		at := int(g.minimum)

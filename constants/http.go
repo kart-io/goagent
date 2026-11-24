@@ -1,7 +1,6 @@
-// HTTP 请求、响应与接口路径常量。
 package constants
 
-// HTTP 请求方法。
+// HTTP methods.
 const (
 	MethodGet    = "GET"
 	MethodPost   = "POST"
@@ -10,21 +9,20 @@ const (
 	MethodPatch  = "PATCH"
 )
 
-// HTTP 内容类型。
+// HTTP content types.
 const (
 	ContentTypeJSON        = "application/json"
 	ContentTypeOctetStream = "application/octet-stream"
 )
 
-// HTTP 头名称。
+// HTTP header names.
 const (
 	HeaderContentType   = "Content-Type"
 	HeaderAuthorization = "Authorization"
 	HeaderUserAgent     = "User-Agent"
 )
 
-// 字符编码与认证方案。
+// HTTP authentication schemes.
 const (
 	Bearer = "Bearer"
-	Basic  = "Basic"
 )

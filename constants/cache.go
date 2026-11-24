@@ -1,9 +1,11 @@
 package constants
 
-// 共享默认策略与协议值；领域实现直接引用本包。
+// Middleware defaults.
 const (
-	// DefaultMiddlewareCacheCapacity 是工具缓存中间件的旧条目上限，不再自动套用；宿主经 WithCacheMaxEntries 显式传入。
+	// DefaultMiddlewareCacheCapacity is the former entry cap of the tool caching
+	// middleware. It is no longer applied; pass it via WithCacheMaxEntries.
 	DefaultMiddlewareCacheCapacity = 10000
-	// DefaultTimingWindow 是 TimingMiddleware.GetTimings 保留的最近记录数。
+	// DefaultTimingWindow is how many recent records TimingMiddleware.GetTimings
+	// keeps.
 	DefaultTimingWindow = 1000
 )

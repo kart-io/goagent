@@ -1,6 +1,7 @@
 package constants
 
-// 修订归档上限按字节和条目计；归档大小包含 JSON 与文件的 base64 编码。
+// Revision archive limits in bytes and entries; archive size includes the
+// JSON and base64-encoded files.
 const (
 	MaxRevisionArchiveBytes    = 64 << 20
 	MaxRevisionDefinitionBytes = 4 << 20

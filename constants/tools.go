@@ -1,8 +1,8 @@
-// 工具名称、描述与执行默认值。
 package constants
 
 import "time"
 
+// Built-in tool names, descriptions and execution defaults.
 const (
 	ToolCalculator            = "calculator"
 	ToolAPI                   = "api"
@@ -17,10 +17,12 @@ const (
 	DefaultToolRetries        = 3
 )
 
-// 共享默认策略与协议值；领域实现直接引用本包。
+// Tool runtime defaults.
 const (
-	// DefaultApprovalTimeout 是旧默认值，tools 不再自动套用，宿主要保留旧行为时显式传入 Pipeline.ApprovalTimeout。
-	// DefaultResumableToolAttempts 写入 durable 日志，仍是 RunnableToolConfig.MaxAttempts 为 0 时的默认值。
+	// DefaultApprovalTimeout is a former default that tools no longer apply;
+	// pass it to Pipeline.ApprovalTimeout to keep the old behavior.
+	// DefaultResumableToolAttempts is written to the durable log and is still
+	// the default when RunnableToolConfig.MaxAttempts is 0.
 	DefaultApprovalTimeout       = 10 * time.Minute
 	DefaultResumableToolAttempts = 3
 	ToolReadSpill                = "read_spill"
@@ -29,8 +31,9 @@ const (
 	SpillMaxLineRunes            = 2000
 	ToolReadContextResult        = "read_context_result"
 	ToolRecallHistory            = "recall_history"
-	// DefaultRecallHistoryLimit 与 MaxRecallHistoryLimit 是 recall_history 每次返回的消息条数；
-	// MaxRecallHistoryRunes 是单条消息的上限，更长的截断并标注。
+	// DefaultRecallHistoryLimit and MaxRecallHistoryLimit bound the messages
+	// recall_history returns per call; MaxRecallHistoryRunes caps one message,
+	// longer ones are truncated and marked.
 	DefaultRecallHistoryLimit = 20
 	MaxRecallHistoryLimit     = 100
 	MaxRecallHistoryRunes     = 4000
@@ -52,5 +55,6 @@ const (
 	DefaultShellMaxOutputBytes = 1 << 20
 )
 
-// CalculatorMaxNesting 限制计算器表达式的括号与一元负号嵌套深度，防止超长输入耗尽栈。
+// CalculatorMaxNesting caps parenthesis and unary minus nesting in calculator
+// expressions so long input cannot exhaust the stack.
 const CalculatorMaxNesting = 64

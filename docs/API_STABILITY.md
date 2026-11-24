@@ -13,7 +13,7 @@ The packages listed in [`scripts/stable-packages.txt`](../scripts/stable-package
 - `workflow`
 - `llm`, `llm/common`, `llm/providers`
 - `tools` and its governance subpackages (`policy`, `spill`, `toolargs`, `middleware`)
-- `interfaces`, `errors`, `execution`, `mcp/remote`
+- `interfaces`, `errors`, `execution`, `mcp/remote`, `constants`
 
 The list matches import paths exactly; a subpackage is stable only if it is listed itself.
 
@@ -43,7 +43,7 @@ Experimental packages may change in any minor release. Breaking changes are stil
 
 ## Transitive exposure
 
-A stable package's exported API sometimes names a type from an experimental package, for example `builder.ModelCache.Cache` (`cache.Bytes`) or `llm.Client.Provider()` (`constants.Provider`). Such a type is covered by the stable promise to the extent callers depend on it through the stable package, in one of three modes:
+A stable package's exported API sometimes names a type from an experimental package, for example `builder.WithLongTermMemory` (`*memory.Memory`) or `llm/common.BaseProvider.NewHTTPClient` (`*httpclient.Client`). Such a type is covered by the stable promise to the extent callers depend on it through the stable package, in one of three modes:
 
 | Mode | Applies to | Frozen |
 |---|---|---|

@@ -3,6 +3,7 @@
 # 增删条目即改变兼容承诺，需在 CHANGELOG 中说明。
 builder
 builder/contextpolicy
+constants
 core
 core/budget
 core/durable
