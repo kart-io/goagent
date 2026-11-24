@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tools/middleware`：`WithCache` 与 `CachingConfig.Cache` 弃用，改用 `WithResultCache` 与 `CachingConfig.Store`。新接口 `ResultCache` 只含 `Get`/`Set`，任意 `cache.Cache` 都满足；两者都设置时 `Store` 优先。迁移：`WithCache(c)` 改为 `WithResultCache(c)`。
 
+### 修复
+
+- `interfaces.Document.String()` 的内容预览改为截取前 50 个字符，此前按 50 字节截断，会把中文等多字节文本切成无效 UTF-8。
+
 ### 工程
 
 - API 稳定性政策新增“传递暴露”：稳定包导出 API 引用的实验包类型按 `full`/`identity`/`alias` 三种模式冻结，登记在 `scripts/api-exposure.txt`，见 [API_STABILITY](docs/API_STABILITY_CN.md#传递暴露)。

@@ -138,7 +138,8 @@ func (d *Document) SetMetadata(key string, value interface{}) {
 	d.Metadata[key] = value
 }
 
-// String returns a string representation of the document.
+// String returns a debug representation; the content preview keeps the first
+// 50 characters (not bytes), so multibyte text is never split.
 func (d *Document) String() string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Document(ID=%s, Score=%.4f", d.ID, d.Score)
@@ -158,8 +159,8 @@ func (d *Document) String() string {
 		sb.WriteString("}")
 	}
 	contentPreview := d.PageContent
-	if len(contentPreview) > 50 {
-		contentPreview = contentPreview[:50] + "..."
+	if r := []rune(contentPreview); len(r) > 50 {
+		contentPreview = string(r[:50]) + "..."
 	}
 	fmt.Fprintf(&sb, ", Content='%s')", contentPreview)
 	return sb.String()

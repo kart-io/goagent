@@ -65,12 +65,17 @@ func TestDocumentString(t *testing.T) {
 			want: "Document(ID=d2, Score=0.0000, Metadata={a: x, b: 2}, Content='c')",
 		},
 		{
-			name: "内容超过 50 字节截断",
+			name: "内容超过 50 字符截断",
 			doc:  Document{ID: "d3", PageContent: strings.Repeat("a", 51)},
 			want: "Document(ID=d3, Score=0.0000, Content='" + strings.Repeat("a", 50) + "...')",
 		},
 		{
-			name: "内容恰好 50 字节不截断",
+			name: "多字节内容按字符截断",
+			doc:  Document{ID: "d5", PageContent: strings.Repeat("中", 51)},
+			want: "Document(ID=d5, Score=0.0000, Content='" + strings.Repeat("中", 50) + "...')",
+		},
+		{
+			name: "内容恰好 50 字符不截断",
 			doc:  Document{ID: "d4", PageContent: strings.Repeat("a", 50)},
 			want: "Document(ID=d4, Score=0.0000, Content='" + strings.Repeat("a", 50) + "')",
 		},
