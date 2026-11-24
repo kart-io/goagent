@@ -11,11 +11,12 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 **Purpose**: Continuous Integration
 
 **Actions**:
-- Run tests with race detection across Go 1.21, 1.22, 1.23
 - Verify import layering compliance
-- Run linters (golangci-lint)
-- Build for multiple platforms
-- Upload coverage to Codecov
+- Run the full test suite with race detection (the only full run on a PR)
+- Check coverage gates from `scripts/coverage-gates.txt`; on PRs, post the gate table as a comment
+- Check formatting and run linters (golangci-lint)
+- Build and run the offline host example
+- Upload coverage to Codecov when the `CODECOV_TOKEN` secret is configured
 
 **Usage**: Automatically runs on every push and PR
 
@@ -109,29 +110,20 @@ git push origin v1.3.0-rc.1
 **Purpose**: PR validation and feedback
 
 **Actions**:
-- Check code formatting
-- Verify import layering (strict mode)
-- Run go vet
-- Run tests with coverage
-- Validate coverage ≥ 80%
+- Check stable-package API compatibility; the `breaking-change` label turns failures into a report, and labeling re-runs only this check
 - Run security scanner (Gosec)
-- Post coverage report as PR comment
 
-**Coverage Report Example**:
+Tests, coverage, import layering, formatting and lint run in `ci.yml`, which also triggers on PRs.
+
+**Coverage Report Example** (posted by `ci.yml`; rows come from `scripts/coverage-gates.txt`):
 ```
 ## 📊 Test Coverage Report
 
-**Coverage**: 85.3%
-✅ Meets minimum threshold (80%)
-
----
-
-### Checklist
-- [x] All tests pass
-- [x] Code is properly formatted
-- [x] Import layering rules satisfied
-- [x] Test coverage ≥ 80%
-- [x] All linter checks pass
+| 范围 | 覆盖率 | 门槛 | 结果 |
+|---|---|---|---|
+| `整体` | 86.2% | 84% | 通过 |
+| `builder` | 91.4% | 89% | 通过 |
+| `testing/mocks` | 28.0% | 不计入整体 | — |
 ```
 
 ---

@@ -14,6 +14,11 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     steps:
       - name: Checkout code
@@ -59,16 +64,83 @@ jobs:
         run: make test-exposurecheck
 
       - name: Check coverage gates
-        run: bash scripts/check_coverage.sh coverage.out
+        run: bash scripts/check_coverage.sh coverage.out coverage-summary.md
 
+      - name: Comment PR with coverage
+        uses: actions/github-script@v7
+        # 门禁失败也贴出明细；测试步骤失败时没有摘要，不评论。
+        if: always() && github.event_name == 'pull_request' && hashFiles('coverage-summary.md') != ''
+        with:
+          script: |
+            const fs = require('fs');
+
+            // 门槛与结果都来自 scripts/coverage-gates.txt 经 coveragecheck 生成的表，这里不重复声明。
+            const table = fs.readFileSync('coverage-summary.md', 'utf8');
+
+            const body = `## 📊 Test Coverage Report
+
+            ${table}
+            门槛见 \`scripts/coverage-gates.txt\`；本地复现：\`make coverage-check PROFILE=coverage.out\`。
+
+            ---
+
+            ### Checklist
+
+            - [ ] All tests pass
+            - [ ] Code is properly formatted (\`make fmt\`)
+            - [ ] Import layering rules are satisfied
+            - [ ] Test coverage meets requirements (see above)
+            - [ ] All linter checks pass
+            `;
+
+            await core.summary.addRaw(body).write();
+
+            // fork 发起的 PR 中 GITHUB_TOKEN 被强制只读，无法评论，报告仅输出到 job summary
+            const headRepo = context.payload.pull_request.head.repo?.full_name;
+            if (headRepo !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.info(`来自 fork 的 PR (${headRepo})，跳过评论`);
+              return;
+            }
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Test Coverage Report')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      # 仓库未配置 CODECOV_TOKEN 时跳过：无令牌上传会被 Codecov 拒绝。门禁以上一步为准。
       - name: Upload coverage to Codecov
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.out
+          files: ./coverage.out
+          disable_search: true
           flags: unittests
           name: codecov-umbrella
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     name: Lint
@@ -82,6 +154,14 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      - name: Check code formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Code is not formatted. Please run 'make fmt'"
+            gofmt -l .
+            exit 1
+          fi
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
