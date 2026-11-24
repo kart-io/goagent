@@ -4,31 +4,16 @@ import (
 	"context"
 	"slices"
 	"time"
+
+	"github.com/kart-io/goagent/interfaces"
 )
 
-// Tagged 是支持按标签批量删除的缓存能力，与 Cache 独立，由后端按需实现。
-//
-// 实现要求：
-//   - DeleteTag 必须幂等：标签不存在、重复调用、条目已被删除或过期都返回 nil。
-//   - 外部后端（如 Redis）里标签集合的过期时间不得短于其成员条目的 TTL，否则标签先过期会让条目无法按标签删除。
-//   - 标签关联的条目很多时应分批删除，避免单次操作长时间阻塞后端。
-//
-// 一致性契约由两条性质组成，"已完成"指 SetTagged 在 DeleteTag 开始前已返回：
-//   - S1（必须）：DeleteTag 返回后，在它开始前已完成的 SetTagged 写入的、带该标签的条目不可读。
-//     可以用原子操作，也可以用令牌或版本校验使旧写入在读取时失效（参见 goagent-contrib 的 cache/redis），不要求事务或脚本。
-//     多删允许（如无标签覆盖后的新值被一并删除），但被覆盖的旧带标签值不得复活。
-//   - S2（实现须写明）：上述条目何时从存储中物理删除；不能在 DeleteTag 返回时删除的情形，须写明回收上限。
-//
+// Tagged is the tag-deletion cache capability. It is an alias of
+// interfaces.TaggedCache, which documents the consistency contract.
+type Tagged = interfaces.TaggedCache
+
 // SimpleCache 在 tagMu 下写入条目并登记标签，DeleteTag 同样持有 tagMu，S2 在 DeleteTag 返回时成立；
 // 不带标签的 Set 不取锁，只可能让 DeleteTag 多删。
-type Tagged interface {
-	// SetTagged 写入条目并关联标签。对同一个键重复调用时，新标签集合整体替换旧的。
-	SetTagged(ctx context.Context, key string, value []byte, ttl time.Duration, tags ...string) error
-
-	// DeleteTag 删除所有关联该标签的条目。
-	DeleteTag(ctx context.Context, tag string) error
-}
-
 var _ Tagged = (*SimpleCache)(nil)
 
 // SetTagged 写入条目并关联标签。标签切片会被复制，调用方之后修改它不影响索引。

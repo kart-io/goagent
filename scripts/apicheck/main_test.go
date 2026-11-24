@@ -172,6 +172,12 @@ func TestCacheCanImportOnlyRootErrors(t *testing.T) {
 	require.True(t, forbidden("errors/sentinels.go", module+"cache"))
 }
 
+func TestCacheCanImportOnlyRootInterfaces(t *testing.T) {
+	require.False(t, forbidden("cache/bytes.go", module+"interfaces"))
+	require.True(t, forbidden("cache/bytes.go", module+"interfaces/sub"))
+	require.True(t, forbidden("interfaces/cache.go", module+"cache"))
+}
+
 func TestScanEnforcesErrorConstructionOutsideIndependentTools(t *testing.T) {
 	root := t.TempDir()
 	for name, src := range map[string]string{

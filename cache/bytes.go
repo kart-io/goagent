@@ -1,16 +1,9 @@
 package cache
 
-import (
-	"context"
-	"time"
-)
+import "github.com/kart-io/goagent/interfaces"
 
-// Bytes 是只收发字节的缓存接口。外部缓存（如 Redis）无法保存任意 Go 值，收窄后误用在编译期暴露。
-type Bytes interface {
-	// GetBytes 未命中时返回 errors.ErrCacheMiss。
-	GetBytes(ctx context.Context, key string) ([]byte, error)
-	SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error
-	Delete(ctx context.Context, key string) error
-}
+// Bytes is the byte-only cache contract. It is an alias of
+// interfaces.ByteCache, which is covered by the stable API promise.
+type Bytes = interfaces.ByteCache
 
 var _ Bytes = (*SimpleCache)(nil)

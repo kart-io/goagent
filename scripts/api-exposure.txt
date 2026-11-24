@@ -8,7 +8,6 @@
 memory.Memory          identity  # builder.WithLongTermMemory、AgentConfig.LongTermMemory：由 memory.New 构造后透传
 memory.EraseFunc       full      # builder.ModelCache.Eraser 的返回值，调用方赋给 memory.Config.OnErase
 
-cache.Bytes            full      # builder.ModelCache.Cache：调用方实现（如 goagent-contrib cache/redis）
 cache.Cache            full      # tools/middleware.CachingConfig.Cache、WithCache：调用方实现或传 NewSimpleCache
 cache.CacheStats       full      # cache.Cache.GetStats 的返回值
 
