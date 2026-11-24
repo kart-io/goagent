@@ -1,54 +1,56 @@
-# 执行入口与扩展契约
+# Execution Entry Points and Extension Contract
 
-推荐通过 `agent.AsRunnable().Invoke/Stream` 接入。`ExecuteStream` 与它共享执行源；Builder 接受任意 `llm.Client`，配置工具时需要 `llm.ToolStreamClient`。
+[English](EXTENSION_CONTRACT.md) | [中文](EXTENSION_CONTRACT_CN.md)
 
-## 公共契约与变更验证
+The recommended entry point is `agent.AsRunnable().Invoke/Stream`. `ExecuteStream` shares the same execution source; the Builder accepts any `llm.Client`, and configuring tools requires `llm.ToolStreamClient`.
 
-当前 0.x 版本以以下行为作为公共契约；版本号并不承诺所有接口永久不变。修改签名或恢复行为须在 CHANGELOG 中提供迁移说明，并验证所有关联模块，不增加只为掩盖破坏的兼容别名。
+## Public Contract and Change Verification
 
-| 边界 | 必须保持的行为 | 回归位置 |
+In the current 0.x versions, the following behaviors form the public contract; the version number does not promise that every interface stays unchanged forever. Changing a signature or recovery behavior requires migration notes in the CHANGELOG and verification of all related modules; do not add compatibility aliases whose only purpose is to hide a break.
+
+| Boundary | Behavior that must be preserved | Regression location |
 |---|---|---|
-| `Runnable` / `StreamRunnable` | Invoke 与 Stream 共用执行源；成功只有一个终态；缺失/重复终态、迟到错误和取消不发布成功结果 | `core/stream_runnable_test.go`、`core/composition_stream_test.go`、`builder/runnable_test.go` |
-| `llm.Client` / `ToolStreamClient` | 完整工具调用只来自成功终止块；保留工具 ID、原生续接状态、错误和已知用量，未知值不伪造为零 | `llm/providers/native_contract_test.go`、`structured_hardening_contract_test.go`、`builder/agent_usage_test.go` |
-| `durable.Store` / 持久操作 | Lock、原子 Save/SaveAll 与读取语义遵循接口注释；已完成操作回放；未知效果先核对或显式允许重试 | `core/durable/storetest`、`operation_wait_test.go`、`save_all_test.go` |
-| 审批与中断恢复 | 错误输入保持等待；已消费恢复键不再次应用状态修改；宿主授权不能由审批键替代 | `workflow/resume_test.go`、`resume_process_test.go`、`core/durable/interrupt_test.go` |
-| 根预算 | 父子调用共用额度；持久运行恢复不清零；未知用量、配置漂移与并发请求按账本规则处理 | `core/budget/unified_test.go`、`limits_test.go`、`builder/model_budget_test.go` |
+| `Runnable` / `StreamRunnable` | Invoke and Stream share the execution source; a success has exactly one terminal state; a missing/duplicate terminal state, a late error, or cancellation does not publish a successful result | `core/stream_runnable_test.go`, `core/composition_stream_test.go`, `builder/runnable_test.go` |
+| `llm.Client` / `ToolStreamClient` | Complete tool calls come only from a successful terminal chunk; tool IDs, native continuation state, errors, and known usage are preserved, and unknown values are not faked as zero | `llm/providers/native_contract_test.go`, `structured_hardening_contract_test.go`, `builder/agent_usage_test.go` |
+| `durable.Store` / durable operations | Lock, atomic Save/SaveAll, and read semantics follow the interface comments; completed operations are replayed; unknown effects are reconciled first or retried only when explicitly allowed | `core/durable/storetest`, `operation_wait_test.go`, `save_all_test.go` |
+| Approval and interrupt recovery | Invalid input keeps the run waiting; a consumed resume key does not apply state changes again; host authorization cannot be replaced by an approval key | `workflow/resume_test.go`, `resume_process_test.go`, `core/durable/interrupt_test.go` |
+| Root budget | Parent and child calls share the quota; recovering a durable run does not reset it; unknown usage, configuration drift, and concurrent requests are handled by ledger rules | `core/budget/unified_test.go`, `limits_test.go`, `builder/model_budget_test.go` |
 
-执行 `make test-contracts` 验证这些边界，`make test-frameworkbench` 验证独立模块，`make compatibility` 验证本地 Harness、Contrib 和 Examples 的实际调用方。跨仓报告记录当前核心依赖目录、源码提交、完整测试日志与跳过项。函数或状态结构变化须主动提升宿主流程版本，不能仅以 Go 编译通过断言旧检查点可恢复。带数据库、真实模型或业务授权的部分，还需相应环境的验收证据。
+Run `make test-contracts` to verify these boundaries, `make test-frameworkbench` to verify the standalone module, and `make compatibility` to verify the actual callers in local Harness, Contrib, and Examples. The cross-repo report records the current core dependency directory, source commit, full test logs, and skipped items. Changes to functions or state structures require proactively bumping the host workflow version; a successful Go compile alone does not prove that old checkpoints can be recovered. Parts involving databases, real models, or business authorization also need acceptance evidence from the corresponding environment.
 
-## 扩展点
+## Extension Points
 
-| 扩展点 | 是否改变执行 | 错误与超时 | 恢复语义 |
+| Extension point | Changes execution? | Errors and timeouts | Recovery semantics |
 |---|---|---|---|
-| `core/observe.Observer` | 只读观察，不是检查点 | 同步sink须及时返回；panic隔离；可显式包装AsyncObserver | 事件不是持久账本，回放有Replayed标识 |
-| `WithUsageHook` / `budget.WithUsageHook` | 只读Token统计通知，不改变执行 | 同步且支持并发；query/回调panic不改变业务；未绑定预算仅单次证据 | 父子继承，子非nil替换；回放标识保留，累计不能相加；见[用量指南](MULTI_AGENT_USAGE.md) |
-| `core.Callback` | 生命周期通知 | StreamRunnable的OnStart/OnEnd错误使调用失败；OnError返回值忽略，panic按错误处理；旧RunnableFunc的OnEnd返回值仍忽略 | 父子回调独立，宿主避免重复注册副作用 |
-| `core/middleware` | 可改请求与结果 | 返回错误中止，受调用context约束 | 中间件副作用不自动幂等，需宿主版本与执行键 |
-| `WithOutputValidator` / `StreamRunnable.WithFinalValidator` | 只读最终验收，不能追加模型请求 | 错误/取消/panic阻止成功终态，验收器可能多次调用 | 回放重新验收，不回滚已保存历史或外部效果 |
-| `PreStep`、`TurnStopping` | 可改历史、阻止请求或续跑 | 错误中止，续跑受请求预算限制 | 持久执行记录结果，恢复回放 |
-| `RequestHook` | 可调整模型请求或客户端 | 错误中止 | 持久模式须确定，变化须提升宿主版本 |
-| `RequestErrorHook`（`WithRequestError`；暂时性失败的原样重试用 `builder.RetryTransient`） | 可压缩、回退或重试 | 原生工具流，恢复次数有界；没有工具的流式回答只支持原样重试 | 原样重试在同一条回合记录内，每次尝试各占预算；持久运行中替换消息或客户端以错误结束 |
-| Pipeline Pre/审批/Guard | 可拒绝或声明替代调用 | 模型可修订的拒绝是Rejected，error中止；审批有独立上限 | 准入在操作日志之外，完成操作回放跳过准入 |
-| `Authorize` | 宿主层授权 | error中止，与Pipeline互补；参数不合法时也可能调用 | 不应仅据函数存在推断已授权回放的其他业务效果 |
-| Pipeline Around/Post | 包装执行、改结果或追加上下文 | 计入单次Timeout，异常结果不变成成功 | 冻结后的结果写入操作日志 |
-| `OnResult` | 宿主结果交付/状态重建 | 错误使调用失败，不受工具单次Timeout；宿主ctx仍有效 | 首次和回放均可触发，以ExecutionKey去重 |
+| `core/observe.Observer` | Read-only observation, not a checkpoint | Synchronous sinks must return promptly; panics are isolated; can be explicitly wrapped with AsyncObserver | Events are not a durable ledger; replays carry the Replayed flag |
+| `WithUsageHook` / `budget.WithUsageHook` | Read-only token usage notification; does not change execution | Synchronous and concurrency-safe; query/callback panics do not change business behavior; without a bound budget it is single-call evidence only | Inherited from parent to child, a non-nil child hook replaces it; the replay flag is preserved and cumulative values must not be added up; see the [usage guide](MULTI_AGENT_USAGE.md) |
+| `core.Callback` | Lifecycle notification | OnStart/OnEnd errors on StreamRunnable fail the call; OnError's return value is ignored and panics are treated as errors; the OnEnd return value of the legacy RunnableFunc is still ignored | Parent and child callbacks are independent; hosts should avoid registering side effects twice |
+| `core/middleware` | Can modify requests and results | Returning an error aborts; bound by the call context | Middleware side effects are not automatically idempotent; they need a host version and execution key |
+| `WithOutputValidator` / `StreamRunnable.WithFinalValidator` | Read-only final acceptance; cannot add model requests | Errors/cancellation/panics block the successful terminal state; validators may be called multiple times | Replays re-run acceptance; saved history and external effects are not rolled back |
+| `PreStep`, `TurnStopping` | Can modify history, block requests, or continue the run | Errors abort; continuation is limited by the request budget | Durable execution records results, which are replayed on recovery |
+| `RequestHook` | Can adjust the model request or client | Errors abort | Must be deterministic in durable mode; changes require bumping the host version |
+| `RequestErrorHook` (`WithRequestError`; use `builder.RetryTransient` for unchanged retries of transient failures) | Can compact, fall back, or retry | Native tool streams, with a bounded number of recoveries; streaming answers without tools only support unchanged retries | Unchanged retries stay within the same turn record, and each attempt consumes budget; replacing messages or the client in a durable run ends with an error |
+| Pipeline Pre/approval/Guard | Can reject or declare a substitute call | Rejections the model can revise are Rejected, errors abort; approval has its own limit | Admission is outside the operation journal; replays of completed operations skip admission |
+| `Authorize` | Host-level authorization | Errors abort; complements the Pipeline; may also be called when arguments are invalid | Do not infer, merely from the function's existence, that other business effects of a replay were authorized |
+| Pipeline Around/Post | Wraps execution, changes the result, or appends context | Counts toward the single-call Timeout; abnormal results do not become successes | The frozen result is written to the operation journal |
+| `OnResult` | Host result delivery/state rebuild | Errors fail the call; not subject to the tool's single-call Timeout; the host ctx is still valid | May fire on both the first run and replays; deduplicate by ExecutionKey |
 
-完整签名以源码Go文档为准；业务最终结果必须来自成功终态，预览文本不证明任务完成。
+Full signatures are defined by the Go documentation in the source; the final business result must come from a successful terminal state, and preview text does not prove the task is complete.
 
-## Pipe 与 Sequence 的一致性修复
+## Consistency Fixes for Pipe and Sequence
 
-组合器仍等待前一阶段最终输出后才执行后一阶段；没有跨节点逐Token变换。最后阶段的流经共同执行源验证，必须有且只有一个终态，并在其后关闭通道。缺少/重复终态、终态后事件或迟到错误都会失败；空Sequence作为恒等变换。
+Combinators still wait for the previous stage's final output before running the next stage; there is no per-token transformation across nodes. The last stage's stream is validated through the shared execution source: it must have exactly one terminal state and close the channel after it. A missing/duplicate terminal state, events after the terminal state, or a late error all fail; an empty Sequence acts as the identity transformation.
 
-显式配置的父级回调现在对Invoke、Stream和Batch逐输入生效，子回调仍独立运行；旧调用方若曾同时注册父子相同副作用回调，须去重。Batch改为逐输入Invoke并遵守父级MaxConcurrency，保持结果索引；单个输入失败后仍处理其他输入，返回有序部分结果和首个观察到的错误，不再调用子级自定义Batch。错误输出只作诊断，不视为成功业务结果。
+Explicitly configured parent callbacks now apply per input for Invoke, Stream, and Batch, while child callbacks still run independently; legacy callers that registered the same side-effecting callback on both parent and child must deduplicate. Batch now invokes per input, respects the parent's MaxConcurrency, and keeps result indexes; after one input fails it still processes the other inputs, returns ordered partial results and the first observed error, and no longer calls the child's custom Batch. Error output is for diagnostics only and is not treated as a successful business result.
 
-消费者提前停止读取时必须取消ctx。组合器自身发送与等待支持取消，但无法强制终止忽略context的第三方同步函数或生产者；提供终态后不关闭通道的第三方会被等待到ctx取消。未配置ctx期限的宿主应自行管理生命周期。
+Consumers that stop reading early must cancel the ctx. The combinators' own sends and waits support cancellation, but they cannot forcibly stop third-party synchronous functions or producers that ignore the context; a third party that does not close the channel after delivering the terminal state is waited on until the ctx is canceled. Hosts that do not set a ctx deadline should manage the lifecycle themselves.
 
-## 初始化与记忆
+## Initialization and Memory
 
-宿主推荐使用 `BuildContext(ctx)` 构建，OnStart 回调共享该上下文，回调返回后检查取消；旧 `Build()` 使用 Background。取消不回滚外部效果，也无法强制终止忽略 ctx 的实现。标准身份、预算和观察装配见 [宿主接入指南](HOST_INTEGRATION.md)。
+Hosts should build with `BuildContext(ctx)`; OnStart callbacks share that context, and cancellation is checked after the callbacks return. The legacy `Build()` uses Background. Cancellation does not roll back external effects and cannot forcibly stop implementations that ignore the ctx. For standard identity, budget, and observation assembly, see the [Host Integration Guide](HOST_INTEGRATION.md).
 
-多轮历史只来自会话日志（`WithSessionLog`）。日志写入失败时本轮失败，错误保留 errors.Is 链；流式文本可能已经输出，失败不回滚模型调用或业务副作用。
+Multi-turn history comes only from the session log (`WithSessionLog`). If writing the log fails, the turn fails and the error keeps its errors.Is chain; streamed text may already have been emitted, and the failure does not roll back model calls or business side effects.
 
-治理与诊断接入见 [执行治理指南](EXECUTION_GOVERNANCE.md)。
+For governance and diagnostics integration, see the [Execution Governance Guide](EXECUTION_GOVERNANCE.md).
 
-纯文本执行不支持的循环钩子与提示词扩展现在在BuildContext期报错；RequestError原样重试与OutputValidator仍可使用。详见[能力迁移说明](EXECUTION_ACCEPTANCE.md#构建期能力检查与迁移)。
+Loop hooks and prompt extensions that plain-text execution does not support now fail at BuildContext time; RequestError unchanged retries and OutputValidator are still available. See the [capability migration notes](EXECUTION_ACCEPTANCE.md#build-time-capability-checks-and-migration).

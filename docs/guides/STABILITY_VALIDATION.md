@@ -1,22 +1,24 @@
-# 稳定化验证与发布顺序
+# Stabilization Validation and Release Order
 
-## 本地门槛
+[English](STABILITY_VALIDATION.md) | [中文](STABILITY_VALIDATION_CN.md)
 
-使用 go.mod 声明的 Go 工具链，在当前源码执行全仓 `go test -race -count=1 ./...`、覆盖率门槛、`go build`、`go vet`、Lint、导入分层和独立 frameworkbench 契约测试。跳过项单独检查，不用自动重试后的绿灯代替首次结果。
+## Local Gates
 
-## 离线长稳
+Using the Go toolchain declared in go.mod, run on the current source the repo-wide `go test -race -count=1 ./...`, the coverage gate, `go build`, `go vet`, lint, import layering, and the standalone frameworkbench contract tests. Check skipped items separately, and do not substitute a green result after automatic retries for the first-run result.
+
+## Offline Soak
 
 ```sh
 go run ./scripts/stabilitysoak -duration 24h -workers 4 -interval 1s -sample 1m
 ```
 
-每个周期通过公开接口完成治理工具循环、文件会话日志、重建后的零模型请求/零工具效果重放、持久图审批与完成重放，以及已取消工具调用的零效果验证。模型为无网络的合成流；每个周期应恰好两次模型请求、一次工具效果和一次图节点效果。
+Each cycle, through public interfaces, completes a governed tool loop, a file session log, a replay after rebuild with zero model requests/zero tool effects, durable graph approval and completion replay, and a zero-effect check for a canceled tool call. The model is a synthetic stream with no network; each cycle should make exactly two model requests, one tool effect, and one graph node effect.
 
-这是同一进程反复创建、执行、重建、清理的生命周期负载。每周期回收临时状态，以保持存储有界；不验证长会话历史持续累积、真实模型质量、Postgres、远端服务或生产业务容量。长会话规模另用已有会话基准验证，生产容量需使用实际业务与存储后端单独测试。
+This is a lifecycle load in which the same process repeatedly creates, executes, rebuilds, and cleans up. Temporary state is reclaimed every cycle to keep storage bounded; it does not validate continuous growth of long session history, real model quality, Postgres, remote services, or production business capacity. Long-session scale is validated separately with the existing session benchmarks, and production capacity must be tested separately with real business workloads and storage backends.
 
-默认每周期期限5秒，每分钟采样；堆内存256MiB、goroutine128个、临时存储16MiB为采样门槛，可以通过 `-max-heap`、`-max-goroutines`、`-max-disk` 调整。它们是采样峰值，不是连续测量或操作系统硬配额。P95/P99是累计混合周期耗时的直方图上界，包含清理，末桶使用实际最大值。一次执行错误、取消、门槛超限或采样长时间中断均不能算通过。
+By default each cycle has a 5-second deadline and sampling happens every minute; heap memory 256MiB, 128 goroutines, and 16MiB of temporary storage are the sampling gates, adjustable with `-max-heap`, `-max-goroutines`, and `-max-disk`. These are sampled peaks, not continuous measurements or operating-system hard quotas. P95/P99 are histogram upper bounds of cumulative mixed-cycle durations, including cleanup, and the last bucket uses the actual maximum. Any execution error, cancellation, gate violation, or prolonged sampling interruption counts as a failure.
 
-运行时临时状态自动删除，不生成报告文件。需跨会话检查时，先在干净、已提交源码上构建二进制，再启动：
+Temporary state is deleted automatically at runtime, and no report file is generated. When you need to check across sessions, first build the binary from clean, committed source, then start it:
 
 ```sh
 go build -o /tmp/goagent-stabilitysoak ./scripts/stabilitysoak
@@ -24,38 +26,38 @@ go build -o /tmp/goagent-stabilitysoak ./scripts/stabilitysoak
 curl --fail http://127.0.0.1:18763/status
 ```
 
-接口仅监听回环地址，结果留在进程内存。`Phase=passed`、`Result.Elapsed >= Target`、有效周期非零且 `Revision` 与待发布提交完全一致，才表示该源码完成声明时长；`running`、`failed`、`unknown` 或 `-dirty` 均不能作为稳定发布证据。检查结束后用 `curl -X POST http://127.0.0.1:18763/stop` 关闭进程；提前停止按取消失败处理。执行期间应防止电脑休眠，不能把挂起时间当持续负载。
+The endpoint listens only on the loopback address, and results stay in process memory. Only `Phase=passed`, `Result.Elapsed >= Target`, a non-zero number of valid cycles, and a `Revision` that exactly matches the commit to be released together mean that the source completed the declared duration; `running`, `failed`, `unknown`, or `-dirty` cannot serve as evidence for a stable release. After checking, shut down the process with `curl -X POST http://127.0.0.1:18763/stop`; stopping early is treated as a cancellation failure. Keep the computer from sleeping during the run; suspended time does not count as sustained load.
 
-## MiniMax 回归
+## MiniMax Regression
 
-使用[MiniMax Anthropic 指南](MINIMAX_ANTHROPIC.md#有界定期回归)中的专用凭据和入口。每次最多三个请求，无网络错误重试；不要把每周的少量真实回归扩大为24小时持续付费调用。GitHub 工作流只有配置环境 Secret 并显式启用后才运行；权限不足时可以由宿主本机调度同一入口，凭据仍从本机读取。
+Use the dedicated credentials and entry point from the [MiniMax Anthropic guide](MINIMAX_ANTHROPIC.md#bounded-periodic-regression). Each run makes at most three requests, with no retries on network errors; do not expand the small weekly real regression into 24 hours of continuous paid calls. The GitHub workflow runs only when the environment Secret is configured and it is explicitly enabled; without sufficient permissions, the host can schedule the same entry point locally, with credentials still read from the local machine.
 
-## 版本对齐
+## Version Alignment
 
-合并主分支不等于已经发布。仅在目标提交本地门槛与长稳通过后创建核心正式 tag；本轮包含构建期拒绝过去静默忽略的配置，应按0.x阶段的 minor升级，而不是仅补patch。发布前重新核对远端版本，不能覆盖既有tag。
+Merging into the main branch is not the same as releasing. Create the core release tag only after the target commit passes the local gates and the soak; this round includes rejecting at build time configurations that were previously ignored silently, so it should be a minor bump in the 0.x stage rather than just a patch. Recheck the remote versions before releasing, and never overwrite an existing tag.
 
-Contrib采用独立模块tag，按真实依赖顺序发布：
+Contrib uses independent module tags, released in actual dependency order:
 
-1. 核心正式tag可下载后，在Contrib各迁移模块中更新核心版本，执行单模块 `GOWORK=off go test -mod=readonly -race ./...`。
-2. 发布retrieval的新版本。
-3. 将document、cohere、qdrant、vertexai锁定到已经发布的retrieval版本，分别执行独立测试后发布；database、practical没有同仓上游，可独立发布。
-4. 将PDF锁定到已经发布的document、retrieval版本，独立验证后发布。
-5. 用不含任何本地replace的全新临时消费模块下载整套正式版本并构建；临时模块完成后删除。
+1. Once the core release tag is downloadable, update the core version in each migrated Contrib module and run per-module `GOWORK=off go test -mod=readonly -race ./...`.
+2. Release a new version of retrieval.
+3. Pin document, cohere, qdrant, and vertexai to the released retrieval version, run their tests independently, then release them; database and practical have no in-repo upstream and can be released independently.
+4. Pin PDF to the released document and retrieval versions, verify it independently, then release it.
+5. Use a brand-new temporary consumer module without any local replace to download and build the full set of released versions; delete the temporary module when done.
 
-不要先提交指向尚未发布tag的依赖，不以workspace联调结果代替发布后的独立消费验证。发布时若长稳尚在运行，保留未发布状态，不把短时预检标记成24小时通过。
+Do not commit dependencies that point to tags not yet released, and do not substitute workspace integration results for independent post-release consumer verification. If the soak is still running at release time, keep the unreleased state, and do not mark a short pre-check as a 24-hour pass.
 
-下表是 v0.50.0 一轮的历史候选版本记录（goagent `v0.50.0` 已发布，当前版本以远端 tag 为准），不代表当前待发布版本；只有对应上游tag真实发布后才修改下游依赖；发布时须再次检查远端是否已有新版本。
+The table below is the historical record of candidate versions for the v0.50.0 round (goagent `v0.50.0` has been released; the current version is determined by the remote tags) and does not represent the version currently pending release; downstream dependencies are changed only after the corresponding upstream tag is actually released; check again at release time whether the remote already has newer versions.
 
-| 模块 | 候选tag | 同仓依赖 |
+| Module | Candidate tag | In-repo dependencies |
 |---|---|---|
-| goagent | `v0.50.0` | 无 |
-| retrieval | `retrieval/v0.4.1` | 无 |
+| goagent | `v0.50.0` | None |
+| retrieval | `retrieval/v0.4.1` | None |
 | document | `document/v0.3.1` | retrieval `v0.4.1` |
 | retrieval/cohere | `retrieval/cohere/v0.4.1` | retrieval `v0.4.1` |
 | retrieval/qdrant | `retrieval/qdrant/v0.4.1` | retrieval `v0.4.1` |
 | retrieval/vertexai | `retrieval/vertexai/v0.4.1` | retrieval `v0.4.1` |
-| tools/database | `tools/database/v0.3.1` | 无 |
-| tools/practical | `tools/practical/v0.3.1` | 无 |
-| document/pdf | `document/pdf/v0.3.1` | document `v0.3.1`、retrieval `v0.4.1` |
+| tools/database | `tools/database/v0.3.1` | None |
+| tools/practical | `tools/practical/v0.3.1` | None |
+| document/pdf | `document/pdf/v0.3.1` | document `v0.3.1`, retrieval `v0.4.1` |
 
-本轮迁移模块的核心依赖随正式发布对齐到已存在的核心新tag。ACP、HTTP Agent、pgstore没有此次编解码迁移，不为版本号一致而抬高最低依赖；消费端仍须显式锁定所验证的核心版本。
+The core dependency of the modules migrated in this round is aligned with the existing new core tag at release. ACP, HTTP Agent, and pgstore had no codec migration this time, so their minimum dependency is not raised just to keep version numbers aligned; consumers must still explicitly pin the core version they verified.

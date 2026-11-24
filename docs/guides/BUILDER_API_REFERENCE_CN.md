@@ -97,7 +97,7 @@ return builder.NewSimpleBuilder(client).
 | `WithSessionLog(session.Store)` | 无 | 多轮历史来自会话日志；不配置时每次调用没有历史 |
 | `WithCompaction(*contextpolicy.Compaction)` | 无 | 对话超过阈值时压缩较早的消息；仅作用于原生工具流 |
 | `WithLongTermMemory(*memory.Memory)` | 无 | 跨会话长期记忆：每轮召回、轮末登记抽取任务；需要 `WithSessionLog` 与请求上下文中的 `memory.WithNamespace`；召回仅作用于原生工具流；Request 钩子不得改写或移动召回消息 |
-| `WithModelCache(builder.ModelCache)` | 无 | 模型调用缓存：以完整请求为键，`Scope` 声明可信的隔离身份（配置了长期记忆时默认取其命名空间）；`Erase` 为 `EraseOff` / `EraseAuto`（默认）/ `EraseRequired`；使用标签删除时 `TagKey` 至少 32 字节；`Build` 校验配置，见[缓存指南](CACHING_GUIDE.md#模型调用缓存) |
+| `WithModelCache(builder.ModelCache)` | 无 | 模型调用缓存：以完整请求为键，`Scope` 声明可信的隔离身份（配置了长期记忆时默认取其命名空间）；`Erase` 为 `EraseOff` / `EraseAuto`（默认）/ `EraseRequired`；使用标签删除时 `TagKey` 至少 32 字节；`Build` 校验配置，见[缓存指南](CACHING_GUIDE_CN.md#模型调用缓存) |
 | `WithSessionID(string)` | `session-<纳秒时间戳>` | 会话日志的缺省会话 ID；请求上下文中的 `tools.WithSessionID` 优先 |
 | `WithState(S)` | `core.NewAgentState()` | 初始状态 |
 
@@ -141,7 +141,7 @@ return builder.NewSimpleBuilder(client).
 
 同一 Agent 的所有执行入口按会话串行；跨会话并发应创建独立 Agent。入口行为对照见[执行契约](EXECUTION_CONTRACT_CN.md)。
 
-`Handle.PendingInputs() []builder.PendingInput` 返回未被循环领取的队列快照；每项有 `Kind`（steer/inject/redirect/followup）与 `Text`。同队列有序，跨队列不承诺全局顺序。查询不消费，已领取不代表处理成功。入队与快照不持久化；运行收敛后的剩余输入由宿主处置，见[组合指南](AGENT_COMPOSITION.md)。
+`Handle.PendingInputs() []builder.PendingInput` 返回未被循环领取的队列快照；每项有 `Kind`（steer/inject/redirect/followup）与 `Text`。同队列有序，跨队列不承诺全局顺序。查询不消费，已领取不代表处理成功。入队与快照不持久化；运行收敛后的剩余输入由宿主处置，见[组合指南](AGENT_COMPOSITION_CN.md)。
 
 `Interrupt` 请求合作式取消；`Wait` 仍等待本轮执行源退出及同步工具清理，等待 context 超时只结束等待。持久 Followup 链必须由宿主按原批次重建，Start/WithResume 不自动恢复其调度。
 
@@ -167,7 +167,7 @@ fmt.Println(agent.GetState().Tenant)
 
 `WithUsageHook(budget.UsageHook)` 接收单次模型证据和可用的 Attribution 累计报告；只读、支持并发、向子 Agent 继承，子非 nil 钩子替换继承项。也可用 `budget.WithUsageHook` 绑定 context，不替换 Observer。详见[专用钩子契约](../design/TOKEN_USAGE_HOOK.md)。
 
-`WithAgentID(id)` 设置逻辑角色，独立于 DurableScope；绑定预算会自动建立调用身份，未命名角色为 anonymous。`observe.Event.Agent/Usage` 与 model_attempt_start/model_usage 提供只读元数据；`budget.Config.MaxAgentCalls` 限制调用节点数，所有预算统一保存字段证据，`Controller.Attribution` 返回 Self/Inclusive/Root 及未知字段统计。`AsRunnable().Invoke` 与流式入口共用计量路径。见[多 Agent 用量指南](MULTI_AGENT_USAGE.md)。
+`WithAgentID(id)` 设置逻辑角色，独立于 DurableScope；绑定预算会自动建立调用身份，未命名角色为 anonymous。`observe.Event.Agent/Usage` 与 model_attempt_start/model_usage 提供只读元数据；`budget.Config.MaxAgentCalls` 限制调用节点数，所有预算统一保存字段证据，`Controller.Attribution` 返回 Self/Inclusive/Root 及未知字段统计。`AsRunnable().Invoke` 与流式入口共用计量路径。见[多 Agent 用量指南](MULTI_AGENT_USAGE_CN.md)。
 
 ### 显式推理配置
 

@@ -55,7 +55,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - 持久（journal）模式下 Builder 的 `errorFeedback` 被禁用：工具返回 Go 错误或超时会让任务失败，而不是把错误交给模型。工具的业务失败应作为工具结果返回（如 `tools.Rejected`）。
 - 投递重试只有退避上限（`DeliveryBackoffMax`），没有次数上限，也没有死信；接收端持续失败的投递会一直重投。结果保存失败经 `Config.Report`（kind `outbox_save`）上报后按退避整轮重试，接收端 panic 计为一次失败。
 
-领域错误直接使用 `github.com/kart-io/goagent/errors` 中的 `ErrManagement*`，不在本包维护旧错误别名。迁移说明和完整对应关系见 [核心迁移指南](../docs/guides/MANAGEMENT_MIGRATION.md)。
+领域错误直接使用 `github.com/kart-io/goagent/errors` 中的 `ErrManagement*`，不在本包维护旧错误别名。迁移说明和完整对应关系见 [核心迁移指南](../docs/guides/MANAGEMENT_MIGRATION_CN.md)。
 
 ## 本地验证
 
@@ -88,6 +88,6 @@ DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际�
 
 纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 [管理层稳定化验收](../docs/evaluation/2026-11-09-management-hardening/REPORT.md)。
 
-A2A、HTTP 与 MCP 共用任务的装配及互操作约束见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS.md)。
+A2A、HTTP 与 MCP 共用任务的装配及互操作约束见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS_CN.md)。
 
-不可变配置、提示词、Skills 与程序工件的实际归档和旧版本加载见 [AgentRevision 与会话绑定](../docs/guides/AGENT_REVISIONS.md)。
+不可变配置、提示词、Skills 与程序工件的实际归档和旧版本加载见 [AgentRevision 与会话绑定](../docs/guides/AGENT_REVISIONS_CN.md)。

@@ -6,7 +6,7 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 
 不在本仓库的内容：
 
-- Preset 与编码工具（原 `harness/preset`、`tools/coding`）在独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，见 [Harness 迁移指南](../guides/HARNESS_MIGRATION.md)。
+- Preset 与编码工具（原 `harness/preset`、`tools/coding`）在独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，见 [Harness 迁移指南](../guides/HARNESS_MIGRATION_CN.md)。
 - 大部分可运行的业务示例在 `github.com/kart-io/goagent-examples`；本仓库 `examples/` 只保留少量示例。
 
 ## 技术栈
@@ -137,7 +137,7 @@ graph TD
 
 ### Agent 与 Runnable
 
-`builder.NewAgentBuilder[S](client)`（或 `NewSimpleBuilder`）配置后经 `Build()` / `BuildContext(ctx)` 得到 `*ConfigurableAgent`。推荐入口 `agent.AsRunnable()` 返回 `*core.StreamRunnable[any, *builder.AgentOutput]`，`Invoke` 与 `Stream` 共享 `ExecuteStream` 同一执行源。完整契约见 [执行契约](../guides/EXECUTION_CONTRACT.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
+`builder.NewAgentBuilder[S](client)`（或 `NewSimpleBuilder`）配置后经 `Build()` / `BuildContext(ctx)` 得到 `*ConfigurableAgent`。推荐入口 `agent.AsRunnable()` 返回 `*core.StreamRunnable[any, *builder.AgentOutput]`，`Invoke` 与 `Stream` 共享 `ExecuteStream` 同一执行源。完整契约见 [执行契约](../guides/EXECUTION_CONTRACT.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)。
 
 客户端实现 `llm.ToolStreamClient` 且配置了工具时，走原生工具循环：每轮一次 `CompleteToolsStream`，模型返回工具调用则执行并追加 `tool` 消息，返回文本则结束；`WithMaxIterations` 限制模型请求次数。
 

@@ -130,7 +130,7 @@ if err != nil {
 
 ## 超时
 
-`llm.WithTimeout` 与请求 ctx 的关系见 [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md#超时配置)。调用级期限用 ctx 控制：
+`llm.WithTimeout` 与请求 ctx 的关系见 [Provider 最佳实践](PROVIDER_BEST_PRACTICES_CN.md#超时配置)。调用级期限用 ctx 控制：
 
 ```go
 ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -141,5 +141,5 @@ resp, err := llm.Chat(ctx, client, messages)
 ## 相关文档
 
 - [快速入门](QUICKSTART_CN.md)
-- [Provider 最佳实践](PROVIDER_BEST_PRACTICES.md)
+- [Provider 最佳实践](PROVIDER_BEST_PRACTICES_CN.md)
 - [Provider 能力边界](PROVIDER_CAPABILITIES_CN.md)

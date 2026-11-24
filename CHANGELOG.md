@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 文档
+
+- `docs/guides` 中 24 份原先只有中文的指南补齐英文主文件，中文版改名为 `_CN` 后缀，站内中文文档的链接同步指向 `_CN`。
+- 修正指南与代码不符之处：`llm.WithTimeout` 未设置时不设超时（Ollama 同样）；内置 Provider 枚举为 9 个（含 `ProviderMiniMax`）；常量迁移表实为 47 项；插件指南不再提已删除的 Runnable 注册表。
+
 ## [0.62.2] - 2026-11-24
 
 ### 安全
@@ -304,7 +309,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `memory.ValidateNamespace` 与 `memory.NormalizeVector`：导出命名空间校验与向量归一化，供外部 `memory.Index` 实现（如 contrib 的 pgvector）与 `MemoryIndex` 保持同样的校验与错误码。
 - `memory/memorytest.RunIndex`：`memory.Index` 的一致性测试，外部实现用它验证维度、归一化、排序与并列（按 ID 字节序）等契约。
-- `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。`ModelCache.Cache` 的类型为只收发字节的 `cache.Bytes`；写入缓存返回错误时发出 `model_cache_write_error`，并对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。`EraseOff` 下不输出"TTL 超过 EraseWithin"的构建期警告。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE.md#模型调用缓存)。
+- `builder.WithModelCache(builder.ModelCache{...})`：模型调用缓存。以完整请求为键，含宿主经 `Scope` 声明的隔离身份、会话 ID、客户端与模型、采样参数、规范化的工具定义和长期记忆的版本；命中只省掉一次模型调用，会话日志、持久日志与工具执行照常。命中不占预算、不记账，turn 的 `Usage` 为零值；observe 结束事件带 `Cached` 标记，输出元数据增加 `model_cache_hits`，`model_calls` 只计真实调用。`ModelCache.Cache` 的类型为只收发字节的 `cache.Bytes`；写入缓存返回错误时发出 `model_cache_write_error`，并对同一键调用一次 `Delete`（超时的写入可能已在服务端生效）。`EraseOff` 下不输出"TTL 超过 EraseWithin"的构建期警告。使用方法、信任边界与删除承诺见[缓存指南](docs/guides/CACHING_GUIDE_CN.md#模型调用缓存)。
 - `cache.Bytes`（`GetBytes`、`SetBytes`、`Delete`）：只收发字节的缓存接口，Redis 等外部缓存只能存字节，误用在编译期暴露。`SimpleCache` 已实现，其 `GetBytes` 遇到非 `[]byte` 的值返回 `CodeInvalidInput`。
 - `cache.Tagged`（`SetTagged`、`DeleteTag`）：按标签批量删除的可选接口，`SimpleCache` 已实现。一致性契约分两条：S1（必须）`DeleteTag` 返回后，在它开始前已完成的 `SetTagged` 写入的带该标签条目不可读；S2（实现须写明）这些条目何时物理删除及回收上限。外部实现不要求事务或脚本，可用令牌或版本校验使旧写入在读取时失效（如 contrib 的 `cache/redis`）。
 - `cache/cachetest.RunTagged`：`cache.Bytes` 与 `cache.Tagged` 的一致性测试，外部实现用它验证 S1 与多实例共享。

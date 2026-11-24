@@ -27,7 +27,7 @@ Harness 的 preset 子 Agent 默认禁用子层 journal，仅代表那一种装�
 
 Handle 入队方法返回 nil 仅代表接收进程内输入。失败路径以前把全部 Followup 从队列取出后直接结束，尚未执行的输入消失；此外，Inject 不唤醒、Steer 在最后一轮或结束检查之后到达，本来就可能没有下一次领取机会。
 
-修复失败路径，只有开始下一轮才领取 Followup；新增只读 `PendingInputs` 供宿主查看仍在队列的输入。保持现有预算和完成语义，不为了消耗剩余队列偷偷创建新执行。已领取输入即使处理失败也不会重新出现在快照中，因此它不是业务投递确认或重试清单。设计见[采纳边界](../design/PI_CORE_ADOPTION.md)，用法见[组合指南](../guides/AGENT_COMPOSITION.md)。
+修复失败路径，只有开始下一轮才领取 Followup；新增只读 `PendingInputs` 供宿主查看仍在队列的输入。保持现有预算和完成语义，不为了消耗剩余队列偷偷创建新执行。已领取输入即使处理失败也不会重新出现在快照中，因此它不是业务投递确认或重试清单。设计见[采纳边界](../design/PI_CORE_ADOPTION.md)，用法见[组合指南](../guides/AGENT_COMPOSITION_CN.md)。
 
 ## 后续事项按层归属
 

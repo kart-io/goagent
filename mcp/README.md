@@ -51,4 +51,4 @@ if errors.As(err, &pending) {
 
 ## 将 GoAgent 发布为 MCP 服务
 
-`management/mcpserver` 将已发布 Agent 暴露为工具，提供 task_get/task_wait/task_cancel/task_respond，与 HTTP/A2A 使用同一个管理任务服务。完整装配、工具契约和协议边界见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS.md)。
+`management/mcpserver` 将已发布 Agent 暴露为工具，提供 task_get/task_wait/task_cancel/task_respond，与 HTTP/A2A 使用同一个管理任务服务。完整装配、工具契约和协议边界见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS_CN.md)。

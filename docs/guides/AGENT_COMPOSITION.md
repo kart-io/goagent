@@ -1,82 +1,84 @@
-# Agent、workflow 与运行中输入
+# Agents, Workflows, and In-Flight Input
 
-GoAgent 提供通用执行基础。宿主决定任务路由，Runnable 统一承载 Agent、工具与流程；不要求所有任务先经过一个主 Agent。
+[English](AGENT_COMPOSITION.md) | [中文](AGENT_COMPOSITION_CN.md)
 
-## 选择入口
+GoAgent provides a general execution foundation. The host decides task routing, and Runnable is the common carrier for Agents, tools, and flows; not every task has to pass through a main Agent first.
 
-| 情况 | 建议 |
+## Choosing an Entry Point
+
+| Situation | Recommendation |
 | --- | --- |
-| 用户信息不足 | 宿主返回澄清问题，保留业务状态，补齐后再路由 |
-| 意图明确、步骤固定 | 直接调用编译后的 workflow Runnable，无需新增模型请求 |
-| 工具选择需要运行时探索 | 调用 Agent，由模型在本次允许的工具中选择 |
-| 主任务需要专业子 Agent | 将子 Agent 的 Runnable 适配为工具，经 Dispatcher 暴露给父 Agent |
-| 多个独立工作可并行 | 使用有界 Graph.AddParallel；显式 Clone/Merge，明确分支失败规则 |
-| 多个 Agent 按顺序、循环或分流协作 | 使用 `multiagent` 的 Sequential、Loop、RouterSupervisor，见[多 Agent 预置模式](MULTI_AGENT_PATTERNS.md) |
-| 需要人工审批与恢复 | 使用 DurableGraph/AsChildRunnable、Resumable 工具及宿主提供的日志和恢复输入 |
+| Insufficient user information | The host returns a clarifying question, keeps the business state, and routes once the information is complete |
+| Clear intent, fixed steps | Call the compiled workflow Runnable directly, with no additional model requests |
+| Tool selection needs runtime exploration | Call an Agent and let the model choose among the tools allowed for this run |
+| The main task needs a specialized sub-Agent | Adapt the sub-Agent's Runnable as a tool and expose it to the parent Agent through the Dispatcher |
+| Multiple independent pieces of work can run in parallel | Use a bounded Graph.AddParallel; Clone/Merge explicitly and define branch failure rules clearly |
+| Multiple Agents collaborate sequentially, in a loop, or by routing | Use `multiagent`'s Sequential, Loop, and RouterSupervisor; see [Multi-Agent Patterns](MULTI_AGENT_PATTERNS.md) |
+| Human approval and recovery are needed | Use DurableGraph/AsChildRunnable, Resumable tools, and the journal and resume input provided by the host |
 
-路由规则与置信阈值属于业务。不要把路由结果直接当成工具授权；真正执行仍需校验与准入。`workflow.Graph.AddBranch` 可用于类型化的分流，未知意图应有显式澄清或拒绝路径。
+Routing rules and confidence thresholds belong to the business. Do not treat a routing result directly as tool authorization; actual execution still requires validation and admission. `workflow.Graph.AddBranch` can be used for typed routing; unknown intents should have an explicit clarification or rejection path.
 
-## 同一种流程可以直接运行或暴露为工具
+## The Same Flow Can Run Directly or Be Exposed as a Tool
 
-已编译 Graph 实现 Runnable，可直接 Invoke，也可传给 `tools.NewRunnableTool`；提供给 Agent 时使用 `dispatcher.Tools()`。可编译、可运行的离线示例见 [ExampleNewRunnableTool_workflow](../../tools/runnable_tool_example_test.go)：
+A compiled Graph implements Runnable. It can be invoked directly or passed to `tools.NewRunnableTool`; when providing it to an Agent, use `dispatcher.Tools()`. For a compilable, runnable offline example, see [ExampleNewRunnableTool_workflow](../../tools/runnable_tool_example_test.go):
 
 ```sh
 go test ./tools -run '^ExampleNewRunnableTool_workflow$' -v
 ```
 
-例子直接提供工具调用参数，不发模型请求。真实子 Agent 使用 `child.AsRunnable()` 适配，并显式声明 `ModelInvoking: true`，提供共享根预算。需要每次独立会话与资源时用 `NewRunnableToolFactory`；不要在并发请求间意外共享可变 Agent/会话状态。
+The example supplies the tool call arguments directly and sends no model requests. A real sub-Agent is adapted with `child.AsRunnable()`, explicitly declares `ModelInvoking: true`, and is given a shared root budget. Use `NewRunnableToolFactory` when each call needs its own session and resources; do not accidentally share mutable Agent/session state across concurrent requests.
 
-父子 Dispatcher 使用独立实例以避免祖先占槽时重入死锁，根预算与限制向下传递。详细配置见[可组合编排](COMPOSABLE_ORCHESTRATION.md)。
+Parent and child Dispatchers use separate instances to avoid reentrancy deadlocks while an ancestor holds a slot; the root budget and limits are passed down. For detailed configuration, see [Composable Orchestration](COMPOSABLE_ORCHESTRATION.md).
 
-## 可恢复子流程不等于后台任务服务
+## A Resumable Subflow Is Not a Background Task Service
 
-`DurableGraph.AsChildRunnable()` 使用父操作日志的 Store 和派生执行键；外层工具需声明 `Resumable: true`。审批等待返回 `durable.WaitError`，父 Builder 以 `agentErrors.ErrAgentWaiting` 暂停，不能把等待当作模型可见的成功工具结果。
+`DurableGraph.AsChildRunnable()` uses the Store of the parent's operation journal and a derived execution key; the outer tool must declare `Resumable: true`. An approval wait returns `durable.WaitError`, and the parent Builder pauses with `agentErrors.ErrAgentWaiting`; a wait must not be treated as a successful, model-visible tool result.
 
-宿主从等待路径最后一项取得操作执行键 `operationKey`，从 `ChildContinuation.ApprovalKey` 取得子图检查点键 `approvalKey`。完成业务鉴权后用 `workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: approvalKey})` 提供结构化批准；有人工载荷时写入 `ResumeRequest.Input`。两种键不能互换，裸审批键不再作为子图恢复输入接受。审批键是恢复凭据，不是用户有权审批的证明。恢复时保持执行键、作用域、版本和输入意图稳定。可参考[实际嵌套审批回归](../../builder/nested_resume_test.go)及[图入口](../../workflow/README.md)。
+The host takes the operation execution key `operationKey` from the last element of the wait path, and the child graph checkpoint key `approvalKey` from `ChildContinuation.ApprovalKey`. After completing business authorization, it supplies a structured approval with `workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: approvalKey})`; when there is a human payload, write it to `ResumeRequest.Input`. The two keys are not interchangeable, and a bare approval key is no longer accepted as child graph resume input. The approval key is a resume credential, not proof that the user is entitled to approve. When resuming, keep the execution key, scope, version, and input intent stable. See the [actual nested approval regression](../../builder/nested_resume_test.go) and the [graph entry point](../../workflow/README.md).
 
-只有所有效果都记在正确派生键下的可恢复流程才能声明 Resumable。普通外部 API、命令或包含未记录模型请求的闭包不能直接打开它来获得安全重试；pending 未知结果应先 Reconcile 或交宿主处理。
+Only a resumable flow whose effects are all recorded under the correct derived keys may declare Resumable. Ordinary external APIs, commands, or closures containing unrecorded model requests must not simply turn it on to get safe retries; a pending unknown result should first be reconciled with Reconcile or handed to the host.
 
-这些机制不提供后台任务租约、持久消息投递或跨主机接管。后台子 Agent 需要独立任务身份、所有者、取消策略、预算、状态查询、结果投递与回收；由宿主调度系统管理。
+These mechanisms do not provide background task leases, durable message delivery, or cross-host takeover. A background sub-Agent needs its own task identity, owner, cancellation policy, budget, status queries, result delivery, and reclamation; these are managed by the host's scheduling system.
 
-## Handle 的输入与完成边界
+## Handle Input and Completion Boundaries
 
-| 方法 | 领取时机 | 可能保留未领取输入的情况 |
+| Method | When it is picked up | When unclaimed input may remain |
 | --- | --- | --- |
-| Steer | 下一步；结束检查时可唤醒有剩余额度的循环 | 最后一轮、结束检查之后到达、失败或取消 |
-| Inject | 随下一步，不主动唤醒 | 当前答复结束且没有下一步 |
-| Redirect | 非持久模型请求中取消并重新请求；其他情况转 Steer | 失败或无法再发请求；转为 Steer 后按其规则 |
-| Followup | 本轮成功后，队列合并成下一轮输入 | 本轮失败或取消 |
-| Interrupt | 合作式取消 | 不等于所有外部副作用都已停止 |
+| Steer | Next step; at the end check it can wake a loop that has remaining budget | Last round, arrival after the end check, failure, or cancellation |
+| Inject | With the next step; does not wake the loop | The current answer ends and there is no next step |
+| Redirect | Cancels and re-requests during a non-durable model request; otherwise becomes Steer | Failure or no further request is possible; after becoming Steer, its rules apply |
+| Followup | After the current round succeeds, the queue is merged into the next round's input | The current round fails or is cancelled |
+| Interrupt | Cooperative cancellation | Does not mean all external side effects have stopped |
 
-入队返回 nil 不代表处理完成。使用以下模式在运行收敛后处理仍留在队列的输入：
+A nil return from enqueueing does not mean processing is complete. Use the following pattern to handle input still left in the queue after the run settles:
 
 ```go
 out, err := handle.Wait(waitCtx)
 pending := handle.PendingInputs()
-// err/out 表示本次运行结果；pending 仅表示尚未被循环领取的输入。
-// 宿主决定展示或安排新执行，不能据此自动重试已发生的业务效果。
+// err/out describe the result of this run; pending only describes input not yet picked up by the loop.
+// The host decides whether to show it or schedule a new execution; it must not use this to automatically retry business effects that already happened.
 ```
 
-PendingInputs 是独立只读快照，调用不消费输入；同一队列有序，跨队列没有全局到达顺序。运行中也可查询，但后续会变化。Wait 的 context 只控制等待，超时不取消 Handle；只有实际运行结束后的快照才稳定。需要中止时显式 Interrupt，Handle 会等本轮 ExecuteStream 退出，包括其同步执行的工具与清理。工具和钩子必须合作返回，Wait 可用独立的有界 context；等待超时不能视为清理完成。执行源返回的错误与取消原因均保留在错误链中；Handle 在生产端关闭后读取私有终态，不依赖可能被取消丢弃的公开 error 事件。公开 ExecuteStream 的取消事件仍为 best-effort。
+PendingInputs is an independent read-only snapshot; calling it does not consume input. Order is preserved within a queue, and there is no global arrival order across queues. It can also be queried during a run, but will change afterwards. The context passed to Wait only controls waiting; a timeout does not cancel the Handle, and only the snapshot taken after the run has actually ended is stable. To abort, call Interrupt explicitly; the Handle waits for the current round's ExecuteStream to exit, including the tools and cleanup it runs synchronously. Tools and hooks must return cooperatively, and Wait can use a separate bounded context; a wait timeout must not be treated as cleanup being complete. Errors returned by the execution source and cancellation causes are all preserved in the error chain; after the producer side closes, the Handle reads a private terminal state and does not rely on public error events that cancellation may drop. Cancellation events from the public ExecuteStream remain best-effort.
 
-Handle 收件箱是进程内对象。要求跨重启可靠接收输入时，宿主先持久化收件箱及接收 ID，再管理投递与确认。已领取输入即使请求失败也不再出现在 PendingInputs；该接口不提供“未成功处理的全部消息”或 exactly-once。
+The Handle inbox is an in-process object. When input must be received reliably across restarts, the host first persists the inbox and the receive IDs, and then manages delivery and acknowledgement. Input that has been picked up no longer appears in PendingInputs even if the request fails; this interface does not provide "all messages not yet successfully processed" or exactly-once.
 
-Followup 的派生执行键只标识轮次内的持久操作，不会持久保存轮次调度。若第 1 个 Followup 在审批处等待，重启后仅 `Start(ctxWithResume, 原输入)` 会回放第 0 轮并结束，不会自动进入该 Followup。宿主必须按原轮次与原合并批次重建 Followup 链，并在对应前一轮结束前入队；不同批次划分可能导致恢复意图不匹配。`WithResume` 提供审批凭据，不重建调度。完整验证见[Handle 生命周期回归](../../builder/handle_lifecycle_test.go)。
+The derived execution key of a Followup only identifies durable operations within a round; it does not persist round scheduling. If the 1st Followup is waiting at an approval, after a restart a bare `Start(ctxWithResume, original input)` replays round 0 and ends, without automatically entering that Followup. The host must rebuild the Followup chain using the original rounds and original merge batches, and enqueue them before the corresponding previous round ends; a different batch split may cause a resume intent mismatch. `WithResume` provides the approval credential; it does not rebuild scheduling. For full verification, see the [Handle lifecycle regression](../../builder/handle_lifecycle_test.go).
 
-回放可能立即完成，不能假设在 Start 返回后紧接着调用 Followup 一定赶得上。宿主需要显式同步边界（回归中用 RequestHook 协调）保证批次重建；固定多轮任务更适合用持久 Graph 显式编排，避免依赖 goroutine 调度。Handle 的成功返回只描述本次实际重建的轮次，不证明宿主持久收件箱中的全部工作已完成。
+Replay may complete immediately, so do not assume that calling Followup right after Start returns will always be in time. The host needs an explicit synchronization boundary (the regression coordinates with a RequestHook) to guarantee batch reconstruction; fixed multi-round tasks are better orchestrated explicitly with a durable Graph, avoiding reliance on goroutine scheduling. A successful return from the Handle only describes the rounds actually rebuilt in this run; it does not prove that all work in the host's durable inbox is complete.
 
-## 区分三种终态
+## Distinguishing Three Terminal States
 
-- `AgentEvent.done`：一次 ExecuteStream 调用完成，含中间件处理后的最终 Output。text/tool_end 不是最终答案或完整运行终态。
-- `Handle.Wait`：全部 Followup 轮次结束，或运行失败/暂停；返回最后一轮结果。ErrWaiting 仍需宿主续跑。
-- `DurableGraph.AsRunnable` 的流 Done：本次调用结束；业务是否完成检查 GraphSnapshot.Done，Waiting 表示仍在等待。
+- `AgentEvent.done`: one ExecuteStream call has completed, including the final Output after middleware processing. text/tool_end is neither the final answer nor the complete terminal state of the run.
+- `Handle.Wait`: all Followup rounds have ended, or the run failed/paused; it returns the result of the last round. ErrWaiting still requires the host to continue the run.
+- The stream Done of `DurableGraph.AsRunnable`: this call has ended; whether the business is complete is checked with GraphSnapshot.Done, and Waiting means it is still waiting.
 
-工具并发执行时，GoAgent 保持模型调用顺序的结果、tool_end 和 OnResult 处理，不复制 Pi 的完成顺序事件语义。更多见[执行契约](EXECUTION_CONTRACT.md)。
+When tools execute concurrently, GoAgent keeps results, tool_end, and OnResult processing in model call order, and does not copy Pi's completion-order event semantics. See the [Execution Contract](EXECUTION_CONTRACT.md) for more.
 
-## 会话与外部环境各自管理
+## Sessions and the External Environment Are Managed Separately
 
-`WithSessionLog` 记录模型历史和 history/rewrite；PreStep 改写后续上下文，Offload 将长结果外置并按引用读取。UI 详情、凭据和审计信息不应全部进入模型上下文；脱敏时检查文本与结构化副本。会话日志的重写记录可能包含旧内容，不等于删除历史秘密。
+`WithSessionLog` records model history and history/rewrite; PreStep rewrites subsequent context, and Offload moves long results out and reads them by reference. UI details, credentials, and audit information should not all enter the model context; when redacting, check both the text and structured copies. Rewrite records in the session log may contain old content and are not equivalent to deleting historical secrets.
 
-`session.Store.Fork` 复制历史事件，不撤销工具副作用。宿主分别维护 SessionID、RunID/ExecutionKey、子任务身份和 SandboxID；从旧历史继续时明确选择原环境或新的环境/产物。不要更换执行键来绕过 pending 或重复执行业务。
+`session.Store.Fork` copies history events and does not undo tool side effects. The host maintains SessionID, RunID/ExecutionKey, sub-task identity, and SandboxID separately; when continuing from old history, explicitly choose the original environment or a new environment/artifacts. Do not change the execution key to bypass pending results or repeat business execution.
 
-定位和后续准入见[Pi 核心采纳设计](../design/PI_CORE_ADOPTION.md)及[能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
+For positioning and follow-up admission, see the [Pi core adoption design](../design/PI_CORE_ADOPTION.md) and the [capability comparison](../research/2026-11-01-pi-core-gap-analysis.md).

@@ -19,7 +19,7 @@ GoAgent 是嵌入 Go 业务服务的可恢复、可计量、可观测 Agent 执�
 
 - [goagent-contrib](https://github.com/kart-io/goagent-contrib)：检索器（BM25、混合、重排序、Qdrant）、文档加载、实用工具与多实例 Postgres `durable.Store`。
 - [goagent-examples](https://github.com/kart-io/goagent-examples)：业务案例（DevOps、文章审核、自动回复、退款恢复、真实模型编排）。
-- [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能装配、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION.md)。
+- [goagent-harness](https://github.com/kart-io/goagent-harness)：Preset、计划模式、压缩、技能装配、子 Agent 组件与编码工具，见 [Harness 迁移指南](docs/guides/HARNESS_MIGRATION_CN.md)。
 
 ## 为什么选 GoAgent
 
@@ -61,7 +61,7 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 
 ## 特性
 
-- **Skills 加载**：独立的只读 `skills.Catalog` 提供元数据、正文和附属资源读取，可选 `load_skill` 工具适配。见 [Skills 指南](docs/guides/SKILLS.md)。
+- **Skills 加载**：独立的只读 `skills.Catalog` 提供元数据、正文和附属资源读取，可选 `load_skill` 工具适配。见 [Skills 指南](docs/guides/SKILLS_CN.md)。
 - **统一执行入口**：`agent.AsRunnable()` 的 `Invoke`、`Stream`、`Batch`、`Pipe` 共用同一执行源，工具、检索、中间件与回调走同一路径。
 - **原生工具循环**：模型在一次流式请求中选择工具或直接回答（OpenAI、DeepSeek、Gemini、Anthropic Provider 及 Kimi、SiliconFlow、Ollama 预设）；可选并发工具调用与直接返回工具。
 - **循环扩展点**：PreStep、Request、RequestError、TurnStopping 钩子，提示词段落与上下文，以及接受 Steer/Inject/Redirect/Followup 的运行句柄 `Handle`。
@@ -70,7 +70,7 @@ go run ./examples/human-in-the-loop -dir "$DIR" -action resume -key '<Key>' \
 - **执行治理**：根预算（`core/budget`）、带审批、守卫与准入限制的 `tools.Dispatcher`/`Pipeline`、工具结果卸载、会话日志（`core/session`）。
 - **LLM 提供商**：OpenAI（及兼容端点）、DeepSeek、Gemini 支持 `AsRunnable` 与原生工具循环；Kimi、SiliconFlow、Ollama 是 OpenAI 兼容预设，Anthropic 基于官方 SDK，支持相同。见[提供商对照](docs/README_CN.md#llm-提供商)。
 - **可观测性**：只读执行事件（`core/observe`）与 OpenTelemetry 集成（`observability`）。
-- **A2A / MCP**：连接外部 Agent 与 MCP 工具，并通过 A2A/MCP 发布 GoAgent；与 HTTP 共用任务服务，支持输入、审批、状态查询和取消。见[协议接入](docs/guides/PROTOCOL_ADAPTERS.md)。
+- **A2A / MCP**：连接外部 Agent 与 MCP 工具，并通过 A2A/MCP 发布 GoAgent；与 HTTP 共用任务服务，支持输入、审批、状态查询和取消。见[协议接入](docs/guides/PROTOCOL_ADAPTERS_CN.md)。
 
 ## 快速开始
 
@@ -184,7 +184,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 
 ### 基于证据的 RAG
 
-`WithRetriever(retriever, builder.RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000})` 在每次请求时检索证据，并在输出元数据 `retrieval_sources` 中返回来源。检索器实现 `interfaces.DocumentRetriever`，现成实现位于 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)。参见 [RAG 与流式指南](docs/guides/GROUNDED_RAG_AND_STREAMING.md)。
+`WithRetriever(retriever, builder.RetrievalConfig{MaxDocuments: 4, MaxContextRunes: 12000})` 在每次请求时检索证据，并在输出元数据 `retrieval_sources` 中返回来源。检索器实现 `interfaces.DocumentRetriever`，现成实现位于 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)。参见 [RAG 与流式指南](docs/guides/GROUNDED_RAG_AND_STREAMING_CN.md)。
 
 ### 运行句柄与循环钩子
 
@@ -195,10 +195,10 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 - [人工介入](docs/guides/HUMAN_IN_THE_LOOP_CN.md)：审批时接收人工输入、执行中途中断、检查点与故障语义；离线示例：`examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt`。
 - [原生编排](docs/guides/NATIVE_ORCHESTRATION_CN.md)：`workflow.Graph`、持久图 `AsRunnable`、分支级恢复与 `tools.Dispatcher`。
 - [工作流](workflow/README_CN.md)：类型化图、分支、并行汇合与有界循环。
-- [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
+- [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS_CN.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
 - [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION_CN.md)：用 `tools.NewRunnableToolFactory` 把子 Agent 或 `workflow.DurableGraph` 包装为工具；子流程等待审批时，父流程以 `builder.ErrWaiting` 挂起。
 - [宿主接入](docs/guides/HOST_INTEGRATION_CN.md)：`execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`；离线示例：`go run ./examples/execution-scope`。
-- [扩展契约](docs/guides/EXTENSION_CONTRACT.md)与[执行治理](docs/guides/EXECUTION_GOVERNANCE_CN.md)：预算、诊断与资源限制。
+- [扩展契约](docs/guides/EXTENSION_CONTRACT_CN.md)与[执行治理](docs/guides/EXECUTION_GOVERNANCE_CN.md)：预算、诊断与资源限制。
 
 ## 包一览
 
@@ -212,7 +212,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 | [llm](llm/) | 客户端接口与选项；`llm/providers` 为各提供商实现 |
 | [tools](tools/) | 工具注册表、函数工具、`Dispatcher`、`Pipeline`；`tools/policy`、`tools/spill` 与内置工具 |
 | [mcp](mcp/) | 基于官方 SDK 的 MCP 客户端适配 |
-| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS.md)、[运行与恢复](docs/guides/MEMORY_RUNTIME_CN.md) |
+| [memory](memory/) | 长期记忆、时序图谱、派生级联与索引；[当前能力与迁移边界](docs/guides/RUNTIME_READINESS_CN.md)、[运行与恢复](docs/guides/MEMORY_RUNTIME_CN.md) |
 | [harness/env](harness/env/) | 供工具使用的文件系统与命令执行接口 |
 | [observability](observability/) | OpenTelemetry 追踪与指标 |
 | [evaluation/agentbench](evaluation/agentbench/README.md) | 可复现的任务评测 |
@@ -225,7 +225,7 @@ rag, err := builder.RAGAgent(client, retriever) // DocumentRetriever、带 Retri
 - [快速入门](docs/guides/QUICKSTART_CN.md)
 - [使用指南](docs/guides/USER_GUIDE_CN.md)
 - [Builder API 参考](docs/guides/BUILDER_API_REFERENCE_CN.md)
-- [HTTP/SSE/WebSocket、双向Webhook与Hooks](docs/guides/HTTP_AGENT.md) · [设计](docs/design/HTTP_AGENT_DESIGN.md)
+- [HTTP/SSE/WebSocket、双向Webhook与Hooks](docs/guides/HTTP_AGENT_CN.md) · [设计](docs/design/HTTP_AGENT_DESIGN.md)
 - [LLM 提供商](docs/guides/LLM_PROVIDERS_CN.md)
 - [执行开销实测](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 

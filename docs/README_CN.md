@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型化工作流图、持久执行与审批恢复、请求预算、会话日志、只读观察与 MCP。Preset、编码工具等装配能力位于独立项目 goagent-harness（见[迁移指南](guides/HARNESS_MIGRATION.md)），检索器与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)，业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。
+GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型化工作流图、持久执行与审批恢复、请求预算、会话日志、只读观察与 MCP。Preset、编码工具等装配能力位于独立项目 goagent-harness（见[迁移指南](guides/HARNESS_MIGRATION_CN.md)），检索器与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)，业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。
 
 ## 入门
 
@@ -11,7 +11,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [Builder API 参考](guides/BUILDER_API_REFERENCE_CN.md)：Builder 方法、默认值与循环扩展点
 - [执行契约](guides/EXECUTION_CONTRACT_CN.md)：各执行入口的能力与边界
 
-- [统一运行管理](../management/README.md)：Agent、Session、Task、Approval、Worker 与只读运行观测；[迁移指南](guides/MANAGEMENT_MIGRATION.md)
+- [统一运行管理](../management/README.md)：Agent、Session、Task、Approval、Worker 与只读运行观测；[迁移指南](guides/MANAGEMENT_MIGRATION_CN.md)
 
 ## 编排与持久执行
 
@@ -22,25 +22,25 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [可组合编排](guides/COMPOSABLE_ORCHESTRATION_CN.md)：根预算、子 Agent 工具、持久上下文引用与只读观察
 - [会话日志](../core/session/README_CN.md)：事件日志、分叉、轨迹导出
 - [上下文治理](guides/CONTEXT_POLICY_CN.md)：工具结果卸载与自定义 PreStep
-- [基于证据的 RAG 与流式](guides/GROUNDED_RAG_AND_STREAMING.md)
+- [基于证据的 RAG 与流式](guides/GROUNDED_RAG_AND_STREAMING_CN.md)
 
 ## 宿主接入与治理
 
-- [AgentRevision 与会话绑定](guides/AGENT_REVISIONS.md)：不可变配置与工件归档、旧程序加载、新旧会话版本隔离
+- [AgentRevision 与会话绑定](guides/AGENT_REVISIONS_CN.md)：不可变配置与工件归档、旧程序加载、新旧会话版本隔离
 
-- [Skills 加载](guides/SKILLS.md)：可复用 Catalog、按需正文与资源读取、可选工具适配及宿主边界
+- [Skills 加载](guides/SKILLS_CN.md)：可复用 Catalog、按需正文与资源读取、可选工具适配及宿主边界
 - [宿主标准接入](guides/HOST_INTEGRATION_CN.md)：Scope、BuildContext、恢复身份与资源生命周期
-- [HTTP/SSE/WebSocket、Webhook与Hooks](guides/HTTP_AGENT.md)：安装、页面/客户端案例、宿主装配、可替换连接接口与正式文档入口
-- [扩展契约](guides/EXTENSION_CONTRACT.md)
+- [HTTP/SSE/WebSocket、Webhook与Hooks](guides/HTTP_AGENT_CN.md)：安装、页面/客户端案例、宿主装配、可替换连接接口与正式文档入口
+- [扩展契约](guides/EXTENSION_CONTRACT_CN.md)
 - [执行治理](guides/EXECUTION_GOVERNANCE_CN.md)：预算、诊断与资源治理
-- [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES.md)
-- [工具中间件](guides/TOOL_MIDDLEWARE_CN.md)、[缓存](guides/CACHING_GUIDE.md)、[插件：Agent 能力包与 Runnable 注册表](guides/PLUGIN_SYSTEM_GUIDE.md)
-- [Option 模式](guides/OPTION_PATTERN_BEST_PRACTICES.md)
+- [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES_CN.md)
+- [工具中间件](guides/TOOL_MIDDLEWARE_CN.md)、[缓存](guides/CACHING_GUIDE_CN.md)、[插件：Agent 能力包与 Runnable 注册表](guides/PLUGIN_SYSTEM_GUIDE_CN.md)
+- [Option 模式](guides/OPTION_PATTERN_BEST_PRACTICES_CN.md)
 
 ## LLM 提供商
 
-- [LLM 提供商指南](guides/LLM_PROVIDERS_CN.md)、[能力对照](guides/PROVIDER_CAPABILITIES_CN.md)、[最佳实践](guides/PROVIDER_BEST_PRACTICES.md)、[持续回归](guides/PROVIDER_REGRESSION.md)
-- [MiniMax Anthropic 协议接入](guides/MINIMAX_ANTHROPIC.md)：国内端点、显式凭据配置、原生工具续接与真实验证边界
+- [LLM 提供商指南](guides/LLM_PROVIDERS_CN.md)、[能力对照](guides/PROVIDER_CAPABILITIES_CN.md)、[最佳实践](guides/PROVIDER_BEST_PRACTICES_CN.md)、[持续回归](guides/PROVIDER_REGRESSION_CN.md)
+- [MiniMax Anthropic 协议接入](guides/MINIMAX_ANTHROPIC_CN.md)：国内端点、显式凭据配置、原生工具续接与真实验证边界
 - [Embedder 提供商](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md)（goagent-contrib）
 
 | 提供商 | 构造函数（`llm/providers`） | `AsRunnable` 与原生工具流 |
@@ -60,7 +60,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [架构概述](architecture/ARCHITECTURE.md)、[组件关系图](architecture/COMPONENT_DIAGRAM.md)、[导入层级](architecture/IMPORT_LAYERING.md)
 - [设计概述](design/DESIGN_OVERVIEW.md)、[时序图](design/SEQUENCE_DIAGRAMS.md)、[流程图](design/FLOW_DIAGRAMS.md)
 - [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
-- [运行能力与后续验收](guides/RUNTIME_READINESS.md)：已实现能力、部署限制、记忆迁移与后续评测清单
+- [运行能力与后续验收](guides/RUNTIME_READINESS_CN.md)：已实现能力、部署限制、记忆迁移与后续评测清单
 - [记忆系统设计](design/MEMORY_DESIGN.md)、[长期记忆的删除优先](design/MEMORY_GOVERNANCE.md)：G0/G1/G2 已合并，包含召回块不进日志、durable.Store 存储与派生数据级联失效；[管理功能](design/MEMORY_ADMIN.md)中的分页列表与共享命名空间仍待实施
 - [Hermes 全文对照](research/2026-11-10-hermes-design-review.md)与[跨仓采纳设计](superpowers/specs/2026-11-10-hermes-runtime-design.md)：17 张图阅读、固定官方源码核对，以及技能加载、上下文来源、路由、检索和宿主调度的增量提案（未实施）
 - [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任

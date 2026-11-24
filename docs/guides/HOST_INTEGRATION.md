@@ -55,7 +55,7 @@ This is a synthetic load on a single machine; file mode only covers budget persi
 
 ## Governed Tool Flow
 
-When you need explicit authorization plus a bounded root budget, admission, and queuing, use `execution.NewGovernedBuilder` and run it under the same Scope.Bind; tools are supplied uniformly through WithDispatcher and must not be mixed with WithTools. It returns a regular Builder and a static governance report, without creating a new run engine or taking ownership of resources. See the [full guide](EXECUTION_ACCEPTANCE.md#标准治理装配) and the [offline example](../../examples/execution-governed/main.go).
+When you need explicit authorization plus a bounded root budget, admission, and queuing, use `execution.NewGovernedBuilder` and run it under the same Scope.Bind; tools are supplied uniformly through WithDispatcher and must not be mixed with WithTools. It returns a regular Builder and a static governance report, without creating a new run engine or taking ownership of resources. See the [full guide](EXECUTION_ACCEPTANCE.md#standard-governance-assembly) and the [offline example](../../examples/execution-governed/main.go).
 
 ## Logging
 

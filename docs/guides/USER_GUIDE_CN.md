@@ -246,7 +246,7 @@ agent, err := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-信任边界、命中场景与删除承诺见[缓存指南](CACHING_GUIDE.md#模型调用缓存)。
+信任边界、命中场景与删除承诺见[缓存指南](CACHING_GUIDE_CN.md#模型调用缓存)。
 
 ### 自定义中间件
 

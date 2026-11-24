@@ -17,7 +17,7 @@
 go run ./examples/tools/01-calculator
 ```
 
-编码修复与计划模式示例在 `github.com/kart-io/goagent-harness`，见 [Harness 迁移指南](../../docs/guides/HARNESS_MIGRATION.md)。
+编码修复与计划模式示例在 `github.com/kart-io/goagent-harness`，见 [Harness 迁移指南](../../docs/guides/HARNESS_MIGRATION_CN.md)。
 
 ## 自定义工具的三种方式
 

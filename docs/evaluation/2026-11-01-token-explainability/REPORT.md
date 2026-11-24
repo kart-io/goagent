@@ -13,7 +13,7 @@
 - 会话 TurnEnd 复用统一 TokenUsage 并复制整值，不再手写三个字段的独立映射。
 - 真实案例输出细项可用性、实际模型和请求配置，并检查钩子、角色、Root 全六字段一致。
 
-[设计契约](../../design/TOKEN_USAGE_EXPLAINABILITY.md)、[使用指南](../../guides/MULTI_AGENT_USAGE.md)、[真实案例](https://github.com/kart-io/goagent-examples/blob/main/agent-usage/live/README.md)。
+[设计契约](../../design/TOKEN_USAGE_EXPLAINABILITY.md)、[使用指南](../../guides/MULTI_AGENT_USAGE_CN.md)、[真实案例](https://github.com/kart-io/goagent-examples/blob/main/agent-usage/live/README.md)。
 
 ## 验证
 

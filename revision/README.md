@@ -21,7 +21,7 @@
 
 ## 使用与限制
 
-完整宿主装配、版本发布、会话绑定和实际程序加载见 [AgentRevision 指南](../docs/guides/AGENT_REVISIONS.md)。
+完整宿主装配、版本发布、会话绑定和实际程序加载见 [AgentRevision 指南](../docs/guides/AGENT_REVISIONS_CN.md)。
 公共 API 不依赖 management、Builder、模型或 Harness；只负责内容校验与归档。
 
 限制位于 `constants/revisions.go`：归档 64 MiB（含 Base64）、定义 4 MiB、单文件 16 MiB、文件数 10000、路径 4096 字节、JSON 深度 128。

@@ -1,8 +1,10 @@
-# 多 Agent 钩子与 Token 统计
+# Multi-Agent Hooks and Token Accounting
 
-GoAgent 以同一根预算账本统计父 Agent、子 Agent 和汇总请求，Observer 提供只读通知。所有预算使用同一套字段证据与归属模型，不创建默认存储，不改变业务路由或权限。
+[English](MULTI_AGENT_USAGE.md) | [中文](MULTI_AGENT_USAGE_CN.md)
 
-## 开启身份与归属
+GoAgent accounts for the parent agent, child agents, and summarization requests in a single root budget ledger, and Observer provides read-only notifications. All budgets use the same field-evidence and attribution model; no default storage is created, and business routing and permissions are not changed.
+
+## Enabling Identity and Attribution
 
 ```go
 controller, err := budget.New(budget.Config{
@@ -10,151 +12,151 @@ controller, err := budget.New(budget.Config{
     MaxModelRequests: 100,
     MaxAgentCalls: 50,
 })
-// 检查 err；需要跨进程恢复时使用 NewDurable(config, hostStore)。
+// Check err; use NewDurable(config, hostStore) when cross-process recovery is needed.
 ctx := budget.WithController(hostCtx, controller)
 agent, err := builder.NewSimpleBuilder(client).
     WithAgentID("coordinator").BuildContext(ctx)
 ```
 
-每个 Agent 自动建立调用身份；WithAgentID 显式命名角色，未设置时为 anonymous。子 Agent 使用独立实例/会话和传入 context，继承根预算及 Observer。持久调用仍需 WithDurableScope；AgentID 不替代它。`execution.ConfigureBuilder` 会设置 SessionID、DurableScope 和 AgentID。
+Each agent automatically establishes a call identity; WithAgentID names the role explicitly, and when it is not set the role is anonymous. A child agent uses its own instance/session and the passed-in context, and inherits the root budget and Observer. Durable calls still need WithDurableScope; AgentID does not replace it. `execution.ConfigureBuilder` sets SessionID, DurableScope, and AgentID.
 
-MaxAgentCalls 约束保存的调用节点数量，包括零模型调用的中间 Agent；为0时不限制，负值拒绝；在途账本按 DefaultMaxAgentCalls=1000 写入的须继续显式传 1000，否则配置变化被拒绝。同一逻辑调用恢复不重复占槽。同名角色可以有多个不同调用键。根 RunID 由 Scope 或 Controller.RootKey 确定，已有父身份/观察根不一致时在发请求前拒绝。
+MaxAgentCalls limits the number of saved call nodes, including intermediate agents that make zero model calls; 0 means no limit and negative values are rejected; in-flight ledgers written with DefaultMaxAgentCalls=1000 must keep passing 1000 explicitly, otherwise the configuration change is rejected. Recovering the same logical call does not take an extra slot. A role with the same name can have several different call keys. The root RunID is determined by the Scope or Controller.RootKey; if an existing parent identity or observation root does not match, the call is rejected before the request is sent.
 
-不经统一入口的隐藏 SDK 请求不会自动计量。ModelInvoking=true 是可信宿主声明，不是模型调用探测器。完整钩子覆盖 ExecuteStream、AsRunnable 和 Start，即 Builder 的全部执行入口。
+Hidden SDK requests that bypass the unified entry point are not metered automatically. ModelInvoking=true is a trusted host declaration, not a model-call detector. Full hook coverage includes ExecuteStream, AsRunnable, and Start, that is, all execution entry points of the Builder.
 
-## 观察钩子
+## Observation Hooks
 
-直接获取 Token 与累计统计可使用专用钩子，无需实现 Observer 或筛选事件：
+To get tokens and cumulative statistics directly, use the dedicated hook; there is no need to implement an Observer or filter events:
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).
     WithUsageHook(func(ctx context.Context, e budget.UsageEvent) {
-        // e.Model.Tokens：本次尝试；KnownFields 标明哪些字段已报告。
-        // e.Model.AgentID / AgentCallKey：Agent 归属。
+        // e.Model.Tokens: this attempt; KnownFields marks which fields were reported.
+        // e.Model.AgentID / AgentCallKey: agent attribution.
         if e.HasStatistics {
             total := e.Statistics.Root.KnownTokens.TotalTokens
-            _ = total // 时点累计；不要将多个回调的累计值相加。
-            // e.Statistics.Calls 中按 AgentCallKey 查 Self / Inclusive。
+            _ = total // Point-in-time cumulative value; do not add up cumulative values from several callbacks.
+            // Look up Self / Inclusive in e.Statistics.Calls by AgentCallKey.
         }
-        // 回放标识 e.Model.Replayed；尝试键与 Revision 可用于投影去重。
+        // Replay flag e.Model.Replayed; the attempt key and Revision can be used to deduplicate projections.
     }).Build()
 ```
 
-也可通过 `budget.WithUsageHook(ctx, hook)` 统一绑定父子调用。父钩子默认向子 Agent 继承；子 Builder 设置非 nil 钩子会替换继承项，nil 配置保留继承。直接 WithUsageHook(ctx,nil) 清除。Observer 可以同时工作；需要多个目标时在一个钩子中分发。
+You can also bind parent and child calls together with `budget.WithUsageHook(ctx, hook)`. The parent hook is inherited by child agents by default; a non-nil hook set on a child Builder replaces the inherited one, and a nil configuration keeps the inherited one. Calling WithUsageHook(ctx,nil) directly clears it. An Observer can work at the same time; when you need several targets, dispatch from a single hook.
 
-没有预算时仍通知单次用量，HasStatistics=false；不会隐式创建账本。查询失败时 StatisticsError 非 nil，单次 Model 证据仍保留；记账失败时 AccountingCommitted=false，不能将其当作已可靠登记。回调及查询异常不改变业务结果。
+Without a budget, per-call usage is still notified, with HasStatistics=false; no ledger is created implicitly. When the query fails, StatisticsError is non-nil and the per-call Model evidence is still kept; when accounting fails, AccountingCommitted=false and the usage must not be treated as reliably recorded. Callback and query failures do not change the business result.
 
-钩子同步执行、必须支持并发并及时返回；不要在钩子内同步等待或重新执行当前 Agent。框架提供脱离执行取消信号的有界 context，以便取消后仍交付已知用量，但无法强制终止忽略 context 的宿主代码。开启累计钩子会在每次通知时查询账本，有实际开销；未配置时没有这次额外查询。详细契约见[设计](../design/TOKEN_USAGE_HOOK.md)。
+The hook runs synchronously, must be safe for concurrent use, and must return promptly; do not wait synchronously inside the hook or re-execute the current agent. The framework provides a bounded context detached from the execution's cancellation signal so that known usage can still be delivered after cancellation, but it cannot forcibly stop host code that ignores the context. Enabling the cumulative hook queries the ledger on every notification, which has a real cost; without it configured there is no such extra query. See the [design](../design/TOKEN_USAGE_HOOK.md) for the detailed contract.
 
-通用观察仍可使用 Observer：
+General observation can still use Observer:
 
-实现 `observe.Observer`，通过 `observe.WithObserver(ctx, sink)` 或 execution.Scope 注入。后代继承该 sink；不要在每层重复注册同一累加器。父层 PreStep/RequestError 等控制钩子仍与子层独立。在这些钩子或工具 Pipeline 中可用 usage.FromContext(ctx) 读取当前调用身份；身份标签不替代授权。
+Implement `observe.Observer` and inject it through `observe.WithObserver(ctx, sink)` or execution.Scope. Descendants inherit the sink; do not register the same accumulator again at each level. Parent-level control hooks such as PreStep/RequestError remain independent of the child level. Inside these hooks or the tool Pipeline, usage.FromContext(ctx) reads the current call identity; identity labels do not replace authorization.
 
 ```go
 func (s *Sink) Observe(ctx context.Context, e observe.Event) {
     if e.Type != "model_usage" || e.Usage == nil { return }
-    u := *e.Usage // 副本；不依赖其交付次数计费
-    // u.AgentID / AgentCallKey / ParentAgentCallKey：归属
-    // u.AttemptKey / Attempt / Revision：尝试与证据去重
-    // u.Tokens / KnownFields：报告值及字段是否已知
-    // u.Replayed / AccountingCommitted：回放与持久登记状态
-    // 将它投影到宿主展示/指标系统；丢事件后用账本查询修复。
+    u := *e.Usage // A copy; do not bill based on how many times it is delivered
+    // u.AgentID / AgentCallKey / ParentAgentCallKey: attribution
+    // u.AttemptKey / Attempt / Revision: attempt and evidence deduplication
+    // u.Tokens / KnownFields: reported values and whether each field is known
+    // u.Replayed / AccountingCommitted: replay and durable recording status
+    // Project it into the host's display/metrics system; after dropped events, repair with a ledger query.
 }
 ```
 
-新增 `model_attempt_start` 在预算准入之后、调用客户端前发出，不证明请求已经到达供应商；准入拒绝不发该事件。`model_usage` 覆盖成功、失败、取消及回放补登记。现有 model_start/end 仍描述逻辑模型操作，不能和逐尝试事件再累加一次。
+The new `model_attempt_start` is emitted after budget admission and before the client is called; it does not prove the request reached the provider, and it is not emitted when admission is rejected. `model_usage` covers success, failure, cancellation, and replay back-filling. The existing model_start/end still describe the logical model operation and must not be added on top of the per-attempt events.
 
-`Event.Agent` 含 Agent 的 Owner 与本次 VisitID/ParentVisitID；`Event.VisitID` 保持观察操作的访问身份，两者用途不同。调用恢复保留 AgentCallKey，生成新 Agent VisitID。元数据不包含对话正文或原始供应商错误。
+`Event.Agent` contains the agent's Owner and the current VisitID/ParentVisitID; `Event.VisitID` keeps the visit identity of the observed operation. The two serve different purposes. Call recovery keeps the AgentCallKey and generates a new agent VisitID. Metadata does not include conversation content or raw provider errors.
 
-同步 Observer 必须及时返回，panic 被隔离；AsyncObserver 有界且可能丢事件。失败通知不改变业务成功，不提供 exactly-once。可靠累计必须查询预算账本，不能将 hook 的累加值作为最终账单。
+A synchronous Observer must return promptly, and panics are isolated; AsyncObserver is bounded and may drop events. Failed notifications do not change business success, and exactly-once delivery is not provided. Reliable totals must query the budget ledger; do not use values accumulated from hooks as the final bill.
 
-## Self、Inclusive 与 Root
+## Self, Inclusive, and Root
 
 ```go
 reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 defer cancel()
 report, err := controller.Attribution(reportCtx)
-// report.Root：根累计
-// report.Calls：按逻辑 Agent 调用，Owner + Self + Inclusive
-// report.Agents：按 AgentID 的 Self 汇总
-// report.Unattributed：没有 Agent 上下文的直接预算调用
+// report.Root: root total
+// report.Calls: per logical agent call, Owner + Self + Inclusive
+// report.Agents: Self totals per AgentID
+// report.Unattributed: direct budget calls without agent context
 ```
 
-失败或审批暂停后也可以查询。若 Wait 自身超时，执行可能仍在收敛，查询只是时点快照。子 Agent 结束不代表外层 OwnedRunnable.Close 已完成；工具及 Handle 的终态按各自生命周期处理。
+You can also query after a failure or an approval pause. If Wait itself times out, execution may still be converging, and the query is only a point-in-time snapshot. A child agent finishing does not mean the outer OwnedRunnable.Close has completed; the final states of tools and Handles follow their own lifecycles.
 
-父分析 3、子 A 4、子 B 5、父汇总 6 时，父 Self=9、Inclusive=18，根为18。不要相加父子输出、Inclusive 或连续根快照。并行时也不能用两个根快照差值推算某个子 Agent。
+With parent analysis 3, child A 4, child B 5, and parent summary 6, the parent Self=9, Inclusive=18, and the root is 18. Do not add up parent and child outputs, Inclusive values, or consecutive root snapshots. With parallel execution you also cannot derive a child agent's usage from the difference between two root snapshots.
 
-原 AgentOutput.TokenUsage 保持本层逻辑调用口径；它在回放时仍可包含历史用量，不代表本次新增消费。根账本按唯一模型尝试键去重；真正重试占新的尝试键。
+The existing AgentOutput.TokenUsage keeps the logical-call scope of its own level; on replay it can still include historical usage, and it does not represent new consumption in this run. The root ledger deduplicates by unique model attempt key; a real retry takes a new attempt key.
 
-## 未知、缓存、部分报告
+## Unknown, Cached, and Partial Reports
 
-`llm.Usage` 新增 CachedTokens 和可选 KnownFields，`Tokens()` 取值，`Fields()` 返回字段位图。nil mask 保持旧三字段语义；显式 mask 可标明已报告的零值。缓存一般是输入的子集，不加到 TotalTokens。
+`llm.Usage` adds CachedTokens and optional KnownFields; `Tokens()` reads the values and `Fields()` returns the field bitmap. A nil mask keeps the old three-field semantics; an explicit mask can mark reported zero values. Cached tokens are generally a subset of input and are not added to TotalTokens.
 
 ```go
 fields := usage.Total | usage.Cached
 u := &llm.Usage{TotalTokens: 19, CachedTokens: 4, KnownFields: &fields}
 ```
 
-统一账本保留字段证据，允许未知字段后续补齐；相同证据幂等、已知字段改变报错。跨流帧只更新后来已知的字段，不累加累计帧，也不让缺失字段覆盖前帧证据。回放通知不改变原始来源或增加证据 Revision。
+The unified ledger keeps field evidence and allows unknown fields to be filled in later; identical evidence is idempotent, and a change to a known field is an error. Across stream frames, only fields that become known later are updated; cumulative frames are not added up, and missing fields do not overwrite evidence from earlier frames. Replay notifications do not change the original source or increase the evidence Revision.
 
-报表提供 UnknownUsageEntries、PartialUsageEntries，以及每个汇总中的 UnknownPromptEntries/UnknownCompletionEntries/UnknownTotalEntries/UnknownCachedEntries。Complete 只表示基本三字段完整，不承诺缓存已知、供应商账单完整或外部隐藏调用都已捕获。Total 未知时不计算 KnownTokenDelta，不把预估当作实际节省。
+Reports provide UnknownUsageEntries, PartialUsageEntries, and, in each summary, UnknownPromptEntries/UnknownCompletionEntries/UnknownTotalEntries/UnknownCachedEntries. Complete only means the three basic fields are complete; it does not promise that cache usage is known, that the provider bill is complete, or that hidden external calls were all captured. When Total is unknown, KnownTokenDelta is not computed, and estimates are not treated as actual savings.
 
-所有预算默认保留部分字段，不再存在降级为旧格式 unknown 的模式；成功提交的 model_usage 通知设置 AccountingCommitted=true。Reserve/ReserveEstimated/RecordUsage 是同一证据实现的便利入口；需要字段 mask 时使用 RecordEvidence。直接调用没有 Agent 上下文时明确记入 Unattributed，不猜测归属。
+All budgets keep partial fields by default; there is no longer a mode that downgrades to the old unknown format. Successfully committed model_usage notifications set AccountingCommitted=true. Reserve/ReserveEstimated/RecordUsage are convenience entry points over the same evidence implementation; use RecordEvidence when you need a field mask. Direct calls without agent context are recorded explicitly as Unattributed, with no guessed attribution.
 
-当前 OpenAI/DeepSeek 标准流、Gemini 传递 SDK 可用的缓存与字段信息。SDK 将缺失和显式零都解码为 scalar 时，保守标未知；DeepSeek 私有缓存字段未被 SDK 暴露的部分不伪造。货币定价、生效时间与账单核对由宿主提供。
+The current OpenAI/DeepSeek standard streams and Gemini pass through the cache and field information available from the SDK. When the SDK decodes both a missing value and an explicit zero as a scalar, the field is conservatively marked unknown; the part of DeepSeek's private cache fields not exposed by the SDK is not fabricated. Currency pricing, effective dates, and bill reconciliation are provided by the host.
 
-## 恢复与迁移
+## Recovery and Migration
 
-只有一种账本结构和格式标记 goagent-model-budget，不提供格式选择开关。Config.Version 仅作为宿主预算策略指纹，不选择实现版本。旧格式明确拒绝读取，不自动迁移；已有持久运行需由原实现或宿主明确处置，不能换执行键重跑已有业务。
+There is only one ledger structure and one format marker, goagent-model-budget, with no format selection switch. Config.Version is only the host's budget policy fingerprint and does not select an implementation version. The old format is explicitly rejected on read and is not migrated automatically; existing durable runs must be handled explicitly by the original implementation or the host, and existing business must not be re-run under a different execution key.
 
-模型结果保存后、用量登记前中断时，恢复读取已保存结果补登记，不再次发请求。账本提交后、通知前中断可能漏事件，查询仍正确。Owner/祖先链在预留、证据登记和回放时都校验；改 AgentID/父关系会拒绝。同一工具整体回放不重新进入子 Builder，采用历史归属；改变闭包中的子配置需提升工具 Version。
+If execution is interrupted after the model result is saved but before usage is recorded, recovery reads the saved result and back-fills the record without sending the request again. An interruption after the ledger commit but before notification may lose an event, but queries remain correct. The Owner/ancestor chain is validated on reservation, evidence recording, and replay; changing the AgentID or parent relationship is rejected. When the same tool is replayed as a whole, the child Builder is not re-entered and the historical attribution is used; changing the child configuration in a closure requires bumping the tool Version.
 
-账本事务保留现有锁、克隆与完整校验，启用归属增加 CPU/内存开销，大账本查询和更新仍有线性成本。宿主应按业务运行限制请求与调用节点数量。
+Ledger transactions keep the existing locking, cloning, and full validation; enabling attribution adds CPU/memory overhead, and querying and updating large ledgers still has linear cost. Hosts should limit the number of requests and call nodes according to business runs.
 
-## 离线运行与证据
+## Offline Runs and Evidence
 
-所有案例代码已迁至 kart-io/goagent-examples，以下命令在该仓库根目录执行（当前新 API 需先 make work 联调本地 GoAgent）。按两种业务口径统计的完整案例见 [Token 统计案例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)：
+All example code has moved to kart-io/goagent-examples, and the commands below are run from that repository's root (the current new API requires `make work` first to develop against a local GoAgent). For complete examples covering two business accounting scopes, see [Token accounting examples](https://github.com/kart-io/goagent-examples/tree/main/agent-usage):
 
 ```sh
-# 完整任务：父 Agent + 两个并行子 Agent + 普通工具，总量 18
+# Full task: parent agent + two parallel child agents + a regular tool, total 18
 go run ./agent-usage/task
-# 单 Agent：writer 总量 10
+# Single agent: writer total 10
 go run ./agent-usage/agent -mode single
-# 子 Agent：writer 为 10，包含父分析与汇总的任务总量 17
+# Child agent: writer is 10, task total including parent analysis and summary is 17
 go run ./agent-usage/agent -mode child
 ```
 
-案例同时演示逐尝试钩子、角色 Self、调用 Self/Inclusive 和完成后的 Root 查询，不需要模型凭据。模型 usage 为预设值，实际接入时替换模型客户端。
+The examples also demonstrate the per-attempt hook, role Self, call Self/Inclusive, and the Root query after completion, without needing model credentials. Model usage values are preset; replace the model client for real integrations.
 
 ```sh
 go run ./agent-usage
 ```
 
-例子包含两个并行子 Agent、一次失败重试和持久回放。两次输出均为 Root=18、父 Self=9、父 Inclusive=18；请求5次，其中一次缺少 usage，unknown=1。临时目录由示例自己创建并清理，不需要模型凭据。
+The example includes two parallel child agents, one failed retry, and a durable replay. Both outputs show Root=18, parent Self=9, parent Inclusive=18; there are 5 requests, one of which lacks usage, so unknown=1. The example creates and cleans up its own temporary directory and needs no model credentials.
 
-示例通过父 Builder.WithUsageHook 取得所有后代通知，打印 hook: live=5 replay=2；通知次数不等于新增费用，回放后的根累计仍为18。
+The example receives all descendant notifications through the parent Builder.WithUsageHook and prints hook: live=5 replay=2; the number of notifications is not the same as new cost, and the root total after replay is still 18.
 
-实现依据见[设计](../design/MULTI_AGENT_HOOKS_AND_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。
+See the [design](../design/MULTI_AGENT_HOOKS_AND_USAGE.md) for the implementation basis and the [delivery report](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md) for verification.
 
-## 推理明细、实际模型与配置
+## Reasoning Breakdown, Actual Model, and Configuration
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).
-    WithReasoning(usage.ReasoningConfig{Effort: "low"}). // OpenAI 兼容/DeepSeek；模型需支持
+    WithReasoning(usage.ReasoningConfig{Effort: "low"}). // OpenAI-compatible/DeepSeek; the model must support it
     WithUsageHook(func(ctx context.Context, e budget.UsageEvent) {
-        fmt.Println(e.Model.Model, e.Model.ResponseModel) // 请求名与响应实际名
+        fmt.Println(e.Model.Model, e.Model.ResponseModel) // Requested name and actual name from the response
         if e.Model.KnownFields&usage.Reasoning != 0 {
             fmt.Println("已知推理 Token", e.Model.Tokens.ReasoningTokens)
         }
         if e.Model.KnownFields&usage.ToolUsePrompt != 0 {
             fmt.Println("工具相关输入", e.Model.Tokens.ToolUsePromptTokens)
         }
-        // ReasoningConfigured/Reasoning 记录显式请求设置，不推断上游默认。
+        // ReasoningConfigured/Reasoning record the explicitly requested settings and do not infer upstream defaults.
     }).Build()
 ```
 
-Gemini 2.5 可用 `usage.ReasoningConfig{BudgetSet: true, BudgetTokens: 128}` 请求单次思考预算；模型支持零预算时，显式 0 与未设置仍可区分。客户端默认值通过 `llm.WithReasoning(config)` 设置。无实现的 Provider 明确拒绝；自定义客户端实现 `llm.ReasoningRequestValidator` 后才接受 Builder 的显式设置。
+Gemini 2.5 can request a per-call thinking budget with `usage.ReasoningConfig{BudgetSet: true, BudgetTokens: 128}`; when the model supports a zero budget, an explicit 0 can still be distinguished from unset. Client defaults are set with `llm.WithReasoning(config)`. Providers without an implementation reject it explicitly; a custom client accepts the Builder's explicit setting only after implementing `llm.ReasoningRequestValidator`.
 
-推理与工具输入分项不能再加到供应商 TotalTokens。未报告的字段仍为未知，不用总量减法推算。UsageSummary 提供 `UnknownReasoningEntries`、`UnknownToolUsePromptEntries`；基本用量 Complete 不代表所有可选细项已知。实际响应模型未提供时 ResponseModel 为空。
+The reasoning and tool-input breakdowns must not be added to the provider's TotalTokens again. Fields that are not reported remain unknown and are not derived by subtracting from the total. UsageSummary provides `UnknownReasoningEntries` and `UnknownToolUsePromptEntries`; Complete for basic usage does not mean all optional breakdowns are known. When the actual response model is not provided, ResponseModel is empty.
 
-[设计契约](../design/TOKEN_USAGE_EXPLAINABILITY.md)记录字段、配置和回放规则。
+The [design contract](../design/TOKEN_USAGE_EXPLAINABILITY.md) records the fields, configuration, and replay rules.

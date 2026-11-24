@@ -58,7 +58,7 @@ JSON 统一使用 codec/json，管理领域错误直接使用核心 errors.ErrMa
 
 ## 复跑入口
 
-核心根目录使用 Go1.27.3 执行 `go test -race ./...`、`go vet ./...`、`scripts/verify_imports.sh`、`make test-frameworkbench`，覆盖率按现有 scripts/check_coverage.sh。contrib 在专用 Postgres 上显式指定包含新包的 GOAGENT_CORE_ROOT，执行 scripts/test-all.sh 与 scripts/lint-all.sh；真实退款案例和完整迁移入口见 [迁移指南](../../guides/MANAGEMENT_MIGRATION.md)。
+核心根目录使用 Go1.27.3 执行 `go test -race ./...`、`go vet ./...`、`scripts/verify_imports.sh`、`make test-frameworkbench`，覆盖率按现有 scripts/check_coverage.sh。contrib 在专用 Postgres 上显式指定包含新包的 GOAGENT_CORE_ROOT，执行 scripts/test-all.sh 与 scripts/lint-all.sh；真实退款案例和完整迁移入口见 [迁移指南](../../guides/MANAGEMENT_MIGRATION_CN.md)。
 
 ## 合入本地主线后的复测
 

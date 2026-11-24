@@ -1,6 +1,6 @@
 # 长期记忆的删除优先：实现文档
 
-日期：2026-11-11；状态于 2026-11-14 核对：G0、G1、G2 已合并到 master（v0.53.0）。本文保留第 5.1 版设计与问题背景，当前接口和部署边界见[运行能力与后续验收](../guides/RUNTIME_READINESS.md)。
+日期：2026-11-11；状态于 2026-11-14 核对：G0、G1、G2 已合并到 master（v0.53.0）。本文保留第 5.1 版设计与问题背景，当前接口和部署边界见[运行能力与后续验收](../guides/RUNTIME_READINESS_CN.md)。
 
 修订经过：
 - 前三版经 Codex 两轮审查，以及 Software Architect、Backend Architect 两个 agent 的独立审查。
@@ -53,7 +53,7 @@
 | 模型调用缓存 | `Forget`、`Rewound`、`Purge` 之后逻辑上不可达；物理删除按 `Erase` 模式执行，`EraseRequired` 下在 `EraseWithin` 内完成；失败时以 TTL 为上限 | 同左 | builder |
 
 - `Rewound` 的删除承诺与 `Forget` 相同，表中不再单列一列。
-- `EraseRequired` 要求 TTL 不超过 `EraseWithin`，只在配置了长期记忆时检查；不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。使用方法与信任边界见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
+- `EraseRequired` 要求 TTL 不超过 `EraseWithin`，只在配置了长期记忆时检查；不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。使用方法与信任边界见[缓存指南](../guides/CACHING_GUIDE_CN.md#模型调用缓存)。
 
 ## 1. 现状问题
 
@@ -114,7 +114,7 @@ Worker 抽取时会按 `RecallPrefix` 前缀跳过召回块（`memory/worker.go`
 
 ### 1.8 响应缓存跨用户命中
 
-旧的整轮响应缓存中间件（已删除）的键是 `fmt.Sprintf("%v", request.Input)`，命中时直接跳过 handler。共享缓存实例时，相同输入会拿到别人的回答。现由 Builder 的模型调用缓存取代：缓存下沉到单次模型调用，键含宿主声明的隔离身份与记忆版本（见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)）。
+旧的整轮响应缓存中间件（已删除）的键是 `fmt.Sprintf("%v", request.Input)`，命中时直接跳过 handler。共享缓存实例时，相同输入会拿到别人的回答。现由 Builder 的模型调用缓存取代：缓存下沉到单次模型调用，键含宿主声明的隔离身份与记忆版本（见[缓存指南](../guides/CACHING_GUIDE_CN.md#模型调用缓存)）。
 
 ### 1.9 存储没有事务契约
 

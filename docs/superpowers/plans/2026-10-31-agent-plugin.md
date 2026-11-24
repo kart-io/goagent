@@ -1530,7 +1530,7 @@ Agent 能力包：在 Go 中静态组合工具、提示词片段、循环钩子�
 | `host.go` | `Host`：依赖排序、启动回滚、停止 |
 | `install.go` | `Install`、`Only`、`Dispatch` |
 
-使用方式与规则见 [插件指南](../docs/guides/PLUGIN_SYSTEM_GUIDE.md)。
+使用方式与规则见 [插件指南](../docs/guides/PLUGIN_SYSTEM_GUIDE_CN.md)。
 ```
 
 `docs/guides/PLUGIN_SYSTEM_GUIDE.md`：把标题改为"插件"，开头一段改为"Agent 能力包见第一节；`core` 的 Runnable 注册表见最后一节"。删除"带版本与生命周期的插件"整节与表格中 `EnhancedPluginRegistry`、`Plugin / BasePlugin`、`Container` 三行及 `GlobalEnhancedPluginRegistry` 的说明，新增第一节"Agent 能力包"，内容为：

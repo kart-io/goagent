@@ -1,10 +1,12 @@
-# LLM Provider 最佳实践指南
+# LLM Provider Best Practices
 
-本文档介绍在 GoAgent 中创建和切换 LLM Provider 的推荐方式。各 Provider 的配置项见 [LLM 提供商指南](LLM_PROVIDERS.md)。
+[English](PROVIDER_BEST_PRACTICES.md) | [中文](PROVIDER_BEST_PRACTICES_CN.md)
 
-## 推荐方式：直接使用 Provider 构造函数
+This document describes the recommended way to create and switch LLM Providers in GoAgent. For each Provider's configuration options, see the [LLM Provider Guide](LLM_PROVIDERS.md).
 
-每个 Provider 在 `llm/providers` 中提供 `NewXxxWithOptions(opts ...llm.ClientOption)` 构造函数，返回实现 `llm.Client` 的客户端：
+## Recommended Approach: Use Provider Constructors Directly
+
+Each Provider offers a `NewXxxWithOptions(opts ...llm.ClientOption)` constructor in `llm/providers` that returns a client implementing `llm.Client`:
 
 ```go
 import (
@@ -21,15 +23,15 @@ if err != nil {
 }
 ```
 
-可用的构造函数：`NewOpenAIWithOptions`、`NewAnthropicWithOptions`、`NewGeminiWithOptions`、`NewDeepSeekWithOptions`、`NewOllamaWithOptions`、`NewSiliconFlowWithOptions`、`NewKimiWithOptions`；全部实现 `llm.Client` 与 `llm.ToolStreamClient`（Kimi、SiliconFlow、Ollama 为 OpenAI 兼容预设，Anthropic 基于官方 SDK）；`NewDeepSeekStreamingWithOptions`、`NewGeminiStreamingWithOptions` 是保留的流式包装。
+Available constructors: `NewOpenAIWithOptions`, `NewAnthropicWithOptions`, `NewGeminiWithOptions`, `NewDeepSeekWithOptions`, `NewOllamaWithOptions`, `NewSiliconFlowWithOptions`, `NewKimiWithOptions`; all implement `llm.Client` and `llm.ToolStreamClient` (Kimi, SiliconFlow, and Ollama are OpenAI-compatible presets, and Anthropic is based on the official SDK); `NewDeepSeekStreamingWithOptions` and `NewGeminiStreamingWithOptions` are retained streaming wrappers.
 
-GoAgent 没有按名称查找 Provider 的注册表，应直接调用对应构造函数。
+GoAgent has no registry for looking up Providers by name; call the corresponding constructor directly.
 
-## 使用场景
+## Use Cases
 
-### 多 Provider 支持
+### Multiple Provider Support
 
-在应用中按配置选择构造函数，返回统一的 `llm.Client`：
+Choose the constructor in your application based on configuration, returning a unified `llm.Client`:
 
 ```go
 func createClient(provider string) (llm.Client, error) {
@@ -50,9 +52,9 @@ func createClient(provider string) (llm.Client, error) {
 }
 ```
 
-### Provider 回退
+### Provider Fallback
 
-构造函数只校验配置、不发起请求，构造成功不代表服务可用。回退应基于实际调用的错误：
+Constructors only validate configuration and do not send requests, so successful construction does not mean the service is available. Fallback should be based on errors from actual calls:
 
 ```go
 func chatWithFallback(ctx context.Context, primary, backup llm.Client, messages []llm.Message) (*llm.CompletionResponse, error) {
@@ -64,11 +66,11 @@ func chatWithFallback(ctx context.Context, primary, backup llm.Client, messages 
 }
 ```
 
-回退会让同一请求发送两次，只用于幂等、可重复的调用。
+Fallback sends the same request twice, so use it only for idempotent, repeatable calls.
 
-### 测试
+### Testing
 
-测试中使用 `testing/mocks` 的 `MockLLMClient`，按顺序返回预设响应：
+In tests, use `MockLLMClient` from `testing/mocks`, which returns preset responses in order:
 
 ```go
 import (
@@ -80,17 +82,17 @@ client := mocks.NewMockLLMClient()
 client.SetResponses(llm.CompletionResponse{Content: "预设回答"})
 ```
 
-## 超时配置
+## Timeout Configuration
 
-`llm.WithTimeout` 的参数是 `time.Duration`，按整秒保存，正数向上取整；未设置时为 60 秒，Ollama 为 120 秒（显式设为 60 秒也按 120 秒处理）：
+The argument to `llm.WithTimeout` is a `time.Duration`, stored in whole seconds with positive values rounded up; when unset there is no timeout, and the same holds for Ollama; pass one explicitly when you need a bound, for Ollama for example `constants.DefaultOllamaTimeout`:
 
 ```go
-llm.WithTimeout(30 * time.Second) // 30 秒
-llm.WithTimeout(30)               // 写错单位：30 纳秒，向上取整为 1 秒
+llm.WithTimeout(30 * time.Second) // 30 seconds
+llm.WithTimeout(30)               // Wrong unit: 30 nanoseconds, rounded up to 1 second
 ```
 
-OpenAI Provider 与 DeepSeek 的流式方法用它限制等待响应开始的时间：非流式请求在生成完毕后才返回，因而整体受此限；流式请求在首块到达后不再受限，长回复不会被截断。流开始后可用 `llm.WithStreamIdleTimeout`（两次数据的最长间隔）与 `llm.WithStreamTimeout`（流式总时长）限制（OpenAI、DeepSeek、Anthropic 流式生效），未设置时只受 ctx 控制；消费者不再读取时必须取消 ctx，否则 goroutine 与连接不会释放。其他 Provider 及 DeepSeek 的非流式方法将它作为整个 HTTP 请求的时限。
+The OpenAI Provider and DeepSeek's streaming methods use it to limit how long to wait for the response to start: a non-streaming request returns only after generation finishes, so it is limited as a whole; a streaming request is no longer limited after the first chunk arrives, so long replies are not cut off. After the stream starts, use `llm.WithStreamIdleTimeout` (maximum gap between two pieces of data) and `llm.WithStreamTimeout` (total streaming duration) to limit it (effective for OpenAI, DeepSeek, and Anthropic streaming); when unset, only ctx controls it. When the consumer stops reading, it must cancel ctx, otherwise the goroutine and connection are not released. Other Providers and DeepSeek's non-streaming methods use it as the time limit for the whole HTTP request.
 
-## 相关文档
+## Related Documents
 
-- [LLM 提供商指南](LLM_PROVIDERS.md) - 各 Provider 的配置与使用示例
+- [LLM Provider Guide](LLM_PROVIDERS.md) - Configuration and usage examples for each Provider

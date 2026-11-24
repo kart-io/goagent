@@ -1,6 +1,6 @@
 # HTTP Agent：内核与网络扩展的设计边界
 
-本页是GoAgent仓库的正式设计入口。网络模块的完整已实现设计位于goagent-contrib的 [httpagent/docs/DESIGN.md](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md)，公开接口基线为cfb3e85。使用与版本信息见 [接入指南](../guides/HTTP_AGENT.md)。
+本页是GoAgent仓库的正式设计入口。网络模块的完整已实现设计位于goagent-contrib的 [httpagent/docs/DESIGN.md](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md)，公开接口基线为cfb3e85。使用与版本信息见 [接入指南](../guides/HTTP_AGENT_CN.md)。
 
 ## 组件与定位
 

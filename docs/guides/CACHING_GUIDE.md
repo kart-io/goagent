@@ -1,40 +1,42 @@
-# 缓存指南
+# Caching Guide
 
-GoAgent 不默认缓存任何模型答案或工具结果（`ConfigureForRAG` 也不缓存）。需要缓存时按缓存对象选择组件：
+[English](CACHING_GUIDE.md) | [中文](CACHING_GUIDE_CN.md)
 
-| 缓存对象 | 组件 | 说明 |
+GoAgent does not cache any model answer or tool result by default (`ConfigureForRAG` does not cache either). When you need caching, pick the component by what you cache:
+
+| What is cached | Component | Notes |
 |---|---|---|
-| 通用键值 | `cache.Cache`；推荐 `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` | `sync.Map` + TTL，后台清理；`NoOpCache` 为空实现。包说明见 [cache/README.md](../../cache/README.md) |
-| 单个工具的结果 | `tools/middleware.Caching`（经 `middleware.Wrap`） | 底层是任意 `cache.Cache`，见[工具中间件](TOOL_MIDDLEWARE_CN.md#内置中间件) |
-| 单次模型调用 → 回答 | `builder.WithModelCache(builder.ModelCache{...})` | 以完整请求为键，按宿主声明的隔离身份隔离；命中只省掉一次模型调用，会话日志照常写入。见[模型调用缓存](#模型调用缓存) |
+| Generic key-value | `cache.Cache`; recommended `cache.NewSimpleCache(ttl)`; use `cache.WithoutBackgroundCleanup()` when there is no background lifecycle entry point | `sync.Map` + TTL with background cleanup; `NoOpCache` is the empty implementation. See [cache/README.md](../../cache/README.md) for the package |
+| Results of a single tool | `tools/middleware.Caching` (via `middleware.Wrap`) | Backed by any `cache.Cache`; see [Tool Middleware](TOOL_MIDDLEWARE.md#built-in-middleware) |
+| A single model call → answer | `builder.WithModelCache(builder.ModelCache{...})` | Keyed by the full request and isolated by the isolation identity the host declares; a hit only saves one model call, and the session log is still written. See [Model Call Caching](#model-call-caching) |
 
-## 通用键值缓存
+## Generic Key-Value Cache
 
 ```go
-c := cache.NewSimpleCache(5 * time.Minute) // ttl <= 0 时取 5 分钟
+c := cache.NewSimpleCache(5 * time.Minute) // 5 minutes when ttl <= 0
 defer c.Close()
 
-_ = c.Set(ctx, "key", "value", 10*time.Minute) // ttl <= 0 时使用构造时的 TTL
+_ = c.Set(ctx, "key", "value", 10*time.Minute) // uses the TTL given at construction when ttl <= 0
 value, err := c.Get(ctx, "key")
 if errors.Is(err, agentErrors.ErrCacheMiss) {
-    // 未命中或已过期
+    // miss or expired
 }
-stats := c.GetStats() // Hits、Misses、Size、HitRate
+stats := c.GetStats() // Hits, Misses, Size, HitRate
 ```
 
-`cache.NewCacheKeyGenerator(prefix)` 用 SHA256 生成键（`GenerateKey(prompt, params)`、`GenerateKeySimple(parts...)`）。`cache.NewCacheFromConfig(cfg)` 在 `Enabled=false` 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache`。`CacheConfig` 只包含实际生效的 `Enabled` 和 `DefaultTTL`；原 `Type`、`MaxSize`、`CleanupInterval` 字段已删除，严格配置解码会拒绝对应旧键。
+`cache.NewCacheKeyGenerator(prefix)` generates keys with SHA256 (`GenerateKey(prompt, params)`, `GenerateKeySimple(parts...)`). `cache.NewCacheFromConfig(cfg)` returns `NoOpCache` when `Enabled=false`, otherwise a `SimpleCache` constructed with `DefaultTTL`. `CacheConfig` contains only the fields that actually take effect, `Enabled` and `DefaultTTL`; the former `Type`, `MaxSize`, and `CleanupInterval` fields have been removed, and strict config decoding rejects the corresponding old keys.
 
-`InMemoryCache`、`LRUCache`、`MultiTierCache` 及其构造器已经删除，不保留兼容别名：
+`InMemoryCache`, `LRUCache`, `MultiTierCache`, and their constructors have been removed, with no compatibility aliases:
 
-| 旧 | 新 |
+| Old | New |
 |---|---|
-| `cache.NewInMemoryCache(maxSize, ttl, cleanup)` | `cache.NewSimpleCache(ttl)`；无后台生命周期入口时用 `cache.WithoutBackgroundCleanup()` |
-| `cache.NewLRUCache(maxSize, ttl, cleanup)` | 仅需 TTL 时改用 `cache.NewSimpleCache(ttl)`；需要容量和 LRU 语义时注入明确实现这些契约的 `cache.Cache` |
-| `cache.NewMultiTierCache(tiers...)` | 仅需单层 TTL 时改用 `cache.NewSimpleCache(ttl)`；需要多层语义时显式组合并实现 `cache.Cache` |
+| `cache.NewInMemoryCache(maxSize, ttl, cleanup)` | `cache.NewSimpleCache(ttl)`; use `cache.WithoutBackgroundCleanup()` when there is no background lifecycle entry point |
+| `cache.NewLRUCache(maxSize, ttl, cleanup)` | When only TTL is needed, use `cache.NewSimpleCache(ttl)`; when you need capacity and LRU semantics, inject a `cache.Cache` that explicitly implements those contracts |
+| `cache.NewMultiTierCache(tiers...)` | When only a single TTL tier is needed, use `cache.NewSimpleCache(ttl)`; when you need multi-tier semantics, compose them explicitly and implement `cache.Cache` |
 
-`SimpleCache` 不提供容量限制、LRU 或多级回填语义，不能把上述构造器机械替换后仍宣称保留这些策略。`NoOpCache.Get` 返回中央 `errors.ErrCacheDisabled`，`Set` 不存储。其它接口清理见[兼容入口迁移指南](COMPATIBILITY_CLEANUP.md)。
+`SimpleCache` provides no capacity limit, LRU, or multi-tier backfill semantics, so you cannot mechanically replace the constructors above and still claim those policies are kept. `NoOpCache.Get` returns the central `errors.ErrCacheDisabled`, and `Set` stores nothing. For other interface cleanup, see the [Compatibility Entry Point Migration Guide](COMPATIBILITY_CLEANUP.md).
 
-## 工具结果缓存
+## Tool Result Caching
 
 ```go
 cachedTool := middleware.Wrap(originalTool, middleware.Caching(
@@ -43,117 +45,117 @@ cachedTool := middleware.Wrap(originalTool, middleware.Caching(
 ))
 ```
 
-- 只缓存成功结果；键由工具名与参数的完整 SHA256 组成，并按会话（`tools.WithSessionID`，Builder 以 `SessionID` 设置）与 `ToolInput.CallerID` 隔离。租户、知识版本等其他影响结果的维度仍须用 `WithCacheKeyFunc` 放进键，或不缓存。
-- 有副作用的工具不要缓存：命中时工具不执行。
-- 持久运行已由 Dispatcher 调用日志保证恢复时回放、不重复执行；工具缓存解决的是跨运行的重复计算，二者无关。包装后的工具不转发 `DispatchTimeoutProvider` 等可选接口，注意事项见[工具中间件](TOOL_MIDDLEWARE.md#middlewarewrap)。
+- Only successful results are cached; the key consists of the tool name and the full SHA256 of the arguments, and is isolated by session (`tools.WithSessionID`, set by the Builder from `SessionID`) and `ToolInput.CallerID`. Other dimensions that affect the result, such as tenant or knowledge version, must still be put into the key with `WithCacheKeyFunc`, or not cached.
+- Do not cache tools with side effects: on a hit the tool does not run.
+- Durable runs already rely on the Dispatcher call journal to replay on recovery without re-executing; tool caching addresses repeated computation across runs, and the two are unrelated. Wrapped tools do not forward optional interfaces such as `DispatchTimeoutProvider`; for caveats see [Tool Middleware](TOOL_MIDDLEWARE.md#middlewarewrap).
 
-## 模型调用缓存
+## Model Call Caching
 
 ```go
 mc := builder.ModelCache{
-    Cache:  c,                // cache.Bytes；物理删除需同时实现 cache.Tagged（SimpleCache 已实现）
-    TTL:    5 * time.Minute,  // 必须大于 0
+    Cache:  c,                // cache.Bytes; physical deletion also requires cache.Tagged (SimpleCache implements it)
+    TTL:    5 * time.Minute,  // must be greater than 0
     Scope:  func(ctx context.Context) (string, bool) { return tenantUser(ctx) },
-    Erase:  builder.EraseAuto, // EraseOff / EraseAuto（默认）/ EraseRequired
-    TagKey: tagKey,           // 标签摘要的 HMAC 密钥；使用标签时至少 32 字节
+    Erase:  builder.EraseAuto, // EraseOff / EraseAuto (default) / EraseRequired
+    TagKey: tagKey,           // HMAC key for tag digests; at least 32 bytes when tags are used
 }
 agent, err := builder.NewSimpleBuilder(client).WithModelCache(mc).Build()
 ```
 
-`Scope` 返回可信的隔离身份（租户、用户），返回 `false` 或空串时本次不查也不写。会话 ID 不能当隔离依据：它由调用方任意设置，缺省时共享同一个 Agent 的所有用户取到同一个值。配置了长期记忆时 `Scope` 可以省略，默认取 `memory.WithNamespace` 绑定的命名空间；否则必填。
+`Scope` returns a trusted isolation identity (tenant, user); when it returns `false` or an empty string, this call neither reads nor writes the cache. The session ID cannot serve as the basis for isolation: the caller sets it arbitrarily, and when it is omitted, all users sharing the same Agent get the same value. When long-term memory is configured, `Scope` can be omitted and defaults to the namespace bound by `memory.WithNamespace`; otherwise it is required.
 
-键是下列内容的 SHA-256：隔离身份、会话 ID、客户端身份与解析后的模型名、完整请求（含召回块、采样参数）、规范化后的工具定义、长期记忆的版本。任何一项变化都不命中。客户端可以实现 `CacheIdentity() string` 声明自己的身份（base URL、部署名等）；没有声明时用提供商加模型名（请求的 `Model`，为空时取客户端的 `ModelName()`），两者都取不到时本次不查也不写，没有错误或事件。
+The key is the SHA-256 of: the isolation identity, the session ID, the client identity and resolved model name, the full request (including recalled blocks and sampling parameters), the normalized tool definitions, and the long-term memory version. A change in any of them is a miss. A client can implement `CacheIdentity() string` to declare its own identity (base URL, deployment name, etc.); without a declaration, the provider plus model name is used (the request's `Model`, or the client's `ModelName()` when it is empty). When neither can be obtained, this call neither reads nor writes the cache, with no error or event.
 
-### 适用场景
+### When It Applies
 
-有会话日志时，同一会话的下一轮请求包含上一轮的问答，不会命中。命中主要发生在：
+With a session log, the next request in the same session contains the previous turn's question and answer, so it does not hit. Hits mainly happen in:
 
-- 没有会话日志的无状态 Agent：同一身份下重复的相同问题，例如固定提示的分类、抽取与路由；
-- 同一身份下以相同历史重复提交，例如用户重新生成、前端重试；配置了长期记忆时重新生成不会命中：重新生成前须 `session.Rewind`，随后的 `Memory.Rewound` 即使没有记录受影响也会改变记忆版本；
-- 工具循环中两次完全相同的中间请求。
+- Stateless Agents without a session log: the same question repeated under the same identity, such as classification, extraction, and routing with fixed prompts;
+- Repeated submissions with the same history under the same identity, such as a user regenerating or a frontend retrying; when long-term memory is configured, regeneration does not hit: you must call `session.Rewind` before regenerating, and the subsequent `Memory.Rewound` changes the memory version even if no record is affected;
+- Two identical intermediate requests within a tool loop.
 
-持久运行的崩溃恢复由持久日志回放覆盖，不依赖缓存。不要对有状态对话期待高命中率。以下回答不缓存：出错、截断、空回答、非法工具调用、带 `ProviderState` 的回答（开启思考签名的推理模型因此不走缓存）。两个相同请求并发到达时各自调用一次模型，不合并。
+Crash recovery of durable runs is covered by durable journal replay and does not depend on the cache. Do not expect a high hit rate for stateful conversations. The following answers are not cached: errors, truncation, empty answers, invalid tool calls, and answers carrying `ProviderState` (so reasoning models with thinking signatures enabled do not use the cache). When two identical requests arrive concurrently, each calls the model once; they are not merged.
 
-### 命中时的行为
+### Behavior on a Hit
 
-命中不消耗 token，不占预算、不记账，turn 的 `Usage` 为零值。调用方判断是否命中：
+A hit consumes no tokens, does not use budget, and is not accounted; the turn's `Usage` is the zero value. Callers determine whether there was a hit from:
 
-- observe 事件的 `Cached` 标记；
-- 输出元数据 `model_cache_hits`。
+- the `Cached` flag on observe events;
+- the output metadata `model_cache_hits`.
 
-用量相关元数据按回合判断。"完全来自缓存"指回合内有命中且没有发出真实请求：
+Usage-related metadata is evaluated per round. "Fully from cache" means the round had a hit and sent no real request:
 
-- `model_calls` 是逻辑回合数，不计完全来自缓存的回合；同一轮内的重试不另计。
-- 回合内主客户端请求失败、经 RequestError 换客户端后命中时，失败的请求可能已消耗 token，这一回合按真实回合计入 `model_calls`；它没有用量报告，`usage_complete` 可能为 false。这种回合同时计入 `model_calls` 和 `model_cache_hits`，二者相加不等于总回合数。
-- 最终回答完全来自缓存时，`answer_usage_reported` 为 true：命中没有用量可报告，不视为缺失。
+- `model_calls` is the number of logical rounds and does not count rounds fully from cache; retries within the same round are not counted separately.
+- When the primary client request in a round fails and, after switching clients via RequestError, the round hits the cache, the failed request may have consumed tokens, so the round is counted in `model_calls` as a real round; it has no usage report, so `usage_complete` may be false. Such a round is counted in both `model_calls` and `model_cache_hits`, and their sum does not equal the total number of rounds.
+- When the final answer comes fully from cache, `answer_usage_reported` is true: a hit has no usage to report, which is not treated as missing.
 
-事件流先发 `step: model_cached`，`Content` 非空时再发一整段 `text`，不重放多段增量。
+The event stream first emits `step: model_cached`, then, when `Content` is non-empty, a single whole `text` event; multiple incremental deltas are not replayed.
 
-### 信任边界
+### Trust Boundary
 
-- 缓存后端与会话存储同等可信。能写入缓存的人可以伪造回答，包括伪造工具调用让 Agent 执行；命中后的工具调用仍要通过与写入前相同的校验（工具必须存在，参数合法），但这挡不住合法而恶意的调用。外部缓存必须有访问控制，不能与不可信服务共享。
-- 缓存值是明文：模型回答、工具调用参数（可能含个人信息）、推理文本。加密与网络隔离由宿主负责。
-- 标签是 HMAC 摘要，不含明文用户 ID 或会话 ID，不会经缓存键名、监控或慢查询日志泄露。
+- The cache backend is as trusted as the session store. Anyone who can write to the cache can forge answers, including forging tool calls for the Agent to execute; tool calls after a hit still go through the same validation as before writing (the tool must exist and the arguments must be valid), but this does not stop calls that are valid but malicious. External caches must have access control and must not be shared with untrusted services.
+- Cached values are plaintext: model answers, tool call arguments (which may contain personal information), and reasoning text. Encryption and network isolation are the host's responsibility.
+- Tags are HMAC digests that contain no plaintext user ID or session ID, and do not leak through cache key names, monitoring, or slow-query logs.
 
-### 删除承诺
+### Deletion Guarantees
 
-`Forget`、`Rewound`、`Purge` 之后，相同请求不会命中（键含记忆版本）。物理删除由 `Erase` 决定：
+After `Forget`, `Rewound`, or `Purge`, the same request does not hit (the key includes the memory version). Physical deletion is determined by `Erase`:
 
-| 模式 | 行为 | 适用 |
+| Mode | Behavior | Use for |
 |---|---|---|
-| `EraseOff` | 只做逻辑删除，旧条目留到 TTL 到期；TTL 超过 `EraseWithin` 时不警告 | 进程内缓存、TTL 很短，或没有合规要求 |
-| `EraseAuto`（默认） | 缓存实现 `cache.Tagged` 且记忆配置了 `OnErase` 时物理删除，否则退回 TTL。缓存不支持 `Tagged` 时构建会记录警告；记忆没有配置 `OnErase` 时同样退回 TTL，但不会有警告，需要自行装配（用 `mc.Eraser()`）；TTL 超过 `EraseWithin` 时也会警告 | 大多数场景 |
-| `EraseRequired` | 条件不满足时 `Build` 失败 | 有删除个人数据合规要求的生产环境 |
+| `EraseOff` | Logical deletion only; old entries remain until the TTL expires; no warning when the TTL exceeds `EraseWithin` | In-process caches, very short TTLs, or no compliance requirements |
+| `EraseAuto` (default) | Physically deletes when the cache implements `cache.Tagged` and memory configures `OnErase`; otherwise falls back to TTL. When the cache does not support `Tagged`, the build logs a warning; when memory does not configure `OnErase`, it likewise falls back to TTL but without a warning, and you need to wire it yourself (with `mc.Eraser()`); a warning is also logged when the TTL exceeds `EraseWithin` | Most scenarios |
+| `EraseRequired` | `Build` fails when the conditions are not met | Production environments with compliance requirements for deleting personal data |
 
-- `EraseRequired` 要求 TTL 不超过 `memory.Config.EraseWithin`，这个约束只在配置了长期记忆时生效。不配长期记忆时，删除会话后缓存残留时长的上限是 TTL。
-- 物理删除失败不影响逻辑正确性，只推迟清除。`EraseRequired` 下推迟的上限是 TTL；对 Redis 是 TTL 加过期回收周期（Redis 的过期回收没有硬上限）。
-- 遗忘与回退会清掉该命名空间当前作用域下的全部缓存条目，粒度较粗。
-- 记忆版本在召回（hydrateRecall）之后才读取。召回与读取版本之间发生的删除可能让条目带上删除后的版本写入：这种条目逻辑上不可达，物理残留以 TTL 为上限。
+- `EraseRequired` requires the TTL to be no greater than `memory.Config.EraseWithin`; this constraint only takes effect when long-term memory is configured. Without long-term memory, the upper bound on how long the cache retains data after a session is deleted is the TTL.
+- A failed physical deletion does not affect logical correctness; it only delays the purge. Under `EraseRequired` the upper bound of the delay is the TTL; for Redis it is the TTL plus the expiration reclaim cycle (Redis expiration reclaim has no hard upper bound).
+- Forgetting and rewinding clear all cache entries under the namespace's current scope, which is coarse-grained.
+- The memory version is read only after recall (hydrateRecall). A deletion that happens between recall and reading the version may cause an entry to be written with the post-deletion version: such an entry is logically unreachable, and its physical residue is bounded by the TTL.
 
-### 装配 OnErase
+### Wiring OnErase
 
-长期记忆一侧只接通用回调，`memory` 不知道缓存：
+The long-term memory side only accepts a generic callback; `memory` does not know about the cache:
 
 ```go
 m, err := memory.New(memory.Config{
     // ...
-    OnErase: mc.Eraser(), // memory.EraseFunc；EraseOff 或缓存不支持 Tagged 时为 nil
+    OnErase: mc.Eraser(), // memory.EraseFunc; nil under EraseOff or when the cache does not support Tagged
 })
 ```
 
-- 配置了 `OnErase` 时，`memory.New` 要求 `RetireGrace >= EraseWithin`，否则返回配置错误。
-- 独立的 Worker 进程不经过 Builder，装配 `OnErase` 时必须使用与 Builder 相同的缓存后端，以及相同且至少 32 字节的 `TagKey`。否则标签对不上，删除会静默落空。`EraseRequired` 时 Builder 只能校验本进程的记忆实例。
-- Worker 启动时应调用 `mc.Validate()`，出错即退出。它检查 `Cache` 非空、`TTL` 大于 0、`EraseRequired` 时缓存实现 `cache.Tagged`，以及会做标签删除时 `TagKey` 的长度，与 Build 用的是同一组规则。不调用时，配错要等到第一次 `OnErase` 才暴露，之后每轮维护都会失败。
-- `OnErase` 持续失败时，每轮维护都会通过 `RunMaintenance` 的 `onError` 报错，并累计到 `Memory.EraseErrors()`（提交之后立即擦除失败的次数）。宿主应当监控它。
-- 多进程部署时，擦除重做的截止时间（`Until`）依赖各进程的时钟，时钟偏差会改变实际的删除时限。
+- When `OnErase` is configured, `memory.New` requires `RetireGrace >= EraseWithin`, otherwise it returns a configuration error.
+- A standalone Worker process does not go through the Builder; when wiring `OnErase` it must use the same cache backend as the Builder, and the same `TagKey` of at least 32 bytes. Otherwise the tags do not match and deletion silently misses. Under `EraseRequired`, the Builder can only validate the memory instance in its own process.
+- A Worker should call `mc.Validate()` at startup and exit on error. It checks that `Cache` is non-nil, `TTL` is greater than 0, the cache implements `cache.Tagged` under `EraseRequired`, and the length of `TagKey` when tag deletion is performed, using the same set of rules as Build. Without this call, a misconfiguration is only exposed at the first `OnErase`, after which every maintenance round fails.
+- When `OnErase` keeps failing, every maintenance round reports the error through the `onError` of `RunMaintenance`, and it accumulates in `Memory.EraseErrors()` (the number of times erasure failed right after commit). Hosts should monitor it.
+- In multi-process deployments, the deadline for redoing erasure (`Until`) depends on each process's clock, and clock skew changes the actual deletion deadline.
 
-### 删除或回退会话
+### Deleting or Rewinding a Session
 
-没有长期记忆的会话回退不会触发 `Memory.Rewound`，缓存靠键里的完整历史保证不命中，物理残留须宿主处理：在 `session.Rewind` 或删除会话之后调用 `mc.DeleteSession(ctx, sessionID)`。
+Rewinding a session without long-term memory does not trigger `Memory.Rewound`; the cache relies on the full history in the key to guarantee no hit, and the host must handle physical residue: call `mc.DeleteSession(ctx, sessionID)` after `session.Rewind` or after deleting the session.
 
-`DeleteSession` 在 `EraseOff` 或后端不支持 `Tagged` 时返回 nil，但并没有物理删除，条目留到 TTL 到期。
+`DeleteSession` returns nil under `EraseOff` or when the backend does not support `Tagged`, but nothing is physically deleted; entries remain until the TTL expires.
 
-### 升级
+### Upgrading
 
-`LastRewindSeq` 是只增字段，存储格式版本不变。混合版本部署时，旧程序重写 head 会把它清零，回退之后的条目重新可达；物理删除仍然生效。升级期间要避免新旧程序同时服务带回退操作的命名空间。
+`LastRewindSeq` is an add-only field, and the storage format version is unchanged. In mixed-version deployments, an old binary rewriting the head resets it to zero, making entries after a rewind reachable again; physical deletion still takes effect. During an upgrade, avoid having old and new binaries serve the same namespace with rewind operations at the same time.
 
-## 分布式部署
+## Distributed Deployment
 
-多进程共享长期记忆时，模型调用缓存可换成 Redis（`github.com/kart-io/goagent-contrib/cache/redis`，Redis 7 及以上）：它实现 `cache.Bytes` 与 `cache.Tagged`，作为 `builder.ModelCache.Cache` 传入。向量索引与完整部署说明见 [memory/README.md 的“分布式部署”](../../memory/README.md#分布式部署)。缓存相关须知：
+When multiple processes share long-term memory, the model call cache can be switched to Redis (`github.com/kart-io/goagent-contrib/cache/redis`, Redis 7 or later): it implements `cache.Bytes` and `cache.Tagged` and is passed as `builder.ModelCache.Cache`. For the vector index and full deployment instructions, see ["分布式部署" in memory/README.md](../../memory/README.md#分布式部署). Cache-related notes:
 
-- **所有实例使用相同的 `TagKey`**：标签是 HMAC，`TagKey` 不同则同一记忆在各实例上的标签不同，`DeleteTag` 删不到其他实例写的条目。
-- **每个持有记忆的进程都要接上擦除**：包括只跑 `memory/worker` 的进程，它执行的 `Forget`、`Purge` 也要通过 `OnErase` 调到共享缓存。
-- **切换缓存**：混合部署期间（部分实例仍用 `SimpleCache`）删除不会到达本地缓存，跨实例删除承诺不成立。建议一次性切换，或切换期间关闭 ModelCache。从 Redis 回退到本地无需迁移数据，Redis 中的条目按 TTL 过期。
-- **Redis 淘汰策略**：令牌设计使“删除后读不到”不受淘汰影响；“返回时已物理删除”要求 `maxmemory-policy` 为 `noeviction`（或用量不触及 `maxmemory`），否则被淘汰的成员集合会让部分条目只能等 TTL 回收。
+- **All instances use the same `TagKey`**: tags are HMACs; with different `TagKey`s the same memory gets different tags on each instance, and `DeleteTag` cannot delete entries written by other instances.
+- **Every process that holds memory must wire up erasure**: including processes that only run `memory/worker`; the `Forget` and `Purge` they execute must also reach the shared cache through `OnErase`.
+- **Switching caches**: during a mixed deployment (some instances still use `SimpleCache`), deletions do not reach local caches, and the cross-instance deletion guarantee does not hold. Switch all at once, or disable ModelCache during the switch. Falling back from Redis to local requires no data migration; entries in Redis expire by TTL.
+- **Redis eviction policy**: the token design keeps "not readable after deletion" unaffected by eviction; "already physically deleted on return" requires `maxmemory-policy` to be `noeviction` (or usage never reaching `maxmemory`), otherwise evicted member sets leave some entries to be reclaimed only by TTL.
 
-## 选用建议
+## Recommendations
 
-- 缓存键必须覆盖影响结果的全部维度：用户/租户、会话、知识或数据版本、工具版本。
-- 检索增强回答优先每次检索新证据；需要答案缓存时，键中带上知识版本。
-- TTL 按数据变化频率设置；`SimpleCache` 默认不限条目数，键由外部输入决定时用 `cache.WithMaxEntries(n)` 设置上限（工具缓存中间件默认同样不限条目，用 `middleware.WithCacheMaxEntries(n)` 设置），或由外部缓存实现 `cache.Cache`。
+- The cache key must cover every dimension that affects the result: user/tenant, session, knowledge or data version, tool version.
+- For retrieval-augmented answers, prefer retrieving fresh evidence each time; when you need answer caching, include the knowledge version in the key.
+- Set the TTL by how often the data changes; `SimpleCache` has no entry limit by default, so when keys are determined by external input, set an upper bound with `cache.WithMaxEntries(n)` (the tool caching middleware likewise has no entry limit by default; set it with `middleware.WithCacheMaxEntries(n)`), or have an external cache implement `cache.Cache`.
 
-## 设计审核修复后的配置迁移
+## Configuration Migration After the Design Review Fixes
 
-`SimpleCache` 默认仍需要 `Close()`；`NewSimpleCache(ttl, cache.WithoutBackgroundCleanup())` 不创建后台清理协程，在访问/写入时回收到期项。工具函数式缓存默认使用这一模式，注入缓存的生命周期归宿主管理，构造中间件不会额外创建或关闭宿主缓存。
+`SimpleCache` still requires `Close()` by default; `NewSimpleCache(ttl, cache.WithoutBackgroundCleanup())` creates no background cleanup goroutine and reclaims expired items on access/write. Functional tool caching uses this mode by default; the lifecycle of an injected cache is managed by the host, and constructing the middleware does not create or close the host's cache.
 
-工具缓存对业务输出做保留 Go 类型的隔离快照，保留 `AdditionalContext`、`Labels` 与嵌套结果。不支持安全快照的资源对象仍正常返回，但不会进入缓存。默认完整摘要改变缓存键，旧短摘要条目等待原 TTL 到期或由宿主清空；不会回退读取旧键。
+Tool caching takes an isolated snapshot of business output that preserves Go types, keeping `AdditionalContext`, `Labels`, and nested results. Resource objects that do not support safe snapshots are still returned normally but are not cached. The default full digest changes the cache key; old short-digest entries wait for their original TTL to expire or are cleared by the host; old keys are not read as a fallback.

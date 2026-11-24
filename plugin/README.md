@@ -9,4 +9,4 @@ Agent 能力包：在 Go 中静态组合工具、提示词片段、循环钩子�
 | `host.go` | `Host`：依赖排序、启动回滚、停止 |
 | `install.go` | `Install`、`Only`、`Dispatch` |
 
-使用方式与规则见 [插件指南](../docs/guides/PLUGIN_SYSTEM_GUIDE.md)。
+使用方式与规则见 [插件指南](../docs/guides/PLUGIN_SYSTEM_GUIDE_CN.md)。

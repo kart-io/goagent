@@ -44,4 +44,4 @@
 
 只支持当前格式，不提供自动迁移；已有旧持久运行需由原实现或宿主明确处置，不能更换执行键重跑副作用。Observer 仍可丢事件；可靠累计查同一预算账本。未报告字段、未归属调用和真实货币费用仍需分别处理。
 
-当前 API 见[指南](../../guides/MULTI_AGENT_USAGE.md)，本轮计划见[统一计划](../../superpowers/plans/2026-11-01-unified-usage-accounting.md)。
+当前 API 见[指南](../../guides/MULTI_AGENT_USAGE_CN.md)，本轮计划见[统一计划](../../superpowers/plans/2026-11-01-unified-usage-accounting.md)。

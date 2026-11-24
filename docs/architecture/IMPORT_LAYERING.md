@@ -75,11 +75,11 @@
 说明：
 
 - 顶层 `execution/` 是宿主装配薄层（依赖 `builder`、`core`、`core/budget`、`core/durable`、`core/observe`、`tools`），只有第 6 层及以上的包（如 `evaluation`、`management`、`testing`、`examples`）可以导入。
-- Harness 已迁到独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，反向导入被禁止。本仓库的 `harness/env` 是不依赖内部包的通用环境接口。迁移见 [Harness 迁移指南](../guides/HARNESS_MIGRATION.md)。
+- Harness 已迁到独立仓库 `github.com/kart-io/goagent-harness`，它依赖 GoAgent，反向导入被禁止。本仓库的 `harness/env` 是不依赖内部包的通用环境接口。迁移见 [Harness 迁移指南](../guides/HARNESS_MIGRATION_CN.md)。
 
 ## 当前依赖图
 
-`go list` 得到的实际内部依赖（不含 `examples/`、测试与 `cmd/`）见 [架构概述](ARCHITECTURE.md#包依赖)。基础常量叶子层为 `constants`，它是共享协议值、默认参数和 Provider 类型的唯一入口；原包转发声明及 `llm/constants` 包已删除，不保留兼容别名。其他领域内部类型仍在所属包。迁移方式见[常量迁移指南](../guides/CONSTANTS_MIGRATION.md)。错误码、分类、提示、上下文字段及框架哨兵由 `errors` 统一维护，调用方直接导入该包；`constants` 不导入 `errors`。`cache` 可依赖根 `errors`，`errors` 不反向依赖 `cache` 或其他框架实现；`harness/env` 保持无内部依赖的独立接口。
+`go list` 得到的实际内部依赖（不含 `examples/`、测试与 `cmd/`）见 [架构概述](ARCHITECTURE.md#包依赖)。基础常量叶子层为 `constants`，它是共享协议值、默认参数和 Provider 类型的唯一入口；原包转发声明及 `llm/constants` 包已删除，不保留兼容别名。其他领域内部类型仍在所属包。迁移方式见[常量迁移指南](../guides/CONSTANTS_MIGRATION_CN.md)。错误码、分类、提示、上下文字段及框架哨兵由 `errors` 统一维护，调用方直接导入该包；`constants` 不导入 `errors`。`cache` 可依赖根 `errors`，`errors` 不反向依赖 `cache` 或其他框架实现；`harness/env` 保持无内部依赖的独立接口。
 
 ## 运行
 
@@ -96,7 +96,7 @@ go test ./scripts/apicheck/         # 规则回归测试
 
 无效配置字段的检查沿本包结构体别名、底层定义和匿名嵌入追踪；旧方法接收者只沿透明别名追踪，真正的新定义类型保留自己的方法身份。类型上下文按目录和包名隔离，不让测试声明污染生产检查。在线 durable 包不允许 operation-v1 分派；历史版本只允许在独立离线迁移组件中处理。正常协议 facade、当前业务类型及崩溃恢复不属于退役入口。
 
-此规则检查明确退役清单和本包 AST，不代替编译器完整解析外部类型语义。接口与调用迁移见[兼容入口迁移指南](../guides/COMPATIBILITY_CLEANUP.md)。
+此规则检查明确退役清单和本包 AST，不代替编译器完整解析外部类型语义。接口与调用迁移见[兼容入口迁移指南](../guides/COMPATIBILITY_CLEANUP_CN.md)。
 
 ## 导入顺序
 

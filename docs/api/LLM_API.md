@@ -183,7 +183,7 @@ type ClassifiedError struct {
 | `WithSystemPrompt` | 前置到每次请求的系统提示 |
 | `WithReasoning` | 推理配置（`usage.ReasoningConfig`），请求的 `Reasoning` 未设置时使用 |
 | `WithStreamIdleTimeout`、`WithStreamTimeout` | 流式响应的空闲间隔上限与总时长上限 |
-| `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES.md#超时配置) |
+| `WithTimeout(time.Duration)` | 按整秒保存，正数向上取整；语义见 [最佳实践](../guides/PROVIDER_BEST_PRACTICES_CN.md#超时配置) |
 | `WithCustomHeaders` | 附加到所有内置 Provider 的请求，覆盖 SDK 设置的同名头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
@@ -258,5 +258,5 @@ func main() {
 
 - [核心 API 参考](CORE_API.md)
 - [LLM 提供商指南](../guides/LLM_PROVIDERS.md)
-- [Provider 最佳实践](../guides/PROVIDER_BEST_PRACTICES.md)
+- [Provider 最佳实践](../guides/PROVIDER_BEST_PRACTICES_CN.md)
 - [Provider 能力边界](../guides/PROVIDER_CAPABILITIES.md)

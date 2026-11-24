@@ -23,5 +23,5 @@ go test -race ./examples/memory
 ## 使用时要注意的地方
 
 - **场景 C 的"重新生成"违反宿主契约，不要照抄。** `common.go` 的 `regenerate` 只调用 `session.Rewind`，故意不调用 `Memory.Rewound`，用来得到缓存命中的正向对照。宿主在 `Rewind` 之后必须调用 `Rewound`，见 `eraseOps` 的 `Rewound` 行；这样做之后带长期记忆的重新生成不会命中缓存。
-- `ScriptedClient` 没有模型名，示例用 `cachedClient` 声明 `CacheIdentity()` 才能使模型调用缓存生效，规则见 [CACHING_GUIDE](../../docs/guides/CACHING_GUIDE.md)。
+- `ScriptedClient` 没有模型名，示例用 `cachedClient` 声明 `CacheIdentity()` 才能使模型调用缓存生效，规则见 [CACHING_GUIDE](../../docs/guides/CACHING_GUIDE_CN.md)。
 - 任务 Key 格式、非 JSON 回复的修正重试、Worker 回复格式、`Stats.Conflicts` 与 `InvalidTargets` 的区别、向量键布局，见 [memory/README](../../memory/README.md)。

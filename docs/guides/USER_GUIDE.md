@@ -246,7 +246,7 @@ agent, err := builder.NewSimpleBuilder(client).
     Build()
 ```
 
-For trust boundaries, hit scenarios, and deletion guarantees see the [Caching Guide](CACHING_GUIDE.md#模型调用缓存).
+For trust boundaries, hit scenarios, and deletion guarantees see the [Caching Guide](CACHING_GUIDE.md#model-call-caching).
 
 ### Custom Middleware
 

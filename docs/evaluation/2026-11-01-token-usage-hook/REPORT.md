@@ -41,4 +41,4 @@
 
 Statistics 是时点累计，不能相加；并行时可能包含其他尝试。回放仍通知且带 Replayed，不是新增消费。没有持久事件投递或 exactly-once 承诺，可靠累计仍查询统一账本。
 
-接入见[使用指南](../../guides/MULTI_AGENT_USAGE.md)，契约见[设计](../../design/TOKEN_USAGE_HOOK.md)。
+接入见[使用指南](../../guides/MULTI_AGENT_USAGE_CN.md)，契约见[设计](../../design/TOKEN_USAGE_HOOK.md)。
