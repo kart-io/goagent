@@ -1,10 +1,22 @@
 package common
 
 import (
+	shared "github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/usage"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
+
+// reasoningProviders lists the built-in providers whose per-request reasoning
+// validation accepts explicit controls; EnsureAPIKey rejects a client-level
+// default for any other provider. Keep it in sync with the providers'
+// ValidateReasoning implementations.
+var reasoningProviders = map[shared.Provider]bool{
+	shared.ProviderOpenAI:   true,
+	shared.ProviderMiniMax:  true,
+	shared.ProviderDeepSeek: true,
+	shared.ProviderGemini:   true,
+}
 
 // ResolveReasoning returns a value copy. A nonnil empty request explicitly
 // clears client defaults; nil preserves them.

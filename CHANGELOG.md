@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复
+
+- `llm/providers`：`NewMiniMaxWithOptions` 接受客户端级 `llm.WithReasoning` 默认值。此前单次请求可设推理，构造时却以“does not support explicit reasoning”拒绝同样的配置。
+
 ### 文档
 
 - `docs/guides` 中 24 份原先只有中文的指南补齐英文主文件，中文版改名为 `_CN` 后缀，站内中文文档的链接同步指向 `_CN`。

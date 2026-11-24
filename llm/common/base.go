@@ -99,7 +99,7 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 
 // EnsureAPIKey validates and sets the API key, supporting environment variable fallback.
 func (b *BaseProvider) EnsureAPIKey(envVar string, providerName shared2.Provider) error {
-	if b.Config.Reasoning != nil && providerName != shared2.ProviderOpenAI && providerName != shared2.ProviderDeepSeek && providerName != shared2.ProviderGemini {
+	if b.Config.Reasoning != nil && !reasoningProviders[providerName] {
 		return b.RejectReasoning(nil)
 	}
 	if b.Config.APIKey == "" {
