@@ -24,11 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `tools/middleware`：`WithCache` 与 `CachingConfig.Cache` 弃用，改用 `WithResultCache` 与 `CachingConfig.Store`。新接口 `ResultCache` 只含 `Get`/`Set`，任意 `cache.Cache` 都满足；两者都设置时 `Store` 优先。迁移：`WithCache(c)` 改为 `WithResultCache(c)`。
 
+### 修复
+
+- `interfaces.Document.String()` 的内容预览改为截取前 50 个字符，此前按 50 字节截断，会把中文等多字节文本切成无效 UTF-8。
+
 ### 工程
 
 - API 稳定性政策新增“传递暴露”：稳定包导出 API 引用的实验包类型按 `full`/`identity`/`alias` 三种模式冻结，登记在 `scripts/api-exposure.txt`，见 [API_STABILITY](docs/API_STABILITY_CN.md#传递暴露)。
 - 新增 `scripts/exposurecheck`（嵌套模块，依赖 `golang.org/x/tools`，主模块不新增依赖），由 `check_api_compat.sh` 调用，补上 `apidiff` 看不到的实验接口新增方法、实验函数类型改签名、别名改指向与标准库类型互换；`make test-exposurecheck` 验证工具与登记表。
 - 覆盖率门槛改由 `scripts/coverage-gates.txt` 声明，每个稳定包必须有门槛。包门槛改为精确匹配、不含子包，并按实测值收紧：整体 75→80，`builder` 75→89、`core/durable` 70→82、`core/budget` 75→87、`workflow` 75→84，其余稳定包首次设门槛；`-` 表示目标不得含可执行语句。PR 覆盖率评论改为读取检查生成的摘要表。
+- 补齐 `interfaces`（`Document`、`TokenUsage` 方法）与 `llm`（能力判定、`ProviderError.ErrorCode`、`ValidateReasoningRequest`、流式/嵌入/格式选项）的测试，门槛分别由 0、64 上调到 90、86。
+- 在包内补测 `builder/contextpolicy` 的 `RecallTool`（原先只由 `builder` 的测试间接覆盖，不计入本包）与 `mcp/remote` 的续接参数校验，门槛分别由 77、78 上调到 87、85。
+- `coverage-gates.txt` 新增 `不计` 标记：契约测试套件（`*/storetest`、`sessiontest`、`*test`）、`testing/*` 与 `scripts/*` 移出整体分母，只报告不判定；整体覆盖率由 82.9% 变为 86.2%，门槛 80→84。
+- PR 上只由 `ci.yml` 跑一次全量 `-race` 测试与覆盖率门禁并发表覆盖率评论，`pr.yml` 只保留兼容检查与安全扫描，打标签不再重跑全量测试；gofmt 检查移入 `ci.yml` 的 Lint 任务。Codecov 上传改为仅在配置了 `CODECOV_TOKEN` 时执行（此前无令牌上传一直被拒绝），并只上传 `coverage.out`。
 
 ## [0.61.0] - 2026-11-23
 

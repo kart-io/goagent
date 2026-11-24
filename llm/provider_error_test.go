@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/kart-io/goagent/codec/json"
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
@@ -101,4 +102,32 @@ func TestProviderError空指针分类不崩溃(t *testing.T) {
 	require.NotPanics(t, func() {
 		require.Equal(t, agentErrors.CodeInternal, agentErrors.GetCode(providerError))
 	})
+}
+
+func TestProviderErrorCode(t *testing.T) {
+	cases := []struct {
+		name string
+		err  *ProviderError
+		want agentErrors.ErrorCode
+	}{
+		{"429 限流", &ProviderError{StatusCode: 429, Err: errors.New("x")}, agentErrors.CodeLLMRateLimit},
+		{"401 凭据", &ProviderError{StatusCode: 401, Err: errors.New("x")}, agentErrors.CodeInvalidConfig},
+		{"403 拒绝访问", &ProviderError{StatusCode: 403, Err: errors.New("x")}, agentErrors.CodeAccessDenied},
+		{"400 请求无效", &ProviderError{StatusCode: 400, Err: errors.New("x")}, agentErrors.CodeInvalidInput},
+		{"413 请求过大", &ProviderError{StatusCode: 413, Err: errors.New("x")}, agentErrors.CodeInvalidInput},
+		{"422 无法处理", &ProviderError{StatusCode: 422, Err: errors.New("x")}, agentErrors.CodeInvalidInput},
+		{"其他状态码", &ProviderError{StatusCode: 503, Err: errors.New("x")}, agentErrors.CodeLLMResponse},
+		{"取消", &ProviderError{Err: fmt.Errorf("w: %w", context.Canceled)}, agentErrors.CodeContextCanceled},
+		{"截止时间", &ProviderError{Err: context.DeadlineExceeded}, agentErrors.CodeLLMTimeout},
+		{"内层错误码", &ProviderError{Err: agentErrors.New(agentErrors.CodeInvalidConfig, "bad")}, agentErrors.CodeInvalidConfig},
+		{"网络超时", &ProviderError{Err: &net.OpError{Op: "read", Err: timeoutError{}}}, agentErrors.CodeLLMTimeout},
+		{"JSON 语法错误", &ProviderError{Err: &json.SyntaxError{}}, agentErrors.CodeLLMResponse},
+		{"JSON 类型错误", &ProviderError{Err: &json.UnmarshalTypeError{}}, agentErrors.CodeLLMResponse},
+		{"其他错误", &ProviderError{Err: errors.New("x")}, agentErrors.CodeLLMRequest},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, c.err.ErrorCode())
+		})
+	}
 }

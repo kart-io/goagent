@@ -24,7 +24,14 @@ type block struct {
 
 // gate.target：「*」为整体；以 .go 结尾为单文件；其余为精确包路径（不含子包）。
 // noCode 对应门槛文件中的「-」：目标不得含可执行语句，出现语句即失败，迫使补上真实门槛。
-const noCode = -1
+// excluded 对应「不计」：包的覆盖来自其他包的测试（契约套件、mock）或不随库发布（scripts），
+// 移出整体分母，只报告不判定。
+const (
+	noCode   = -1
+	excluded = -2
+)
+
+var markers = map[string]float64{"-": noCode, "不计": excluded}
 
 type gate struct {
 	target  string
@@ -113,11 +120,12 @@ func loadGates(name string) ([]gate, error) {
 		if len(f) != 2 {
 			return nil, fmt.Errorf("门槛条目须为「目标 最低百分比」: %q", strings.Join(f, " "))
 		}
-		minimum, err := float64(noCode), error(nil)
-		if f[1] != "-" {
+		minimum, marker := markers[f[1]]
+		var err error
+		if !marker {
 			minimum, err = strconv.ParseFloat(f[1], 64)
 		}
-		if err != nil || f[1] == "-" && f[0] == "*" || f[1] != "-" && (minimum < 0 || minimum > 100) {
+		if err != nil || marker && f[0] == "*" || minimum == excluded && strings.HasSuffix(f[0], ".go") || !marker && (minimum < 0 || minimum > 100) {
 			return nil, fmt.Errorf("门槛 %s 的百分比无效: %q", f[0], f[1])
 		}
 		if seen[f[0]] {
@@ -138,18 +146,24 @@ func requireStable(gates []gate, stableFile string) error {
 	if err != nil {
 		return fmt.Errorf("读取稳定包清单: %w", err)
 	}
-	declared := map[string]bool{}
+	declared := map[string]float64{}
 	for _, g := range gates {
-		declared[g.target] = true
+		declared[g.target] = g.minimum
 	}
-	var missing []string
+	var missing, uncounted []string
 	for _, f := range lines {
-		if !declared[f[0]] {
+		switch minimum, ok := declared[f[0]]; {
+		case !ok:
 			missing = append(missing, f[0])
+		case minimum == excluded:
+			uncounted = append(uncounted, f[0])
 		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("稳定包缺少覆盖率门槛: %s", strings.Join(missing, ", "))
+	}
+	if len(uncounted) > 0 {
+		return fmt.Errorf("稳定包不能标记为不计: %s", strings.Join(uncounted, ", "))
 	}
 	return nil
 }
@@ -170,10 +184,16 @@ func check(blocks map[string]block, rules []gate, report, summary io.Writer) err
 	if _, err := fmt.Fprint(summary, "| 范围 | 覆盖率 | 门槛 | 结果 |\n|---|---|---|---|\n"); err != nil {
 		return err
 	}
+	uncounted := map[string]bool{}
+	for _, rule := range rules {
+		if rule.minimum == excluded {
+			uncounted[rule.target] = true
+		}
+	}
 	for _, rule := range rules {
 		var total, covered uint64
 		for _, b := range blocks {
-			if !matches(rule.target, b.file) {
+			if !matches(rule.target, b.file) || rule.target == "*" && uncounted[path.Dir(b.file)] {
 				continue
 			}
 			total += b.statements
@@ -188,6 +208,15 @@ func check(blocks map[string]block, rules []gate, report, summary io.Writer) err
 		name := rule.target
 		if name == "*" {
 			name = "整体"
+		}
+		if rule.minimum == excluded {
+			if _, err := fmt.Fprintf(report, "覆盖率 %s: %.1f%% (%d/%d)，不计入整体\n", name, percent, covered, total); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(summary, "| `%s` | %.1f%% | 不计入整体 | — |\n", name, percent); err != nil {
+				return err
+			}
+			continue
 		}
 		if rule.minimum == noCode {
 			if total > 0 {
