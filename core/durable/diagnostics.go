@@ -33,6 +33,9 @@ type DiagnosticReport struct {
 	Operations []OperationDiagnostic `json:"operations,omitempty"`
 }
 
+// OperationDiagnostic summarizes one operation record for DiagnoseOperations:
+// Status is the record status or "not_found", FailureKind is a coarse category
+// ("unknown" when unrecognized), and Actions suggests host next steps.
 type OperationDiagnostic struct {
 	ID          string   `json:"id"`
 	Status      string   `json:"status"`

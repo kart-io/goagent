@@ -89,7 +89,7 @@ task_wait 发 form elicitation 前检查当前请求的客户端能力；`elicit
 ## 验证与依据
 
 ```bash
-env -u GOROOT GO_TEST_MODE=true go test -race -count=1 ./management/protocol ./mcp/remote
+env -u GOROOT go test -race -count=1 ./management/protocol ./mcp/remote
 ```
 
 测试使用真实官方 SDK、HTTP transport 和管理 Worker，覆盖跨入口查询/回复/取消、审批不可绕过、Worker 重启、多轮输入、能力协商、消息幂等、首事件以及数值精度。夹具是事务内存 Store；这些测试不等于生产数据库故障恢复验收。

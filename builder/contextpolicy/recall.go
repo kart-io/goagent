@@ -53,15 +53,20 @@ func NewRecallToolConfig(store session.Store, cfg RecallConfig) (*RecallTool, er
 	return &RecallTool{store: store, config: cfg}, nil
 }
 
+// Name returns constants.ToolRecallHistory.
 func (r *RecallTool) Name() string { return constants.ToolRecallHistory }
 
 // SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: a recall
 // only reads the session log.
 func (r *RecallTool) SupportsConcurrentCalls() bool { return true }
+
+// Description returns the model-facing description of recall_history.
 func (r *RecallTool) Description() string {
 	return "取回本会话中已被压缩为摘要的原始消息。query 按子串过滤；before 只返回序号小于它的消息，用上次结果的 next_before 向前翻页；limit 默认 20。"
 }
 
+// ArgsSchema returns the JSON schema for query, before and limit; limit is
+// capped at MaxLimit when set.
 func (r *RecallTool) ArgsSchema() string {
 	limit := `{"type":"integer","minimum":1}`
 	if r.config.MaxLimit > 0 {

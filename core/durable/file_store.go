@@ -21,6 +21,7 @@ import (
 // distributed lease service; network filesystem guarantees must be verified.
 type FileStore struct{ dir string }
 
+// NewFileStore returns a FileStore rooted at dir, creating it with mode 0700.
 func NewFileStore(dir string) (*FileStore, error) {
 	path, err := filepath.Abs(dir)
 	if err != nil {
@@ -32,6 +33,9 @@ func NewFileStore(dir string) (*FileStore, error) {
 	return &FileStore{dir: path}, nil
 }
 func (s *FileStore) path(id string) string { return filepath.Join(s.dir, digest(id)+".json") }
+
+// Lock implements Store with an OS file lock, polling until it is acquired or
+// ctx ends; the returned function releases it.
 func (s *FileStore) Lock(ctx context.Context, id string) (func() error, error) {
 	lock := flock.New(s.path(id) + ".lock")
 	ok, err := lock.TryLockContext(ctx, 20*time.Millisecond)
@@ -44,6 +48,8 @@ func (s *FileStore) Lock(ctx context.Context, id string) (func() error, error) {
 	return lock.Close, nil
 }
 
+// Load implements Store. It first rolls forward any SaveAll interrupted by a
+// crash, and wraps JSON decode failures as a corrupt checkpoint.
 func (s *FileStore) Load(ctx context.Context, id string) (*Snapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -62,6 +68,8 @@ func (s *FileStore) Load(ctx context.Context, id string) (*Snapshot, error) {
 	return &snapshot, nil
 }
 
+// Save implements Store by writing a temporary file, fsyncing it, and
+// renaming it over the checkpoint in the same directory.
 func (s *FileStore) Save(ctx context.Context, id string, snapshot *Snapshot) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -187,7 +195,7 @@ func (s *FileStore) scope(name string) *fileScope {
 
 // Scope implements Scoped. The directory is created on first write, and loading
 // a nonexistent record creates no files; Load on a removed scope returns
-// ErrScopeRemoved.
+// errors.ErrScopeRemoved.
 func (s *FileStore) Scope(name string) Store { return s.scope(name) }
 
 // RemoveScope implements Scoped: it waits for in-flight writes to finish,

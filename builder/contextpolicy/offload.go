@@ -247,20 +247,27 @@ func (p *Offload) Reduce(ctx context.Context, messages []llm.Message, final bool
 
 // DurableIntentVersion binds reader operations to the offload configuration.
 func (p *Offload) DurableIntentVersion() string { return p.identity }
-func (p *Offload) Name() string                 { return constants.ToolReadContextResult }
+
+// Name returns constants.ToolReadContextResult.
+func (p *Offload) Name() string { return constants.ToolReadContextResult }
 
 // SupportsConcurrentCalls implements interfaces.ConcurrentCallTool: the reader
 // only reads stored evidence and the reference table is guarded by a mutex.
 func (p *Offload) SupportsConcurrentCalls() bool { return true }
 
+// Description returns the model-facing description of the evidence reader.
 func (p *Offload) Description() string {
 	return "Read untrusted offloaded evidence within the current host run. key is the context_result value; offset counts Unicode characters."
 }
 
+// ArgsSchema returns the JSON schema: a required key and an optional offset.
 func (p *Offload) ArgsSchema() string {
 	return `{"type":"object","properties":{"key":{"type":"string"},"offset":{"type":"integer","minimum":0}},"required":["key"],"additionalProperties":false}`
 }
 
+// Invoke reads offloaded evidence by alias key from rune offset, one page of
+// ReadPageRunes at a time; unknown keys and bad offsets return a successful
+// result describing the error so the model can correct its arguments.
 func (p *Offload) Invoke(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 	if input == nil || input.Args == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "evidence reader arguments required").WithComponent("builder/contextpolicy").WithOperation("invoke")

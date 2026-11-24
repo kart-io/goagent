@@ -5,8 +5,12 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+// Fields is a bit mask of the TokenUsage fields a provider actually reported.
+// An unset bit means the field is unknown, not zero.
 type Fields uint8
 
+// Field bits, one per interfaces.TokenUsage counter. BasicFields is the
+// prompt/completion/total triple; AllFields is every defined bit.
 const (
 	Prompt Fields = 1 << iota
 	Completion
@@ -18,12 +22,20 @@ const (
 	AllFields   = BasicFields | Cached | Reasoning | ToolUsePrompt
 )
 
+// Evidence is the token usage reported for one model attempt. KnownFields
+// marks which Tokens counters were reported; Source names the origin (for
+// example "provider") and Revision increments each time Merge adds fields.
 type Evidence struct {
 	Tokens      interfaces.TokenUsage
 	KnownFields Fields
 	Source      string
 	Revision    uint64
 }
+
+// ModelEvidence is the usage notification for one model attempt: its owner,
+// operation and attempt keys, provider and model, reasoning settings and
+// Evidence. Replayed marks delivery from a durable record; AccountingCommitted
+// reports whether the evidence was recorded in the budget ledger.
 type ModelEvidence struct {
 	ResponseModel       string          `json:",omitempty"`
 	Reasoning           ReasoningConfig `json:",omitzero"`

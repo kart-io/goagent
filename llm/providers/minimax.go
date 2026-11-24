@@ -15,9 +15,11 @@ import (
 	agentllm "github.com/kart-io/goagent/llm"
 )
 
-// NewMiniMaxWithOptions 创建 MiniMax 客户端，走 OpenAI 兼容协议，支持视觉与原生工具流。
-// effort=none 时 M3 系列改发 thinking 禁用；M2.x 不接受该开关，none 被忽略。
-// 视觉接口只读 max_completion_tokens，带图片的请求改发该字段，纯文本请求仍发 max_tokens。
+// NewMiniMaxWithOptions creates a MiniMax client over the OpenAI-compatible
+// protocol, with vision and native tool streaming. Effort "none" disables
+// thinking on M3 models and is ignored on M2.x, which lack the switch.
+// Requests with images send max_completion_tokens (the only limit the vision
+// endpoint reads); text-only requests still send max_tokens.
 func NewMiniMaxWithOptions(opts ...agentllm.ClientOption) (*OpenAIProvider, error) {
 	return newOpenAICompatible(openAICompatibleSpec{
 		provider:              shared.ProviderMiniMax,

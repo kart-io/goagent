@@ -1,5 +1,7 @@
-// Package storetest 是 durable.Store 实现的一致性测试，覆盖 durable.Store 与 durable.Scoped 文档中的契约。
-// 后端实现在自己的测试中调用 Run，用同一后端上的两个独立实例模拟两个进程。
+// Package storetest is a conformance suite for durable.Store implementations,
+// covering the contracts documented on durable.Store and durable.Scoped.
+// A backend calls Run from its own tests, using two independent instances on
+// the same backend to simulate two processes.
 package storetest
 
 import (

@@ -10,20 +10,30 @@ import (
 	"github.com/kart-io/goagent/interfaces"
 )
 
+// UsageSummary aggregates reserved model requests and their usage evidence:
+// summed known tokens plus counts of entries missing each field.
 type UsageSummary struct {
 	UnknownPromptEntries, UnknownCompletionEntries, UnknownTotalEntries, UnknownCachedEntries int
 	UnknownReasoningEntries, UnknownToolUsePromptEntries                                      int
 	KnownTokens                                                                               interfaces.TokenUsage
 	ReservedRequests, KnownUsageEntries, UnknownUsageEntries, PartialUsageEntries             int
 }
+
+// CallAttribution is the usage of one agent call: Self counts only its own
+// requests, Inclusive adds those of all descendant calls.
 type CallAttribution struct {
 	usage.Owner
 	Self, Inclusive UsageSummary
 }
+
+// AgentAttribution is the usage of every call made by one agent ID.
 type AgentAttribution struct {
 	AgentID string
 	Self    UsageSummary
 }
+
+// AttributionReport breaks the root ledger down by agent call and agent ID.
+// Unattributed holds requests reserved without a lineage.
 type AttributionReport struct {
 	Root                                     Snapshot
 	Calls                                    []CallAttribution
@@ -69,10 +79,15 @@ func (c *Controller) register(l *ledger, chain []usage.Owner) error {
 	return nil
 }
 
+// RegisterAgent records an agent call lineage (root first) in the ledger. It
+// rejects malformed or changed owners and calls beyond MaxAgentCalls.
 func (c *Controller) RegisterAgent(ctx context.Context, lineage []usage.Owner) error {
 	return c.transaction(ctx, true, func(l *ledger) error { return c.register(l, lineage) })
 }
 
+// ReserveAttributed reserves one model request with an estimate of tokens
+// under key and attributes it to the last owner in lineage, registering the
+// lineage first. An empty lineage leaves the reservation unattributed.
 func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens int, lineage []usage.Owner) error {
 	if key == "" || tokens < 0 {
 		return agentErrors.Newf(agentErrors.CodeInvalidInput, "invalid reservation").WithComponent("budget").WithOperation("reserve_attributed")
@@ -111,6 +126,9 @@ func (c *Controller) ReserveAttributed(ctx context.Context, key string, tokens i
 	})
 }
 
+// RecordEvidence merges usage evidence into the reservation for key (see
+// usage.Merge) and returns the merged evidence. The lineage must resolve to
+// the same owner the reservation was made for.
 func (c *Controller) RecordEvidence(ctx context.Context, key string, lineage []usage.Owner, e usage.Evidence) (out usage.Evidence, err error) {
 	if err = e.Validate(); err != nil {
 		return
@@ -236,6 +254,8 @@ func addSummary(dst *UsageSummary, src UsageSummary) error {
 	return nil
 }
 
+// Attribution reports ledger usage per agent call and per agent ID, sorted by
+// key. Complete is false if any entry is unattributed or lacks BasicFields.
 func (c *Controller) Attribution(ctx context.Context) (out AttributionReport, err error) {
 	err = c.transaction(ctx, false, func(l *ledger) error {
 		calls := map[string]*CallAttribution{}

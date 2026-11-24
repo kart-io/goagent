@@ -10,6 +10,9 @@ import (
 	agentErrors "github.com/kart-io/goagent/errors"
 )
 
+// InputHandler collects host input for a pending remote tool call (see
+// WithInputHandler). It returns one response per request in the error, or an
+// error to abort the call.
 type InputHandler func(context.Context, *InputRequiredError) (mcp.InputResponseMap, error)
 
 // InputRequiredError is a serializable continuation checkpoint; the host can
@@ -39,6 +42,9 @@ func pendingCall(r *mcp.CallToolParams, result *mcp.CallToolResult) (*InputRequi
 	return &InputRequiredError{Name: r.Name, Arguments: args, RequestState: result.RequestState, Requests: result.InputRequests}, nil
 }
 
+// Continue resends the pending call on session s with responses, which must
+// answer every request in e with a matching response type. If the remote side
+// asks for more input, it returns a new *InputRequiredError.
 func (e *InputRequiredError) Continue(ctx context.Context, s *mcp.ClientSession, responses mcp.InputResponseMap) (*mcp.CallToolResult, error) {
 	if s == nil {
 		return nil, agentErrors.Newf(agentErrors.CodeInvalidInput, "MCP 续接参数无效")

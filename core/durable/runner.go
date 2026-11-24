@@ -22,6 +22,9 @@ type Step struct {
 	RequireApproval bool
 	Run             func(context.Context, StepInput) (json.RawMessage, error)
 }
+
+// StepInput is passed to Step.Run: the run's current Data and the step's
+// stable execution Key, which is identical when the step is retried.
 type StepInput struct {
 	Data json.RawMessage
 	Key  string
@@ -42,8 +45,8 @@ type Snapshot struct {
 // Store locks a run for the whole execution and saves snapshots atomically.
 // Implementations must satisfy the following contract:
 //   - Lock waits until it acquires the lock; if it has not acquired it when ctx
-//     ends, it returns an error that wraps both ErrLockUnavailable and the ctx
-//     error. The same ID is not reentrant, and a second Lock in the same
+//     ends, it returns an error that wraps both errors.ErrLockUnavailable and
+//     the ctx error. The same ID is not reentrant, and a second Lock in the same
 //     process also waits; locks have no deadlock detection, so a nested cycle
 //     waits until ctx ends.
 //   - Locks may be held for a long time (an entire graph or durable operation),
@@ -53,7 +56,7 @@ type Snapshot struct {
 //     also be called with a WithoutCancel ctx after the Lock ctx is canceled.
 //     Save is atomic and durable and stores every Snapshot field verbatim. When
 //     the holder has lost the lock, the implementation may refuse the write and
-//     return ErrLeaseLost.
+//     return errors.ErrLeaseLost.
 //   - Load needs no lock and reads the complete snapshot of the most recent
 //     successful Save (not from a lagging replica); on success the snapshot is
 //     non-nil. When the record does not exist it returns an error recognized by
@@ -68,7 +71,7 @@ type Snapshot struct {
 //
 // core/durable/storetest verifies the parts of this contract that can be
 // checked in a generic environment; it does not cover long-held locks, release
-// after process exit, or ErrLeaseLost.
+// after process exit, or errors.ErrLeaseLost.
 type Store interface {
 	Lock(context.Context, string) (func() error, error)
 	Load(context.Context, string) (*Snapshot, error)
@@ -101,8 +104,8 @@ func ValidateWrites(writes []Write) error {
 // Scoped is an optional partitioning capability of a Store: Scope returns an
 // independent namespace (created on demand; reads create no files), and
 // RemoveScope deletes the whole namespace and leaves a tombstone so that it
-// rejects reads and writes (Lock/Save/Load return ErrScopeRemoved), which also
-// takes effect when the scope does not exist. If removal crashes midway the
+// rejects reads and writes (Lock/Save/Load return errors.ErrScopeRemoved),
+// which also takes effect when the scope does not exist. If removal crashes midway the
 // tombstone is already in effect, and leftover data stays unreadable until
 // RemoveScope is called again. A name cannot be reused after removal. When
 // RemoveScope returns, in-progress lock holders are not guaranteed to have
@@ -120,6 +123,11 @@ type Scoped interface {
 	RemoveScope(ctx context.Context, name string) error
 	PruneRemoved(ctx context.Context, olderThan time.Duration) error
 }
+
+// Runner executes Steps in order, checkpointing to Store after each step and
+// pausing at steps that require approval. Version and the step list (names and
+// approval flags) are bound into each checkpoint; resuming a run with a
+// different plan is rejected.
 type Runner struct {
 	Store   Store
 	Version string

@@ -37,7 +37,7 @@ logging := middleware.NewLoggingMiddleware()
 wrapped := middleware.Wrap(tool, logging.Wrap)
 ```
 
-You can no longer pass arbitrary objects directly to `middleware.Wrap`, nor reconnect the old hooks through runtime type checks. Assembly with a nil middleware function or one that returns a nil invoker fails with a configuration error. Logging timing belongs to each call and is not written into the caller's `ToolInput.Args`; partial results returned by the underlying tool are kept together with the error. Tool wrapping does not thereby automatically gain the underlying optional durable capabilities; for the exact boundaries see the [Tool Middleware guide](TOOL_MIDDLEWARE.md).
+You can no longer pass arbitrary objects directly to `middleware.Wrap`, nor reconnect the old hooks through runtime type checks. If a middleware function is nil or returns a nil invoker, `Wrap` panics with an `errors.CodeInvalidConfig` error. Logging timing belongs to each call and is not written into the caller's `ToolInput.Args`; partial results returned by the underlying tool are kept together with the error. Tool wrapping does not thereby automatically gain the underlying optional durable capabilities; for the exact boundaries see the [Tool Middleware guide](TOOL_MIDDLEWARE.md).
 
 ## Runtime and Retries
 

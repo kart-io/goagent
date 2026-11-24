@@ -28,6 +28,9 @@ type GeminiProvider struct {
 	client *genai.Client
 }
 
+// NewGeminiWithOptions creates a Gemini client on the native Gemini API. The
+// API key is required (option or environment); the SDK never retries, so one
+// call makes one upstream request.
 func NewGeminiWithOptions(opts ...agentllm.ClientOption) (*GeminiProvider, error) {
 	base := common.NewBaseProvider(opts...)
 	base.ApplyProviderDefaults(shared.ProviderGemini, "https://generativelanguage.googleapis.com", "gemini-2.5-flash", shared.EnvGeminiBaseURL, shared.EnvGeminiModel)
@@ -407,13 +410,24 @@ func (p *GeminiProvider) toolSchemaToGeminiSchema(schema any) (map[string]any, e
 	return result, nil
 }
 
+// Provider returns shared.ProviderGemini.
 func (p *GeminiProvider) Provider() shared.Provider { return shared.ProviderGemini }
-func (p *GeminiProvider) ProviderName() string      { return string(shared.ProviderGemini) }
-func (p *GeminiProvider) ModelName() string         { return p.GetModel("") }
-func (p *GeminiProvider) MaxTokens() int            { return p.GetMaxTokens(0) }
 
+// ProviderName returns the provider name "gemini".
+func (p *GeminiProvider) ProviderName() string { return string(shared.ProviderGemini) }
+
+// ModelName returns the configured chat model.
+func (p *GeminiProvider) ModelName() string { return p.GetModel("") }
+
+// MaxTokens returns the configured output token limit.
+func (p *GeminiProvider) MaxTokens() int { return p.GetMaxTokens(0) }
+
+// GeminiStreamingProvider adds StreamWithContext, an event-channel streaming
+// API, to GeminiProvider.
 type GeminiStreamingProvider struct{ *GeminiProvider }
 
+// NewGeminiStreamingWithOptions creates a GeminiStreamingProvider; options are
+// the same as NewGeminiWithOptions.
 func NewGeminiStreamingWithOptions(opts ...agentllm.ClientOption) (*GeminiStreamingProvider, error) {
 	p, err := NewGeminiWithOptions(opts...)
 	if err != nil {
@@ -422,10 +436,14 @@ func NewGeminiStreamingWithOptions(opts ...agentllm.ClientOption) (*GeminiStream
 	return &GeminiStreamingProvider{p}, nil
 }
 
+// NewGeminiStreaming creates a GeminiStreamingProvider from LLMOptions.
 func NewGeminiStreaming(config *agentllm.LLMOptions) (*GeminiStreamingProvider, error) {
 	return NewGeminiStreamingWithOptions(common.ConfigToOptions(config)...)
 }
 
+// StreamWithContext streams a single user prompt as StreamEvents: "start",
+// then "token" deltas, then "complete" or "error". The channel closes after
+// that final event, when the stream ends, or when ctx is canceled.
 func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt string) (<-chan StreamEvent, error) {
 	chunks, err := p.stream(ctx, &agentllm.CompletionRequest{Messages: []agentllm.Message{agentllm.UserMessage(prompt)}}, nil)
 	if err != nil {
@@ -468,6 +486,9 @@ func (p *GeminiStreamingProvider) StreamWithContext(ctx context.Context, prompt 
 	return out, nil
 }
 
+// StreamEvent is one event from GeminiStreamingProvider.StreamWithContext.
+// Type is "start", "token" (Content holds the delta), "error" (Error is set)
+// or "complete" (Metadata holds token usage when reported).
 type StreamEvent struct {
 	Type      string
 	Content   string
