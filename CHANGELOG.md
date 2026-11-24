@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.2] - 2026-11-24
+
 ### 安全
 
 - `github.com/klauspost/compress` 由 v1.18.0 升到 v1.20.5，修复 GO-2026-6865（两块帧解码 panic）与 GO-2026-5841。`memory` 的状态快照编解码会调用受影响的 zstd 路径，构造的快照可使进程崩溃。
@@ -1609,7 +1611,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.2...HEAD
+[0.62.2]: https://github.com/kart-io/goagent/compare/v0.62.1...v0.62.2
 [0.62.1]: https://github.com/kart-io/goagent/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/kart-io/goagent/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/kart-io/goagent/compare/v0.60.1...v0.61.0
