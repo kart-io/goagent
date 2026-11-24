@@ -1,0 +1,19 @@
+# 稳定包导出 API 传递暴露的非稳定类型：<标识符> <模式>，由 scripts/exposurecheck 校验。
+# 标识符为相对模块根的包路径加类型名；模式见 docs/API_STABILITY.md「传递暴露」：
+#   full     调用方实现、赋值或构造：冻结底层类型、方法集与该类型的导出常量
+#   identity 原样透传的不透明句柄：只冻结类型名与所在包
+#   alias    类型别名：冻结指向
+# 新增暴露必须在此登记；已不再暴露的条目必须删除。
+
+memory.Memory          identity  # builder.WithLongTermMemory、AgentConfig.LongTermMemory：由 memory.New 构造后透传
+memory.EraseFunc       full      # builder.ModelCache.Eraser 的返回值，调用方赋给 memory.Config.OnErase
+
+cache.Cache            full      # 已弃用的 tools/middleware.CachingConfig.Cache、WithCache，随其删除一并移除
+cache.CacheStats       full      # cache.Cache.GetStats 的返回值
+
+utils/httpclient.Client full     # llm/common.BaseProvider.NewHTTPClient 的返回值
+utils/httpclient.Config full     # httpclient.Client 方法签名引用
+
+codec/json.RawMessage  alias     # core/durable、core/session、workflow、mcp/remote、llm 的签名
+codec/json.Number      alias     # tools/toolargs.Compare、IsInteger
+codec/json.Decoder     alias     # llm.LLMOptions.UnmarshalJSONFrom

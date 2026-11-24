@@ -1,4 +1,4 @@
-// coveragecheck 按语句数加权检查整体、关键模块和关键文件的覆盖率。
+// coveragecheck 按语句数加权检查整体、关键包和关键文件的覆盖率；门槛来自数据文件。
 package main
 
 import (
@@ -21,28 +21,17 @@ type block struct {
 	statements uint64
 	covered    bool
 }
+
+// gate.target：「*」为整体；以 .go 结尾为单文件；其余为精确包路径（不含子包）。
+// noCode 对应门槛文件中的「-」：目标不得含可执行语句，出现语句即失败，迫使补上真实门槛。
+const noCode = -1
+
 type gate struct {
-	name, path string
-	minimum    float64
+	target  string
+	minimum float64
 }
 
-var (
-	profileLine = regexp.MustCompile(`^(.+):[0-9]+\.[0-9]+,[0-9]+\.[0-9]+ ([0-9]+) ([0-9]+)$`)
-	gates       = []gate{
-		{"整体覆盖率", "", 75},
-		{"core/durable", "core/durable/", 70},
-		{"core/budget", "core/budget/", 75},
-		{"workflow", "workflow/", 75},
-		{"builder", "builder/", 75},
-		{"multiagent", "multiagent/", 85},
-		{"management", "management/", 75},
-		{"management/adapters", "management/adapters/", 75},
-		{"management/httpapi", "management/httpapi/", 80},
-		{"llm/providers/openai.go", "llm/providers/openai.go", 70},
-		{"llm/providers/gemini.go", "llm/providers/gemini.go", 65},
-		{"llm/common/base.go", "llm/common/base.go", 50},
-	}
-)
+var profileLine = regexp.MustCompile(`^(.+):[0-9]+\.[0-9]+,[0-9]+\.[0-9]+ ([0-9]+) ([0-9]+)$`)
 
 func parseProfile(r io.Reader) (map[string]block, error) {
 	scanner := bufio.NewScanner(r)
@@ -95,12 +84,96 @@ func parseProfile(r io.Reader) (map[string]block, error) {
 	return blocks, nil
 }
 
-func check(blocks map[string]block, rules []gate, w io.Writer) error {
+// readLines 读取去掉注释与空行的条目，供门槛文件与稳定包清单共用。
+func readLines(name string) ([][]string, error) {
+	data, err := os.ReadFile(name) // #nosec G304 -- 路径来自命令行参数，由仓库脚本与 CI 传入
+	if err != nil {
+		return nil, err
+	}
+	var out [][]string
+	for _, raw := range strings.Split(string(data), "\n") {
+		if i := strings.Index(raw, "#"); i >= 0 {
+			raw = raw[:i]
+		}
+		if fields := strings.Fields(raw); len(fields) > 0 {
+			out = append(out, fields)
+		}
+	}
+	return out, nil
+}
+
+func loadGates(name string) ([]gate, error) {
+	lines, err := readLines(name)
+	if err != nil {
+		return nil, fmt.Errorf("读取门槛文件: %w", err)
+	}
+	seen := map[string]bool{}
+	gates := make([]gate, 0, len(lines))
+	for _, f := range lines {
+		if len(f) != 2 {
+			return nil, fmt.Errorf("门槛条目须为「目标 最低百分比」: %q", strings.Join(f, " "))
+		}
+		minimum, err := float64(noCode), error(nil)
+		if f[1] != "-" {
+			minimum, err = strconv.ParseFloat(f[1], 64)
+		}
+		if err != nil || f[1] == "-" && f[0] == "*" || f[1] != "-" && (minimum < 0 || minimum > 100) {
+			return nil, fmt.Errorf("门槛 %s 的百分比无效: %q", f[0], f[1])
+		}
+		if seen[f[0]] {
+			return nil, fmt.Errorf("门槛 %s 重复声明", f[0])
+		}
+		seen[f[0]] = true
+		gates = append(gates, gate{f[0], minimum})
+	}
+	if !seen["*"] {
+		return nil, errors.New("门槛文件缺少整体条目「*」")
+	}
+	return gates, nil
+}
+
+// requireStable 保证兼容承诺扩大时覆盖率门槛同步扩大。
+func requireStable(gates []gate, stableFile string) error {
+	lines, err := readLines(stableFile)
+	if err != nil {
+		return fmt.Errorf("读取稳定包清单: %w", err)
+	}
+	declared := map[string]bool{}
+	for _, g := range gates {
+		declared[g.target] = true
+	}
+	var missing []string
+	for _, f := range lines {
+		if !declared[f[0]] {
+			missing = append(missing, f[0])
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("稳定包缺少覆盖率门槛: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func matches(target, file string) bool {
+	switch {
+	case target == "*":
+		return true
+	case strings.HasSuffix(target, ".go"):
+		return file == target
+	default:
+		return path.Dir(file) == target
+	}
+}
+
+func check(blocks map[string]block, rules []gate, report, summary io.Writer) error {
 	failed := false
+	if _, err := fmt.Fprint(summary, "| 范围 | 覆盖率 | 门槛 | 结果 |\n|---|---|---|---|\n"); err != nil {
+		return err
+	}
 	for _, rule := range rules {
 		var total, covered uint64
 		for _, b := range blocks {
-			if rule.path != "" && b.file != rule.path && (!strings.HasSuffix(rule.path, "/") || path.Dir(b.file) != strings.TrimSuffix(rule.path, "/")) {
+			if !matches(rule.target, b.file) {
 				continue
 			}
 			total += b.statements
@@ -108,20 +181,34 @@ func check(blocks map[string]block, rules []gate, w io.Writer) error {
 				covered += b.statements
 			}
 		}
-		if total == 0 {
-			if _, err := fmt.Fprintf(w, "%s: 缺少覆盖率数据（要求 ≥ %.0f%%）\n", rule.name, rule.minimum); err != nil {
+		percent, status := 0.0, "通过"
+		if total > 0 {
+			percent = 100 * float64(covered) / float64(total)
+		}
+		name := rule.target
+		if name == "*" {
+			name = "整体"
+		}
+		if rule.minimum == noCode {
+			if total > 0 {
+				status, failed = "失败", true
+			}
+			if _, err := fmt.Fprintf(report, "覆盖率 %s: %d 条语句，要求无可执行语句，%s\n", name, total, status); err != nil {
 				return err
 			}
-			failed = true
+			if _, err := fmt.Fprintf(summary, "| `%s` | — | 无语句 | %s |\n", name, status); err != nil {
+				return err
+			}
 			continue
 		}
-		percent := 100 * float64(covered) / float64(total)
-		status := "通过"
-		if percent < rule.minimum {
-			status = "失败"
-			failed = true
+		if total == 0 || percent < rule.minimum {
+			status, failed = "失败", true
 		}
-		if _, err := fmt.Fprintf(w, "%s: %.1f%% (%d/%d)，要求 ≥ %.0f%%，%s\n", rule.name, percent, covered, total, rule.minimum, status); err != nil {
+		// 行首加「覆盖率 」前缀，避免 setup-go 的问题匹配器把「x.go: ...」当成编译错误注解。
+		if _, err := fmt.Fprintf(report, "覆盖率 %s: %.1f%% (%d/%d)，要求 ≥ %g%%，%s\n", name, percent, covered, total, rule.minimum, status); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(summary, "| `%s` | %.1f%% | %g%% | %s |\n", name, percent, rule.minimum, status); err != nil {
 			return err
 		}
 	}
@@ -131,8 +218,17 @@ func check(blocks map[string]block, rules []gate, w io.Writer) error {
 	return nil
 }
 
-func run(path string, w io.Writer) (err error) {
-	f, err := os.Open(path)
+type options struct{ profile, gates, stable, summary string }
+
+func run(o options, w io.Writer) (err error) {
+	gates, err := loadGates(o.gates)
+	if err != nil {
+		return err
+	}
+	if err := requireStable(gates, o.stable); err != nil {
+		return err
+	}
+	f, err := os.Open(o.profile)
 	if err != nil {
 		return fmt.Errorf("打开覆盖率文件: %w", err)
 	}
@@ -141,17 +237,30 @@ func run(path string, w io.Writer) (err error) {
 	if err != nil {
 		return err
 	}
-	return check(blocks, gates, w)
+	summary := io.Discard
+	if o.summary != "" {
+		s, err := os.Create(o.summary)
+		if err != nil {
+			return fmt.Errorf("创建摘要文件: %w", err)
+		}
+		defer func() { err = errors.Join(err, s.Close()) }()
+		summary = s
+	}
+	return check(blocks, gates, w, summary)
 }
 
 func main() {
-	path := flag.String("profile", "coverage/coverage.out", "覆盖率文件路径")
+	var o options
+	flag.StringVar(&o.profile, "profile", "coverage/coverage.out", "覆盖率文件路径")
+	flag.StringVar(&o.gates, "gates", "scripts/coverage-gates.txt", "覆盖率门槛文件")
+	flag.StringVar(&o.stable, "stable", "scripts/stable-packages.txt", "稳定包清单，每个包都必须有门槛")
+	flag.StringVar(&o.summary, "summary", "", "可选：写出 Markdown 摘要表（供 PR 评论使用）")
 	flag.Parse()
 	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "用法: coveragecheck -profile 文件")
+		fmt.Fprintln(os.Stderr, "用法: coveragecheck [-profile 文件] [-gates 文件] [-stable 文件] [-summary 文件]")
 		os.Exit(2)
 	}
-	if err := run(*path, os.Stdout); err != nil {
+	if err := run(o, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

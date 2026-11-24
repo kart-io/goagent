@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/core/observe"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -38,8 +37,8 @@ const (
 // ModelName), that call is silently not cached.
 type ModelCache struct {
 	// Cache is the cache backend and only exchanges bytes; with EraseRequired
-	// it must also implement cache.Tagged.
-	Cache cache.Bytes
+	// it must also implement interfaces.TaggedCache.
+	Cache interfaces.ByteCache
 	// TTL must be greater than 0; with EraseRequired it must not exceed
 	// memory.Config.EraseWithin (enforced only when long-term memory is
 	// configured).
@@ -65,8 +64,8 @@ func (b *AgentBuilder[S]) WithModelCache(mc ModelCache) *AgentBuilder[S] {
 	return b
 }
 
-func (mc ModelCache) tagged() (cache.Tagged, bool) {
-	t, ok := mc.Cache.(cache.Tagged)
+func (mc ModelCache) tagged() (interfaces.TaggedCache, bool) {
+	t, ok := mc.Cache.(interfaces.TaggedCache)
 	return t, ok
 }
 
@@ -128,7 +127,7 @@ func (mc ModelCache) rules() []configRule {
 }
 
 // Validate checks the configuration unrelated to long-term memory: Cache is
-// non-nil, TTL is greater than 0, the cache implements cache.Tagged under
+// non-nil, TTL is greater than 0, the cache implements interfaces.TaggedCache under
 // EraseRequired, and TagKey has sufficient length when tag deletion will be
 // used. Workers do not go through the Builder and should call it at startup, so
 // a misconfiguration does not cause repeated OnErase failures in every

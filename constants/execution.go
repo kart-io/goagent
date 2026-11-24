@@ -2,14 +2,17 @@ package constants
 
 import "time"
 
-// 持久模型及收件箱策略：改变重发次数会使已有运行的操作策略校验失败。
-// DefaultModelResendAttempts 是已弃用的 WithInterruptedModelResend 的发送次数；DefaultInboxWriteTimeout 是 WithPersistTimeout 的默认值。
+// Durable model and inbox policy. Changing the resend count fails the policy
+// check of existing runs. DefaultModelResendAttempts is the send count of the
+// deprecated WithInterruptedModelResend; DefaultInboxWriteTimeout is the
+// WithPersistTimeout default.
 const (
 	DefaultModelResendAttempts = 3
 	DefaultInboxWriteTimeout   = 5 * time.Second
-	// MaxModelRetryAfter 限制持有回合锁等待服务端恢复的时长。
+	// MaxModelRetryAfter bounds how long a turn lock is held waiting for the
+	// server to recover.
 	MaxModelRetryAfter = time.Minute
-	// 暂时性请求错误的默认退避，区别于提供商 SDK 的重试策略。
+	// Backoff for transient request errors, separate from provider SDK retries.
 	DefaultTransientRetryBaseDelay = 500 * time.Millisecond
 	DefaultTransientRetryMaxDelay  = 8 * time.Second
 )

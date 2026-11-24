@@ -19,8 +19,9 @@
 
 其他脚本：
 
-- `check_coverage.sh [PROFILE]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权检查：整体 75%，`core/durable` 70%，`core/budget`、`workflow`、`builder` 各 75%，`multiagent` 85%，`management`、`management/adapters` 各 75%，`management/httpapi` 80%（精确包路径，不混入子包），以及既有 Provider 单文件阈值；缺少关键数据即失败。`make coverage` 生成报告并执行门禁，不依赖 Bash 关联数组或 bc。
-- `check_api_compat.sh [BASE_REF]`：用固定版本的 `golang.org/x/exp/cmd/apidiff` 比较 BASE_REF（默认最近 tag）与工作区的导出 API，`stable-packages.txt` 所列稳定包出现不兼容变更即失败；`ALLOW_BREAKING=1` 只报告。PR 流水线中由 `breaking-change` 标签设置。见 [API 稳定性政策](../docs/API_STABILITY_CN.md)。
+- `check_coverage.sh [PROFILE] [SUMMARY_MD]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权，逐条检查 `coverage-gates.txt` 中的门槛（`*` 为整体，`.go` 结尾为单文件，其余为精确包路径，不混入子包）；`stable-packages.txt` 中的稳定包缺门槛、门槛目标缺数据都会失败。传入 `SUMMARY_MD` 时另写出 Markdown 表，供 PR 评论使用。`make coverage` 生成报告并执行门禁，`make coverage-check PROFILE=文件` 只检查已有 profile。
+- `check_api_compat.sh [BASE_REF]`：用固定版本的 `golang.org/x/exp/cmd/apidiff` 比较 BASE_REF（默认最近 tag）与工作区的导出 API，`stable-packages.txt` 所列稳定包出现不兼容变更即失败；`ALLOW_BREAKING=1` 只报告。PR 流水线中由 `breaking-change` 标签设置。同一脚本还运行 `exposurecheck`，按 `api-exposure.txt` 检查稳定包导出 API 传递暴露的非稳定类型：未登记或登记过期即失败（不受 `ALLOW_BREAKING` 影响），并报告 apidiff 看不到的实验接口新增方法、实验函数类型改签名、别名改指向与标准库类型互换。见 [API 稳定性政策](../docs/API_STABILITY_CN.md)。
+- `exposurecheck/`：上述检查的实现，独立模块（依赖 `golang.org/x/tools/go/packages`，不进入主模块依赖图）；`make test-exposurecheck` 运行其测试并校验仓库登记表。
 - `create_release.sh <version> [alpha|beta|rc]`：创建并推送发布 tag。
 - `finalize_changelog.sh NEW_TAG PREV_TAG [DATE]`：把 `CHANGELOG.md` 的 `[Unreleased]` 条目归入 `## [x.y.z] - 日期` 并补比较链接；版本段已存在或 Unreleased 为空时不改文件（退出码 3）。`auto-tag.yml` 发版时自动调用并提交，平时只需往 Unreleased 写条目。
 - `verify_all_examples.sh`：以 5 秒超时逐个运行 `examples/` 下的 `package main` 程序并写出结果日志。

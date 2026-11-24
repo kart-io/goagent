@@ -1,6 +1,6 @@
-// 输出解析字段、标记与模式。
 package constants
 
+// ReAct output markers.
 const (
 	MarkerThought     = "Thought:"
 	MarkerAction      = "Action:"

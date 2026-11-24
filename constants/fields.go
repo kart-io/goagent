@@ -1,12 +1,11 @@
-// 序列化、映射与数据交换字段常量。
 package constants
 
-// 请求与响应字段。
+// Request and response fields.
 const (
 	FieldStatus = "status"
 )
 
-// HTTP 请求字段。
+// HTTP request fields.
 const (
 	FieldURL        = "url"
 	FieldMethod     = "method"
@@ -15,12 +14,12 @@ const (
 	FieldStatusCode = "status_code"
 )
 
-// 指标与性能字段。
+// Metric fields.
 const (
 	FieldDuration = "duration"
 )
 
-// 配置与分页字段。
+// Configuration fields.
 const (
 	FieldTimeout = "timeout"
 )

@@ -30,7 +30,7 @@ func TestCachingZeroTTLAndCapacityAreUnlimited(t *testing.T) {
 				_, err := wrapped(context.Background(), &interfaces.ToolInput{Args: map[string]any{"k": fmt.Sprint(i)}})
 				require.NoError(t, err)
 			}
-			require.Equal(t, tc.want, m.config.Cache.(*cache.SimpleCache).GetStats().Size)
+			require.Equal(t, tc.want, m.config.Store.(*cache.SimpleCache).GetStats().Size)
 		})
 	}
 }

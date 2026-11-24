@@ -34,7 +34,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-agent-acceptance test-example-slogx test-contracts compatibility compatibility-postgres coverage deps help version
+.PHONY: all build build-all build-linux build-windows build-darwin run clean test test-management test-frameworkbench test-agent-acceptance test-example-slogx test-exposurecheck test-contracts compatibility compatibility-postgres coverage coverage-check deps help version
 
 ## help: Display this help message
 help:
@@ -89,6 +89,10 @@ test-agent-acceptance:
 test-frameworkbench:
 	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
 
+## test-exposurecheck: 验证传递暴露检查工具（独立模块）及仓库登记表
+test-exposurecheck:
+	cd scripts/exposurecheck && GOWORK=off $(GOTEST) $(TEST_FLAGS) -mod=readonly ./...
+
 ## test-example-slogx: 验证独立模块中的 slogx 日志示例（离线运行，不调用模型）
 test-example-slogx:
 	cd examples/logging/slogx && GOWORK=off $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
@@ -120,9 +124,13 @@ coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
 	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
-	bash scripts/check_coverage.sh $(COVERAGE_DIR)/coverage.out
+	$(MAKE) coverage-check PROFILE=$(COVERAGE_DIR)/coverage.out
 	$(GOCMD) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	@echo "$(GREEN)Coverage report generated at $(COVERAGE_DIR)/coverage.html$(NC)"
+
+## coverage-check: Check an existing profile against scripts/coverage-gates.txt (PROFILE=path, no test run)
+coverage-check:
+	bash scripts/check_coverage.sh $(or $(PROFILE),$(COVERAGE_DIR)/coverage.out)
 
 ## coverage-view: View coverage in browser
 coverage-view: coverage

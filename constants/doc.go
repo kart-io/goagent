@@ -1,5 +1,11 @@
-// Package constants 集中维护跨模块使用的协议值、字段和默认参数。
-// 本包是叶子层，只依赖标准库，不导入任何框架实现包。
-// 错误码、分类、提示及错误上下文字段由 errors 包维护。
-// 领域内部枚举及持久格式版本由其所属包维护。
+// Package constants holds the protocol values, field names and default
+// parameters shared across goagent packages. It is a leaf package that imports
+// only the standard library.
+//
+// Error codes, categories, messages and error context fields live in the
+// errors package. Domain-internal enums and persisted format versions live in
+// the packages that own them.
+//
+// Values documented as former defaults are no longer applied by the framework;
+// they are kept so callers can pass the old value explicitly.
 package constants

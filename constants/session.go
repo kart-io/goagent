@@ -1,23 +1,28 @@
 package constants
 
-// 会话日志事件类型；对应数据结构仍由 core/session 定义。
+// Session log event types; their payload types are defined in core/session.
 const (
-	// SessionEventTurnStart 开始一轮，数据为 TurnStart。
+	// SessionEventTurnStart starts a turn; payload TurnStart.
 	SessionEventTurnStart = "turn/start"
-	// SessionEventTurnEnd 结束一轮，数据为 TurnEnd；中止轮次的 Surface 撤销该轮全部事件。
+	// SessionEventTurnEnd ends a turn; payload TurnEnd. The Surface of an
+	// aborted turn reverts all of its events.
 	SessionEventTurnEnd = "turn/end"
-	// SessionEventSystemMessage 记录变化后的系统提示词，数据为 MessageData；只供导出。
+	// SessionEventSystemMessage records a changed system prompt; payload
+	// MessageData, export only.
 	SessionEventSystemMessage = "system/message"
-	// SessionEventToolDefinitions 记录变化后的工具定义，数据为 ToolsData；只供导出。
+	// SessionEventToolDefinitions records changed tool definitions; payload
+	// ToolsData, export only.
 	SessionEventToolDefinitions = "tool/definitions"
-	// 消息事件的数据为 MessageData；工具结果另带工具元数据。
+	// Message events carry MessageData; tool results also carry tool metadata.
 	SessionEventUserMessage      = "user/message"
 	SessionEventAssistantMessage = "assistant/message"
 	SessionEventToolResult       = "tool/result"
-	// SessionEventHistoryRewrite 的 RewriteData 替换 Surface 指定区间中的消息。
+	// SessionEventHistoryRewrite replaces the messages in the Surface range with
+	// its RewriteData.
 	SessionEventHistoryRewrite = "history/rewrite"
-	// SessionEventRewind 撤销 Surface 指定区间中的全部事件。
+	// SessionEventRewind reverts every event in the Surface range.
 	SessionEventRewind = "session/rewind"
-	// SessionEventBoundarySnapshot 的 BoundaryData 保存一次 durable 操作快照。
+	// SessionEventBoundarySnapshot stores a durable operation snapshot in its
+	// BoundaryData.
 	SessionEventBoundarySnapshot = "boundary/snapshot"
 )

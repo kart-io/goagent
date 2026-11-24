@@ -2,12 +2,16 @@ package constants
 
 import "time"
 
-// 时间默认值区分整数秒与 Duration，避免旧接口发生隐式单位转换。
+// Timeouts. Integer-second and time.Duration values are named separately so
+// older APIs never convert units implicitly.
 const (
-	// DefaultLLMTimeoutSeconds 是 llm 客户端的旧默认超时，不再自动套用（0 = 不限）。
+	// DefaultLLMTimeoutSeconds is the former llm client timeout. It is no longer
+	// applied; 0 means no timeout.
 	DefaultLLMTimeoutSeconds = 60
 	DefaultToolTimeout       = DefaultToolTimeoutSeconds * time.Second
-	// DefaultAgentExecutionTimeout 与 DefaultAgentMaxIterations 不再由 builder 自动套用（0 = 不限），只供预设与需要旧取值的调用方显式传入。
+	// DefaultAgentExecutionTimeout and DefaultAgentMaxIterations are no longer
+	// applied by builder (0 means unlimited); presets and callers that want the
+	// old values pass them explicitly.
 	DefaultAgentExecutionTimeout = 5 * time.Minute
 	DefaultSessionCleanupTimeout = 5 * time.Second
 	// DefaultUsageHookTimeout bounds one budget usage statistics query plus
@@ -15,12 +19,14 @@ const (
 	DefaultUsageHookTimeout = 5 * time.Second
 )
 
-// 不同调用层的默认策略独立命名，不因当前数值相同而合并。
+// Per-layer defaults. Each layer has its own name even when values coincide.
 const (
-	// DefaultClientMaxTokens 不再作为客户端默认值发送（0 = 不发送 max_tokens），只作为 Anthropic 必填 max_tokens 的默认值。
+	// DefaultClientMaxTokens is no longer sent by default (0 omits max_tokens);
+	// it is only the default for Anthropic's required max_tokens.
 	DefaultClientMaxTokens    = 2000
 	DefaultAgentMaxIterations = 10
-	// DefaultDispatcherConcurrency 不再由 Dispatcher 自动套用（0 = 不限），只供需要旧取值的调用方显式传入。
+	// DefaultDispatcherConcurrency is no longer applied by Dispatcher (0 means
+	// unlimited); callers that want the old value pass it explicitly.
 	DefaultDispatcherConcurrency = 4
 	DefaultDispatcherAttempts    = 3
 )

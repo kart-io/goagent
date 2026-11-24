@@ -125,7 +125,8 @@ func forbidden(file, path string) bool {
 		// errors 只可能依赖常量叶子层，utils 依赖它不会成环。
 		return dest != "utils" && dep != "errors" && dest != "codec" && dep != "constants"
 	case "cache":
-		return dest != "cache" && dest != "codec" && dep != "constants" && dep != "errors"
+		// interfaces 根包只依赖 constants，cache 的契约以别名指向它不会成环。
+		return dest != "cache" && dest != "codec" && dep != "constants" && dep != "errors" && dep != "interfaces"
 	case "core":
 		return dest == "tools" || dest == "middleware" || dest == "parsers" || dest == "builder" || dest == "skills" || dest == "revision"
 	case "builder", "parsers":

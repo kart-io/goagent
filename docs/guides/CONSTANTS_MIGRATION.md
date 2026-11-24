@@ -50,7 +50,7 @@ custom := shared.Provider("offline-demo")
 
 ## 错误与协议字段
 
-错误码、分类、错误提示、错误上下文字段和哨兵使用 `errors` 包，详见[错误处理迁移指南](ERROR_HANDLING_MIGRATION.md)。`FieldStatus`、`StatusFailed`、`MethodGet` 等字段名、状态值和 HTTP 协议值，继续在 `constants` 中。
+错误码、分类、错误提示、错误上下文字段和哨兵使用 `errors` 包，详见[错误处理迁移指南](ERROR_HANDLING_MIGRATION.md)。`FieldStatus`、`MethodGet` 等字段名和 HTTP 协议值，继续在 `constants` 中。
 
 ## 领域共享入口补齐
 

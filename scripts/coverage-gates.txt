@@ -1,0 +1,47 @@
+# 覆盖率门槛：<目标> <最低百分比>，由 scripts/coveragecheck 解释。
+# 目标：「*」为整体（不含 examples）；以 .go 结尾为单文件；其余为精确包路径，不含子包。
+# 百分比写「-」表示目标没有可执行语句（如只含常量的包），一旦出现语句即失败。
+# scripts/stable-packages.txt 中每个包都必须在此有条目，否则门禁失败。
+# 初值 = 实测最低值 − max(2pp, 4 条语句对应的百分比)，向下取整（2026-11-24 实测）。
+# 覆盖率提升后可上调（棘轮）；下调须在 PR 说明理由。
+
+*                        80
+
+# 稳定包
+builder                  89
+builder/contextpolicy    77
+constants                -    # 只有常量声明
+core                     84
+core/budget              87
+core/durable             82
+core/durable/migrate     85
+core/logging             65
+core/middleware          89
+core/observe             94
+core/session             83
+core/state               89
+core/usage               74
+errors                   83
+execution                89
+interfaces               0    # 实测 0%：store.go/token.go 的方法无测试，补测后上调
+llm                      64   # 三次运行在 66.1%~67.4% 间抖动
+llm/common               83
+llm/providers            88
+mcp/remote               78
+tools                    86
+tools/middleware         92
+tools/policy             87
+tools/spill              79
+tools/toolargs           86
+workflow                 84
+
+# 实验性包中既有的关键门槛（沿用原值）
+multiagent               85
+management               75
+management/adapters      75
+management/httpapi       80
+
+# 既有单文件门槛
+llm/providers/openai.go  70
+llm/providers/gemini.go  65
+llm/common/base.go       50

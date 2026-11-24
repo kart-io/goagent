@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,50 +16,138 @@ type failingWriter struct{ err error }
 
 func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
+func writeFile(t *testing.T, name, data string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestGatePropagatesReportWriteFailure(t *testing.T) {
 	want := errors.New("报告写入失败")
 	for _, blocks := range []map[string]block{{}, {"block": {file: "a.go", statements: 1, covered: true}}} {
-		if err := check(blocks, []gate{{"整体", "", 45}}, failingWriter{want}); !errors.Is(err, want) {
+		if err := check(blocks, []gate{{"*", 45}}, failingWriter{want}, io.Discard); !errors.Is(err, want) {
 			t.Fatalf("需要报告写入错误，实际: %v", err)
+		}
+		if err := check(blocks, []gate{{"*", 45}}, io.Discard, failingWriter{want}); !errors.Is(err, want) {
+			t.Fatalf("需要摘要写入错误，实际: %v", err)
 		}
 	}
 }
 
-// 每个关键包或文件必须有独立门禁，不能被其他包的高覆盖率掩盖。
-func TestRunEnforcesEveryCriticalCoverageGate(t *testing.T) {
-	files := []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "multiagent/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go", "management/a.go", "management/adapters/a.go", "management/httpapi/a.go"}
-	profile := filepath.Join(t.TempDir(), "coverage.out")
-	write := func(target, mode string) {
-		t.Helper()
-		var data strings.Builder
-		data.WriteString("mode: atomic\n")
-		for _, file := range files {
-			if file == target && mode == "missing" {
-				continue
-			}
-			count := "1"
-			if file == target && mode == "uncovered" {
-				count = "0"
-			}
-			data.WriteString(module + file + ":1.1,2.2 100 " + count + "\n")
-		}
-		if err := os.WriteFile(profile, []byte(data.String()), 0o600); err != nil {
-			t.Fatal(err)
-		}
+// 门槛来自数据文件；稳定包缺门槛、门槛文件非法、覆盖不足都必须失败。
+func TestRunGatesFromDataFile(t *testing.T) {
+	profile := "mode: atomic\n" +
+		module + "core/a.go:1.1,2.2 8 1\n" + module + "core/a.go:3.1,4.2 2 0\n" +
+		module + "core/sub/a.go:1.1,2.2 10 0\n" +
+		module + "llm/providers/openai.go:1.1,2.2 5 1\n" +
+		module + "examples/x/main.go:1.1,2.2 100 0\n"
+	cases := []struct {
+		name, gates, stable string
+		wantErr             string
+		wantOut             string
+		wantSummary         string
+	}{
+		{"通过", "* 40\ncore 80\nllm/providers/openai.go 100\n", "core\n", "", "覆盖率 core: 80.0% (8/10)", "| `core` | 80.0% | 80% | 通过 |"},
+		{"包门槛不含子包且低于门槛失败", "* 0\ncore 81\n", "core\n", "覆盖率检查失败", "失败", "| `core` | 80.0% | 81% | 失败 |"},
+		{"整体按语句加权且排除 examples", "* 52\n", "", "", "覆盖率 整体: 52.0% (13/25)", "| `整体` | 52.0% |"},
+		{"稳定包缺门槛", "* 0\n", "# 注释\ncore\ncore/sub\n", "稳定包缺少覆盖率门槛: core, core/sub", "", ""},
+		{"缺整体条目", "core 1\n", "", "缺少整体条目", "", ""},
+		{"百分比越界", "* 101\n", "", "百分比无效", "", ""},
+		{"条目字段数错误", "* 1 2\n", "", "门槛条目须为", "", ""},
+		{"重复声明", "* 1\ncore 1\ncore 2\n", "", "重复声明", "", ""},
+		{"门槛目标无数据", "* 0\ntools 1\n", "", "覆盖率检查失败", "(0/0)", ""},
+		{"无语句目标确无语句", "* 0\ntools -\n", "tools\n", "", "覆盖率 tools: 0 条语句，要求无可执行语句，通过", "| `tools` | — | 无语句 | 通过 |"},
+		{"无语句目标出现语句", "* 0\ncore -\n", "", "覆盖率检查失败", "覆盖率 core: 10 条语句，要求无可执行语句，失败", ""},
+		{"整体不能声明无语句", "* -\n", "", "百分比无效", "", ""},
 	}
-	write("", "")
-	if err := run(profile, &bytes.Buffer{}); err != nil {
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var out bytes.Buffer
+			summary := filepath.Join(t.TempDir(), "summary.md")
+			err := run(options{
+				profile: writeFile(t, "coverage.out", profile),
+				gates:   writeFile(t, "gates.txt", c.gates),
+				stable:  writeFile(t, "stable.txt", c.stable),
+				summary: summary,
+			}, &out)
+			if c.wantErr == "" && err != nil || c.wantErr != "" && (err == nil || !strings.Contains(err.Error(), c.wantErr)) {
+				t.Fatalf("错误 = %v，期望包含 %q", err, c.wantErr)
+			}
+			if !strings.Contains(out.String(), c.wantOut) {
+				t.Fatalf("报告缺少 %q:\n%s", c.wantOut, out.String())
+			}
+			if c.wantSummary != "" {
+				data, err := os.ReadFile(summary)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(data), c.wantSummary) {
+					t.Fatalf("摘要缺少 %q:\n%s", c.wantSummary, data)
+				}
+			}
+		})
+	}
+}
+
+// 仓库门槛文件必须覆盖全部稳定包；每条门槛都要独立生效，不能被其他目标的高覆盖率掩盖。
+func TestRepositoryGatesAreEnforcedIndependently(t *testing.T) {
+	const gatesFile, stableFile = "../coverage-gates.txt", "../stable-packages.txt"
+	gates, err := loadGates(gatesFile)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range files {
-		for _, mode := range []string{"missing", "uncovered"} {
-			t.Run(file+"/"+mode, func(t *testing.T) {
-				write(file, mode)
-				if run(profile, &bytes.Buffer{}) == nil {
-					t.Fatalf("整体覆盖率通过时仍须拒绝关键数据 %s: %s", mode, file)
-				}
-			})
+	if err := requireStable(gates, stableFile); err != nil {
+		t.Fatal(err)
+	}
+	fileOf := func(target string) string {
+		if strings.HasSuffix(target, ".go") {
+			return target
 		}
+		return target + "/gate_probe.go"
+	}
+	// 被测目标 100 条语句、覆盖 covered 条；其余目标各 10000 条全覆盖。
+	// 测包门槛时，包内单文件探针按同一比例覆盖；测单文件门槛时，所在包由大权重探针托住。
+	profileFor := func(target string, covered int) string {
+		var data strings.Builder
+		data.WriteString("mode: atomic\n")
+		for _, g := range gates {
+			if g.target == "*" || g.minimum == noCode {
+				continue
+			}
+			file := fileOf(g.target)
+			if g.target == target || path.Dir(file) == target {
+				fmt.Fprintf(&data, "%s%s:1.1,2.2 %d 1\n%s%s:3.1,4.2 %d 0\n", module, file, covered, module, file, 100-covered)
+			} else {
+				fmt.Fprintf(&data, "%s%s:1.1,2.2 10000 1\n", module, file)
+			}
+		}
+		return data.String()
+	}
+	runWith := func(profile string) error {
+		return run(options{profile: writeFile(t, "coverage.out", profile), gates: gatesFile, stable: stableFile}, io.Discard)
+	}
+	if err := runWith(profileFor("", 0)); err != nil {
+		t.Fatalf("全部覆盖时应通过: %v", err)
+	}
+	for _, g := range gates {
+		if g.target == "*" || g.minimum <= 0 {
+			continue
+		}
+		at := int(g.minimum)
+		if float64(at) < g.minimum {
+			at++
+		}
+		t.Run(g.target, func(t *testing.T) {
+			if err := runWith(profileFor(g.target, at)); err != nil {
+				t.Fatalf("覆盖 %d%% 应满足门槛 %g%%: %v", at, g.minimum, err)
+			}
+			if runWith(profileFor(g.target, at-1)) == nil {
+				t.Fatalf("覆盖 %d%% 低于门槛 %g%% 仍被放行", at-1, g.minimum)
+			}
+		})
 	}
 }
 
@@ -70,7 +160,7 @@ func TestWeightedCoverageAndExampleExclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := check(p, []gate{{"整体", "", 90}, {"持久化", "core/durable/", 90}}, &out); err != nil {
+	if err := check(p, []gate{{"*", 90}, {"core/durable", 90}}, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "90.0% (9/10)") {
@@ -83,9 +173,8 @@ func TestGateRejectsMissingAndUndercoveredModules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rule := range []gate{{"预算", "core/budget/", 75}, {"持久化", "core/durable/", 70}, {"相邻包", "core/durablex/", 70}} {
-		var out bytes.Buffer
-		if check(p, []gate{rule}, &out) == nil {
+	for _, rule := range []gate{{"core/budget", 75}, {"core/durable", 70}, {"core/durablex", 70}} {
+		if check(p, []gate{rule}, io.Discard, io.Discard) == nil {
 			t.Fatalf("门禁错误放行: %+v", rule)
 		}
 	}
@@ -101,44 +190,11 @@ func TestPackageGateDoesNotMixDescendants(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := check(p, []gate{{"持久化", "core/durable/", 90}}, &out); err != nil {
+	if err := check(p, []gate{{"core/durable", 90}}, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "90.0% (9/10)") {
 		t.Fatal(out.String())
-	}
-}
-
-func TestManagementCoverageBoundaries(t *testing.T) {
-	for _, target := range []gate{{"management", "management/", 75}, {"management/adapters", "management/adapters/", 75}, {"management/httpapi", "management/httpapi/", 80}} {
-		for _, covered := range []int{int(target.minimum) - 1, int(target.minimum)} {
-			t.Run(fmt.Sprintf("%s/%d", target.name, covered), func(t *testing.T) {
-				var data strings.Builder
-				data.WriteString("mode: atomic\n")
-				for _, rule := range gates {
-					if rule.path == "" {
-						continue
-					}
-					file := rule.path
-					if strings.HasSuffix(file, "/") {
-						file += "a.go"
-					}
-					if rule.path == target.path {
-						fmt.Fprintf(&data, "%s%s:1.1,2.2 %d 1\n%s%s:3.1,4.2 %d 0\n", module, file, covered, module, file, 100-covered)
-					} else {
-						fmt.Fprintf(&data, "%s%s:1.1,2.2 100 1\n", module, file)
-					}
-				}
-				profile := filepath.Join(t.TempDir(), "coverage.out")
-				if err := os.WriteFile(profile, []byte(data.String()), 0o600); err != nil {
-					t.Fatal(err)
-				}
-				err := run(profile, &bytes.Buffer{})
-				if (err != nil) != (covered < int(target.minimum)) {
-					t.Fatalf("门禁边界错误：%v", err)
-				}
-			})
-		}
 	}
 }
 
@@ -159,7 +215,7 @@ func TestDuplicateBlocksDoNotInflateStatementCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := check(p, []gate{{"整体", "", 50}}, &out); err != nil {
+	if err := check(p, []gate{{"*", 50}}, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "50.0% (4/8)") {
@@ -168,52 +224,5 @@ func TestDuplicateBlocksDoNotInflateStatementCounts(t *testing.T) {
 	_, err = parseProfile(strings.NewReader("mode: count\ngithub.com/kart-io/goagent/a.go:1.1,2.2 4 1\ngithub.com/kart-io/goagent/a.go:1.1,2.2 5 1\n"))
 	if err == nil {
 		t.Fatal("冲突的语句数必须失败")
-	}
-}
-
-func TestRunEnforcesOverall75PercentBoundary(t *testing.T) {
-	files := []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "multiagent/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go", "management/a.go", "management/adapters/a.go", "management/httpapi/a.go"}
-	for _, covered := range []int{74, 75} {
-		t.Run(fmt.Sprint(covered), func(t *testing.T) {
-			var profile strings.Builder
-			profile.WriteString("mode: atomic\n")
-			for _, file := range files {
-				fmt.Fprintf(&profile, "%s%s:1.1,2.2 1 1\n", module, file)
-			}
-			fmt.Fprintf(&profile, "%sapplication.go:1.1,2.2 %d 1\n", module, covered-len(files))
-			fmt.Fprintf(&profile, "%sapplication.go:3.1,4.2 %d 0\n", module, 100-covered)
-			path := filepath.Join(t.TempDir(), "coverage.out")
-			if err := os.WriteFile(path, []byte(profile.String()), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			err := run(path, &bytes.Buffer{})
-			if (err != nil) != (covered < 75) {
-				t.Fatalf("整体 %d%% 的门禁结果错误: %v", covered, err)
-			}
-		})
-	}
-}
-
-func TestRunRequiresMultiagentCoverageIndependently(t *testing.T) {
-	for _, covered := range []int{-1, 84, 85} {
-		t.Run(fmt.Sprint(covered), func(t *testing.T) {
-			var profile strings.Builder
-			profile.WriteString("mode: atomic\n")
-			for _, file := range []string{"core/durable/a.go", "core/budget/a.go", "workflow/a.go", "builder/a.go", "llm/providers/openai.go", "llm/providers/gemini.go", "llm/common/base.go", "management/a.go", "management/adapters/a.go", "management/httpapi/a.go"} {
-				fmt.Fprintf(&profile, "%s%s:1.1,2.2 100 1\n", module, file)
-			}
-			if covered >= 0 {
-				fmt.Fprintf(&profile, "%smultiagent/a.go:1.1,2.2 %d 1\n", module, covered)
-				fmt.Fprintf(&profile, "%smultiagent/a.go:3.1,4.2 %d 0\n", module, 100-covered)
-			}
-			path := filepath.Join(t.TempDir(), "coverage.out")
-			if err := os.WriteFile(path, []byte(profile.String()), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			err := run(path, &bytes.Buffer{})
-			if (err != nil) != (covered < 85) {
-				t.Fatalf("其他模块高覆盖率不能掩盖 multiagent %d%%: %v", covered, err)
-			}
-		})
 	}
 }
