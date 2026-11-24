@@ -75,4 +75,4 @@ env -u GOROOT go test -race -count=1 -timeout=120s -coverprofile=/tmp/goagent-re
 编码前复核 management 版本发布/Worker、workflow RecoveryManifest、Harness Manifest/PinManifest、skills Catalog、codec/json 精确解析和 durable 文件存储模式。
 环境没有 desktop-commander、sequential-thinking、shrimp-task-manager、context7 或 GitHub 代码搜索工具；使用 rg、本地源码、Go 工具链、官方 kagent 文档及专业代理分工补足。设计与范围保存在 `.claude/context-summary-agent-revision.md`。
 
-产品 API、装配步骤和来源链接见 [AgentRevision 指南](../../guides/AGENT_REVISIONS.md)。
+产品 API、装配步骤和来源链接见 [AgentRevision 指南](../../guides/AGENT_REVISIONS_CN.md)。

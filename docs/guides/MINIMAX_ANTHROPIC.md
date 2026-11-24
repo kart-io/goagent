@@ -1,8 +1,10 @@
-# 使用 Anthropic 协议调用 MiniMax
+# Calling MiniMax over the Anthropic Protocol
 
-MiniMax 通过 `providers.NewAnthropicWithOptions` 接入，国内基地址为 `https://api.minimax.cn/anthropic`，实际请求路径为 `/anthropic/v1/messages`。模型显式选择 `MiniMax-M3.1-Flash`。端点、模型与认证配置参见 [MiniMax 官方说明](https://platform.minimax.cn/docs/api-reference/text-anthropic-api)。
+[English](MINIMAX_ANTHROPIC.md) | [中文](MINIMAX_ANTHROPIC_CN.md)
 
-以下函数可放入宿主服务，凭据从 `MINIMAX_CN_API_KEY` 读取；调用方也可以从自己的凭据管理组件取得 key，再传给 `llm.WithAPIKey`。
+MiniMax is integrated through `providers.NewAnthropicWithOptions`. The mainland China base URL is `https://api.minimax.cn/anthropic`, and the actual request path is `/anthropic/v1/messages`. The model is explicitly set to `MiniMax-M3.1-Flash`. For endpoint, model, and authentication configuration, see the [official MiniMax documentation](https://platform.minimax.cn/docs/api-reference/text-anthropic-api).
+
+The function below can be placed in a host service and reads the credential from `MINIMAX_CN_API_KEY`; the caller can also obtain the key from its own credential management component and pass it to `llm.WithAPIKey`.
 
 ```go
 package minimaxexample
@@ -34,23 +36,23 @@ func NewClient() (*providers.AnthropicProvider, error) {
 }
 ```
 
-返回的客户端实现 `llm.ToolStreamClient`，可交给 `builder.NewSimpleBuilder(client)` 使用。显式传入模型、基地址和 key 后，本机用于其他供应商的 `ANTHROPIC_*` 默认配置不会替换这些值。`Provider()` 标识仍是 `anthropic`，供应商和模型身份需结合实际端点、请求模型与响应模型判断。
+The returned client implements `llm.ToolStreamClient` and can be passed to `builder.NewSimpleBuilder(client)`. Once the model, base URL, and key are passed explicitly, local `ANTHROPIC_*` default settings used for other providers do not replace these values. The `Provider()` identifier is still `anthropic`; the provider and model identity should be determined from the actual endpoint, the requested model, and the response model.
 
-工具循环需要完整保留 assistant 消息的 `ProviderState`，其中包含原生 thinking、签名和 tool_use。Builder 会自动保留；手工续接时应把终态块的 `ToolCalls`、`ProviderState` 一并放入下一轮 assistant 消息，再追加对应工具结果。`MiniMax-M3.1-Flash` 的思考 Token 计入输出上限；不要发送 `thinking.type=disabled`。供应商的具体限制以官方说明为准。
+The tool loop must fully preserve the assistant message's `ProviderState`, which contains native thinking, signatures, and tool_use. The Builder preserves it automatically; when continuing manually, put the final block's `ToolCalls` and `ProviderState` together into the next assistant message, then append the corresponding tool results. Thinking tokens of `MiniMax-M3.1-Flash` count toward the output limit; do not send `thinking.type=disabled`. The official documentation is authoritative for the provider's specific limits.
 
-若工具结果本身就是完整答案，可显式使用 `WithReturnDirectTools`。完整 JSON 直返与要求模型只输出回执是不同契约，调用方应按业务需求选择。
+If a tool result is itself the complete answer, use `WithReturnDirectTools` explicitly. Returning complete JSON directly and requiring the model to output only a receipt are different contracts; callers should choose according to business needs.
 
 
-## 精确参数与回执验收
+## Exact Arguments and Receipt Acceptance
 
-精确标识和小数应声明为 `type: "string"`，宿主按可信业务参考值逐字段验证；仅在解码端保留 `json.Number` 无法找回上游已截短的位数。
+Exact identifiers and decimals should be declared as `type: "string"`, and the host validates them field by field against trusted business reference values; keeping `json.Number` only on the decoding side cannot recover digits already truncated upstream.
 
-需要模型按指定格式回答时，复用 `WithTurnStopping` 检查最终文本，最多纠正一次，仍错误就返回失败。评测参考实现为 [`agentbench.ToolContract`](../../evaluation/agentbench/tool_contract.go)，完整装配与重放见[回归测试](../../evaluation/agentbench/tool_contract_test.go)。`CheckArguments` 应接入 Dispatcher 授权和工具执行两处；`CheckAnswer` 应在返回权威终态前再次调用。该验收器针对本组合成字段，实际业务应替换为自己的 Schema、可信数据和权限规则。
+When the model must answer in a specified format, reuse `WithTurnStopping` to check the final text, correct it at most once, and return a failure if it is still wrong. The evaluation reference implementation is [`agentbench.ToolContract`](../../evaluation/agentbench/tool_contract.go); see the [regression test](../../evaluation/agentbench/tool_contract_test.go) for complete assembly and replay. `CheckArguments` should be wired into both Dispatcher authorization and tool execution; `CheckAnswer` should be called again before returning the authoritative final state. This acceptance checker targets this set of synthetic fields; real business should replace it with its own schema, trusted data, and permission rules.
 
-可采用 `WithMaxIterations(5)` 为停止钩子预留步骤，同时通过根预算限制 `MaxModelRequests: 3`、`MaxToolCalls: 1`，再设置请求超时。第二次错误格式应终止，不提取 JSON 字段充当模型回答成功；中间流文本仍可能已经输出。改变验收规则时，更新持久化 scope 和预算版本，避免直接复用旧策略终态。
+You can use `WithMaxIterations(5)` to reserve steps for the stop hook, while limiting the root budget with `MaxModelRequests: 3` and `MaxToolCalls: 1`, and then set a request timeout. A second malformed answer should terminate the run; do not extract JSON fields to stand in for a successful model answer; intermediate streamed text may already have been output. When changing acceptance rules, update the durable scope and budget version to avoid reusing final states from the old policy directly.
 
-## 有界定期回归
+## Bounded Periodic Regression
 
-设置专用 `MINIMAX_CN_API_KEY` 后运行 `bash scripts/provider_live.sh minimax`。该入口固定使用国内 Anthropic 地址，默认模型为 `MiniMax-M3.1-Flash`，可通过 `MINIMAX_MODEL` 覆盖。最多三个模型请求、一次合成工具效果；检查精确字符串参数、最多一次回执纠正，以及重建后的零请求、零效果重放。网络错误不重试，任何验收失败返回非零退出码，临时检查点自动删除，不生成报告文件。
+After setting a dedicated `MINIMAX_CN_API_KEY`, run `bash scripts/provider_live.sh minimax`. This entry point always uses the mainland China Anthropic URL; the default model is `MiniMax-M3.1-Flash` and can be overridden with `MINIMAX_MODEL`. It makes at most three model requests and one synthetic tool effect; it checks exact string arguments, at most one receipt correction, and zero-request, zero-effect replay after rebuilding. Network errors are not retried, any acceptance failure returns a non-zero exit code, temporary checkpoints are deleted automatically, and no report file is generated.
 
-定期工作流沿用 `ENABLE_PROVIDER_LIVE` 显式开关及 `provider-live` 环境。启用前在该环境配置 `MINIMAX_CN_API_KEY` Secret，可选配置 `MINIMAX_MODEL` Variable；凭据不复用其他供应商的 `ANTHROPIC_*` 设置。
+The periodic workflow keeps the explicit `ENABLE_PROVIDER_LIVE` switch and the `provider-live` environment. Before enabling it, configure the `MINIMAX_CN_API_KEY` secret in that environment, and optionally the `MINIMAX_MODEL` variable; credentials do not reuse other providers' `ANTHROPIC_*` settings.

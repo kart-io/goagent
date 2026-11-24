@@ -1,6 +1,6 @@
 # Agent / 子 Agent 钩子与 Token 归属设计
 
-日期：2026-11-01。基线：`de6c61a`。状态：**核心功能已实施**；实现覆盖身份、观察钩子、字段证据与统一归属账本。接入见[指南](../guides/MULTI_AGENT_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
+日期：2026-11-01。基线：`de6c61a`。状态：**核心功能已实施**；实现覆盖身份、观察钩子、字段证据与统一归属账本。接入见[指南](../guides/MULTI_AGENT_USAGE_CN.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
 
 ## 1. 结论与方案
 

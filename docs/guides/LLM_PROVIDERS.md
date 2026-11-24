@@ -130,7 +130,7 @@ Classification relies on `*llm.ProviderError`, which every Provider constructs f
 
 ## Timeouts
 
-For the relationship between `llm.WithTimeout` and the request ctx, see [Provider Best Practices](PROVIDER_BEST_PRACTICES.md#超时配置). Control per-call deadlines with ctx:
+For the relationship between `llm.WithTimeout` and the request ctx, see [Provider Best Practices](PROVIDER_BEST_PRACTICES.md#timeout-configuration). Control per-call deadlines with ctx:
 
 ```go
 ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

@@ -12,6 +12,6 @@
 | T6 | 三Provider工具流契约 | 完整参数、finish reason、中断取消、未知usage、429分类 |
 | T7 | 扩展契约、治理与发布文档 | 全量race、导入检查、Harness跨仓验证与独立审阅 |
 
-执行入口见 [执行契约](../guides/EXECUTION_CONTRACT.md)，扩展行为见 [扩展契约](../guides/EXTENSION_CONTRACT.md)，运维接入见 [治理指南](../guides/EXECUTION_GOVERNANCE.md)。
+执行入口见 [执行契约](../guides/EXECUTION_CONTRACT.md)，扩展行为见 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)，运维接入见 [治理指南](../guides/EXECUTION_GOVERNANCE.md)。
 
 不新增分布式调度器、默认Token估算或模型价格表；真实业务成功率和生产负载仍由宿主数据验证。

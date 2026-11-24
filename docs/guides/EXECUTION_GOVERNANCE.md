@@ -72,4 +72,4 @@ Version migration must be performed explicitly by the host; diagnosis itself doe
 
 ## Upgrade Compatibility Check
 
-A durable graph can declare StateVersion/Components, export a Manifest, and call CheckCompatibility for specific runs. This check reuses the read-only Diagnose and does not execute, lock, write, or migrate tasks; Compatible does not prove that effects can be safely re-run. See [version manifest and drain procedure](EXECUTION_ACCEPTANCE.md#恢复清单和升级前检查).
+A durable graph can declare StateVersion/Components, export a Manifest, and call CheckCompatibility for specific runs. This check reuses the read-only Diagnose and does not execute, lock, write, or migrate tasks; Compatible does not prove that effects can be safely re-run. See [version manifest and drain procedure](EXECUTION_ACCEPTANCE.md#recovery-manifest-and-pre-upgrade-checks).

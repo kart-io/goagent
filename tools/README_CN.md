@@ -31,7 +31,7 @@ type Tool interface {
 | `tools/skill` | `skill.New(catalog)`：把只读的 `skills.Catalog` 适配为 `load_skill` 工具 |
 | `tools/toolargs` | 解析模型给出的工具参数，float64 表示不了的数字保留为 `json.Number`，并按 Schema 校验 |
 
-编码 Agent 的工作区工具在独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION.md)。
+编码 Agent 的工作区工具在独立模块 `github.com/kart-io/goagent-harness/tools/coding`，见 [迁移指南](../docs/guides/HARNESS_MIGRATION_CN.md)。
 
 ## 创建工具
 
@@ -121,7 +121,7 @@ out, err := d.Invoke(ctx, tools.ToolRequest{Name: "calculator", Input: &interfac
 - `Pipeline` 依次执行 `Pre`（`PreHook` 裁决 `PreAllow`、`PreDeny`、`PreAsk`、`PreStop` 或 `PreSubstitute`）→ `Approver` 审批 → `Guards` → `Around`（计入超时）→ 工具 → `Post`（替换结果或追加上下文）。准入阶段（Pre、审批、Guard）在操作日志之外，不计入 `Timeout`。会话级批准用 `tools.WithSessionID(ctx, id)` 区分会话，`Grants`/`RevokeGrants`/`PruneGrants` 管理已授予的批准。
 - 工具可实现 `DispatchTimeoutProvider`（自定义超时）、`DurablePolicyProvider`（持久运行中的操作策略）、`DurableIntentVersioner` 等可选接口。
 
-扩展点的错误与恢复语义见 [扩展契约](../docs/guides/EXTENSION_CONTRACT.md)。
+扩展点的错误与恢复语义见 [扩展契约](../docs/guides/EXTENSION_CONTRACT_CN.md)。
 
 ## 其他组件
 

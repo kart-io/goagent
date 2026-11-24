@@ -55,7 +55,7 @@ go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,m
 
 ## 受治理工具流
 
-需要显式授权和有限根预算、准入与排队时，使用 `execution.NewGovernedBuilder`，并以同一个Scope.Bind执行；工具通过WithDispatcher统一提供，禁止混入WithTools。它返回常规Builder和静态治理报告，不建立新运行引擎或接管资源。见[完整指南](EXECUTION_ACCEPTANCE.md#标准治理装配)与[离线示例](../../examples/execution-governed/main.go)。
+需要显式授权和有限根预算、准入与排队时，使用 `execution.NewGovernedBuilder`，并以同一个Scope.Bind执行；工具通过WithDispatcher统一提供，禁止混入WithTools。它返回常规Builder和静态治理报告，不建立新运行引擎或接管资源。见[完整指南](EXECUTION_ACCEPTANCE_CN.md#标准治理装配)与[离线示例](../../examples/execution-governed/main.go)。
 
 ## 日志
 

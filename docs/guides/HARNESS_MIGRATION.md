@@ -1,33 +1,35 @@
-# Harness 独立项目迁移
+# Migrating to the Standalone Harness Project
 
-GoAgent 专注执行机制：Runnable、Builder 原生循环、Graph、durable、budget、observe、Dispatcher/Pipeline、Handle 与循环钩子。
-独立项目 GoAgent Harness 专注可配置的 Agent 装配：Preset、计划模式、压缩、技能、子 Agent 组件、Claude Code 命令钩子与编码工具。
+[English](HARNESS_MIGRATION.md) | [中文](HARNESS_MIGRATION_CN.md)
 
-Skills 的通用加载现由主仓顶层 `skills` 和可选 `tools/skill` 提供；Harness 负责技能配置、授权、
-提示词与 Manifest 装配。普通业务无需引入 Harness 即可使用[技能目录与资源读取](SKILLS.md)。
+GoAgent focuses on execution mechanisms: Runnable, the Builder's native loop, Graph, durable, budget, observe, Dispatcher/Pipeline, Handle, and loop hooks.
+The standalone GoAgent Harness project focuses on configurable Agent assembly: Presets, plan mode, compaction, skills, sub-Agent components, Claude Code command hooks, and coding tools.
 
-## 路径对照
+Generic loading of Skills is now provided by the top-level `skills` package and the optional `tools/skill` in the main repository; Harness is responsible for skill configuration, authorization,
+prompts, and Manifest assembly. Ordinary applications can use the [skill catalog and resource reading](SKILLS.md) without bringing in Harness.
 
-| 原 GoAgent 路径 | 新项目路径 |
+## Path Mapping
+
+| Original GoAgent path | New project path |
 |---|---|
 | `github.com/kart-io/goagent/harness/preset` | `github.com/kart-io/goagent-harness/preset` |
 | `github.com/kart-io/goagent/tools/coding` | `github.com/kart-io/goagent-harness/tools/coding` |
 | `examples/tools/09-coding-agent` | `goagent-harness/examples/coding-agent` |
 | `examples/tools/10-plan-agent` | `goagent-harness/examples/plan-agent` |
 
-新项目是独立仓库 [kart-io/goagent-harness](https://github.com/kart-io/goagent-harness)，具有独立 Go module、许可证、文档、测试与提交历史；原始实现来源记录在其 NOTICE 中。
-GoAgent 自 v0.27.0 起不再包含上表的包。迁移只改 import，原有配置文件路径、格式与装配 API 不变；不保留旧包的兼容转发。
-仅使用 Builder 或工作流的业务无需引入新项目。
+The new project is a standalone repository, [kart-io/goagent-harness](https://github.com/kart-io/goagent-harness), with its own Go module, license, documentation, tests, and commit history; the origin of the original implementation is recorded in its NOTICE.
+Since v0.27.0, GoAgent no longer contains the packages in the table above. Migration only changes imports; the original config file paths, formats, and assembly APIs are unchanged; no compatibility forwarding is kept for the old packages.
+Applications that only use the Builder or workflows do not need to bring in the new project.
 
-## 保留在核心
+## Kept in the Core
 
-`harness/env` 保留环境能力接口、LocalFS 与 Executor 等实现；`tools/policy`、`tools/spill` 继续服务任何工具。
-新项目直接消费这些公开接口，不复制模型循环、预算或日志。`scripts/apicheck` 禁止核心生产代码及示例反向导入新模块。
+`harness/env` keeps the environment capability interfaces and implementations such as LocalFS and Executor; `tools/policy` and `tools/spill` continue to serve any tool.
+The new project consumes these public interfaces directly and does not copy the model loop, budget, or logs. `scripts/apicheck` forbids core production code and examples from importing the new module in reverse.
 
-## 本地验证
+## Local Verification
 
-Skills 公共包自 GoAgent v0.52.0 发布；联调尚未发布的核心改动时，使用临时 workspace 验证两个 checkout。
-从 GoAgent 根目录运行：
+The Skills public packages were released in GoAgent v0.52.0; when integrating unreleased core changes, verify both checkouts with a temporary workspace.
+Run from the GoAgent root directory:
 
 ```bash
 (
@@ -42,19 +44,19 @@ env -u GOROOT GOWORK="$workspace_dir/go.work" go -C "$harness_dir" build ./...
 )
 ```
 
-发布时更新 Harness 的 GoAgent 版本依赖后，再运行包含独立模块门禁的脚本：
+When releasing, after updating Harness's GoAgent version dependency, run the script that includes the standalone module gates:
 
 ```bash
-# 在 goagent-harness 克隆目录运行，参数为本仓库路径（默认 ../goagent）。
+# Run in the goagent-harness clone; the argument is the path to this repository (default ../goagent).
 ./scripts/verify-goagent.sh ../goagent
 ```
 
-脚本先以 `GOWORK=off` 验证已发布依赖，再临时创建 workspace 测试本地两个模块，不写入本地 replace 或修改现有 go.work。
-新项目的 `integration` 测试通过公开 API 验证 Preset 装配、工具审批、持久图等待、重建宿主后的批准续跑和完成后回放；迁出的原有测试覆盖技能、子 Agent、计划模式、压缩与交互。
+The script first verifies the released dependency with `GOWORK=off`, then temporarily creates a workspace to test the two local modules, without writing a local replace or modifying an existing go.work.
+The new project's `integration` tests verify, through public APIs, Preset assembly, tool approval, durable graph waiting, approval resume after rebuilding the host, and replay after completion; the migrated original tests cover skills, sub-Agents, plan mode, compaction, and interaction.
 
-## 版本
+## Versions
 
-GoAgent Harness 的版本依赖以其 `go.mod` 为准；本地 workspace 不会将新公共包的依赖传递给下游。
-独立发布前必须选择包含 `skills`、`tools/skill` 的可获取 GoAgent 版本并通过 `GOWORK=off` 检查。
+GoAgent Harness's version dependency is defined by its `go.mod`; a local workspace does not pass new public package dependencies on to downstream.
+Before an independent release, you must select a fetchable GoAgent version that contains `skills` and `tools/skill`, and pass the `GOWORK=off` check.
 
-新项目中的历史设计文档保留来源；本仓库的 Harness 历史设计不再代表上层组件的维护位置。
+Historical design documents in the new project keep their origin; the Harness historical designs in this repository no longer represent where the upper-layer components are maintained.

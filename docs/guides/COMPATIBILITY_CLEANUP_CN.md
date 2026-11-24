@@ -1,0 +1,129 @@
+# 旧入口与无效配置迁移
+
+[English](COMPATIBILITY_CLEANUP.md) | [中文](COMPATIBILITY_CLEANUP_CN.md)
+
+本轮删除兼容名称、旧流协议、工具中间件旧钩子及没有执行路径的配置，不保留转发别名。调用方须迁移到实际执行的接口；编译失败或严格配置解码失败用于暴露仍未迁移的调用。
+
+## 工具调用与流式执行
+
+`tools.ToolCall` 已删除，工具调用经 Dispatcher 的 `tools.ToolRequest`。`llm.ToolCall`、`builder.ToolCall` 和 `interfaces.ToolCall` 是不同业务对象，不在本次删除范围。
+
+`core/streaming_alias.go` 的类型、常量、工厂变量以及 `core/execution` 的旧 `StreamingAgent/StreamOutput/LegacyStreamChunk` 体系已删除。流式执行使用 `core.Runnable[I,O].Stream` 或 `core.StreamRunnable[I,O]`，消费 `core.StreamChunk[O]` 的 `Data/Error/Done/Event`。调用方应区分一次调用完成和业务流程完成；不能把通道关闭简单当作已持久提交或业务成功。参见[流式执行说明](GROUNDED_RAG_AND_STREAMING_CN.md)。
+
+这不是把 `StreamOutput.Next()` 换成一个同名包装器；旧流实现须接入现行泛型执行源，不再公开两套数据块和工厂入口。
+
+## 强类型工具中间件
+
+装配入口固定为：
+
+```go
+func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.Tool // 包 tools/middleware
+```
+
+列表中的第一个函数处于最外层。`ToolMiddleware/BaseToolMiddleware/Chain` 旧生命周期已删除；日志、缓存、限流统一通过函数包装调用器：
+
+```go
+wrapped := middleware.Wrap(tool,
+    middleware.Logging(),
+    middleware.Caching(),
+    middleware.RateLimit(middleware.WithQPS(10)),
+)
+```
+
+要保留状态对象并读取其能力时，显式传入该对象的 `Wrap` 方法：
+
+```go
+logging := middleware.NewLoggingMiddleware()
+wrapped := middleware.Wrap(tool, logging.Wrap)
+```
+
+不能再把任意对象直接传给 `middleware.Wrap`，也不能靠运行时类型判断接回旧钩子。空中间件函数或返回空调用器的装配以配置错误失败。日志计时属于每次调用，不写入调用方 `ToolInput.Args`；底层返回的部分结果和错误一起保留。工具包装不因此自动获得底层可选持久能力，具体边界见[工具中间件指南](TOOL_MIDDLEWARE_CN.md)。
+
+## Runtime 与重试
+
+删除 `execution.RuntimeConfig`、`DefaultRuntimeConfig`、`RuntimeMetrics`、`NewRuntimeMetrics` 及 `RuntimeManager.Metrics()`。此前的自动保存、保存间隔、大小限制和指标开关没有执行路径，不能迁为同名隐藏默认行为。保存须由宿主明确执行；观测使用实际的 `execution.Scope`、Observer/Tracer 和模型 UsageHook。`core/execution` 包随后整体删除，见[持久化、人工介入与 Runtime](#持久化人工介入与-runtime)。
+
+`core.RunnableConfig.RetryPolicy`、`core.RetryPolicy`、`core.BackoffPolicy` 已删除。模型暂时错误使用 `AgentBuilder.WithRequestError` 与 `builder.RetryTransient`，每次请求独立预留预算，已输出的响应不自动重发；参见[Builder 参考](BUILDER_API_REFERENCE_CN.md)。工具调用不做隐式重试，恢复次数由 `tools.DispatchConfig.MaxAttempts` 与持久操作策略控制。
+
+## 对话记忆
+
+`AgentBuilder.WithMemory`、`WithMaxConversationHistory`、`WithMemoryFailurePolicy` 及 `MemoryFailurePolicy`、`AgentConfig.MaxConversationHistory`/`MemoryFailurePolicy` 已删除。多轮历史只来自会话日志：
+
+```go
+// 旧
+b.WithMemory(memory.NewInMemoryManager(memory.DefaultConfig())).WithSessionID(id).WithMaxConversationHistory(20)
+// 新
+sessions := session.NewMemoryStore() // 或 session.NewFileStore(dir)
+compaction, err := contextpolicy.NewCompaction(contextpolicy.CompactionConfig{MaxTokens: 100000, Model: summaryClient})
+b.WithSessionLog(sessions).WithSessionID(id).WithCompaction(compaction)
+```
+
+不再按轮数截断：历史长度由 Compaction 按估算 token 控制，旧内容压缩成摘要，原文可经 `contextpolicy.NewRecallTool(sessions)` 取回。会话日志写入失败即本轮失败，没有"尽力而为"模式。旧 `MemoryManager` 中已保存的对话不会自动迁入会话日志；需要保留时由宿主读出后以 `session.Recorder.Sync` 写入。goagent-harness 的 `compaction` 组件是其自带实现，配置不变。
+
+`interfaces.MemoryManager`、`Conversation`、`Case` 与 `memory` 包原有实现（`InMemoryManager`、`HierarchicalMemory` 及其短期/长期层、`InMemoryVectorStore`、`ChromaVectorStore` 等）已删除，由长期记忆替代：
+
+```go
+// 旧
+mgr.AddCase(ctx, &interfaces.Case{Title: t, Problem: p, Solution: s})
+cases, _ := mgr.SearchSimilarCases(ctx, query, 5)
+// 新
+mem, err := memory.New(memory.Config{Durable: fs, Index: memory.NewMemoryIndex(), Embedder: embedClient})
+ctx = memory.WithNamespace(ctx, tenantID, userID)
+_, err = mem.Remember(ctx, memory.Record{Kind: memory.KindSkill, Content: p + "：" + s, Importance: 0.7})
+found, err := mem.Recall(ctx, memory.Query{Text: query, K: 5})
+```
+
+没有命名空间时所有读写返回错误，不再存在所有调用方共享的空间。`MemoryManager.Store/Retrieve` 的键值数据改用 `store.Store`。旧数据不会自动迁移。
+
+## 通用缓存
+
+`cache.InMemoryCache/LRUCache/MultiTierCache`、三个对应构造器及专属 `CacheEntry` 已删除。仅需要 TTL 时使用 `cache.NewSimpleCache`；禁用缓存使用 `cache.NewNoOpCache`。SimpleCache 没有容量、LRU 或多级回填契约，不能宣称构造器替换保留了这些能力。
+
+`cache.CacheConfig` 仅保留实际生效的 `Enabled/DefaultTTL`，删除 `Type/MaxSize/CleanupInterval`。配置文件删除 `type/max_size/cleanup_interval`，严格解码会拒绝这些旧键。需要容量或多级语义的宿主须显式注入实现相应契约的 `cache.Cache`，见[缓存指南](CACHING_GUIDE_CN.md)。
+
+## 检查点切回
+
+`DistributedCheckpointerConfig.FailbackDelay` 和生产无调用的私有 `tryFailback` 已删除。配置文件删除 `failback_delay`。故障切到副库后仍由宿主协调写入、核对全部数据及删除结果后重建实例；主库重新健康不会触发自动切回。此改动不增加跨进程 fencing、CAS 或零 RPO 能力。`core/checkpoint` 包随后整体删除，见下节。
+
+## 工作流续跑与历史账本
+
+子图审批统一使用 `workflow.WithResume(ctx, operationKey, workflow.ResumeRequest{Key: approvalKey, Input: input})`，不再把裸审批字符串识别为有效请求。`operationKey` 与请求内的 `Key` 标识不同边界，不能互换。没有载荷的审批仍可使用 nil `Input`；显式 JSON `null` 仍是一个提供过的载荷。实际宿主授权和审批校验保持必需。
+
+`durable.WithResume` 继续用于普通持久操作及叶子中断的原始输入；这个能力不等同于子图审批的旧裸键协议，不能一并删除。
+
+在线持久操作只读取现行 operation-v2。旧 operation-v1 记录须经独立的 `core/durable/migrate` 组件显式转换；在线执行不再自动兼容旧版本，也不会因为拒绝旧版本而重新执行业务。
+
+迁移操作必须停止相关写入并保留备份；使用 `OperationRef{Key,ID}` 明确列出目标，在相同 Store/作用域上先用默认干跑的 `migrate.OperationsV1` 获取报告，校验通过后再传 `OperationOptions{Apply:true}`。组件按存储 ID 排序持锁，全部读取校验完成后通过一次 `Store.SaveAll` 原子转换。转换只改变快照版本，原 Data 字节、身份、输入指纹、结果及次数不变，不调用业务函数。混合的有效 v2 记录不改写，重复应用安全；提交结果未知时重新干跑核对。Store 必须满足 Lock 和 SaveAll 契约。
+
+不要通过删除旧账本来解决版本拒绝；账本记录着已发生的外部效果，清空后重新运行可能重复这些效果。迁移的实际接口、错误边界及可执行示例见迁移包文档；不得让迁移工具和在线执行同时处理同一组运行。
+
+## 持久化、人工介入与 Runtime
+
+以下包与接口已删除，状态持久化、人工介入与恢复统一使用 `core/durable` + `core/session`：
+
+| 已删除 | 迁移方式 |
+|---|---|
+| `core/checkpoint` 整包（`Checkpointer`、`NewInMemorySaver`、`DistributedCheckpointer` 等）；Builder 的 `WithCheckpointer`、`WithAutoSaveEnabled`、`AgentConfig.EnableAutoSave`；`errors.NewStateCheckpointError` | `Shutdown` 不再保存状态。状态跨进程恢复用 `WithSessionLog(store).WithSessionState()`，状态类型须实现 `MarshalJSON`/`UnmarshalJSON`；会话历史用 `WithSessionLog(session.Store)`，崩溃恢复用 `core/durable` 与 `WithDurableScope`，图级暂停与恢复用 `workflow.CompileDurable` |
+| `core/execution` 整包（`Runtime`、`NewRuntime`、`RuntimeManager`、`ToolWithRuntime` 等）；`core/middleware.MiddlewareRequest.Runtime` | 中间件读取 `State` 与 `Metadata`；宿主装配用顶层 `execution.Scope`，见[宿主接入](HOST_INTEGRATION_CN.md) |
+| `core.InterruptManager`、`InterruptableExecutor`、`InterruptConfig` 等 | 持久图的 `ApprovalNodes` 或 `durable.AwaitInput`，见[人工介入](HUMAN_IN_THE_LOOP_CN.md)及 `examples/human-in-the-loop`、`examples/human-in-the-loop-interrupt` |
+| Builder 的 `WithStore` | 对话历史用 `WithSessionLog`，长期记忆用 `WithLongTermMemory`；其他键值数据由宿主直接持有 `store.Store` |
+| 泛型参数 `C` 与 `WithContext(C)`：`AgentBuilder[C, S]`、`ConfigurableAgent[C, S]` | 改为 `AgentBuilder[S]`、`ConfigurableAgent[S]`，如 `NewAgentBuilder[any, *core.AgentState]` → `NewAgentBuilder[*core.AgentState]`；应用数据经 `context.Context` 或 `WithMetadata` 传递 |
+| `interfaces` 的 `Lifecycle`、`LifecycleManager`、`HealthStatus` 等生命周期与健康状态定义 | 插件用 `plugin.Starter`、`plugin.Dependent`；其他组件由宿主自行管理生命周期 |
+| `tools.WithMiddleware`、`tools.MiddlewareTool` | `tools/middleware.Wrap(tool, middlewares...)`、`*middleware.WrappedTool` |
+| `tools.ToolExecutor`、`ToolCallRequest`、`ToolResult`、`RetryPolicy`、`ToolGraph` | `tools.NewDispatcher` 与 `DispatchConfig`（并发、超时、持久回放、重试策略） |
+| `tools.ToolCache`、`SimpleToolCache`、`MemoryToolCache`、`ShardedToolCache`、`NewCachedTool`、`NewHighPerformanceCache`、`NewLowMemoryCache` | `tools/middleware.Caching`，底层任意 `cache.Cache`（可用 `cache.WithMaxEntries` 限制条目） |
+| `core.Agent`、`BaseAgent`、`AgentExecutor`、`AgentInput`/`AgentOutput`、`FastInvoker`；`observability.InstrumentedAgent`/`WrapAgent` | 用 `builder` 构建 Agent，经 `AsRunnable()` 接入 `core.Runnable` |
+| `interfaces.Store`、`ConversationMemory`、`ToolExecutor`、`ToolResult`；`memory.ConversationStore` | 键值存储 `store.Store`；对话历史 `WithSessionLog(session.Store)` |
+| `llm/cache`（语义缓存） | 无替代；需要时由宿主按租户/会话作用域实现 |
+| `interfaces.ToolInput.Context` | 删除赋值，工具使用 `Invoke(ctx, input)` 的 ctx |
+| `builder.Handle` 的 `Steer(msg)`、`SteerOnce(key, msg)`、`Inject(msg)`、`Followup(msg)`、`Redirect(msg)` | 首参加 `ctx`：`Steer(ctx, msg)` 等 |
+| `tools/middleware.WithoutInputLogging`、`WithoutOutputLogging` | 默认已不记录参数与结果；需要记录时用 `WithInputLogging`、`WithOutputLogging` |
+| `constants` 中无引用的常量（含 `store.go` 全部常量） | 在调用方所属包内定义 |
+| `testing/testutil` | 使用标准库 `testing` 断言，或 `testing/mocks` |
+| `core` 的 `Chain`、`BaseChain`、`ChainableAgent`、`Orchestrator`、`PluginRegistry`、`LifecycleManager`、`TimeoutConfig` | 组合用 `core.RunnablePipe`/`RunnableSequence` 或 `workflow`；多 Agent 用 `multiagent` |
+| `tools` 的 `ToolRuntime`、`RuntimeToolAdapter`、`UserInfoTool`、`SavePreferenceTool`、`UpdateStateTool` | 工具所需数据经 `context.Context` 或构造时注入；`StreamWriter` 进度推送没有替代 |
+| 示例 `examples/integration/{human-in-loop,langchain-phase1,langchain-complete}`、`examples/advanced/tool-runtime` | 人工介入见上述 HITL 示例 |
+
+## 保留的现行契约
+
+统一 JSON facade 的稳定编码、当前文件格式的崩溃恢复、业务 CloneSnapshot 协议、泛型便利类型和对外服务协议适配继续保留。它们承载现行数据或能力契约，不是被删除旧框架接口的重命名入口。本轮没有自动迁移用户数据、改变外部依赖版本或发布模块。

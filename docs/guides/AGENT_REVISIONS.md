@@ -1,47 +1,49 @@
-# 不可变 AgentRevision 与会话版本绑定
+# Immutable AgentRevision and Session Version Binding
 
-`revision` 是宿主层的内容归档包，`management/adapters.ArchivedFactory` 将归档接到既有管理执行链。
-保存配置版本时指定 `RevisionID`，创建会话时从不可变 `management.Version` 复制该身份；发布新版本只改变后续默认创建的会话。
-已有 Session、该 Session 的新 Task、待审批任务和 Fork 都继续使用原版本。`GetRun` 的 `Task.RevisionID` 可追溯当时归档。
+[English](AGENT_REVISIONS.md) | [中文](AGENT_REVISIONS_CN.md)
+
+`revision` is a host-level content archive package, and `management/adapters.ArchivedFactory` connects archives to the existing management execution chain.
+Specify `RevisionID` when saving a configuration version; when a session is created, that identity is copied from the immutable `management.Version`. Publishing a new version only changes sessions created by default afterwards.
+Existing Sessions, new Tasks in those Sessions, tasks waiting for approval, and Forks all keep using the original version. `Task.RevisionID` from `GetRun` traces back to the archive used at the time.
 
 ```mermaid
 flowchart LR
-  archive[不可变归档] --> version[management.Version]
-  version --> session[Session 固定版本]
+  archive[Immutable archive] --> version[management.Version]
+  version --> session[Session pinned version]
   session --> task[Task / Run]
-  task --> factory[ArchivedFactory 精确加载]
+  task --> factory[ArchivedFactory exact load]
   archive --> factory
-  factory --> runtime[宿主注册的程序与资源]
+  factory --> runtime[Host-registered program and resources]
 ```
 
-这里复用现有 Version、会话日志和 Worker；不引入第二套任务服务。A2A、HTTP 和 MCP 接入同一个管理服务时，自然遵守相同绑定规则。
-单独使用 Builder 或 `core/session.Store` 不会自动获得管理层的发布和绑定行为。
+This reuses the existing Version, session log, and Worker; no second task service is introduced. When A2A, HTTP, and MCP connect to the same management service, they naturally follow the same binding rules.
+Using the Builder or `core/session.Store` on its own does not automatically get the management layer's publishing and binding behavior.
 
-## 归档内容
+## Archive Contents
 
-| 字段 | 内容与约束 |
+| Field | Content and constraints |
 | --- | --- |
-| `Definition.Config` | 已解析的 JSON 配置对象；精确保留大整数，拒绝重复键 |
-| `Prompts` / `Tools` | 最终提示词与工具定义；提示词不再从可覆盖的工作区重新读取 |
-| `Models` / `Policy` | 模型配置与权限策略的 `ID`、`Version`；宿主必须按精确版本解析 |
-| `Skills` / `Files` | 技能名到归档目录的映射，以及 SKILL.md、参考资料、模板等实际文件字节 |
-| `Runtime` | 程序类型、版本、SHA-256，以及可执行文件路径或固定摘要的镜像引用 |
-| `AgentRevision.ID` | 全部定义与文件的内容摘要；调用方不能另指定或覆盖 |
+| `Definition.Config` | Parsed JSON configuration object; large integers are preserved exactly and duplicate keys are rejected |
+| `Prompts` / `Tools` | Final prompts and tool definitions; prompts are no longer re-read from an overridable workspace |
+| `Models` / `Policy` | `ID` and `Version` of the model configuration and permission policy; the host must resolve them by exact version |
+| `Skills` / `Files` | Mapping from skill names to archive directories, and the actual file bytes of SKILL.md, reference material, templates, etc. |
+| `Runtime` | Program kind, version, SHA-256, and an executable path or an image reference pinned by digest |
+| `AgentRevision.ID` | Content digest of all definitions and files; callers cannot specify or override it |
 
-`revision.Seal` 可只在内存中封存，`Verify` 校验；`revision.Open` 创建文件归档句柄，`Put` 封存并持久保存，`Load` 按 ID 读取，`Close` 释放句柄。
-所有快照均复制输入，不借用调用方后续可能修改的映射或字节。JSON 数字保留原文，`1` 与 `1.0` 可以产生不同摘要。
+`revision.Seal` can seal in memory only, and `Verify` validates; `revision.Open` creates a file archive handle, `Put` seals and persists, `Load` reads by ID, and `Close` releases the handle.
+All snapshots copy their input and do not borrow maps or bytes that the caller may modify later. JSON numbers keep their original text, so `1` and `1.0` can produce different digests.
 
-模型配置引用不等于模型权重归档：外部模型服务的可用性和同名模型的行为变化仍受提供方影响。
-凭据使用宿主版本化引用，避免把密钥正文放进明文归档。权限策略版本用于重建原装配。管理 API 请求及输入/审批续接仍经过 Authorizer；运行器内部工具权限与实时撤权由宿主落实，归档引用本身不提供该保证。
+A model configuration reference is not an archive of model weights: the availability of an external model service and behavior changes of a model with the same name remain subject to the provider.
+Credentials use host versioned references, to avoid putting secret contents into a plaintext archive. The permission policy version is used to rebuild the original assembly. Management API requests and input/approval resumption still go through the Authorizer; tool permissions inside the runner and real-time revocation are enforced by the host, and the archive reference itself does not provide that guarantee.
 
-## 装配与发布顺序
+## Assembly and Publishing Order
 
-1. 在宿主确定配置、提示词、工具定义、模型和策略版本，读取需要固定的 Skills 文件。
-2. 使用 `archive.Put(ctx, definition, files)` 获取不可变 `snapshot.ID`。
-3. 注册 `map[revision.Runtime]adapters.RevisionLoader`，通过 `NewArchivedFactory` 构造管理 Factory。键包含完整 Runtime 身份，不只比较版本字符串。
-4. 在 `management.Config.Factories` 中注册该 Factory；调用 `SaveVersion`，传入相同的 Config、Runtime.Version 对应的 ImplementationVersion 和 RevisionID。
-5. 保存、发布均校验归档完整性、配置一致性和精确加载器可用性。通过后再调用 `PublishVersion`。
-6. 创建新 Session 默认选择当前发布版本；可显式指定仍保留的版本。随后发布 v2，不改变既有 v1 Session。
+1. On the host, determine the configuration, prompts, tool definitions, and model and policy versions, and read the Skills files that need to be pinned.
+2. Use `archive.Put(ctx, definition, files)` to get an immutable `snapshot.ID`.
+3. Register a `map[revision.Runtime]adapters.RevisionLoader` and build the management Factory with `NewArchivedFactory`. The key contains the full Runtime identity, not just the version string.
+4. Register that Factory in `management.Config.Factories`; call `SaveVersion`, passing the same Config, the ImplementationVersion corresponding to Runtime.Version, and the RevisionID.
+5. Both saving and publishing check archive integrity, configuration consistency, and the availability of an exact loader. Call `PublishVersion` only after these pass.
+6. Creating a new Session selects the currently published version by default; a version that is still retained can be specified explicitly. Publishing v2 afterwards does not change existing v1 Sessions.
 
 ```go
 snapshot, err := archive.Put(ctx, definition, files)
@@ -63,46 +65,46 @@ _, err = service.PublishVersion(ctx, actor, management.PublishRequest{
 return err
 ```
 
-`RevisionID` 参与 `Version.ConfigHash`，所以同一程序只修改提示词或技能，也会改变管理层恢复身份。
-同名 Version 不允许覆盖；同一幂等键换一个 RevisionID 会冲突。
-未声明 RevisionID 的版本仍使用原 Factory 合约，其配置记录本身不可变，但不会自动补齐旧资源归档。需要归档的部署应创建并发布新的版本，旧 Session 不做原地迁移。
+`RevisionID` is part of `Version.ConfigHash`, so changing only the prompts or skills of the same program also changes the management layer's recovery identity.
+A Version with the same name cannot be overwritten; reusing the same idempotency key with a different RevisionID is a conflict.
+Versions that do not declare a RevisionID still use the original Factory contract; their configuration record itself is immutable, but old resources are not archived retroactively. Deployments that need archiving should create and publish a new version; old Sessions are not migrated in place.
 
-## 实际加载旧版本
+## Actually Loading an Old Version
 
-`RevisionLoader.Check` 校验能力，不分配需要清理的资源；`Build` 收到独立的 `RevisionEnvironment`：
+`RevisionLoader.Check` validates capabilities and does not allocate resources that need cleanup; `Build` receives a separate `RevisionEnvironment`:
 
-- `Revision` 是已验真的完整快照。
-- `Root` 包含本次加载的归档文件，可读取提示词外的模板和程序工件。
-- `Skills` 是只包含显式声明技能的 Catalog，可按名称加载旧技能正文与参考文件。
+- `Revision` is the verified complete snapshot.
+- `Root` contains the archive files for this load, so templates and program artifacts beyond prompts can be read.
+- `Skills` is a Catalog that contains only the explicitly declared skills, from which old skill bodies and reference files can be loaded by name.
 
-宿主使用这些固定内容构造已有 NativeFactory、GraphFactory 或自己的 Runtime。`Binding.Cleanup` 先清理宿主资源，再关闭 Skills 和目录句柄、移除私有目录；Runtime 不应在清理后继续使用借用资源。
-`Build` 返回前发生 panic 时，宿主须自行清理尚未交出的资源。
+The host uses this pinned content to build an existing NativeFactory, GraphFactory, or its own Runtime. `Binding.Cleanup` first cleans up host resources, then closes the Skills and directory handles and removes the private directory; the Runtime should not keep using borrowed resources after cleanup.
+If a panic occurs before `Build` returns, the host must clean up resources it has not yet handed over.
 
-| Runtime.Kind | 如何恢复旧程序 |
+| Runtime.Kind | How the old program is restored |
 | --- | --- |
-| `native` | 新宿主仍注册旧版本实现；GoAgent 不会从摘要生成或动态链接已删除的 Go 代码 |
-| `executable` | `Artifact` 指向归档中的程序字节，封存时校验 SHA-256；宿主明确授权并启动物化后的程序 |
-| `oci` | `Image` 必须固定为 `image@sha256:...`；宿主保留镜像层并负责拉取和容器生命周期 |
+| `native` | The new host still registers the old version's implementation; GoAgent does not generate or dynamically link deleted Go code from a digest |
+| `executable` | `Artifact` points to the program bytes in the archive, and SHA-256 is checked at sealing; the host explicitly authorizes and starts the materialized program |
+| `oci` | `Image` must be pinned as `image@sha256:...`; the host keeps the image layers and is responsible for pulling and the container lifecycle |
 
-[可运行示例](../../examples/agent-revisions/README.md) 实际编译两个 Go 程序版本，归档程序与提示词，删除原构建产物，关闭并重开归档后分别执行 v1 和 v2。
-它不需要模型或 Docker。跨会话、审批和输入续接的部署模拟位于 `management/revision_test.go`：真实重开归档并重建 Service/Worker，管理与会话 Store 使用内存夹具，不等同于进程退出后的全存储恢复。
+The [runnable example](../../examples/agent-revisions/README.md) actually compiles two versions of a Go program, archives the programs and prompts, deletes the original build output, closes and reopens the archive, and then runs v1 and v2 separately.
+It needs neither a model nor Docker. A deployment simulation across sessions, approvals, and input resumption is in `management/revision_test.go`: it really reopens the archive and rebuilds the Service/Worker, while the management and session Stores use in-memory fixtures, which is not equivalent to full storage recovery after a process exit.
 
-加载器缺失或归档损坏时不选择最新版本。执行前校验失败会阻塞持久命令并保留原任务；宿主恢复精确依赖后，Worker 可继续处理。
-`ArchivedFactory` 在尚未调用宿主 Build 的归档读取、校验或物化阶段失败，且清理成功时，可恢复原命令并延迟重试。宿主 Build 只有能保证本次未执行任务、无业务副作用且资源已释放，才可返回 `*management.RetryableBuildError`；普通错误、panic、清理失败或已返回 Runtime 不会自动重试。该声明不取消此前 attempt 的副作用核对要求。业务副作用仍必须使用已有 durable、execution.Scope 和 Inspect 证据机制；归档不能替代执行日志或外部操作幂等。
+When a loader is missing or an archive is corrupted, the latest version is not selected. A pre-execution check failure blocks the durable command and keeps the original task; once the host restores the exact dependencies, the Worker can continue processing.
+When `ArchivedFactory` fails in the archive read, validation, or materialization stage before calling the host Build, and cleanup succeeds, the original command can be restored and retried later. The host Build may return `*management.RetryableBuildError` only if it can guarantee that the task was not executed in this attempt, that there are no business side effects, and that resources have been released; ordinary errors, panics, cleanup failures, or an already returned Runtime are not retried automatically. This declaration does not lift the side-effect check requirement for earlier attempts. Business side effects must still use the existing durable, execution.Scope, and Inspect evidence mechanisms; archives cannot replace execution logs or idempotency of external operations.
 
-构建阻塞期间的取消会保留此前执行的核对责任，已完成证据优先于取消。`attention` 或待恢复任务若尚未接纳任何执行/恢复命令，取消返回 Conflict，保留人工核对入口；先通过现有可信核对流程接纳恢复命令，再请求取消。不会先设置取消标志而封死后续 ResumeTask。
+Cancellation while a build is blocked keeps the check responsibility for earlier executions, and completed evidence takes precedence over cancellation. If an `attention` task or a task awaiting recovery has not yet admitted any execute/resume command, cancellation returns Conflict and keeps the manual check entry point open; first admit a resume command through the existing trusted check flow, then request cancellation. A cancel flag is never set first in a way that blocks a later ResumeTask.
 
-## 存储与部署责任
+## Storage and Deployment Responsibilities
 
-文件归档应放在受宿主管理的持久目录。它先同步临时文件，以硬链接原子创建目标，最后同步目录，不覆盖同 ID 内容；文件系统须支持硬链接和目录同步。
-读取验证完整性，不静默修复被改写的文件。关闭等待已有操作结束，不抢占正在进行的文件系统调用。
+File archives should be placed in a durable directory managed by the host. The archive first syncs a temporary file, creates the target atomically with a hard link, and finally syncs the directory, without overwriting content with the same ID; the file system must support hard links and directory sync.
+Reads verify integrity and do not silently repair rewritten files. Close waits for existing operations to finish and does not preempt file system calls in progress.
 
-当前大小限制为：单文件 16 MiB，定义 4 MiB，完整归档 64 MiB（含文件的 Base64 编码），最多 10000 个文件。
-较大的程序应使用固定摘要的 OCI 镜像或宿主注册的 native 实现；镜像层和模型服务不由此文件归档复制。
+The current size limits are: 16 MiB per file, 4 MiB for the definition, 64 MiB for the full archive (including the Base64 encoding of files), and at most 10000 files.
+Larger programs should use an OCI image pinned by digest or a host-registered native implementation; image layers and model services are not copied by this file archive.
 
-归档没有删除或自动 GC 接口。发布新版不能清理仍被 Session、Task、审批或历史审计引用的旧归档及程序。
-备份需同时覆盖管理 Store、Session Store、归档目录及外部版本化资源；Archive 本身不提供租户授权，服务端按授权后的 Version 读取，宿主不得直接把文件目录公开给不可信调用方。
+Archives have no delete or automatic GC interface. Publishing a new version cannot clean up old archives and programs that are still referenced by Sessions, Tasks, approvals, or historical audit records.
+Backups must cover the management Store, Session Store, archive directory, and external versioned resources together; Archive itself provides no tenant authorization, the server reads by the authorized Version, and the host must not expose the file directory directly to untrusted callers.
 
-`workflow.RecoveryManifest` 和 Harness 的 Manifest / PinManifest 继续校验实际装配。宿主应从归档资源构造组件，再执行原有一致性检查；本包不修改这些执行内核合约。
+`workflow.RecoveryManifest` and the Harness Manifest / PinManifest continue to validate the actual assembly. The host should build components from archived resources and then run the existing consistency checks; this package does not change those execution-kernel contracts.
 
-设计参考：[kagent 核心概念](https://kagent.dev/docs/kagent/1.x/about/core-concepts/)、[Agent Harness](https://kagent.dev/docs/kagent/1.x/agents/agent-harness/)。GoAgent 复用不可变修订与会话绑定的原则，宿主负责部署和程序加载。
+Design references: [kagent core concepts](https://kagent.dev/docs/kagent/1.x/about/core-concepts/), [Agent Harness](https://kagent.dev/docs/kagent/1.x/agents/agent-harness/). GoAgent reuses the principles of immutable revisions and session binding; the host is responsible for deployment and program loading.

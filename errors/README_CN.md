@@ -20,7 +20,7 @@
 
 领域错误通过 `CodedError.ErrorCode()` 提供分类；`AgentError.Code` 字段保留。无 `%w` 的格式化业务错误使用 `Newf`，携带原错误时可使用 `Wrapf`；已有合法 `%w` 包装保留标准 `fmt.Errorf` 的错误树语义。标准库 `Is`、`As`、`Join` 保留原用法，自定义 `As` 对 `AgentError` 的投影继续有效。`GetCode` 按错误链遍历顺序取首个框架分类，外层业务包装优先，未知错误返回 `CodeInternal`。codec、harness/env、命令行、测试工具等独立边界保留标准库错误，详细范围由导入检查器约束。
 
-旧领域哨兵和错误常量转发已经删除，主仓及已知关联仓库已同步迁移。迁移路径见 [错误处理迁移指南](../docs/guides/ERROR_HANDLING_MIGRATION.md)。
+旧领域哨兵和错误常量转发已经删除，主仓及已知关联仓库已同步迁移。迁移路径见 [错误处理迁移指南](../docs/guides/ERROR_HANDLING_MIGRATION_CN.md)。
 
 ## 目录
 

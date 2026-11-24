@@ -61,6 +61,6 @@ git diff --check
 
 ## HTTP Agent正式文档补充（2026-10-31）
 
-在后续HTTP扩展与可替换WebSocket接口实现后，新增 [主仓使用入口](../guides/HTTP_AGENT.md) 与 [设计入口](../design/HTTP_AGENT_DESIGN.md)，并在contrib/httpagent维护正式使用指南、设计、API参考和验证说明。原superpowers方案及评测保留为历史证据，不替代当前使用文档。
+在后续HTTP扩展与可替换WebSocket接口实现后，新增 [主仓使用入口](../guides/HTTP_AGENT_CN.md) 与 [设计入口](../design/HTTP_AGENT_DESIGN.md)，并在contrib/httpagent维护正式使用指南、设计、API参考和验证说明。原superpowers方案及评测保留为历史证据，不替代当前使用文档。
 
 本轮脚本默认范围扩充到21份入口文档，当前提取4个完整main，均编译通过。旧LLM_API示例漏providers导入及将真实调用描述为离线模拟的问题已修正。扩展另有2个完整Go包独立构建/vet，并从文档提取真实服务实测JSON/SSE/Webhook与原生Hook；见 [本轮证据](../evaluation/2026-10-31-httpagent-documentation/REPORT.md)。前文19份/8个是此前版本的验证记录，不代表后续文档块数量不变。

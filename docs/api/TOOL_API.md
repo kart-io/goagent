@@ -135,7 +135,7 @@ func (r *Registry) Clear()
 
 ## Dispatcher 与 Pipeline
 
-`NewDispatcher(registry, DispatchConfig)` 在注册表之上提供治理后的调用：并发与排队上限（`MaxConcurrency` 默认 4）、单次 `Timeout`、`Authorize`、`OnResult`，以及 `Pipeline`（PreHook → 审批 → Guard → Around → 工具 → PostHook）。`Dispatcher.Tools()` 返回可交给 `builder.WithTools` 的工具，`Invoke` / `AsRunnable` 供直接调用。没有隐式重试。行为契约见 [执行治理](../guides/EXECUTION_GOVERNANCE.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT.md)；`tools/policy` 提供基于规则的放行/询问/拒绝策略，`tools/spill` 把超长结果写入文件并提供 `read_spill` 读取工具。
+`NewDispatcher(registry, DispatchConfig)` 在注册表之上提供治理后的调用：并发与排队上限（`MaxConcurrency` 默认 4）、单次 `Timeout`、`Authorize`、`OnResult`，以及 `Pipeline`（PreHook → 审批 → Guard → Around → 工具 → PostHook）。`Dispatcher.Tools()` 返回可交给 `builder.WithTools` 的工具，`Invoke` / `AsRunnable` 供直接调用。没有隐式重试。行为契约见 [执行治理](../guides/EXECUTION_GOVERNANCE.md) 与 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)；`tools/policy` 提供基于规则的放行/询问/拒绝策略，`tools/spill` 把超长结果写入文件并提供 `read_spill` 读取工具。
 
 ## 内置工具
 
@@ -285,4 +285,4 @@ Config 必填 Name、Version、对象 ArgsSchema、Decode、Encode，Description
 | tools/search | NewSearchTool(engine SearchEngine) *SearchTool |
 | tools/shell | NewShellTool(allowedCommands []string, timeout time.Duration) *ShellTool |
 
-编码工具已移至 github.com/kart-io/goagent-harness/tools/coding，不再从核心导入。参见 [Harness 迁移](../guides/HARNESS_MIGRATION.md)。外部模块、示例层业务集成与核心工具应分别说明。
+编码工具已移至 github.com/kart-io/goagent-harness/tools/coding，不再从核心导入。参见 [Harness 迁移](../guides/HARNESS_MIGRATION_CN.md)。外部模块、示例层业务集成与核心工具应分别说明。

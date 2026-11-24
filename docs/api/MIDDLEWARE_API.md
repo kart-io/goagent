@@ -11,7 +11,7 @@
 - `State` 是 Agent 状态；
 - `Metadata` 预先填入 `WithMetadata` 设置的键值。
 
-处理器返回的 `Output` 是最终答案，`TokenUsage` 是本次执行的用量。`WithVerbose(true)` 会在用户中间件之前自动加入 `LoggingMiddleware` 与 `TimingMiddleware`。中间件副作用不会自动幂等，契约见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
+处理器返回的 `Output` 是最终答案，`TokenUsage` 是本次执行的用量。`WithVerbose(true)` 会在用户中间件之前自动加入 `LoggingMiddleware` 与 `TimingMiddleware`。中间件副作用不会自动幂等，契约见 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)。
 
 ## 接口与类型
 
@@ -81,7 +81,7 @@ func (c *MiddlewareChain) Size() int
 | `NewToolSelectorMiddleware(tools, maxTools)` | 按输入选出工具名写入 `Metadata["selected_tools"]`；`WithSelector` 自定义选择函数。不改变 Builder 实际提供给模型的工具 |
 | `NewRandomDelayMiddleware(min, max)` | 随机延迟，用于测试 |
 
-整轮响应缓存中间件已删除。缓存模型答案用 `builder.WithModelCache`，见[缓存指南](../guides/CACHING_GUIDE.md#模型调用缓存)。
+整轮响应缓存中间件已删除。缓存模型答案用 `builder.WithModelCache`，见[缓存指南](../guides/CACHING_GUIDE_CN.md#模型调用缓存)。
 
 根包 `github.com/kart-io/goagent/middleware` 另有 `ObservabilityMiddleware`（实现上面的 `Middleware` 接口，基于 `observability.TelemetryProvider`），以及 `AdaptiveMiddleware`、`ContextEnrichmentMiddleware`、`DynamicPromptMiddleware`、`LLMToolSelectorMiddleware`、`LLMToolEmulatorMiddleware`。后五者提供 `Process(ctx, core.State) (core.State, error)`，不实现 `Middleware` 接口，不能传给 `WithMiddleware`。
 

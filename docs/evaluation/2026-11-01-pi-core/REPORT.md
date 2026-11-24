@@ -38,4 +38,4 @@
 
 PendingInputs 不是持久收件箱、业务成功确认或可安全自动重试的消息列表。已领取输入即使之后失败也不在快照中。Wait 超时仅退出等待；终态快照须在实际执行结束后取得。输入在结束检查之后到达时可保留在快照中，不为清空它绕过迭代限制。
 
-本轮不验收真实供应商效果、独立持久后台任务、跨主机接管或远端 Sandbox。Pi 固定源码的选择性验证属于前轮 Harness 调研，不算作本轮 GoAgent 功能验收。功能边界见[设计](../../design/PI_CORE_ADOPTION.md)及[组合指南](../../guides/AGENT_COMPOSITION.md)。
+本轮不验收真实供应商效果、独立持久后台任务、跨主机接管或远端 Sandbox。Pi 固定源码的选择性验证属于前轮 Harness 调研，不算作本轮 GoAgent 功能验收。功能边界见[设计](../../design/PI_CORE_ADOPTION.md)及[组合指南](../../guides/AGENT_COMPOSITION_CN.md)。

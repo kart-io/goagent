@@ -1,23 +1,25 @@
-# 共享常量与 Provider 迁移
+# Shared Constants and Provider Migration
 
-共享协议值和默认参数统一通过 `github.com/kart-io/goagent/constants` 使用。原来位于 `interfaces`、`llm/constants`、`llm/common`、`llm`、`tools`、`store`、`parsers` 和 `core` 的460个公开转发常量已删除，`llm/constants` 包也已删除；没有兼容别名。内部清理期限也直接引用中央值。
+[English](CONSTANTS_MIGRATION.md) | [中文](CONSTANTS_MIGRATION_CN.md)
 
-`interfaces.Tool` 等领域接口、`llm.ToolCall` 及其方法仍在原包。只迁移共享常量和 Provider 类型，不改变这些领域对象的使用方式。
+Shared protocol values and default parameters are all used through `github.com/kart-io/goagent/constants`. The 460 public forwarding constants that used to live in `interfaces`, `llm/constants`, `llm/common`, `llm`, `tools`, `store`, `parsers`, and `core` have been deleted, and the `llm/constants` package has been deleted as well; there are no compatibility aliases. Internal cleanup deadlines also reference the central values directly.
 
-## 导入与名称
+Domain interfaces such as `interfaces.Tool`, as well as `llm.ToolCall` and its methods, remain in their original packages. Only shared constants and the Provider type are migrated; how these domain objects are used does not change.
 
-按旧符号所属包逐项迁移，不能只按名字替换。大部分常量在中央保持原名称，以下默认策略需要特别区分：
+## Imports and Names
 
-| 旧入口 | 新入口 |
+Migrate each old symbol according to the package it belonged to; do not replace by name alone. Most constants keep their original names in the central package, but the following default policies need to be distinguished:
+
+| Old entry | New entry |
 |---|---|
-| `llm/constants.DefaultMaxTokens` | `constants.DefaultProviderMaxTokens`（1000） |
-| `llm.DefaultMaxTokens`、`llm/common.DefaultMaxTokens` | `constants.DefaultCompletionMaxTokens`（2048） |
-| `tools.DefaultToolTimeout` | `constants.DefaultToolTimeoutSeconds`（整数秒） |
+| `llm/constants.DefaultMaxTokens` | `constants.DefaultProviderMaxTokens` (1000) |
+| `llm.DefaultMaxTokens`, `llm/common.DefaultMaxTokens` | `constants.DefaultCompletionMaxTokens` (2048) |
+| `tools.DefaultToolTimeout` | `constants.DefaultToolTimeoutSeconds` (integer seconds) |
 | `tools.MaxConcurrentToolCalls` | `constants.DefaultToolConcurrency` |
 | `tools.MaxRetries` | `constants.DefaultToolRetries` |
-| `core.DefaultAgentExecutionTimeout` 等8个默认超时 | `constants` 中同名常量 |
+| `core.DefaultAgentExecutionTimeout` and the other 8 default timeouts | Constants of the same name in `constants` |
 
-Client/Agent 的2000 token默认策略仍独立管理。`constants.DefaultToolTimeout` 是 `time.Duration`，与整数秒的 `DefaultToolTimeoutSeconds` 不可互换。不能因为字面值相同而合并不同协议字段、状态或默认策略。
+The 2000-token default policy of the Client/Agent is still managed separately. `constants.DefaultToolTimeout` is a `time.Duration` and is not interchangeable with the integer-seconds `DefaultToolTimeoutSeconds`. Do not merge different protocol fields, states, or default policies just because their literal values are the same.
 
 ```go
 import shared "github.com/kart-io/goagent/constants"
@@ -28,9 +30,9 @@ providerTokens := shared.DefaultProviderMaxTokens
 timeout := shared.DefaultToolTimeout
 ```
 
-## Provider 的具名类型
+## The Named Provider Type
 
-`Provider` 的声明位置从 `llm/constants.Provider` 改为 `constants.Provider`，底层仍为 string。这会改变 Go 的具名类型身份，所有 `llm.Client` 实现、配置字段、`WithProvider` 参数及模拟客户端方法都须同步使用新类型。
+`Provider` is now declared as `constants.Provider` instead of `llm/constants.Provider`; its underlying type is still string. This changes the named type identity in Go, so every `llm.Client` implementation, configuration field, `WithProvider` argument, and mock client method must switch to the new type together.
 
 ```go
 import shared "github.com/kart-io/goagent/constants"
@@ -39,24 +41,24 @@ func (c *CustomClient) Provider() shared.Provider {
     return shared.Provider("minimax")
 }
 
-provider := shared.ProviderOpenAI // 推断为 shared.Provider
-label := string(provider)         // 传给 string 参数或赋给 string 变量
+provider := shared.ProviderOpenAI // inferred as shared.Provider
+label := string(provider)         // pass to a string parameter or assign to a string variable
 custom := shared.Provider("offline-demo")
 ```
 
-8个内置枚举 `ProviderOpenAI`、`ProviderGemini`、`ProviderDeepSeek`、`ProviderOllama`、`ProviderSiliconFlow`、`ProviderKimi`、`ProviderCustom`、`ProviderAnthropic` 均显式声明为 `Provider`，字符串值不变。Provider 取值空间保持开放，自定义提供商不受枚举集合限制。
+The 9 built-in enums `ProviderOpenAI`, `ProviderGemini`, `ProviderDeepSeek`, `ProviderOllama`, `ProviderSiliconFlow`, `ProviderKimi`, `ProviderMiniMax`, `ProviderCustom`, and `ProviderAnthropic` are all explicitly declared as `Provider`, with unchanged string values. The Provider value space stays open; custom providers are not limited to the enum set.
 
-原中央枚举是 untyped string；现在直接使用中央枚举时，传给 string 参数、赋给 string 变量或与 string 变量比较，需要显式 `string(...)` 转换。原来使用旧包 typed 枚举的代码保持同样的类型约束，但必须更新导入路径和方法签名。
+The original central enums were untyped strings. When you now use the central enums directly, passing them to a string parameter, assigning them to a string variable, or comparing them with a string variable requires an explicit `string(...)` conversion. Code that used the typed enums of the old package keeps the same type constraints, but must update its import paths and method signatures.
 
-## 错误与协议字段
+## Errors and Protocol Fields
 
-错误码、分类、错误提示、错误上下文字段和哨兵使用 `errors` 包，详见[错误处理迁移指南](ERROR_HANDLING_MIGRATION.md)。`FieldStatus`、`MethodGet` 等字段名和 HTTP 协议值，继续在 `constants` 中。
+Error codes, categories, error hints, error context fields, and sentinels use the `errors` package; see the [Error Handling Migration Guide](ERROR_HANDLING_MIGRATION.md). Field names and HTTP protocol values such as `FieldStatus` and `MethodGet` remain in `constants`.
 
-## 领域共享入口补齐
+## Filling in Shared Domain Entries
 
-以下 49 项原声明和兼容别名均已移除。按包和符号迁移引用，同时删除无用导入；字段名、局部变量及同名领域常量不参与改名。下表覆盖公开入口和框架内私有默认值；私有项便于维护者追踪归属。
+The 47 original declarations and compatibility aliases below have all been removed. Migrate references by package and symbol, and remove unused imports at the same time; field names, local variables, and domain constants with the same name are not renamed. The table covers public entries and private defaults inside the framework; the private items help maintainers track ownership.
 
-| 原入口 | 中央入口 |
+| Original entry | Central entry |
 |---|---|
 | `tools.defaultApprovalTimeout` | `constants.DefaultApprovalTimeout` |
 | `builder.modelResendAttempts` | `constants.DefaultModelResendAttempts` |
@@ -67,10 +69,10 @@ custom := shared.Provider("offline-demo")
 | `llm/providers.OllamaBaseURL` | `constants.OllamaBaseURL` |
 | `tools.resumableAttempts` | `constants.DefaultResumableToolAttempts` |
 | `core/durable.interruptAttempts` | `constants.DefaultInterruptAttempts` |
-| `memory.DefaultMaxConversationLength` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.DefaultSearchLimit` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.DefaultSimilarityThreshold` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.DefaultEmbeddingDimension` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.DefaultMaxConversationLength` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.DefaultSearchLimit` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.DefaultSimilarityThreshold` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.DefaultEmbeddingDimension` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
 | `core/durable.inboxSeenLimit` | `constants.DurableInboxSeenLimit` |
 | `tools/spill.previewRunes` | `constants.SpillPreviewRunes` |
 | `tools/spill.defaultReadLimit` | `constants.DefaultSpillReadLimitLines` |
@@ -98,18 +100,18 @@ custom := shared.Provider("offline-demo")
 | `core/session.TypeHistoryRewrite` | `constants.SessionEventHistoryRewrite` |
 | `core/session.TypeRewind` | `constants.SessionEventRewind` |
 | `core/session.TypeBoundarySnapshot` | `constants.SessionEventBoundarySnapshot` |
-| `memory.VectorStoreTypeMemory` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.VectorStoreTypeChroma` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.VectorStoreTypePinecone` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.VectorStoreTypeWeaviate` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.EmbedderProviderOpenAI` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.EmbedderProviderLocal` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
-| `memory.EmbedderProviderMock` | 已删除（记忆系统重写，见 COMPATIBILITY_CLEANUP） |
+| `memory.VectorStoreTypeMemory` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.VectorStoreTypeChroma` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.VectorStoreTypePinecone` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.VectorStoreTypeWeaviate` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.EmbedderProviderOpenAI` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.EmbedderProviderLocal` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
+| `memory.EmbedderProviderMock` | Deleted (memory system rewritten, see COMPATIBILITY_CLEANUP) |
 
-上述常量保留原来的具名/无类型状态和值。时间值仍为 `time.Duration`，不能改成整数秒；`BudgetUnlimited` 仍用 `math.MaxInt` 随目标架构求值。`DefaultModelResendAttempts` 和 `DefaultInterruptAttempts` 会参与持久操作策略校验，默认数字没有变化；不需要改写既有日志。
+The constants above keep their original named/untyped status and values. Time values are still `time.Duration` and must not be changed to integer seconds; `BudgetUnlimited` still uses `math.MaxInt`, evaluated for the target architecture. `DefaultModelResendAttempts` and `DefaultInterruptAttempts` take part in durable operation policy validation, and their default numbers have not changed; existing logs do not need to be rewritten.
 
-续跑原因属于正常的等待协议，使用 `InterruptReason*`、`WorkflowReject*` 和 `ContinuationKindInterrupt`，不作为业务错误码迁入 `errors`。会话事件数据结构、图构造器、预算控制器及具名领域枚举保持在原包。
+Continuation reasons belong to the normal waiting protocol. They use `InterruptReason*`, `WorkflowReject*`, and `ContinuationKindInterrupt`, and are not moved into `errors` as business error codes. Session event data structures, the graph builder, the budget controller, and named domain enums stay in their original packages.
 
-同一消费路径的内联默认也集中管理：Kimi/SiliconFlow/Ollama 模型、Ollama 超时、RetryTransient 的 500ms/8s 退避与工具缓存中间件的默认容量，不与其他当前同值策略合并。
+Inline defaults on the same consumption path are also centralized: the Kimi/SiliconFlow/Ollama models, the Ollama timeout, the 500ms/8s backoff of RetryTransient, and the default capacity of the tool caching middleware. They are not merged with other policies that currently have the same values.
 
-持久格式版本、算法约束、领域状态机枚举及独立 codec/env 边界仍由原包维护。
+Durable format versions, algorithm constraints, domain state machine enums, and standalone codec/env boundaries are still maintained by their original packages.

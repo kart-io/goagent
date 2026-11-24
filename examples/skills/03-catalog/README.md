@@ -12,4 +12,4 @@ env -u GOROOT go run ./examples/skills/03-catalog
 
 实际应用可以把 `skilltool.New(catalog)` 交给 `Builder.WithTools`，自行选择要展示的
 元数据并组装提示词。停止使用工具后关闭 Catalog。完整边界见
-[Skills 加载指南](../../../docs/guides/SKILLS.md)。
+[Skills 加载指南](../../../docs/guides/SKILLS_CN.md)。

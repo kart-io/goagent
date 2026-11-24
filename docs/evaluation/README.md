@@ -88,7 +88,7 @@ OPENAI_MODEL=deepseek-flash go run ./examples/evaluation/strategies -live
 
 ToT 在 apples 题仍报 `model returned no candidate thoughts`，调用 4 次后停止，没有成功答案；没有通过扩大预算或伪造结果让测试变绿。后续应补充候选生成格式、截断响应诊断和更大题集，再决定是否引入受预算约束的生成修复。
 
-本轮验证包括多行/加粗/中文答案标记、工具参数中引用答案标记、ReAct 重试耗尽、ToT 各阶段错误与评分有效性、四种搜索策略的完成检查错误、最终答案入口一致性、预算耗尽、用量累计和消费者提前停止。全仓短测试通过；变更相关包 race 与 Lint 通过。兼容变化与调用方式见 [能力指南](../guides/PRIORITY_CAPABILITIES.md#推理输出契约补充)。
+本轮验证包括多行/加粗/中文答案标记、工具参数中引用答案标记、ReAct 重试耗尽、ToT 各阶段错误与评分有效性、四种搜索策略的完成检查错误、最终答案入口一致性、预算耗尽、用量累计和消费者提前停止。全仓短测试通过；变更相关包 race 与 Lint 通过。兼容变化与调用方式见 [能力指南](../guides/PRIORITY_CAPABILITIES_CN.md#推理输出契约补充)。
 
 
 ## 工具循环与请求优化历史

@@ -1,14 +1,16 @@
-# 选项模式最佳实践
+# Option Pattern Best Practices
 
-`goagent` 中可选配置较多的组件用函数式选项配置。Agent 例外：`builder.AgentBuilder` 使用链式 `With*` 方法（见 [Builder API 参考](BUILDER_API_REFERENCE.md)）。
+[English](OPTION_PATTERN_BEST_PRACTICES.md) | [中文](OPTION_PATTERN_BEST_PRACTICES_CN.md)
 
-## 现有选项
+Components in `goagent` with many optional settings are configured with functional options. Agents are the exception: `builder.AgentBuilder` uses chained `With*` methods (see the [Builder API Reference](BUILDER_API_REFERENCE.md)).
 
-| 选项类型 | 作用对象 | 构造函数 |
+## Existing Options
+
+| Option type | Applies to | Constructors |
 |---|---|---|
-| `llm.ClientOption` | `*llm.LLMOptions` | `providers.NewOpenAIWithOptions`、`NewDeepSeekWithOptions`、`NewGeminiWithOptions` 等 |
-| `remote.Option` | MCP 工具适配 | `remote.Tools`（`mcp/remote`） |
-| `LoggingOption`、`CachingOption`、`RateLimitOption`（`tools/middleware`） | 工具中间件 | `NewLoggingMiddleware`、`NewCachingMiddleware`、`NewRateLimitMiddleware` |
+| `llm.ClientOption` | `*llm.LLMOptions` | `providers.NewOpenAIWithOptions`, `NewDeepSeekWithOptions`, `NewGeminiWithOptions`, etc. |
+| `remote.Option` | MCP tool adaptation | `remote.Tools` (`mcp/remote`) |
+| `LoggingOption`, `CachingOption`, `RateLimitOption` (`tools/middleware`) | Tool middleware | `NewLoggingMiddleware`, `NewCachingMiddleware`, `NewRateLimitMiddleware` |
 
 ```go
 client, err := providers.NewOpenAIWithOptions(
@@ -22,14 +24,14 @@ cached := middleware.NewCachingMiddleware(
 )
 ```
 
-## 命名约定
+## Naming Conventions
 
-- **构造函数**：参数全部可选时用 `New<Component>WithOptions(opts ...)`，否则用 `New<Component>(必填参数..., opts ...<Component>Option)`。
-- **选项函数**：以 `With` 开头（`WithModel`、`WithMaxConcurrency`）。
-- **选项类型**：`<Component>Option`，即 `func(*<Config>)`。
-- **配置结构体**：`<Component>Config` 或 `<Component>Options`。
+- **Constructors**: use `New<Component>WithOptions(opts ...)` when all parameters are optional; otherwise use `New<Component>(required params..., opts ...<Component>Option)`.
+- **Option functions**: start with `With` (`WithModel`, `WithMaxConcurrency`).
+- **Option types**: `<Component>Option`, i.e. `func(*<Config>)`.
+- **Config structs**: `<Component>Config` or `<Component>Options`.
 
-## 实现
+## Implementation
 
 ```go
 type ComponentOptions struct {
@@ -48,7 +50,7 @@ func WithTimeout(d time.Duration) ComponentOption {
 }
 
 func NewComponent(opts ...ComponentOption) *Component {
-    options := ComponentOptions{MaxRetries: 3, Timeout: 30 * time.Second} // 先填默认值
+    options := ComponentOptions{MaxRetries: 3, Timeout: 30 * time.Second} // Fill in defaults first
     for _, opt := range opts {
         opt(&options)
     }
@@ -56,10 +58,10 @@ func NewComponent(opts ...ComponentOption) *Component {
 }
 ```
 
-- 先设默认值再应用选项，后传的选项生效。
-- 在构造函数中校验最终配置，出错时返回 error，不要 panic。
-- 把构造函数改为选项式时直接替换，项目不为兼容保留废弃的构造函数。
+- Set defaults first, then apply options; options passed later win.
+- Validate the final configuration in the constructor and return an error on failure; do not panic.
+- When converting a constructor to the option style, replace it directly; the project does not keep deprecated constructors for compatibility.
 
-## 性能
+## Performance
 
-选项闭包只在构造时分配一次；不要放在每次请求执行这样的热路径上。
+Option closures are allocated only once, at construction time; do not put them on hot paths such as per-request execution.

@@ -72,4 +72,4 @@ agent, err := builder.NewSimpleBuilder(client).
 
 ## 升级兼容核对
 
-持久图可声明StateVersion/Components，导出Manifest并对指定运行调用CheckCompatibility。该检查复用只读Diagnose，不执行、加锁、写入或迁移任务；Compatible不证明效果可安全重跑。见[版本清单与排空流程](EXECUTION_ACCEPTANCE.md#恢复清单和升级前检查)。
+持久图可声明StateVersion/Components，导出Manifest并对指定运行调用CheckCompatibility。该检查复用只读Diagnose，不执行、加锁、写入或迁移任务；Compatible不证明效果可安全重跑。见[版本清单与排空流程](EXECUTION_ACCEPTANCE_CN.md#恢复清单和升级前检查)。

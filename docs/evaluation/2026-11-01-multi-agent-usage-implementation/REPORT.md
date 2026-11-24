@@ -54,4 +54,4 @@ SDK scalar 不保留“字段缺失/显式零”区别时保守标 unknown；宿
 
 Observer 可以丢事件，统计投影需查询账本修复；它不是 exactly-once 消息总线。Token 不是货币费用。真实供应商账单、隐藏 SDK 请求、供应商内部重试和跨主机计费服务没有在本轮验收。后台任务与租户业务治理仍由宿主承担。
 
-当前接入见[使用指南](../../guides/MULTI_AGENT_USAGE.md)，计划状态见[实施计划](../../superpowers/plans/2026-11-01-multi-agent-hooks-usage.md)。
+当前接入见[使用指南](../../guides/MULTI_AGENT_USAGE_CN.md)，计划状态见[实施计划](../../superpowers/plans/2026-11-01-multi-agent-hooks-usage.md)。

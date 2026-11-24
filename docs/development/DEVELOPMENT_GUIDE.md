@@ -33,7 +33,7 @@ Makefile 从 `go.mod` 的 `toolchain` 声明选择开发工具链，并清除传
 | `make vet` / `make lint` | `go vet ./...` / `golangci-lint run ./...` |
 | `bash scripts/verify_imports.sh` | 导入层级检查，见 [导入层级说明](../architecture/IMPORT_LAYERING.md) |
 | `./scripts/check_coverage.sh` | 默认读取 `coverage/coverage.out`，可传入文件路径；按语句数检查整体、执行核心模块及关键文件，详见[测试规范](TESTING_BEST_PRACTICES.md) |
-| `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION.md) |
+| `bash scripts/provider_regression.sh [REPORT.jsonl]` | 离线 Provider/Builder 契约与竞态回归，见 [持续回归](../guides/PROVIDER_REGRESSION_CN.md) |
 
 CI（`.github/workflows/`）运行带 `-race` 的全量测试、导入检查与 golangci-lint；PR 流程另跑覆盖率门禁。
 
@@ -172,7 +172,7 @@ func useMiddleware(client llm.Client) (*builder.SimpleAgent, error) {
 }
 ```
 
-这里的 `middleware` 是 `github.com/kart-io/goagent/core/middleware`。改变模型请求、历史或工具调用的行为优先用循环钩子（`WithPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`）或 `tools.Pipeline`，它们的持久与恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md)。
+这里的 `middleware` 是 `github.com/kart-io/goagent/core/middleware`。改变模型请求、历史或工具调用的行为优先用循环钩子（`WithPreStep`、`WithRequestHook`、`WithRequestError`、`WithTurnStopping`）或 `tools.Pipeline`，它们的持久与恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)。
 
 ## 调试
 

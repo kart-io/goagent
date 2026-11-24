@@ -1,20 +1,22 @@
-# HTTP、SSE、WebSocket、Webhook 与 Hooks 接入
+# HTTP, SSE, WebSocket, Webhook, and Hooks Integration
 
-GoAgent的网络入口由独立扩展 `github.com/kart-io/goagent-contrib/httpagent` 提供。主库继续负责Agent/工具/图/持久执行；网络适配器负责入口、协议与运行资源责任，Web页面在goagent-examples。
+[English](HTTP_AGENT.md) | [中文](HTTP_AGENT_CN.md)
 
-## 文档与版本
+GoAgent's network entry points are provided by the standalone extension `github.com/kart-io/goagent-contrib/httpagent`. The main library remains responsible for Agents/tools/graphs/durable execution; the network adapter is responsible for entry points, protocols, and runtime resource ownership, and the web page lives in goagent-examples.
 
-本文最初按 contrib 提交 `cfb3e85`、GoAgent v0.32.2 和 Go 1.25 编写。接入当前 GoAgent 时要求 Go 1.27+；扩展与示例的具体依赖版本以各自 `go.mod` 为准，接口以对应版本的下列文档为准。
+## Documentation and Versions
 
-| 需要了解 | 文档 |
+This document was originally written against contrib commit `cfb3e85`, GoAgent v0.32.2, and Go 1.25. Integrating with the current GoAgent requires Go 1.27+; the specific dependency versions of the extension and examples are defined by their own `go.mod`, and the interfaces by the following documents for the corresponding version.
+
+| What you need | Document |
 | --- | --- |
-| 从零运行、复制完整宿主程序 | [使用指南](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/USER_GUIDE.md) |
-| 所有者、终态、取消、接纳与通知的实现取舍 | [扩展设计](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md) |
-| Config全部字段、默认值、公开接口、协议与错误 | [API参考](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/API_REFERENCE.md) |
-| GoAgent内核与扩展如何分工 | [本仓设计入口](../design/HTTP_AGENT_DESIGN.md) |
-| Web页面、CLI、双向回调与宿主WS案例 | [案例指南](https://github.com/kart-io/goagent-examples/blob/main/orchestration/httpagent/SCENARIOS.md) |
+| Run from scratch, copy a complete host program | [User Guide](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/USER_GUIDE.md) |
+| Implementation trade-offs for owners, terminal states, cancellation, admission, and notifications | [Extension Design](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/DESIGN.md) |
+| All Config fields, defaults, public interfaces, protocols, and errors | [API Reference](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/API_REFERENCE.md) |
+| How the GoAgent core and the extension divide responsibilities | [Design entry in this repository](../design/HTTP_AGENT_DESIGN.md) |
+| Web page, CLI, bidirectional callbacks, and host WS cases | [Scenarios Guide](https://github.com/kart-io/goagent-examples/blob/main/orchestration/httpagent/SCENARIOS.md) |
 
-## 运行现成案例
+## Running the Ready-Made Example
 
 ```sh
 git clone -b main https://github.com/kart-io/goagent-examples.git
@@ -22,48 +24,48 @@ cd goagent-examples/orchestration/httpagent
 GOWORK=off go run .
 ```
 
-打开 http://127.0.0.1:8097 。另一个终端在同目录执行：
+Open http://127.0.0.1:8097 . In another terminal, in the same directory, run:
 
 ```sh
 GOWORK=off go run ./cmd/client -case all -input '查询订单 E100'
 ```
 
-预期4条completed和1条cancelled；默认使用离线脚本模型，实际执行Plugin工具和网络传输。无需克隆本地contrib工作树，固定提交已可远端下载。
+Expect 4 completed and 1 cancelled; by default it uses an offline scripted model, while actually executing Plugin tools and network transport. There is no need to clone a local contrib working tree; the pinned commit can already be downloaded remotely.
 
-需要出站Webhook时，先在同目录的另一个终端启动接收器，再带WEBHOOK_URL启动案例服务：
+When you need outbound Webhooks, first start the receiver in another terminal in the same directory, then start the example service with WEBHOOK_URL:
 
 ```sh
 GOWORK=off go run ./cmd/webhook-receiver -listen 127.0.0.1:9000
-# 另一个终端；替换上面的普通服务启动命令
+# In another terminal; replaces the plain service start command above
 GOWORK=off WEBHOOK_URL=http://127.0.0.1:9000/events go run .
 ```
 
-## 在业务服务中安装
+## Installing in a Business Service
 
 ```sh
 go get github.com/kart-io/goagent-contrib/httpagent@v0.0.0-20261031151618-cfb3e85df18a
 ```
 
-实现Factory，在请求context下装配Builder、Plugin和Dispatcher并返回Native(agent.ExecuteStream)。按真实模型能力检查llm.HasToolStreaming，不能凭ExecuteStream方法存在性判断。Factory每次新建请求级Agent，Plugin Host等共享资源由服务生命周期管理。完整可编译程序在扩展使用指南。
+Implement a Factory that assembles the Builder, Plugin, and Dispatcher under the request context and returns Native(agent.ExecuteStream). Check llm.HasToolStreaming against the real model's capabilities; do not infer it from the existence of the ExecuteStream method. The Factory creates a new request-scoped Agent each time, and shared resources such as the Plugin Host are managed by the service lifecycle. The complete compilable program is in the extension's user guide.
 
-| 功能 | 入口/配置 | 主要边界 |
+| Feature | Entry point/configuration | Main boundaries |
 | --- | --- | --- |
-| 同步结果、流式工具事件 | POST /invoke、POST /stream | 两者保留相同原生执行；Answer显式不支持SSE |
-| WebSocket | GET /ws，goagent.v1 | 一连接一个活动运行，终态后等ready再重用 |
-| 自有同步事件 | Receiver.Mode=inline | 等业务完成再应答 |
-| 持久接纳后worker | Receiver.Mode=queued、Acceptor、Handler.Run | 持久队列、去重和worker由宿主提供 |
-| 出站通知 | Delivery、NewSender | 默认有界单次尝试；可靠重投需宿主outbox |
-| 原生Hook与运行观察 | Plugin Hooks、Config.Observer | Hook参与执行循环，Observer观察生命周期 |
-| 其他框架WS | WebSocketUpgrader或ServeWebSocket | 接口不含Gorilla类型，默认实现仍保留Gorilla |
+| Synchronous results, streaming tool events | POST /invoke, POST /stream | Both keep the same native execution; Answer explicitly does not support SSE |
+| WebSocket | GET /ws, goagent.v1 | One active run per connection; after the terminal state, wait for ready before reuse |
+| Own synchronous events | Receiver.Mode=inline | Respond only after the business work completes |
+| Worker after durable admission | Receiver.Mode=queued, Acceptor, Handler.Run | The durable queue, deduplication, and worker are provided by the host |
+| Outbound notifications | Delivery, NewSender | Bounded single attempt by default; reliable redelivery requires a host outbox |
+| Native Hooks and run observation | Plugin Hooks, Config.Observer | Hooks take part in the execution loop; the Observer observes the lifecycle |
+| WS for other frameworks | WebSocketUpgrader or ServeWebSocket | The interface contains no Gorilla types; the default implementation still uses Gorilla |
 
-Handler路由没有/api前缀，案例宿主通过StripPrefix挂载。完整HTTP/WS报文以扩展API参考为准。
+Handler routes have no /api prefix; the example host mounts them with StripPrefix. The complete HTTP/WS messages are defined by the extension's API reference.
 
-## 生命周期与持久执行
+## Lifecycle and Durable Execution
 
-run_id为当前运行身份，不等于业务会话锁、事件去重键或已完成结果缓存。共享SessionID需要宿主协调；需要预算/日志/持久恢复时，Factory应组合 [宿主标准接入](HOST_INTEGRATION.md) 与 [执行治理](EXECUTION_GOVERNANCE.md)。
+run_id is the identity of the current run; it is not a business session lock, an event deduplication key, or a cache of completed results. A shared SessionID requires coordination by the host; when budgets/journals/durable recovery are needed, the Factory should combine [Host Integration](HOST_INTEGRATION.md) and [Execution Governance](EXECUTION_GOVERNANCE.md).
 
-网络断开或退出未确认不能证明工具副作用没发生。客户端没有收到业务终态时，应按run_id诊断，不能盲目换ID重试。停服先BeginShutdown取消，再等HTTP Shutdown与Handler.Shutdown，成功后关闭共享Host。具体超时与资源保留设计见扩展文档。
+A network disconnect or an unacknowledged exit cannot prove that tool side effects did not happen. When the client has not received the business terminal state, diagnose by run_id; do not blindly retry with a new ID. To stop the service, first cancel with BeginShutdown, then wait for HTTP Shutdown and Handler.Shutdown, and close the shared Host after they succeed. For specific timeouts and resource retention design, see the extension documentation.
 
-文档代码块及源码对照范围见 [扩展文档验证](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md)。实测证据见 [完整实现验收](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) 与 [可替换WS接口验收](../evaluation/2026-10-31-websocket-interfaces/REPORT.md)。
+For the documentation code blocks and the scope of source comparison, see [Extension documentation verification](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md). For measured evidence, see [Full implementation acceptance](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) and [Replaceable WS interface acceptance](../evaluation/2026-10-31-websocket-interfaces/REPORT.md).
 
-合并到主分支后的检查见 [合并验收](../evaluation/2026-10-31-httpagent-merge/REPORT.md)。
+For checks after merging into the main branch, see [Merge acceptance](../evaluation/2026-10-31-httpagent-merge/REPORT.md).

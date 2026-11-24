@@ -8,7 +8,7 @@ go doc -all github.com/kart-io/goagent/builder
 go doc -all github.com/kart-io/goagent/core
 ```
 
-执行入口与扩展点的行为契约见 [执行入口与扩展契约](../guides/EXTENSION_CONTRACT.md)，宿主装配见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
+执行入口与扩展点的行为契约见 [执行入口与扩展契约](../guides/EXTENSION_CONTRACT_CN.md)，宿主装配见 [宿主接入指南](../guides/HOST_INTEGRATION.md)。
 
 ## Builder
 
@@ -137,7 +137,7 @@ type StreamChunk[T any] struct {
 ```
 
 - `StreamRunnable[I, O]`（`NewStreamRunnable(mode, source)`）从同一执行源提供 `Invoke`、`Stream`、`Batch`、`Pipe`；`StreamMode()` 说明实际输出能力。
-- `RunnableFunc`（`NewRunnableFunc`）、`RunnablePipe`（`NewRunnablePipe`）、`RunnableSequence` 用于组合；组合语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md#pipe-与-sequence-的一致性修复)。
+- `RunnableFunc`（`NewRunnableFunc`）、`RunnablePipe`（`NewRunnablePipe`）、`RunnableSequence` 用于组合；组合语义见 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md#pipe-与-sequence-的一致性修复)。
 - `Callback` / `BaseCallback`、`CallbackManager` 以及 `LoggingCallback`、`MetricsCallback`、`CostTrackingCallback` 提供生命周期通知。
 
 ## State

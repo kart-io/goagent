@@ -14,7 +14,7 @@
 
 Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与[代码能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
 
-Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；可通过 WithAgentID、Observer 用量事件和统一账本查询角色/调用归属，见[设计](MULTI_AGENT_HOOKS_AND_USAGE.md)与[使用指南](../guides/MULTI_AGENT_USAGE.md)。
+Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；可通过 WithAgentID、Observer 用量事件和统一账本查询角色/调用归属，见[设计](MULTI_AGENT_HOOKS_AND_USAGE.md)与[使用指南](../guides/MULTI_AGENT_USAGE_CN.md)。
 
 Hermes 图解的增量采纳见[全文对照](../research/2026-11-10-hermes-design-review.md)和[设计提案](../superpowers/specs/2026-11-10-hermes-runtime-design.md)：优先统一 Harness 技能加载与上下文来源报告，再补固定路由、会话检索和技能候选发布。网关与日历调度由宿主复用管理任务及效果投递；这些新增能力尚未实施。
 
@@ -62,7 +62,7 @@ harness/env：工具使用的文件系统与命令执行能力接口
 
 ## 扩展点
 
-各扩展点是否改变执行、错误与超时语义、恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT.md)；工具管线见 [工具中间件](../guides/TOOL_MIDDLEWARE.md) 与 [执行治理](../guides/EXECUTION_GOVERNANCE.md)；上下文治理见 [上下文策略](../guides/CONTEXT_POLICY.md)。
+各扩展点是否改变执行、错误与超时语义、恢复语义见 [扩展契约](../guides/EXTENSION_CONTRACT_CN.md)；工具管线见 [工具中间件](../guides/TOOL_MIDDLEWARE.md) 与 [执行治理](../guides/EXECUTION_GOVERNANCE.md)；上下文治理见 [上下文策略](../guides/CONTEXT_POLICY.md)。
 
 ## 相关文档
 

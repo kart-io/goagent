@@ -102,6 +102,6 @@ dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
 ## 参考
 
 - 源码：`tools/middleware/`（`Wrap` 在 `wrap.go`）、`tools/pipeline.go`、`tools/dispatcher.go`
-- [缓存指南](CACHING_GUIDE.md)
+- [缓存指南](CACHING_GUIDE_CN.md)
 
 具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `middleware.Wrap(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；空函数或返回空调用器的函数在构造时以配置错误失败。原工具可选能力仍须按前述约束显式装配。

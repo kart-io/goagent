@@ -59,7 +59,7 @@ agent, err := builder.NewSimpleBuilder(client).
 - 结果已完整可展示的单个终态工具，可显式配置 `WithReturnDirectTools("lookup")`；不会再调用模型总结或补充引用。
 - `WithSessionLog(store).WithSessionID(sessionID)` 启用多轮对话；`WithCompaction` 在对话过长时把较早的消息压缩成摘要。
 - 长任务可用 `WithOffload` 把超长工具结果换成引用、经读取工具分页读回，见[上下文治理](CONTEXT_POLICY_CN.md)；默认关闭。
-- 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES.md)展示外部工具及审批恢复。
+- 检索器实现见 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)；[MCP 与可恢复步骤](PRIORITY_CAPABILITIES_CN.md)展示外部工具及审批恢复。
 
 ## 流式调用
 
@@ -111,6 +111,6 @@ bash scripts/verify_imports.sh
 
 旧入口与旧接口已经删除，残留调用会直接编译失败。逐项迁移时确认 Provider 的 ToolStreamClient、自动工具执行、预算和回调语义，不要批量替换。
 
-[Provider 持续回归](PROVIDER_REGRESSION.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README_CN.md#节点边界的持久化恢复)。
+[Provider 持续回归](PROVIDER_REGRESSION_CN.md)提供离线门禁与有界真实测试。退款应用可复用 [refund.Service](../../workflow/refund/README.md)；串行图恢复使用 [CompileDurable](../../workflow/README_CN.md#节点边界的持久化恢复)。
 
 复杂业务可以完全采用 [GoAgent 原生编排与工具体系](NATIVE_ORCHESTRATION_CN.md)：Dispatcher 同时服务图节点与 Builder，持久图 AsRunnable 提供统一调用、步骤事件和审批恢复。无需引入其他编排框架。

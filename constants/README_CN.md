@@ -36,7 +36,7 @@ role := shared.RoleAssistant
 
 原 `interfaces`、`llm/constants`、`llm/common`、`llm`、`tools`、`store`、`parsers`、`core` 的共享常量转发入口已删除；`llm/constants` 包也已删除，不保留兼容别名。调用方直接使用本包，错误入口统一使用 `errors`。
 
-`Provider` 是本包定义的 string 底层具名类型，8 个内置提供商枚举都显式使用该类型。自定义提供商继续使用 `shared.Provider("minimax")`；字符串接口需要 `string(provider)`。Client 实现的 `Provider()` 返回类型须同步迁移，详见[常量迁移指南](../docs/guides/CONSTANTS_MIGRATION.md)。
+`Provider` 是本包定义的 string 底层具名类型，8 个内置提供商枚举都显式使用该类型。自定义提供商继续使用 `shared.Provider("minimax")`；字符串接口需要 `string(provider)`。Client 实现的 `Provider()` 返回类型须同步迁移，详见[常量迁移指南](../docs/guides/CONSTANTS_MIGRATION_CN.md)。
 
 管理规则：
 

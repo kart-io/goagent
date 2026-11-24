@@ -5630,7 +5630,7 @@ go run ./examples/multi-agent-patterns
 go test ./examples/multi-agent-patterns
 ```
 
-S5 的账本只为演示；真实业务使用 `workflow/refund.Service` 与带事务的存储。各模式的取舍与持久接入契约见 [多 Agent 预置模式指南](../../docs/guides/MULTI_AGENT_PATTERNS.md)。
+S5 的账本只为演示；真实业务使用 `workflow/refund.Service` 与带事务的存储。各模式的取舍与持久接入契约见 [多 Agent 预置模式指南](../../docs/guides/MULTI_AGENT_PATTERNS_CN.md)。
 ````
 
 - [ ] **Step 4: 运行测试与示例**
@@ -5836,7 +5836,7 @@ _ = g.AddBranch("check", func(_ context.Context, c Case) (string, error) {
 
 每个成员包装为 `tools.NewRunnableToolFactory`：参数 Schema 固定为 `{"task": string}`；结果为 `AgentOutput.Result`（字符串原样，其他类型按 JSON 编码）；`Version` 必填，随成员的行为、提示词或工具集变化而提升；`Timeout` 只在经 Dispatcher 调用时生效，0 继承 Dispatcher 默认；`Resumable` 的前提与 `RunnableToolConfig.Resumable` 相同，成员内所有效果都记在派生键下，只能在带持久日志的调用中使用。
 
-宿主把返回的工具注册到 Supervisor Agent 的 Dispatcher，再经 `Dispatcher.Tools()` 交给 Agent。参数不合法时持久运行默认拒绝整个模型回合；要把参数错误交还模型改正，在 Supervisor 的 Dispatcher 上开启 `ReturnArgumentErrors`。用量归属与成员身份见[多 Agent 用量](MULTI_AGENT_USAGE.md)。
+宿主把返回的工具注册到 Supervisor Agent 的 Dispatcher，再经 `Dispatcher.Tools()` 交给 Agent。参数不合法时持久运行默认拒绝整个模型回合；要把参数错误交还模型改正，在 Supervisor 的 Dispatcher 上开启 `ReturnArgumentErrors`。用量归属与成员身份见[多 Agent 用量](MULTI_AGENT_USAGE_CN.md)。
 
 ## 并行分支的事件
 
@@ -5929,7 +5929,7 @@ return graph.Run(ctx, runID, initial, approvalKey)
 替换为
 
 ````markdown
-- [Multi-agent patterns](docs/guides/MULTI_AGENT_PATTERNS.md) - `multiagent`: Sequential, Loop, RouterSupervisor, `ParallelStep`, `SupervisorTools` and the text relay layer on top of `workflow`; offline example: `go run ./examples/multi-agent-patterns`.
+- [Multi-agent patterns](docs/guides/MULTI_AGENT_PATTERNS_CN.md) - `multiagent`: Sequential, Loop, RouterSupervisor, `ParallelStep`, `SupervisorTools` and the text relay layer on top of `workflow`; offline example: `go run ./examples/multi-agent-patterns`.
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md)
 ````
 
@@ -5942,7 +5942,7 @@ return graph.Run(ctx, runID, initial, approvalKey)
 替换为
 
 ````markdown
-- [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
+- [多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS_CN.md)：`multiagent` 包在 `workflow` 之上提供 Sequential、Loop、RouterSupervisor、`ParallelStep`、`SupervisorTools` 与文本接力层；离线示例：`go run ./examples/multi-agent-patterns`。
 - [可组合编排](docs/guides/COMPOSABLE_ORCHESTRATION.md)
 ````
 
@@ -5955,7 +5955,7 @@ return graph.Run(ctx, runID, initial, approvalKey)
 替换为
 
 ````markdown
-| 多个 Agent 按顺序、循环或分流协作 | 使用 `multiagent` 的 Sequential、Loop、RouterSupervisor，见[多 Agent 预置模式](MULTI_AGENT_PATTERNS.md) |
+| 多个 Agent 按顺序、循环或分流协作 | 使用 `multiagent` 的 Sequential、Loop、RouterSupervisor，见[多 Agent 预置模式](MULTI_AGENT_PATTERNS_CN.md) |
 | 需要人工审批与恢复 |
 ````
 
@@ -6021,7 +6021,7 @@ return graph.Run(ctx, runID, initial, approvalKey)
 `docs/research/2026-11-04-eino-comparison.md`：把
 
 ````markdown
-| Sequential/Parallel/Loop/Supervisor/Deep/PlanExecute 预置模式 | 不进核心；如需要归 goagent-harness | 定位 §4.2 删除 `multiagent`；[Harness 迁移指南](../guides/HARNESS_MIGRATION.md) |
+| Sequential/Parallel/Loop/Supervisor/Deep/PlanExecute 预置模式 | 不进核心；如需要归 goagent-harness | 定位 §4.2 删除 `multiagent`；[Harness 迁移指南](../guides/HARNESS_MIGRATION_CN.md) |
 ````
 
 替换为
@@ -6069,7 +6069,7 @@ return graph.Run(ctx, runID, initial, approvalKey)
 ````markdown
 ### Added
 
-- 新增 `multiagent` 包：`Sequential`、`Loop`、`RouterSupervisor` 图构造器返回未编译的 `workflow.Graph`，由宿主选择 `Compile` 或 `CompileDurable`；`ParallelStep`、`AddStep`、`GuardRoute` 供手写组合流程复用；`SupervisorTools` 把成员 Agent 包装为模型工具；文本接力层 `Conversation`、`TextStep`、`TextNext`、`CloneConversation`、`MergeTurns`。路由无效时可转入 `Fallback`，错误满足 `errors.Is(err, multiagent.ErrInvalidRoute)`。与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。见[多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS.md)与离线示例 `examples/multi-agent-patterns`。
+- 新增 `multiagent` 包：`Sequential`、`Loop`、`RouterSupervisor` 图构造器返回未编译的 `workflow.Graph`，由宿主选择 `Compile` 或 `CompileDurable`；`ParallelStep`、`AddStep`、`GuardRoute` 供手写组合流程复用；`SupervisorTools` 把成员 Agent 包装为模型工具；文本接力层 `Conversation`、`TextStep`、`TextNext`、`CloneConversation`、`MergeTurns`。路由无效时可转入 `Fallback`，错误满足 `errors.Is(err, multiagent.ErrInvalidRoute)`。与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。见[多 Agent 预置模式](docs/guides/MULTI_AGENT_PATTERNS_CN.md)与离线示例 `examples/multi-agent-patterns`。
 - 新增 `testing/mocks.ScriptedClient`：实现 `llm.ToolStreamClient` 的脚本化模型替身，按顺序匹配“请求断言 → 回复”，可回复结构化工具调用，收到额外请求时报错，并提供深拷贝的请求历史与按规则的匹配次数。
 - `scripts/apicheck` 新增规则：基础与执行机制包禁止导入 `multiagent`，`multiagent` 禁止导入 `execution` 与 `plugin`。
 - `workflow/refund.Service` 新增可选 `OnRegister` 钩子

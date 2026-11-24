@@ -97,7 +97,7 @@ return builder.NewSimpleBuilder(client).
 | `WithSessionLog(session.Store)` | none | Multi-turn history comes from the session log; without it each call has no history |
 | `WithCompaction(*contextpolicy.Compaction)` | none | Compresses earlier messages when the conversation exceeds the threshold; applies only to native tool streaming |
 | `WithLongTermMemory(*memory.Memory)` | none | Cross-session long-term memory: recalls each turn and registers an extraction task at turn end; requires `WithSessionLog` and `memory.WithNamespace` in the request context; recall applies only to native tool streaming; Request hooks must not rewrite or move the recall message |
-| `WithModelCache(builder.ModelCache)` | none | Model call cache keyed by the full request; `Scope` declares a trusted isolation identity (defaults to the long-term memory namespace when long-term memory is configured); `Erase` is `EraseOff` / `EraseAuto` (default) / `EraseRequired`; with tag-based deletion `TagKey` must be at least 32 bytes; `Build` validates the config, see the [Caching Guide](CACHING_GUIDE.md#模型调用缓存) |
+| `WithModelCache(builder.ModelCache)` | none | Model call cache keyed by the full request; `Scope` declares a trusted isolation identity (defaults to the long-term memory namespace when long-term memory is configured); `Erase` is `EraseOff` / `EraseAuto` (default) / `EraseRequired`; with tag-based deletion `TagKey` must be at least 32 bytes; `Build` validates the config, see the [Caching Guide](CACHING_GUIDE.md#model-call-caching) |
 | `WithSessionID(string)` | `session-<nanosecond timestamp>` | Default session ID for the session log; `tools.WithSessionID` in the request context takes precedence |
 | `WithState(S)` | `core.NewAgentState()` | Initial state |
 

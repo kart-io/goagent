@@ -8,7 +8,7 @@
 - `management/a2a` 提供官方 Agent Card、JSON-RPC/SSE、任务身份映射、取消、等待与输入/审批恢复；`a2a/remote` 提供外部 Agent 发现与工具调用。
 - `management/mcpserver` 将 Agent 暴露为工具，提供 task_get/task_wait/task_cancel/task_respond；支持2026 MRTR 和旧协议人工输入桥接。
 - `mcp/remote` 提供可序列化检查点、换连接续接、有界输入回调、错误时保留检查点，以及宿主官方 SDK 配置入口。
-- [接入指南](../../guides/PROTOCOL_ADAPTERS.md) 与[可编译装配示例](../../../management/protocol/example_test.go)包含生命周期、身份来源、工具参数和协议边界。
+- [接入指南](../../guides/PROTOCOL_ADAPTERS_CN.md) 与[可编译装配示例](../../../management/protocol/example_test.go)包含生命周期、身份来源、工具参数和协议边界。
 
 ## 审查与修复
 

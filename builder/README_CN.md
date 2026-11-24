@@ -60,7 +60,7 @@ out, err := h.Wait(ctx)         // h.Interrupt(cause) 中止运行
 pending := h.PendingInputs()   // 独立快照：仍在队列、尚未被执行循环领取的输入
 ```
 
-入队成功不代表处理完成。Inject 不唤醒、Steer 到达过晚或额度耗尽时可能留下输入；失败时未领取的 Followup 也会保留。`PendingInputs` 不消费、不自动续跑，已领取但处理失败的输入不在其中。`Wait` 的 context 只控制等待；等待超时不代表 Handle 结束。收件箱是进程内对象，不提供跨重启可靠接收，详见[组合与输入契约](../docs/guides/AGENT_COMPOSITION.md)。
+入队成功不代表处理完成。Inject 不唤醒、Steer 到达过晚或额度耗尽时可能留下输入；失败时未领取的 Followup 也会保留。`PendingInputs` 不消费、不自动续跑，已领取但处理失败的输入不在其中。`Wait` 的 context 只控制等待；等待超时不代表 Handle 结束。收件箱是进程内对象，不提供跨重启可靠接收，详见[组合与输入契约](../docs/guides/AGENT_COMPOSITION_CN.md)。
 
 `Interrupt` 后，Handle 等待本轮 ExecuteStream 退出（包括其同步执行的工具与清理），再完成 Wait。宿主工具和钩子必须合作返回；需要限制等待时间时给 Wait 单独设置 context。取消原因与已收到的执行错误通过错误链保留，不把取消解释成业务效果已撤销。
 
@@ -117,6 +117,6 @@ builder/
 
 `WithUsageHook(func(ctx context.Context, e budget.UsageEvent))` 直接获取逐尝试 Token 和可用的累计统计，父钩子向子 Agent 继承。无需自行筛选 Observer 事件；查询错误与回调 panic 不改变业务结果。未绑定预算时仍提供单次用量，详见下述指南。
 
-`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过统一预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE.md)与[离线示例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)。
+`WithAgentID` 标识角色；子 Agent 使用父 context 共享预算与 Observer。model_attempt_start/model_usage 提供尝试键、父子身份和字段证据，可靠累计通过统一预算的 Attribution 查询。Self、Inclusive、Root 不可重复相加，见[指南](../docs/guides/MULTI_AGENT_USAGE_CN.md)与[离线示例](https://github.com/kart-io/goagent-examples/tree/main/agent-usage)。
 
-Token 统计钩子还可读取供应商报告的 `ReasoningTokens`、`ToolUsePromptTokens` 和 `ResponseModel`；先检查对应 `KnownFields`。通过 `WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置本 Agent 的显式推理控制，Gemini 思考预算使用 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确报错。见[用量指南](../docs/guides/MULTI_AGENT_USAGE.md)。
+Token 统计钩子还可读取供应商报告的 `ReasoningTokens`、`ToolUsePromptTokens` 和 `ResponseModel`；先检查对应 `KnownFields`。通过 `WithReasoning(usage.ReasoningConfig{Effort: "low"})` 设置本 Agent 的显式推理控制，Gemini 思考预算使用 `BudgetSet: true` 与 `BudgetTokens`。不支持的客户端明确报错。见[用量指南](../docs/guides/MULTI_AGENT_USAGE_CN.md)。

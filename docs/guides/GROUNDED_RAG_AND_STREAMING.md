@@ -1,8 +1,10 @@
-# 可追溯 RAG 与流式执行
+# Grounded RAG and Streaming Execution
 
-goagent 可以将检索组件（goagent-contrib 中的关键词、向量、混合检索和重排序，或任意实现 `interfaces.DocumentRetriever` 的检索器）接入 Builder，并返回模型实际收到的参考文档来源。模型 Token 流使用独立的 LLM 流式接口。
+[English](GROUNDED_RAG_AND_STREAMING.md) | [中文](GROUNDED_RAG_AND_STREAMING_CN.md)
 
-## 检索增强生成
+goagent can plug retrieval components (the keyword, vector, hybrid, and reranking retrievers in goagent-contrib, or any retriever implementing `interfaces.DocumentRetriever`) into the Builder and return the sources of the reference documents the model actually received. Model token streaming uses the separate LLM streaming interface.
+
+## Retrieval-Augmented Generation
 
 ```go
 agent, err := builder.NewSimpleBuilder(client).
@@ -19,23 +21,23 @@ if err != nil {
 output, err := agent.AsRunnable().Invoke(ctx, "退款政策是什么？")
 ```
 
-`retriever` 只需实现 `interfaces.DocumentRetriever.GetRelevantDocuments(ctx, query)`。goagent-contrib 中 `github.com/kart-io/goagent-contrib/retrieval` 的 `retrieval.KeywordRetriever`、`VectorStoreRetriever`、`HybridRetriever` 和 `RerankingRetriever` 都可直接接入，无需依赖某种向量数据库。
+`retriever` only needs to implement `interfaces.DocumentRetriever.GetRelevantDocuments(ctx, query)`. `retrieval.KeywordRetriever`, `VectorStoreRetriever`, `HybridRetriever`, and `RerankingRetriever` from `github.com/kart-io/goagent-contrib/retrieval` in goagent-contrib can all be plugged in directly, without depending on any particular vector database.
 
-便捷函数 `builder.RAGAgent(client, retriever)` 还接受具有 `Retrieve(ctx, query)` 方法的对象，以及 `interfaces.VectorStore`。直接传入向量存储时默认检索前 4 个结果。传入 `nil` 只应用提示词预设，不执行检索；不支持的对象或带类型的 nil 返回配置错误。
+The convenience function `builder.RAGAgent(client, retriever)` also accepts objects with a `Retrieve(ctx, query)` method, as well as `interfaces.VectorStore`. When a vector store is passed directly, the top 4 results are retrieved by default. Passing `nil` applies only the prompt preset and performs no retrieval; unsupported objects or a typed nil return a configuration error.
 
-行为约定：
+Behavior:
 
-- 每次执行先检索，再调用模型。检索失败直接返回错误，不悄悄退化为无依据回答。
-- 文档使用 `[1]`、`[2]` 编号，提示模型引用相应编号；来源信息用于核验引用，不代表模型引用正确性已经过自动验证。
-- 空结果明确告诉模型证据不足。nil 文档和空文本被跳过。
-- `MaxContextRunes` 限制文档正文的 Unicode 字符数，不包括固定提示词与引用编号，也不是 Token 数。超限截断不会破坏中文 UTF-8；原文档保持不变。
-- 检索内容和原始问题分开传给模型；对话记忆保存原问题，不保存扩充后的参考材料。
-- 所有执行入口（`AsRunnable`、`ExecuteStream`、`Start`）都先检索。
-- `ConfigureForRAG()` 只设置计时中间件、`MaxTokens=3000` 与 `Temperature=0.3`，不缓存答案，以免相同问题命中已过期证据。需要缓存时，显式配置能区分用户、会话和知识版本的缓存策略。
+- Each execution retrieves first and then calls the model. A retrieval failure returns an error directly instead of silently degrading to an ungrounded answer.
+- Documents are numbered `[1]`, `[2]`, and the model is prompted to cite the corresponding numbers; source information is for verifying citations and does not mean the correctness of the model's citations has been verified automatically.
+- An empty result explicitly tells the model that evidence is insufficient. nil documents and empty text are skipped.
+- `MaxContextRunes` limits the number of Unicode characters in the document bodies, excluding the fixed prompt and citation numbers; it is not a token count. Truncation past the limit does not break Chinese UTF-8; the original documents stay unchanged.
+- Retrieved content and the original question are passed to the model separately; conversation memory stores the original question, not the augmented reference material.
+- All execution entry points (`AsRunnable`, `ExecuteStream`, `Start`) retrieve first.
+- `ConfigureForRAG()` only sets the timing middleware, `MaxTokens=3000`, and `Temperature=0.3`; it does not cache answers, so that identical questions do not hit stale evidence. When caching is needed, explicitly configure a cache policy that distinguishes users, sessions, and knowledge versions.
 
-### 按租户或权限过滤
+### Filtering by Tenant or Permission
 
-`RetrievalConfig.Filter` 为每次请求生成元数据过滤条件，检索器按 `interfaces.RetrievalRequest` 执行：
+`RetrievalConfig.Filter` produces a metadata filter for each request, and the retriever executes it via `interfaces.RetrievalRequest`:
 
 ```go
 WithRetriever(retriever, builder.RetrievalConfig{
@@ -49,25 +51,25 @@ WithRetriever(retriever, builder.RetrievalConfig{
 })
 ```
 
-- 条件的每个键都须与文档元数据同名字段相等，多个键同时满足。
-- 检索器必须实现 `interfaces.RequestRetriever`，否则 `Build` 返回配置错误；不会退回无过滤检索。
-- `Filter` 返回错误或空条件时本次执行失败，不调用模型，避免漏设租户时检索到全部数据。
-- goagent-contrib 的 `VectorStoreRetriever`（底层为内存向量库或 Qdrant）支持过滤；关键词、混合、多查询与重排检索器暂不支持。
+- Each key in the filter must equal the document metadata field of the same name; multiple keys must all match.
+- The retriever must implement `interfaces.RequestRetriever`, otherwise `Build` returns a configuration error; it does not fall back to unfiltered retrieval.
+- If `Filter` returns an error or an empty filter, this execution fails without calling the model, to avoid retrieving all data when the tenant is missing.
+- goagent-contrib's `VectorStoreRetriever` (backed by the in-memory vector store or Qdrant) supports filtering; the keyword, hybrid, multi-query, and reranking retrievers do not yet.
 
-输出元数据：
+Output metadata:
 
-| 字段 | 含义 |
+| Field | Meaning |
 |---|---|
-| `retrieval_sources` | `[]builder.RetrievalSource`：编号、文档 ID、来源和检索分数，仅包含实际传给模型的文档 |
-| `retrieval_document_count` | 实际采用的文档数 |
-| `retrieval_context_runes` | 实际采用的正文字符数 |
-| `retrieval_truncated` | 是否因文档数或字符预算省略了证据 |
+| `retrieval_sources` | `[]builder.RetrievalSource`: number, document ID, source, and retrieval score; contains only the documents actually passed to the model |
+| `retrieval_document_count` | Number of documents actually used |
+| `retrieval_context_runes` | Number of body characters actually used |
+| `retrieval_truncated` | Whether evidence was omitted because of the document count or character budget |
 
-检索器实现（BM25、混合检索、重排、Qdrant 等）位于 [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval)，均满足 `interfaces.DocumentRetriever`，可直接传给 `RAGAgent` 或 `WithRetriever`。
+Retriever implementations (BM25, hybrid retrieval, reranking, Qdrant, etc.) live in [goagent-contrib/retrieval](https://github.com/kart-io/goagent-contrib/tree/master/retrieval); all satisfy `interfaces.DocumentRetriever` and can be passed directly to `RAGAgent` or `WithRetriever`.
 
-## 真实模型 Token 流
+## Real Model Token Streaming
 
-所有 `llm.Client`（如 OpenAI、DeepSeek、Gemini Provider）都可直接调用：
+Every `llm.Client` (such as the OpenAI, DeepSeek, and Gemini providers) can be called directly:
 
 ```go
 ctx, cancel := context.WithCancel(ctx)
@@ -90,6 +92,6 @@ for chunk := range chunks {
 }
 ```
 
-`Delta` 是新增文本，`Content` 是累计文本。`finish_reason` 后可能还有用量帧，因此只有终止块标记 `Done=true`。流中读取错误通过 `chunk.Error` 传回。OpenAI 兼容服务（含 DeepSeek）默认发送 `stream_options.include_usage` 以取得用量；拒绝未知字段的严格网关可用 `llm.WithStreamUsage(false)` 关闭，此时流通常不带用量。
+`Delta` is the new text and `Content` is the accumulated text. A usage frame may follow `finish_reason`, so only the terminal chunk is marked `Done=true`. Read errors in the stream are returned through `chunk.Error`. OpenAI-compatible services (including DeepSeek) send `stream_options.include_usage` by default to obtain usage; strict gateways that reject unknown fields can turn it off with `llm.WithStreamUsage(false)`, in which case the stream usually carries no usage.
 
-Agent 级的事件流用 `agent.AsRunnable().Stream` 或 `ExecuteStream`，见[执行契约](EXECUTION_CONTRACT.md)与[事件流](PRIORITY_CAPABILITIES.md#统一事件流)。
+For Agent-level event streams, use `agent.AsRunnable().Stream` or `ExecuteStream`; see [Execution Contract](EXECUTION_CONTRACT.md) and [event stream](PRIORITY_CAPABILITIES.md#unified-event-stream).

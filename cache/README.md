@@ -15,7 +15,7 @@
 | `CacheStats` | 统计信息；`SimpleCache` 填写 `Hits`、`Misses`、`Size`、`HitRate` |
 | `CacheConfig` | 配置；`NewCacheFromConfig` 在 `Enabled` 为 false 时返回 `NoOpCache`，否则返回以 `DefaultTTL` 构造的 `SimpleCache` |
 
-`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；一致性契约（"已完成"指 `SetTagged` 在 `DeleteTag` 开始前已返回）：S1（必须）`DeleteTag` 返回后，已完成的 `SetTagged` 写入的、带该标签的条目不可读，可用原子操作，也可用令牌或版本校验使旧写入在读取时失效，不要求事务或脚本；S2（实现须写明）这些条目何时物理删除，不能在 `DeleteTag` 返回时删除的情形须写明回收上限。`SimpleCache` 用同一把锁使 S2 在 `DeleteTag` 返回时成立。外部实现用 `cachetest.RunTagged` 验证契约。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE.md#模型调用缓存)，不要手写按提示词为键的缓存。
+`Tagged` 的实现要求：`DeleteTag` 幂等；删除任一标签就删除条目本身及其其他标签；外部后端里标签集合的过期时间不得短于条目 TTL；标签关联条目多时分批删除；一致性契约（"已完成"指 `SetTagged` 在 `DeleteTag` 开始前已返回）：S1（必须）`DeleteTag` 返回后，已完成的 `SetTagged` 写入的、带该标签的条目不可读，可用原子操作，也可用令牌或版本校验使旧写入在读取时失效，不要求事务或脚本；S2（实现须写明）这些条目何时物理删除，不能在 `DeleteTag` 返回时删除的情形须写明回收上限。`SimpleCache` 用同一把锁使 S2 在 `DeleteTag` 返回时成立。外部实现用 `cachetest.RunTagged` 验证契约。Agent 的模型答案缓存用 `builder.WithModelCache`，见[缓存指南](../docs/guides/CACHING_GUIDE_CN.md#模型调用缓存)，不要手写按提示词为键的缓存。
 
 缓存错误统一使用 `github.com/kart-io/goagent/errors` 的 `ErrCacheMiss`、`ErrCacheDisabled`。
 

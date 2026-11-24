@@ -1,67 +1,69 @@
-# 运行能力与后续验收
+# Runtime Capabilities and Follow-up Acceptance
 
-核对日期：2026-11-14。实现基线：master 的 `54c308f`（v0.53.0）。本文记录当前支持范围；验收命令的最新结果单独留在执行报告，不以历史评测替代本次验证。
+[English](RUNTIME_READINESS.md) | [中文](RUNTIME_READINESS_CN.md)
 
-## 当前支持范围
+Checked on: 2026-11-14. Implementation baseline: `54c308f` on master (v0.53.0). This document records the current scope of support; the latest results of the acceptance commands are kept separately in the execution report, and historical evaluations do not substitute for this verification.
 
-| 能力 | 当前实现 | 宿主需要承担的部分 |
+## Current Scope of Support
+
+| Capability | Current implementation | What the host is responsible for |
 |---|---|---|
-| 执行与恢复 | Builder 原生工具循环、Graph、操作日志、会话日志、审批与根预算 | 稳定执行键、版本、预算存储、工具授权与资源生命周期 |
-| 外部副作用 | 已完成操作回放；中断操作可用 `Reconcile` 核对 | 非幂等工具提供业务去重或核对策略；Dispatcher 默认允许重跑中断工具，不能仅靠日志保证外部系统不重复生效 |
-| 长期记忆 | 记录、时序图谱、社区摘要、删除与派生级联、回退、异步抽取 | 可信命名空间、会话日志、durable.Store 与维护任务 |
-| 自动召回 | 仅原生工具流；召回正文不进入会话历史与持久日志 | 纯聊天未注册工具时不自动召回 |
-| 管理服务 | Agent/版本、Session/Fork、Task、Approval、Worker、Outbox 与查询 | 注入存储、认证授权与执行工厂；显式启动 Worker |
-| 管理 Worker | 单个活动 Worker，可并发执行不同会话 | 不提供多实例分片或心跳超时自动接管；回收 owner 前确认旧进程已退出 |
-| 记忆 Worker | 同一存储上的 `memory/worker` 锁互斥 | 不能靠增加相同存储上的 Worker 实例提升抽取并行度；监测积压与处理时长 |
-| 记忆管理扩展 | 分页列表与共享命名空间仍是设计 | 当前不要调用设计中的 `Memory.List` 或 `WithSharedNamespaces`；详见 [MEMORY_ADMIN](../design/MEMORY_ADMIN.md) |
+| Execution and recovery | Builder native tool loop, Graph, operation journal, session log, approval, and root budget | Stable execution keys, versions, budget storage, tool authorization, and resource lifecycle |
+| External side effects | Completed operations are replayed; interrupted operations can be checked with `Reconcile` | Non-idempotent tools provide business deduplication or a reconciliation policy; the Dispatcher allows rerunning interrupted tools by default, so the journal alone cannot guarantee the external system does not apply an effect twice |
+| Long-term memory | Records, temporal graph, community summaries, deletion with derivation cascade, rollback, asynchronous extraction | Trusted namespaces, session log, durable.Store, and maintenance tasks |
+| Automatic recall | Only in the native tool flow; recalled text does not enter session history or the durable journal | Plain chat with no registered tools does not recall automatically |
+| Management service | Agent/versions, Session/Fork, Task, Approval, Worker, Outbox, and queries | Inject storage, authentication and authorization, and the execution factory; start the Worker explicitly |
+| Management Worker | A single active Worker that can run different sessions concurrently | No multi-instance sharding or automatic takeover on heartbeat timeout; confirm the old process has exited before reclaiming the owner |
+| Memory Worker | Mutual exclusion via the `memory/worker` lock on the same storage | Extraction parallelism cannot be increased by adding Worker instances on the same storage; monitor backlog and processing time |
+| Memory management extensions | Paginated listing and shared namespaces are still designs | Do not currently call the designed `Memory.List` or `WithSharedNamespaces`; see [MEMORY_ADMIN](../design/MEMORY_ADMIN.md) |
 
-`ConfigurableAgent` 的执行门保护整个会话轮次，同一实例串行执行。宿主按会话建立实例，跨会话并发能力需要结合共享资源限制验证，不能从 `Batch` 或多 Agent API 的存在推断吞吐。
+The execution gate of `ConfigurableAgent` protects the whole session round, and a single instance executes serially. The host creates instances per session; cross-session concurrency must be verified together with shared resource limits, and throughput cannot be inferred from the existence of `Batch` or the multi-Agent APIs.
 
-长期记忆的 `Durable` 必须同时实现 `durable.Scoped`。没有运行抽取 Worker（`Run`/`ProcessPending`）的部署仍需运行 `RunMaintenance` 或定期调用 `Maintain`，以处理遗忘、Purge 与迟到向量的清理。当前默认每个命名空间 state 上限为 8 MiB；删除类操作不受此上限阻止。
+The `Durable` of long-term memory must also implement `durable.Scoped`. Deployments that do not run the extraction Worker (`Run`/`ProcessPending`) still need to run `RunMaintenance` or call `Maintain` periodically to handle forgetting, Purge, and cleanup of late vectors. The current default state limit per namespace is 8 MiB; deletion operations are not blocked by this limit.
 
-## 记忆升级与回滚
+## Memory Upgrade and Rollback
 
-G0/G1/G2 已合并。设计文档保留了各阶段的原始方案和测量，应以当前公开接口及 [CHANGELOG](../../CHANGELOG.md) 的迁移条目为准。
+G0/G1/G2 have been merged. The design documents keep each stage's original plan and measurements; the current public interfaces and the migration entries in the [CHANGELOG](../../CHANGELOG.md) take precedence.
 
-从旧 `store.Store` 记录库迁移到 G1/G2：
+Migrating from the old `store.Store` record store to G1/G2:
 
-1. 停止 Agent 流量与 Worker，结束进行中的持久运行（含等待审批的运行），备份旧记录与索引。
-2. 改用 `Config.Durable`；自定义 `Index` 实现 `IDs`、`Clear`。需要数据回滚时预先设置 `RollbackWindow` 并保留删除日志。
-3. 使用 `MigrateFromStore` 并检查每个命名空间的报告。旧关系、实体、社区与任务不迁入；记录来源从旧单一字段改为 `Sources` 后，旧格式来源不会自动补齐。
-4. 完成清理后恢复流量，启动 Worker 或维护任务。完整步骤与冲突恢复见 [G1 存储设计](../design/MEMORY_G1_STORAGE.md)。
+1. Stop Agent traffic and Workers, finish in-progress durable runs (including runs waiting for approval), and back up the old records and indexes.
+2. Switch to `Config.Durable`; a custom `Index` implements `IDs` and `Clear`. If data rollback is needed, set `RollbackWindow` in advance and keep the deletion log.
+3. Use `MigrateFromStore` and check the report for each namespace. Old relations, entities, communities, and tasks are not migrated; record sources change from the old single field to `Sources`, and old-format sources are not filled in automatically.
+4. After cleanup is complete, restore traffic and start the Worker or maintenance task. For the full steps and conflict recovery, see the [G1 storage design](../design/MEMORY_G1_STORAGE.md).
 
-从 G1 升到 G2：
+Upgrading from G1 to G2:
 
-1. 停止 Worker 并备份 state；升级后执行 `Reindex(true)`，再启动 Worker。
-2. 新程序可读取 G1 的 `/2`，写入 `memory-state-blob/3` 与 `memory-head/3`。旧程序拒绝读取 `/3`，代码回退必须配合恢复升级前的数据备份。
-3. G1 的关系缺少派生依据、实体缺少名称来源，不再直接使用；图谱随新对话重建。社区摘要在第一次同步时重写，会产生模型调用。
-4. 数据回滚后，按删除日志重放回滚窗口内的 Forget/Purge，再重建索引；未启用删除日志时，数据回滚可能带回后来被遗忘的内容。
+1. Stop the Worker and back up state; after upgrading, run `Reindex(true)`, then start the Worker.
+2. The new program can read G1's `/2` and writes `memory-state-blob/3` and `memory-head/3`. The old program refuses to read `/3`, so a code rollback must be paired with restoring the pre-upgrade data backup.
+3. G1 relations lack derivation evidence and entities lack name sources, so they are no longer used directly; the graph is rebuilt from new conversations. Community summaries are rewritten on the first sync, which makes model calls.
+4. After a data rollback, replay Forget/Purge within the rollback window from the deletion log, then rebuild the index; without the deletion log enabled, a data rollback may bring back content that was later forgotten.
 
-恢复时仍需绑定原轮次的命名空间，变更会返回 `ErrMemoryNamespaceChanged`。Request 钩子不能改写或移动召回消息；恢复期间改变请求意图会产生冲突。更多约束见 [删除治理](../design/MEMORY_GOVERNANCE.md)。
+Recovery must still bind to the namespace of the original round; a change returns `ErrMemoryNamespaceChanged`. Request hooks must not rewrite or move recall messages; changing the request intent during recovery causes a conflict. For more constraints, see [Deletion governance](../design/MEMORY_GOVERNANCE.md).
 
-## 下一轮记忆效果验收
+## Next Round of Memory Effectiveness Acceptance
 
-现有 [G2 LOCOMO 评测](../evaluation/2026-11-13-memory-g2/README.md)两次 graph 准确率为 50.5%、51.0%，与 G1 的差异不显著。证据会话召回率上升受来源并集口径变化影响，不能单独作为效果提升依据。现有 [G1 时间题诊断](../evaluation/2026-11-13-memory-g1/README.md)发现抽取遗漏、相对时间处理和排序问题，后续优先逐环节验证。
+The existing [G2 LOCOMO evaluation](../evaluation/2026-11-13-memory-g2/README.md) had graph accuracy of 50.5% and 51.0% across two runs, not significantly different from G1. The increase in evidence session recall is affected by the change to the source-union measurement, and cannot on its own be taken as evidence of improved effectiveness. The existing [G1 temporal question diagnosis](../evaluation/2026-11-13-memory-g1/README.md) found extraction omissions, relative time handling, and ranking problems; follow-up work should verify each stage first.
 
-下一轮实验按以下顺序进行，前一步结果决定后一步改动：
+The next round of experiments proceeds in the following order, with the result of each step deciding the change in the next:
 
-1. 固定题目 ID、模型与提示词、抽取输入、嵌入模型、时钟、RecallK 与上下文预算，保留逐题输出与代码版本。使用独立保留题检验，避免只针对既有错题调参。
-2. 将错误区分为抽取、候选检索、排序、上下文截断、作答或判定；时间题核对原事件时间与合并记录更新时间，多跳题核对每条必要证据。
-3. 在相同上下文预算下，分别比较现行方案、时间相关排序和 RecallK 调整，一次改变一个变量；对同一题目做配对统计，报告分题型准确率、证据精确率/召回率、上下文长度与弃答情况。
-4. 报告抽取与作答的请求数、Token、延迟 p50/p95、失败率与实际计费；货币成本须采用实际账单或当时价格，不用字符数代替。
-5. 功能效果与运行性能分开验收：在实际后端复测冷/热召回、每命名空间写入、缓存淘汰与 Worker 积压。现有 5k 记录测量有硬件、数据与提交速率限制，冷召回单独报告，不能直接外推到生产。
+1. Fix question IDs, model and prompts, extraction input, embedding model, clock, RecallK, and context budget, and keep per-question output and the code version. Use an independent held-out question set to avoid tuning only against known wrong answers.
+2. Classify errors as extraction, candidate retrieval, ranking, context truncation, answering, or judging; for temporal questions, check the original event time against the update time of the merged record, and for multi-hop questions, check each required piece of evidence.
+3. Under the same context budget, compare the current approach, time-aware ranking, and RecallK adjustment separately, changing one variable at a time; perform paired statistics on the same questions, and report per-category accuracy, evidence precision/recall, context length, and abstentions.
+4. Report request counts, tokens, latency p50/p95, failure rate, and actual billing for extraction and answering; monetary cost must use actual bills or the prices at the time, not character counts.
+5. Accept functional effectiveness and runtime performance separately: re-measure cold/warm recall, per-namespace writes, cache eviction, and Worker backlog on the real backend. The existing 5k-record measurement is limited by hardware, data, and submission rate; cold recall is reported separately and cannot be extrapolated directly to production.
 
-业务准确率、延迟和成本上限需由具体场景定义；当前不据此自动切换算法或发起付费评测。
+Business accuracy, latency, and cost limits must be defined by the specific scenario; currently these do not trigger automatic algorithm switching or paid evaluations.
 
-## 多实例能力的启动条件
+## Preconditions for Multi-Instance Capability
 
-先测单活动 Worker 的目标负载：并发会话数、每会话轮次、工具耗时、记忆抽取量、任务积压、恢复耗时与存储锁等待。只有单实例达到资源瓶颈或业务明确要求自动故障接管时，再设计多实例调度。
+First measure the target load of a single active Worker: concurrent sessions, rounds per session, tool duration, memory extraction volume, task backlog, recovery time, and storage lock wait. Design multi-instance scheduling only when a single instance reaches a resource bottleneck or the business explicitly requires automatic failover.
 
-该阶段的交付需要一起定义：分片归属、owner/generation 隔离、租约失效、旧执行者停止证明、外部副作用核对、审批与取消路由、恢复目标，以及旧版本数据的升级路径。用进程终止、网络隔离和旧持有者迟到写入验证，不能仅增加 Worker 数量。
+Deliverables for that phase need to be defined together: shard ownership, owner/generation isolation, lease expiry, proof that the old executor has stopped, reconciliation of external side effects, routing of approvals and cancellation, recovery targets, and the upgrade path for old-version data. Verify with process termination, network isolation, and late writes from old holders; simply adding Workers is not enough.
 
-当前跨仓数据库验收入口为 `make compatibility-postgres`；它需要专用数据库和允许重启的容器，并要求关键场景实际通过，不能把跳过算作验收。
+The current cross-repository database acceptance entry point is `make compatibility-postgres`; it requires a dedicated database and containers that may be restarted, and requires the key scenarios to actually pass; skips must not count as acceptance.
 
-## 本地验证入口
+## Local Verification Entry Points
 
 ```bash
 make test
@@ -72,4 +74,4 @@ go vet ./...
 bash scripts/verify_imports.sh
 ```
 
-`make test` 与 `make coverage` 各自运行全量主模块测试，完整验收时依次执行或选择带覆盖率的一套，避免同时运行。测试默认逐包、无缓存、带竞态检测，包超时为 10 分钟；变量与范围见[测试指南](../development/TESTING_BEST_PRACTICES.md)。独立 frameworkbench 不在根模块的 `go test ./...` 内，需要另行执行。
+`make test` and `make coverage` each run the full main-module tests; for full acceptance, run them one after the other or choose the set with coverage, and avoid running them at the same time. By default, tests run package by package, without caching, with race detection, and with a 10-minute package timeout; for variables and scope, see the [testing guide](../development/TESTING_BEST_PRACTICES.md). The standalone frameworkbench is not included in the root module's `go test ./...` and must be run separately.
