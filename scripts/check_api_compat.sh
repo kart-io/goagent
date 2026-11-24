@@ -29,6 +29,15 @@ awk -v list="$work/stable.txt" '
     if (pkg in stable) print
   }' "$work/diff.txt" >"$work/breaking.txt"
 
+# apidiff 逐包比较，看不到传递暴露的实验类型变化、别名改指向与标准库类型互换，由 exposurecheck 补上。
+# 登记表与源码不一致时直接失败，不受 ALLOW_BREAKING 影响。
+root="$(pwd)"
+if ! (cd scripts/exposurecheck && GOWORK=off go run . -head "$root" -base "$work/base" \
+  -stable "$root/$STABLE" -registry "$root/scripts/api-exposure.txt") >>"$work/breaking.txt"; then
+  echo "传递暴露登记与源码不一致，按 docs/API_STABILITY.md「传递暴露」更新 scripts/api-exposure.txt。" >&2
+  exit 1
+fi
+
 if [ ! -s "$work/breaking.txt" ]; then
   echo "稳定包相对 $BASE 无不兼容 API 变更。"
   exit 0

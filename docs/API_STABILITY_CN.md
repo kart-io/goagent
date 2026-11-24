@@ -41,6 +41,18 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 - 提高 `go.mod` 的最低 Go 版本只在次版本中进行，并写入 CHANGELOG。
 - 未导出代码、`internal/` 包、示例与测试不在承诺范围内。
 
+## 传递暴露
+
+稳定包的导出 API 有时会用到实验包的类型，例如 `builder.ModelCache.Cache`（`cache.Bytes`）、`llm.Client.Provider()`（`constants.Provider`）。调用方经稳定包依赖到的部分同样受稳定承诺约束，分三种模式：
+
+| 模式 | 适用 | 冻结内容 |
+|---|---|---|
+| `full` | 调用方实现或赋值的接口、函数类型，以及调用方构造的具名类型 | 底层类型与方法集 |
+| `identity` | 原样透传的不透明句柄，如由 `memory.New` 构造的 `*memory.Memory` | 只保证类型名与所在包不变，方法集随实验包演进 |
+| `alias` | 类型别名，如 `codec/json.RawMessage` | 别名指向，永不改变 |
+
+所有此类暴露都登记在 [`scripts/api-exposure.txt`](../scripts/api-exposure.txt)。新增暴露未登记、或已登记条目不再被暴露，检查都会失败。
+
 ## 强制执行
 
 `scripts/check_api_compat.sh` 用 Go 团队的 [`apidiff`](https://pkg.go.dev/golang.org/x/exp/cmd/apidiff) 比较工作区与最近发布 tag 的导出 API，稳定包出现不兼容变更即失败。每个 PR 都会运行；PR 带 `breaking-change` 标签时只报告不失败。
@@ -49,6 +61,8 @@ GoAgent 正在走向 v1.0。本文说明哪些包有兼容承诺、v1.0 前后�
 bash scripts/check_api_compat.sh            # 与最近的 tag 比较
 bash scripts/check_api_compat.sh v0.55.0    # 与指定版本比较
 ```
+
+`apidiff` 逐包比较，看不到稳定签名所引用的实验接口新增方法、实验函数类型改签名、别名改指向，以及标准库类型之间的互换。因此同一脚本还会运行 `scripts/exposurecheck`，按上述模式比较两个版本，把这些变化报为不兼容。
 
 ## v1.0 路线
 

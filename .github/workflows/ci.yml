@@ -55,6 +55,9 @@ jobs:
       - name: Verify slogx logging example
         run: make test-example-slogx
 
+      - name: Verify API exposure checker
+        run: make test-exposurecheck
+
       - name: Check coverage gates
         run: bash scripts/check_coverage.sh coverage.out
 

@@ -41,6 +41,18 @@ Experimental packages may change in any minor release. Breaking changes are stil
 - Raising the minimum Go version in `go.mod` happens only in a minor release and is noted in the CHANGELOG.
 - Unexported code, `internal/` packages, examples and tests are not covered.
 
+## Transitive exposure
+
+A stable package's exported API sometimes names a type from an experimental package, for example `builder.ModelCache.Cache` (`cache.Bytes`) or `llm.Client.Provider()` (`constants.Provider`). Such a type is covered by the stable promise to the extent callers depend on it through the stable package, in one of three modes:
+
+| Mode | Applies to | Frozen |
+|---|---|---|
+| `full` | Interfaces and function types that callers implement or assign; named types they construct | Underlying type and method set |
+| `identity` | Opaque handles passed through unchanged, such as `*memory.Memory` from `memory.New` | Only that the type keeps its name and package; its methods follow the experimental package |
+| `alias` | Type aliases, such as `codec/json.RawMessage` | The alias target; it never changes |
+
+Every such exposure is listed in [`scripts/api-exposure.txt`](../scripts/api-exposure.txt). Adding a new exposure without listing it fails the check, and so does a listed entry that is no longer exposed.
+
 ## Enforcement
 
 `scripts/check_api_compat.sh` compares the exported API of the working tree with the latest release tag using the Go team's [`apidiff`](https://pkg.go.dev/golang.org/x/exp/cmd/apidiff), and fails when a stable package has an incompatible change. It runs on every pull request; the `breaking-change` label turns the failure into a report.
@@ -49,6 +61,8 @@ Experimental packages may change in any minor release. Breaking changes are stil
 bash scripts/check_api_compat.sh            # compare with the latest tag
 bash scripts/check_api_compat.sh v0.55.0    # compare with a given version
 ```
+
+`apidiff` compares packages one at a time, so it misses a new method on an experimental interface that a stable signature names, a changed experimental function type, a changed alias target, and a swap between standard-library types. The same script therefore runs `scripts/exposurecheck`, which applies the modes above to both versions and reports these changes as incompatible.
 
 ## Road to v1.0
 

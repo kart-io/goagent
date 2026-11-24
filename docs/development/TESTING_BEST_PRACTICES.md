@@ -2,7 +2,7 @@
 
 ## 覆盖率与门禁
 
-- `make coverage` 和 CI 执行相同门禁：整体（排除示例）≥75%，`core/durable` ≥70%，`core/budget`、`workflow`、`builder`、`management`、`management/adapters` 各 ≥75%，`multiagent` ≥85%，`management/httpapi` ≥80%；`llm/providers/openai.go` ≥70%，`llm/providers/gemini.go` ≥65%，`llm/common/base.go` ≥50%。模块阈值针对精确包路径，不混入子包；全部按语句数加权，缺失关键数据会失败。
+- `make coverage` 和 CI 执行相同门禁，门槛以 [`scripts/coverage-gates.txt`](../../scripts/coverage-gates.txt) 为唯一来源：整体（排除示例）一条，`scripts/stable-packages.txt` 中每个稳定包各一条（缺条目即失败），另有部分实验包与关键文件。包门槛针对精确包路径，不混入子包；全部按语句数加权，缺失数据会失败。已有 profile 时用 `make coverage-check PROFILE=文件` 只跑门禁。门槛随覆盖率提升上调；下调须在 PR 中说明理由。
 - 新行为必须带测试，覆盖正常流程、边界与错误恢复；修 bug 先写能复现的测试。
 - 默认测试不访问外部服务；真实模型测试见 [Provider 持续回归](../guides/PROVIDER_REGRESSION.md)。
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 工程
+
+- API 稳定性政策新增“传递暴露”：稳定包导出 API 引用的实验包类型按 `full`/`identity`/`alias` 三种模式冻结，登记在 `scripts/api-exposure.txt`，见 [API_STABILITY](docs/API_STABILITY_CN.md#传递暴露)。
+- 新增 `scripts/exposurecheck`（嵌套模块，依赖 `golang.org/x/tools`，主模块不新增依赖），由 `check_api_compat.sh` 调用，补上 `apidiff` 看不到的实验接口新增方法、实验函数类型改签名、别名改指向与标准库类型互换；`make test-exposurecheck` 验证工具与登记表。
+- 覆盖率门槛改由 `scripts/coverage-gates.txt` 声明，每个稳定包必须有门槛。包门槛改为精确匹配、不含子包，并按实测值收紧：整体 75→80，`builder` 75→89、`core/durable` 70→82、`core/budget` 75→87、`workflow` 75→84，其余稳定包首次设门槛。PR 覆盖率评论改为读取检查生成的摘要表。
+
 ## [0.61.0] - 2026-11-23
 
 ### 记忆可靠性与引用装配
