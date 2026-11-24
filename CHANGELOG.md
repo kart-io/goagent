@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 `scripts/exposurecheck`（嵌套模块，依赖 `golang.org/x/tools`，主模块不新增依赖），由 `check_api_compat.sh` 调用，补上 `apidiff` 看不到的实验接口新增方法、实验函数类型改签名、别名改指向与标准库类型互换；`make test-exposurecheck` 验证工具与登记表。
 - 覆盖率门槛改由 `scripts/coverage-gates.txt` 声明，每个稳定包必须有门槛。包门槛改为精确匹配、不含子包，并按实测值收紧：整体 75→80，`builder` 75→89、`core/durable` 70→82、`core/budget` 75→87、`workflow` 75→84，其余稳定包首次设门槛；`-` 表示目标不得含可执行语句。PR 覆盖率评论改为读取检查生成的摘要表。
 - 补齐 `interfaces`（`Document`、`TokenUsage` 方法）与 `llm`（能力判定、`ProviderError.ErrorCode`、`ValidateReasoningRequest`、流式/嵌入/格式选项）的测试，门槛分别由 0、64 上调到 90、86。
+- 在包内补测 `builder/contextpolicy` 的 `RecallTool`（原先只由 `builder` 的测试间接覆盖，不计入本包）与 `mcp/remote` 的续接参数校验，门槛分别由 77、78 上调到 87、85。
 
 ## [0.61.0] - 2026-11-23
 
