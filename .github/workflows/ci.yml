@@ -169,6 +169,10 @@ jobs:
           version: v2.15.0
           args: --timeout=5m
 
+      # 只有代码实际调用到的漏洞才会使其失败；仅被依赖、未被调用的漏洞只报告。
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   build:
     name: Build
     runs-on: ubuntu-latest
