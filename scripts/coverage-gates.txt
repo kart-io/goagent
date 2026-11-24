@@ -23,8 +23,8 @@ core/state               89
 core/usage               74
 errors                   83
 execution                89
-interfaces               0    # 实测 0%：store.go/token.go 的方法无测试，补测后上调
-llm                      64   # 三次运行在 66.1%~67.4% 间抖动
+interfaces               90
+llm                      86
 llm/common               83
 llm/providers            88
 mcp/remote               78

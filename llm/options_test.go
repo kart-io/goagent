@@ -1,12 +1,14 @@
 package llm
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	shared2 "github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/usage"
 )
 
 // TestDefaultConfig 测试默认配置
@@ -161,4 +163,37 @@ func TestWithTimeoutRoundsUp(t *testing.T) {
 		config := NewLLMOptionsWithOptions(WithTimeout(c.in))
 		assert.Equal(t, c.want, config.Timeout, "WithTimeout(%v)", c.in)
 	}
+}
+
+func TestStreamEmbeddingAndFormatOptions(t *testing.T) {
+	httpClient := &http.Client{}
+	reasoning := usage.ReasoningConfig{Effort: "low"}
+	config := NewLLMOptionsWithOptions(
+		WithEmbeddingModel("embed-1"),
+		WithEmbeddingDimensions(256),
+		WithEmbeddingRetries(3),
+		WithStreamIdleTimeout(-time.Second),
+		WithStreamTimeout(time.Minute),
+		WithStreamUsage(false),
+		WithJSONResponse(),
+		WithHTTPClient(httpClient),
+		WithReasoning(reasoning),
+	)
+
+	assert.Equal(t, "embed-1", config.EmbeddingModel)
+	assert.Equal(t, 256, config.EmbeddingDimensions)
+	assert.Equal(t, 3, config.EmbeddingRetries)
+	assert.Zero(t, config.StreamIdleTimeout, "负值按不限制处理")
+	assert.Equal(t, time.Minute, config.StreamTimeout)
+	assert.True(t, config.DisableStreamUsage)
+	assert.Same(t, ResponseFormatJSON, config.ResponseFormat)
+	assert.Same(t, httpClient, config.HTTPClient)
+
+	reasoning.Effort = "high"
+	assert.Equal(t, "low", config.Reasoning.Effort, "WithReasoning 须复制配置")
+
+	text := &ResponseFormat{Type: "text"}
+	config = NewLLMOptionsWithOptions(WithStreamUsage(true), WithResponseFormat(text))
+	assert.False(t, config.DisableStreamUsage)
+	assert.Same(t, text, config.ResponseFormat)
 }
