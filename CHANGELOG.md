@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 安全
+
+- `github.com/klauspost/compress` 由 v1.18.0 升到 v1.20.5，修复 GO-2026-6865（两块帧解码 panic）与 GO-2026-5841。`memory` 的状态快照编解码会调用受影响的 zstd 路径，构造的快照可使进程崩溃。
+
+### 工程
+
+- CI 的 Lint 任务新增 `govulncheck`：代码实际调用到的已知漏洞会使构建失败。
+
 ## [0.62.1] - 2026-11-24
 
 ### 修复
