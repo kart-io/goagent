@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-11-24
+
 ### 破坏性变更：constants 清理后纳入稳定包
 
 `constants` 加入 `scripts/stable-packages.txt`，此后受稳定承诺约束；导出标识符改为英文 godoc。纳入前删除主模块与 contrib、examples、harness、oncall-agent 中都没有引用的 12 个常量：`RoleObservation`、`RoleFunctionCall`、`RoleHuman`、`KeyValue`、`Basic`、`ToolTypeFunction`、`MaxIdleConns`、`IdleConnTimeout`、`DefaultFrequencyPenalty`、`DefaultPresencePenalty`、`StatusFailed`、`StatusCompleted`。
@@ -1585,7 +1587,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.61.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.0...HEAD
+[0.62.0]: https://github.com/kart-io/goagent/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/kart-io/goagent/compare/v0.60.1...v0.61.0
 [0.60.1]: https://github.com/kart-io/goagent/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/kart-io/goagent/compare/v0.59.2...v0.60.0
