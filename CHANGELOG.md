@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `docs/guides` 中 24 份原先只有中文的指南补齐英文主文件，中文版改名为 `_CN` 后缀，站内中文文档的链接同步指向 `_CN`。
 - 修正指南与代码不符之处：`llm.WithTimeout` 未设置时不设超时（Ollama 同样）；内置 Provider 枚举为 9 个（含 `ProviderMiniMax`）；常量迁移表实为 47 项；插件指南不再提已删除的 Runnable 注册表。
+- 16 个稳定包补齐中英文 README（`README.md` 与 `README_CN.md`）：builder/contextpolicy、core/budget、core/durable、core/logging、core/middleware、core/observe、core/state、core/usage、execution、llm/common、llm/providers、mcp/remote、tools/middleware、tools/policy、tools/spill、tools/toolargs。
+- 修正指南：`read_context_result` 每页上限由 `ReadPageRunes` 决定，为 0 时一次读到末尾；`NewOllamaClientSimple` 未设超时即不设超时。
 
 ## [0.62.2] - 2026-11-24
 
