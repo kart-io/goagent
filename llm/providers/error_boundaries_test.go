@@ -24,7 +24,6 @@ import (
 )
 
 func Test提供方真实HTTP保留错误码与恢复信息(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	for _, name := range []string{"openai", "gemini"} {
 		for _, mode := range []string{"complete", "embed"} {
 			for _, tc := range []struct {
@@ -87,7 +86,6 @@ func Test提供方真实HTTP保留错误码与恢复信息(t *testing.T) {
 }
 
 func TestDeepSeekEmbed证书失败只请求一次(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	var connections atomic.Int32
 	server := httptest.NewUnstartedServer(http.NotFoundHandler())
 	server.Config.ErrorLog = log.New(io.Discard, "", 0)
@@ -109,7 +107,6 @@ func TestDeepSeekEmbed证书失败只请求一次(t *testing.T) {
 }
 
 func Test提供方真实请求超时与取消保留原因(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	for _, name := range []string{"openai", "gemini"} {
 		for _, mode := range []string{"complete", "embed"} {
 			for _, canceled := range []bool{false, true} {

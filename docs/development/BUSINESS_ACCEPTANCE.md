@@ -25,7 +25,7 @@ make compatibility COMPAT_OUT=/tmp/goagent-acceptance-new
 退款案例的跨进程测试位于 goagent-examples 的 `workflow/refund-recovery`。跨仓命令会执行该包；原始日志中保留审批拒绝、进程退出后恢复和重复恢复的断言结果。需单独运行时，在正确绑定当前源码的工作区执行：
 
 ```sh
-GO_TEST_MODE=true go test -race -count=1 -timeout=120s ./workflow/refund-recovery
+go test -race -count=1 -timeout=120s ./workflow/refund-recovery
 ```
 
 单独运行后须确认 `go list -m -json github.com/kart-io/goagent` 的替换目录，防止验证到了已发布的旧版本。

@@ -55,7 +55,6 @@ jobs:
             -count 1 \
             ./...
         env:
-          GO_TEST_MODE: "true"
           # 增加 Go 运行时配置，提高并发稳定性
           GOMAXPROCS: "4"
           # 启用 CGO 以支持 SQLite 测试和 Race 检测

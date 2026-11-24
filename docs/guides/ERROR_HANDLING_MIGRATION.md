@@ -59,5 +59,5 @@ The checker forbids framework production code from calling or aliasing the stand
 ```sh
 go test ./errors ./scripts/apicheck
 go run ./scripts/apicheck -mode imports -root .
-GO_TEST_MODE=true go test -race -count=1 -timeout 5m ./...
+go test -race -count=1 -timeout 5m ./...
 ```

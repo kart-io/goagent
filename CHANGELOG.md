@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 修复
 
 - `llm/providers`：`NewMiniMaxWithOptions` 接受客户端级 `llm.WithReasoning` 默认值。此前单次请求可设推理，构造时却以“does not support explicit reasoning”拒绝同样的配置。
+- `llm/common`：`ExecuteWithRetry` 不再读取环境变量 `GO_TEST_MODE` 与 context 键 `"test_retry_delay"`，重试延迟只取自 `RetryConfig`；此前在生产环境设置了 `GO_TEST_MODE=true` 的宿主进程，对限流 API 的退避会被压成约 10ms。
 
 ### 文档
 

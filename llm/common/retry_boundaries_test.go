@@ -16,7 +16,6 @@ import (
 )
 
 func TestExecuteWithRetry真实延迟边界(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	for _, delay := range []time.Duration{0, time.Nanosecond, -time.Nanosecond} {
 		t.Run(delay.String(), func(t *testing.T) {
 			calls := 0
@@ -42,7 +41,6 @@ func TestExecuteWithRetry真实延迟边界(t *testing.T) {
 }
 
 func TestExecuteWithRetry取消后不再调用(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	for _, canceledBefore := range []bool{true, false} {
 		ctx, cancel := context.WithCancel(context.Background())
 		if canceledBefore {
@@ -72,7 +70,6 @@ func TestIsRetryable尊重提供方与标准取消(t *testing.T) {
 }
 
 func TestExecuteWithRetry超时与退避饱和(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	calls := 0
@@ -86,7 +83,6 @@ func TestExecuteWithRetry超时与退避饱和(t *testing.T) {
 }
 
 func TestExecuteWithRetry真实HTTP保留重试信息(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "")
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++

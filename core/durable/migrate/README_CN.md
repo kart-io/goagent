@@ -15,7 +15,7 @@
 运行本包的 `ExampleOperationsV1` 可执行一个临时 FileStore 的预览及应用示例：
 
 ```sh
-env -u GOROOT GOTOOLCHAIN=go1.27.4 GO_TEST_MODE=true go test ./core/durable/migrate -run '^ExampleOperationsV1$' -v
+env -u GOROOT GOTOOLCHAIN=go1.27.4 go test ./core/durable/migrate -run '^ExampleOperationsV1$' -v
 ```
 
 转换保留 Snapshot 其余字段，并将从 Store 加载的 Data 原字节原样交给 SaveAll，不重新编码 OperationRecord。身份、输入指纹、状态、尝试次数、上限、结果及错误分类由当前 `durable.DecodeOperationRecord` 统一验证；v1 不能带等待或效果核对语义。非法版本、损坏身份/载荷、重复目标或取消会在提交前拒绝。没有可接受的“删除旧日志重新跑”降级路径。

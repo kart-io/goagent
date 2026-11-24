@@ -15,7 +15,7 @@ Migration steps:
 Run this package's `ExampleOperationsV1` to execute a preview-and-apply example against a temporary FileStore:
 
 ```sh
-env -u GOROOT GOTOOLCHAIN=go1.27.4 GO_TEST_MODE=true go test ./core/durable/migrate -run '^ExampleOperationsV1$' -v
+env -u GOROOT GOTOOLCHAIN=go1.27.4 go test ./core/durable/migrate -run '^ExampleOperationsV1$' -v
 ```
 
 The conversion keeps all other Snapshot fields and passes the Data bytes loaded from the Store unchanged to SaveAll, without re-encoding OperationRecord. Identity, input fingerprint, status, attempt count, limit, result and error classification are validated uniformly by the current `durable.DecodeOperationRecord`; v1 records cannot carry wait or effect-reconciliation semantics. Invalid versions, corrupted identities/payloads, duplicate targets or cancellation are rejected before commit. There is no acceptable "delete the old log and rerun" fallback.
