@@ -40,7 +40,7 @@ stats := c.GetStats() // Hits, Misses, Size, HitRate
 
 ```go
 cachedTool := middleware.Wrap(originalTool, middleware.Caching(
-    middleware.WithCache(cache.NewSimpleCache(10*time.Minute)),
+    middleware.WithResultCache(cache.NewSimpleCache(10*time.Minute)),
     middleware.WithTTL(10*time.Minute),
 ))
 ```

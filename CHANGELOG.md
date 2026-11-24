@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 破坏性变更：删除 tools/middleware 的 WithCache 与 CachingConfig.Cache
+
+v0.62.0 弃用的 `middleware.WithCache` 与 `CachingConfig.Cache` 已删除，`scripts/api-exposure.txt` 同步移除 `cache.Cache`、`cache.CacheStats`，`cache.Cache` 不再经稳定包暴露。
+
+迁移：`WithCache(c)` 改为 `WithResultCache(c)`，`CachingConfig{Cache: c}` 改为 `CachingConfig{Store: c}`；任何 `cache.Cache`（如 `cache.NewSimpleCache`）都满足 `ResultCache`，无需改动缓存实现。
+
 ## [0.62.3] - 2026-11-24
 
 ### 修复

@@ -26,7 +26,7 @@ defer ownedCache.Close()
 wrapped := middleware.Wrap(calculator,
     middleware.Logging(),                          // outermost
     middleware.Caching(
-        middleware.WithCache(ownedCache),
+        middleware.WithResultCache(ownedCache),
         middleware.WithTTL(10*time.Minute),
     ),
     middleware.RateLimit(middleware.WithQPS(10), middleware.WithBurst(5)), // innermost
@@ -43,7 +43,7 @@ With no middleware, the original tool is returned. The wrapped result is a `*mid
 
 **Caching**: `Caching(opts...)` (or `NewCachingMiddleware(opts...).Wrap`, whose `GetStats()` returns hit/miss counts).
 
-- The default cache is `cache.NewSimpleCache(TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(MaxEntries))` (no background goroutine). TTL and MaxEntries are caller policy: 0 means entries never expire and the cache is unbounded; pass `WithTTL(5*time.Minute)` and `WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)` to keep the pre-v0.60 defaults. Keys are isolated by the session from `tools.WithSessionID` and by `ToolInput.CallerID`; `WithCacheKeyFunc` only determines the key within that scope. Options: `WithCache(cache.Cache)`, `WithTTL`, `WithCacheMaxEntries`, `WithCacheKeyFunc(func(toolName string, args map[string]any) string)`, `WithCacheLogger`.
+- The default cache is `cache.NewSimpleCache(TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(MaxEntries))` (no background goroutine). TTL and MaxEntries are caller policy: 0 means entries never expire and the cache is unbounded; pass `WithTTL(5*time.Minute)` and `WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)` to keep the pre-v0.60 defaults. Keys are isolated by the session from `tools.WithSessionID` and by `ToolInput.CallerID`; `WithCacheKeyFunc` only determines the key within that scope. Options: `WithResultCache(middleware.ResultCache)`, `WithTTL`, `WithCacheMaxEntries`, `WithCacheKeyFunc(func(toolName string, args map[string]any) string)`, `WithCacheLogger`.
 - The default key is `tool:<name>:<full hex digest of sha256(args JSON)>`, ignoring arguments that start with `__`; the key is prefixed with a hash of the session and CallerID, and is shared unscoped only when both are empty.
 - Only results with `err == nil` and `Success=true` are cached (excluding metadata starting with `__`). On a hit, the inner layer is not called; a copy is returned with `Metadata["cache_hit"]=true` and `Metadata["cached"]=true`. On a miss followed by a write, `cache_hit=false` and `cache_stored=true` are set.
 

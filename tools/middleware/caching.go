@@ -31,17 +31,12 @@ type ResultCache interface {
 
 // CachingConfig is the caching middleware configuration.
 type CachingConfig struct {
-	// Store holds cached results and takes precedence over Cache; when both
-	// are nil a built-in in-memory cache is used.
+	// Store holds cached results; when nil a built-in in-memory cache is used.
 	Store ResultCache `json:"-"`
-	// Cache is the cache implementation.
-	//
-	// Deprecated: use Store; Cache is used only when Store is nil.
-	Cache cache.Cache `json:"-"`
 	// TTL is how long a cached result stays valid; 0 means it never expires
 	// (it previously meant 5 minutes).
 	TTL time.Duration `json:"ttl"`
-	// MaxEntries caps the built-in cache used when Store and Cache are nil; 0 means no
+	// MaxEntries caps the built-in cache used when Store is nil; 0 means no
 	// cap (it previously meant 10000). Set it when keys come from model input,
 	// otherwise memory grows with every distinct argument set.
 	MaxEntries int                                         `json:"max_entries,omitzero"`
@@ -62,15 +57,6 @@ type CachingOption func(*CachingConfig)
 func WithResultCache(c ResultCache) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Store = c
-	}
-}
-
-// WithCache sets the cache implementation.
-//
-// Deprecated: use WithResultCache.
-func WithCache(c cache.Cache) CachingOption {
-	return func(cfg *CachingConfig) {
-		cfg.Cache = c
 	}
 }
 
@@ -153,9 +139,6 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 		opt(cfg)
 	}
 
-	if cfg.Store == nil && cfg.Cache != nil {
-		cfg.Store = cfg.Cache
-	}
 	if cfg.Store == nil {
 		cfg.Store = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(cfg.MaxEntries))
 	}

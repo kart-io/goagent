@@ -8,9 +8,6 @@
 memory.Memory          identity  # builder.WithLongTermMemory、AgentConfig.LongTermMemory：由 memory.New 构造后透传
 memory.EraseFunc       full      # builder.ModelCache.Eraser 的返回值，调用方赋给 memory.Config.OnErase
 
-cache.Cache            full      # 已弃用的 tools/middleware.CachingConfig.Cache、WithCache，随其删除一并移除
-cache.CacheStats       full      # cache.Cache.GetStats 的返回值
-
 utils/httpclient.Client full     # llm/common.BaseProvider.NewHTTPClient 的返回值
 utils/httpclient.Config full     # httpclient.Client 方法签名引用
 
