@@ -89,7 +89,7 @@ For human input bridging, checkpoint saving, and reconnection examples for remot
 ## Verification and References
 
 ```bash
-env -u GOROOT GO_TEST_MODE=true go test -race -count=1 ./management/protocol ./mcp/remote
+env -u GOROOT go test -race -count=1 ./management/protocol ./mcp/remote
 ```
 
 The tests use the real official SDKs, HTTP transport, and management Worker, covering cross-entry-point query/reply/cancel, non-bypassable approvals, Worker restart, multi-round input, capability negotiation, message idempotency, first events, and numeric precision. The fixture is a transactional in-memory Store; these tests are not an acceptance of production database failure recovery.

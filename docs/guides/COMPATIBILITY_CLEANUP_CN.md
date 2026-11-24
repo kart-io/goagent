@@ -37,7 +37,7 @@ logging := middleware.NewLoggingMiddleware()
 wrapped := middleware.Wrap(tool, logging.Wrap)
 ```
 
-不能再把任意对象直接传给 `middleware.Wrap`，也不能靠运行时类型判断接回旧钩子。空中间件函数或返回空调用器的装配以配置错误失败。日志计时属于每次调用，不写入调用方 `ToolInput.Args`；底层返回的部分结果和错误一起保留。工具包装不因此自动获得底层可选持久能力，具体边界见[工具中间件指南](TOOL_MIDDLEWARE_CN.md)。
+不能再把任意对象直接传给 `middleware.Wrap`，也不能靠运行时类型判断接回旧钩子。中间件函数为 nil 或返回 nil 调用器时，`Wrap` 以 `errors.CodeInvalidConfig` 错误 panic。日志计时属于每次调用，不写入调用方 `ToolInput.Args`；底层返回的部分结果和错误一起保留。工具包装不因此自动获得底层可选持久能力，具体边界见[工具中间件指南](TOOL_MIDDLEWARE_CN.md)。
 
 ## Runtime 与重试
 

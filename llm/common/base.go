@@ -99,7 +99,7 @@ func ConfigToOptions(config *agentllm.LLMOptions) []agentllm.ClientOption {
 
 // EnsureAPIKey validates and sets the API key, supporting environment variable fallback.
 func (b *BaseProvider) EnsureAPIKey(envVar string, providerName shared2.Provider) error {
-	if b.Config.Reasoning != nil && providerName != shared2.ProviderOpenAI && providerName != shared2.ProviderDeepSeek && providerName != shared2.ProviderGemini {
+	if b.Config.Reasoning != nil && !reasoningProviders[providerName] {
 		return b.RejectReasoning(nil)
 	}
 	if b.Config.APIKey == "" {
@@ -308,19 +308,11 @@ func (cfg RetryConfig) attempts(providerName string) (int, error) {
 type ExecuteFunc[T any] func(ctx context.Context) (T, error)
 
 // ExecuteWithRetry executes a function with exponential backoff retry logic.
-// It respects context cancellation and uses test-friendly delay settings.
+// It respects context cancellation; delays come only from cfg.BaseDelay and cfg.MaxDelay.
 func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName string, execute ExecuteFunc[T]) (T, error) {
 	var zero T
 	if cfg.BaseDelay < 0 || cfg.MaxDelay < 0 {
 		return zero, agentErrors.NewInvalidConfigError(providerName, "retry_delay", "重试延迟不能为负数")
-	}
-
-	// Use shorter delays in test environment
-	baseDelay := cfg.BaseDelay
-	if testDelay, ok := ctx.Value("test_retry_delay").(time.Duration); ok && testDelay > 0 {
-		baseDelay = testDelay
-	} else if os.Getenv("GO_TEST_MODE") == "true" {
-		baseDelay = 10 * time.Millisecond
 	}
 
 	maxAttempts, err := cfg.attempts(providerName)
@@ -328,7 +320,7 @@ func ExecuteWithRetry[T any](ctx context.Context, cfg RetryConfig, providerName 
 		return zero, err
 	}
 
-	delay := baseDelay
+	delay := cfg.BaseDelay
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return zero, retryContextError(err)

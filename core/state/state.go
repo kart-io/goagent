@@ -10,11 +10,9 @@ import (
 
 // State defines the interface for Agent state management.
 //
-// Inspired by LangChain's AgentState design, providing:
-//   - Thread-safe state access
-//   - State persistence support
-//   - State update tracking
-//   - State snapshots and cloning
+// Inspired by LangChain's AgentState design, it provides key-value access,
+// batch updates, snapshots and cloning over in-memory state. It does not
+// persist state or track changes; see TypedState for dirty tracking.
 type State interface {
 	// Get retrieves a value from state by key.
 	// Returns the value and true if found, nil and false if not found.

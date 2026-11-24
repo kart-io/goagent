@@ -27,16 +27,16 @@ type Ref struct{ RunKey, Key, SHA256, Version string }
 //
 // Release deletes all evidence written by one run (Ref.RunKey) and also
 // succeeds when the run does not exist. After release the run key cannot be
-// reused: a late PutIfAbsent returns ErrReleased and leaves no data, and Get
-// likewise returns ErrReleased (also when a durable Release crashed midway
-// before the evidence was deleted).
+// reused: a late PutIfAbsent returns errors.ErrResultScopeReleased and leaves
+// no data, and Get likewise returns errors.ErrResultScopeReleased (also when a
+// durable Release crashed midway before the evidence was deleted).
 //
 // Rejecting late reads and writes relies on one tombstone per released run key.
 // PruneReleased reclaims tombstones released earlier than olderThan, with the
 // same semantics for the memory and durable implementations: late reads and
-// writes within the threshold still return ErrReleased; after a tombstone is
-// reclaimed, Get returns os.ErrNotExist and a late write for that run key
-// succeeds and leaves residue. The host should set olderThan greater than the
+// writes within the threshold still return errors.ErrResultScopeReleased;
+// after a tombstone is reclaimed, Get returns os.ErrNotExist and a late write
+// for that run key succeeds and leaves residue. The host should set olderThan greater than the
 // longest retry or recovery window (for example, process crash and restart,
 // retries) and call it periodically.
 type ResultStore interface {
@@ -136,7 +136,7 @@ func load(ctx context.Context, store durable.Store, id string) (saved entry, fou
 	return saved, true, nil
 }
 
-// releasedError 把底层作用域的 ErrScopeRemoved 转为 ErrReleased，并保留原错误链。
+// releasedError 把底层作用域的 ErrScopeRemoved 转为 ErrResultScopeReleased，并保留原错误链。
 func releasedError(err error) error {
 	if errors.Is(err, agentErrors.ErrScopeRemoved) {
 		return fmt.Errorf("%w: %w", agentErrors.ErrResultScopeReleased, err)
@@ -202,7 +202,7 @@ func (s *resultStore) PutIfAbsent(ctx context.Context, ref Ref, data []byte) (er
 
 // Get takes no lock: evidence is immutable and durable writes are atomic, so it
 // verifies the digest after reading; reading a nonexistent reference creates no
-// files. Released runs return ErrReleased; the durable implementation checks
+// files. Released runs return ErrResultScopeReleased; the durable implementation checks
 // tombstones in the underlying scope.
 func (s *resultStore) Get(ctx context.Context, ref Ref) ([]byte, error) {
 	if err := validRef(ctx, ref); err != nil {

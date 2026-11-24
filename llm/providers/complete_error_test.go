@@ -38,7 +38,6 @@ func completeProviders(t *testing.T, endpoint string) map[string]llm.Client {
 }
 
 func TestCompleteErrorsAreClassified(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "true")
 	for _, tc := range []struct {
 		status     int
 		reason     llm.ErrorReason
@@ -73,7 +72,6 @@ func TestCompleteErrorsAreClassified(t *testing.T) {
 }
 
 func TestCompleteConnectionRefusedIsRetryable(t *testing.T) {
-	t.Setenv("GO_TEST_MODE", "true")
 	server := httptest.NewServer(http.NotFoundHandler())
 	endpoint := server.URL
 	server.Close()

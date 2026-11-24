@@ -10,7 +10,7 @@
 在仓库根目录执行：
 
 ```sh
-GOMAXPROCS=2 GO_TEST_MODE=true go test -p 2 -race ./evaluation/agentbench/... ./builder -short -count=1 -timeout 120s
+GOMAXPROCS=2 go test -p 2 -race ./evaluation/agentbench/... ./builder -short -count=1 -timeout 120s
 ```
 
 本包覆盖 800 次终态文本 SDK 协议验证、40 次并发执行隔离，以及普通工具、无证据、预算、取消、缺失用量和截断响应。Builder 另有 20 类 × 80 组执行矩阵。假模型成绩不计作真实模型成功率。

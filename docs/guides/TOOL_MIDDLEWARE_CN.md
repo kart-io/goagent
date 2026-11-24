@@ -34,12 +34,12 @@ wrapped := middleware.Wrap(calculator,
 output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a": 1, "b": 2}})
 ```
 
-`middleware.Wrap(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；空中间件函数或返回空调用器的函数在装配时以 `errors.CodeInvalidConfig` 失败。
-不传中间件时返回原工具。包装结果是 `*middleware.WrappedTool`，只实现 `interfaces.Tool` 与 `Unwrap()`，**不转发**原工具声明的可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
+`middleware.Wrap(tool, middlewares ...middleware.ToolMiddlewareFunc)` 按洋葱模型包装，第一个函数在最外层。`Logging`、`Caching`、`RateLimit` 返回同一种强类型函数；需要保留对象以读取统计时显式传 `NewCachingMiddleware(...).Wrap` 或 `NewRateLimitMiddleware(...).Wrap`。对象或其他任意类型不能作为参数通过编译；中间件函数为 nil 或返回 nil 调用器时，`Wrap` 以 `errors.CodeInvalidConfig` 错误 panic。
+不传中间件时返回原工具。包装结果是 `*middleware.WrappedTool`，实现 `interfaces.Tool`、`Unwrap()` 与 `interfaces.ConcurrentCallTool`（`SupportsConcurrentCalls` 转发原工具的声明），**不转发**原工具声明的其他可选接口（如 `DispatchTimeoutProvider`、`DurablePolicyProvider`、`interfaces.ArgumentErrorTool`），Dispatcher 也不会调用 `Unwrap`；依赖这些声明的工具不要先包装再注册。
 
 ### 内置中间件
 
-**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认输出到 stdout 的 JSON slog，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
+**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认经 `logging.Default()`（`core/logging`）输出，每次调用时解析为 `slog.Default()`，即输出到宿主配置的默认 slog logger，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
 
 **Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
 
@@ -92,7 +92,7 @@ dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
 | 阶段 | 类型 | 作用 |
 |---|---|---|
 | `Pre` | `PreHook` → `PreDecision` | `PreAllow`/`PreDeny`（交还模型修订）/`PreAsk`（交给 `Approver`）/`PreStop`（终止运行）/`PreSubstitute`（改调另一个工具）；全部执行后按 Stop > Deny > Substitute > Ask > Allow 聚合 |
-| `Approver` | `Approver`/`ApproverFunc` | 宿主实现的人工审批；`ApprovalTimeout` 默认 10 分钟，`GrantTTL` 限制会话级授权有效期 |
+| `Approver` | `Approver`/`ApproverFunc` | 宿主实现的人工审批；`ApprovalTimeout` 为 0（默认）表示不超时，只受调用 ctx 约束，`GrantTTL` 限制会话级授权有效期 |
 | `Guards` | `Guard` | 只能拒绝，返回非空原因即以 `tools.Rejected` 交给模型；审批也无法越过 |
 | `Around` | `Around` | 洋葱式包住工具执行，计入单次超时 |
 | `Post` | `PostHook` → `PostDecision` | 替换结果（`Replace`）或追加上下文（`AdditionalContext`）；也处理被拒绝的结果 |
@@ -104,4 +104,4 @@ dispatcher, err := tools.NewDispatcher(registry, tools.DispatchConfig{
 - 源码：`tools/middleware/`（`Wrap` 在 `wrap.go`）、`tools/pipeline.go`、`tools/dispatcher.go`
 - [缓存指南](CACHING_GUIDE_CN.md)
 
-具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `middleware.Wrap(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；空函数或返回空调用器的函数在构造时以配置错误失败。原工具可选能力仍须按前述约束显式装配。
+具有 `Wrap(interfaces.Tool, ToolInvoker) ToolInvoker` 方法的中间件对象须显式传入其 `Wrap`，如 `middleware.Wrap(tool, logging.Wrap)`。装配入口只接受 `ToolMiddlewareFunc`，其它类型由编译器拒绝；函数为 nil 或返回 nil 调用器时，`Wrap` 以 `errors.CodeInvalidConfig` 错误 panic。原工具可选能力仍须按前述约束显式装配。

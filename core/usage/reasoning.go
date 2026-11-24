@@ -11,6 +11,8 @@ type ReasoningConfig struct {
 	BudgetSet    bool   `json:"budget_set,omitzero"`
 }
 
+// Validate rejects unknown efforts, budgets outside [-1, MaxInt32], a nonzero
+// budget without BudgetSet, and an effort combined with a budget.
 func (c ReasoningConfig) Validate() error {
 	if c.BudgetSet && (c.BudgetTokens < -1 || int64(c.BudgetTokens) > 2147483647) {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "invalid thinking budget").WithComponent("reasoning").WithOperation("validate")

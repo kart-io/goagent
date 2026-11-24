@@ -74,12 +74,12 @@ run:
 ## test: Run all tests
 test:
 	@echo "$(YELLOW)Running tests...$(NC)"
-	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -race ./...
+	$(GOTEST) $(TEST_FLAGS) -v -race ./...
 
 ## test-short: Run short tests
 test-short:
 	@echo "$(YELLOW)Running short tests...$(NC)"
-	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -short ./...
+	$(GOTEST) $(TEST_FLAGS) -v -short ./...
 
 ## test-agent-acceptance: 验证验收工具的退出状态、日志与映射核查
 test-agent-acceptance:
@@ -87,7 +87,7 @@ test-agent-acceptance:
 
 ## test-frameworkbench: 验证独立评测模块的依赖与执行契约（不运行计时基准）
 test-frameworkbench:
-	cd evaluation/frameworkbench && GOWORK=off GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
+	cd evaluation/frameworkbench && GOWORK=off $(GOTEST) $(TEST_FLAGS) -mod=readonly -race ./...
 
 ## test-exposurecheck: 验证传递暴露检查工具（独立模块）及仓库登记表
 test-exposurecheck:
@@ -99,7 +99,7 @@ test-example-slogx:
 
 ## test-contracts: 验证执行、模型流、恢复、审批、预算与工具公共契约
 test-contracts:
-	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -race ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
+	$(GOTEST) $(TEST_FLAGS) -race ./core/... ./llm/... ./builder/... ./workflow/... ./multiagent/... ./tools/... ./execution/...
 
 ## compatibility: 使用当前源码验证本地关联仓库（COMPAT_ROOT、COMPAT_CORE、COMPAT_OUT 可覆盖）
 compatibility:
@@ -107,7 +107,7 @@ compatibility:
 
 ## test-management: 验证管理状态机、HTTP 与原生/Graph 适配（无需数据库）
 test-management:
-	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -race ./management/...
+	$(GOTEST) $(TEST_FLAGS) -race ./management/...
 
 ## compatibility-postgres: 跨仓实库验收，要求专用数据库和容器，关键恢复场景不得跳过
 compatibility-postgres: COMPAT_TIMEOUT = 15m
@@ -123,7 +123,7 @@ test-integration:
 coverage:
 	@echo "$(YELLOW)Generating coverage report...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
-	GO_TEST_MODE=true $(GOTEST) $(TEST_FLAGS) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
+	$(GOTEST) $(TEST_FLAGS) -v -race -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
 	$(MAKE) coverage-check PROFILE=$(COVERAGE_DIR)/coverage.out
 	$(GOCMD) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
 	@echo "$(GREEN)Coverage report generated at $(COVERAGE_DIR)/coverage.html$(NC)"

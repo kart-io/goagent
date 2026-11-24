@@ -75,11 +75,11 @@ func goCommand(ctx context.Context, dir string, args ...string) *goProcess {
 	cmd.Dir = dir
 	// 清除旧标准库路径和外部 workspace/GOFLAGS，保留代理、工具链及显式测试服务配置。
 	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "GOROOT=") && !strings.HasPrefix(entry, "GOWORK=") && !strings.HasPrefix(entry, "GOFLAGS=") && !strings.HasPrefix(entry, "GO_TEST_MODE=") {
+		if !strings.HasPrefix(entry, "GOROOT=") && !strings.HasPrefix(entry, "GOWORK=") && !strings.HasPrefix(entry, "GOFLAGS=") {
 			cmd.Env = append(cmd.Env, entry)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GOWORK=off", "GOFLAGS=", "GO_TEST_MODE=true")
+	cmd.Env = append(cmd.Env, "GOWORK=off", "GOFLAGS=")
 	cmd.WaitDelay = 2 * time.Second
 	processgroup.Configure(cmd)
 	return &goProcess{cmd}

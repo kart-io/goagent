@@ -1,9 +1,9 @@
-// Package state provides type-safe state management with schema validation.
+// Package state provides in-memory, thread-safe agent state.
 //
-// This file addresses the state serialization bottleneck problem:
-//   - Replaces map[string]interface{} with typed, schema-validated state
-//   - Provides contract enforcement for distributed systems
-//   - Enables efficient serialization with known schemas
+// AgentState is an untyped key-value implementation of State. TypedState
+// validates values against a StateSchema, tracks unsaved changes (IsDirty,
+// MarkClean) and serializes through StateEnvelope. Neither type persists
+// state; callers store the serialized form themselves.
 package state
 
 import (
@@ -26,6 +26,7 @@ import (
 // FieldType defines the data type of a field.
 type FieldType string
 
+// Field types accepted by FieldSchema.Type. FieldTypeAny skips type checks.
 const (
 	FieldTypeString FieldType = "string"
 	FieldTypeInt    FieldType = "int"
@@ -392,7 +393,9 @@ func (ts *TypedState) Set(key string, value interface{}) error {
 	return nil
 }
 
-// SetBatch sets multiple field values.
+// SetBatch sets multiple field values atomically. The batch is validated
+// against the whole schema, so a batch that omits a required field fails
+// even if the field is already set; use Set for partial updates.
 func (ts *TypedState) SetBatch(values map[string]interface{}) error {
 	// 先验证所有字段
 	if ts.schema != nil {
@@ -527,7 +530,8 @@ type StateEnvelope struct {
 	// Data is the actual state data.
 	Data map[string]interface{} `json:"data"`
 
-	// Checksum is the data checksum (optional).
+	// Checksum is reserved for a data checksum. TypedState.MarshalJSON never
+	// sets it and UnmarshalJSON does not verify it.
 	Checksum string `json:"checksum,omitempty"`
 }
 

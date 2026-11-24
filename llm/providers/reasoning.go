@@ -58,15 +58,22 @@ func (p *GeminiProvider) thinkingConfig(req *llm.CompletionRequest) (*genai.Thin
 	return cfg, nil
 }
 
+// ValidateReasoning implements llm.ReasoningRequestValidator. It accepts
+// effort-only settings for reasoning-capable endpoints, rejects a thinking
+// budget, and rejects any setting for endpoints without reasoning controls.
 func (p *OpenAIProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	_, err := p.reasoningEffort(req)
 	return err
 }
 
+// ValidateReasoning implements llm.ReasoningRequestValidator. DeepSeek accepts
+// only effort "none" (disable thinking) and rejects every other setting.
 func (p *DeepSeekProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	return p.nativeStreamProvider().ValidateReasoning(req)
 }
 
+// ValidateReasoning implements llm.ReasoningRequestValidator. Gemini accepts a
+// thinking budget or effort minimal, low, medium or high.
 func (p *GeminiProvider) ValidateReasoning(req *llm.CompletionRequest) error {
 	_, err := p.thinkingConfig(req)
 	return err

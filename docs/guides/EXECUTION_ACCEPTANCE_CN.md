@@ -65,8 +65,8 @@ Compatible 仅表示声明和检查点结构匹配：`outcome_unknown` 也可能
 历史读取、无变化同步、追加同步和重写同步分别测量，内存/文件存储各覆盖100、1000、10000条消息。变更场景在计时外重建固定历史，使用固定次数以控制夹具构建成本：
 
 ```sh
-GO_TEST_MODE=true go test -run '^$' -bench '^(BenchmarkSessionHistory|BenchmarkLargeToolResult)$' -benchmem -benchtime=5x -count=3 ./core/session ./builder/contextpolicy
-GO_TEST_MODE=true go test -run '^$' -bench '^BenchmarkAgentSessions$' -benchmem -benchtime=300ms -count=3 -cpu=1,4 ./builder
+go test -run '^$' -bench '^(BenchmarkSessionHistory|BenchmarkLargeToolResult)$' -benchmem -benchtime=5x -count=3 ./core/session ./builder/contextpolicy
+go test -run '^$' -bench '^BenchmarkAgentSessions$' -benchmem -benchtime=300ms -count=3 -cpu=1,4 ./builder
 ```
 
 会话基准区分同 Agent 串行执行和独立会话并发；模拟模型没有网络延迟，不能把结果当成真实模型耗时。使用工作树验证关联仓库时，明确执行 `go run ./scripts/compatcheck -root /path/to/repos -core-dir /path/to/current/goagent -out /new/report`；Makefile 的 COMPAT_CORE 默认是当前目录。

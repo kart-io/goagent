@@ -21,10 +21,14 @@ var (
 	_ llm.BatchEmbeddingClient = (*GeminiProvider)(nil)
 )
 
+// CompleteStream streams a completion without tools. The first response is
+// fetched before returning, so initial HTTP errors are returned directly.
 func (p *GeminiProvider) CompleteStream(ctx context.Context, req *llm.CompletionRequest) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, nil)
 }
 
+// CompleteToolsStream is CompleteStream with tools exposed as Gemini function
+// declarations.
 func (p *GeminiProvider) CompleteToolsStream(ctx context.Context, req *llm.CompletionRequest, tools []interfaces.Tool) (<-chan *llm.StreamChunk, error) {
 	return p.stream(ctx, req, tools)
 }

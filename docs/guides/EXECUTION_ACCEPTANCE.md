@@ -65,8 +65,8 @@ Upgrade order: archive the old Manifest and the IDs of pending runs; run the rea
 History reads, no-change sync, append sync, and rewrite sync are measured separately, with in-memory and file stores each covering 100, 1000, and 10000 messages. Mutation scenarios rebuild a fixed history outside the timer and use a fixed iteration count to control fixture construction cost:
 
 ```sh
-GO_TEST_MODE=true go test -run '^$' -bench '^(BenchmarkSessionHistory|BenchmarkLargeToolResult)$' -benchmem -benchtime=5x -count=3 ./core/session ./builder/contextpolicy
-GO_TEST_MODE=true go test -run '^$' -bench '^BenchmarkAgentSessions$' -benchmem -benchtime=300ms -count=3 -cpu=1,4 ./builder
+go test -run '^$' -bench '^(BenchmarkSessionHistory|BenchmarkLargeToolResult)$' -benchmem -benchtime=5x -count=3 ./core/session ./builder/contextpolicy
+go test -run '^$' -bench '^BenchmarkAgentSessions$' -benchmem -benchtime=300ms -count=3 -cpu=1,4 ./builder
 ```
 
 The session benchmarks distinguish serial execution on the same Agent from concurrent independent sessions; the mock model has no network latency, so the results must not be taken as real model latency. When verifying related repositories with a worktree, explicitly run `go run ./scripts/compatcheck -root /path/to/repos -core-dir /path/to/current/goagent -out /new/report`; the Makefile's COMPAT_CORE defaults to the current directory.

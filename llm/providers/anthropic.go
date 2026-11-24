@@ -329,10 +329,14 @@ func anthropicProviderError(err error) *agentllm.ProviderError {
 	return e
 }
 
+// CompleteStream streams a completion without tools. The first event is read
+// before returning, so connection and HTTP errors are returned directly.
 func (p *AnthropicProvider) CompleteStream(ctx context.Context, req *agentllm.CompletionRequest) (<-chan *agentllm.StreamChunk, error) {
 	return p.stream(ctx, req, nil)
 }
 
+// CompleteToolsStream is CompleteStream with tools; tool calls are delivered
+// only in the successful final chunk.
 func (p *AnthropicProvider) CompleteToolsStream(ctx context.Context, req *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
 	return p.stream(ctx, req, tools)
 }

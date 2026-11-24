@@ -9,12 +9,12 @@
 ## 运行
 
 ```bash
-make test                                   # GO_TEST_MODE=true go test -p 1 -timeout 10m -count=1 -v -race ./...
+make test                                   # go test -p 1 -timeout 10m -count=1 -v -race ./...
 make test-short                             # -short
 make test-integration                       # -tags=integration
 go test -race -run TestName ./builder/      # 单个包或用例
 make coverage                               # 生成 coverage/coverage.out，执行门禁并生成 HTML
-GO_TEST_MODE=true go test -p 1 -timeout 10m -count=1 -race -coverprofile=coverage.out ./... && bash scripts/check_coverage.sh coverage.out
+go test -p 1 -timeout 10m -count=1 -race -coverprofile=coverage.out ./... && bash scripts/check_coverage.sh coverage.out
 bash scripts/provider_regression.sh         # 离线 Provider/Builder 契约与竞态回归
 ```
 

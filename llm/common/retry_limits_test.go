@@ -3,7 +3,6 @@ package common_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -14,8 +13,7 @@ import (
 func countAttempts(t *testing.T, cfg common.RetryConfig) (int, error) {
 	t.Helper()
 	calls := 0
-	ctx := context.WithValue(context.Background(), "test_retry_delay", time.Nanosecond)
-	_, err := common.ExecuteWithRetry(ctx, cfg, "test", func(context.Context) (string, error) {
+	_, err := common.ExecuteWithRetry(context.Background(), cfg, "test", func(context.Context) (string, error) {
 		calls++
 		return "", agentErrors.NewLLMRateLimitError("test", "m", 1)
 	})

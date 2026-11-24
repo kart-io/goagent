@@ -39,6 +39,8 @@ func JournalStore(ctx context.Context) Store {
 	return s
 }
 
+// HasJournal reports whether Do in ctx journals operations: ctx carries both
+// a journal Store and an execution key. Otherwise Do just calls run.
 func HasJournal(ctx context.Context) bool {
 	s, _ := ctx.Value(journalContext{}).(Store)
 	return s != nil && ExecutionKey(ctx) != ""
@@ -54,7 +56,12 @@ func ChildKey(parent, id string) string {
 	return digest(string(b))
 }
 
+// OperationPolicy controls how Do retries, resumes and reconciles one journaled
+// operation. It is part of the operation's identity: rerunning with a different
+// MaxAttempts is rejected as a conflict.
 type OperationPolicy struct {
+	// MaxAttempts bounds the attempts recorded across invocations; zero means
+	// one attempt and negative values are rejected.
 	MaxAttempts int `json:"max_attempts"`
 	// RetryFailed permits another attempt on a subsequent explicit invocation.
 	// Do never loops or retries within a single invocation.
@@ -87,6 +94,9 @@ type OperationPolicy struct {
 	RetryInterrupted bool `json:"retry_interrupted"`
 }
 
+// OperationRecord is the journaled state of one operation, keyed by Key
+// (derived from the parent execution key and ID). Replayed is set in memory
+// when Do returns a stored result instead of running.
 type OperationRecord struct {
 	ID          string          `json:"id"`
 	Key         string          `json:"key"`
