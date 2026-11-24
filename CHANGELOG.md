@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.62.3] - 2026-11-24
+
 ### 修复
 
 - `llm/providers`：`NewMiniMaxWithOptions` 接受客户端级 `llm.WithReasoning` 默认值。此前单次请求可设推理，构造时却以“does not support explicit reasoning”拒绝同样的配置。
@@ -1623,7 +1625,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.2...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.3...HEAD
+[0.62.3]: https://github.com/kart-io/goagent/compare/v0.62.2...v0.62.3
 [0.62.2]: https://github.com/kart-io/goagent/compare/v0.62.1...v0.62.2
 [0.62.1]: https://github.com/kart-io/goagent/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/kart-io/goagent/compare/v0.61.0...v0.62.0
