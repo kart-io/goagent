@@ -39,15 +39,15 @@ output, err := wrapped.Invoke(ctx, &interfaces.ToolInput{Args: map[string]any{"a
 
 ### 内置中间件
 
-**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认经 `logging.Default()`（`core/logging`）输出，每次调用时解析为 `slog.Default()`，即输出到宿主配置的默认 slog logger，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
+**Logging**：`Logging(opts...)`（或 `NewLoggingMiddleware(opts...).Wrap`），默认经 `logging.Default()`（`core/logging`）输出，每次调用时解析为 `slog.Default()`，即输出到宿主配置的默认 slog logger，记录工具名、CallerID、TraceID 与耗时；参数与结果常含用户数据和凭证，默认不记录，分别用 `WithInputLogging`、`WithOutputLogging` 开启。其他选项：`WithContextLogger`、`WithMaxArgBytes`（默认 1024 字节，超出截断）。计时留在每次调用的局部变量，不修改业务输入；成功返回时写入 `Metadata["execution_time"]`。错误及部分结果原样传递，空输入和空输出也不会被日志包装改写。
 
 **Caching**：`Caching(opts...)`（或 `NewCachingMiddleware(opts...).Wrap`，后者的 `GetStats()` 返回命中/未命中次数）。
 
-- 默认缓存 `cache.NewSimpleCache(TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(MaxEntries))`（无后台协程）。TTL 与容量属于调用方策略：0 表示不过期、不限条目；要保持 v0.60 之前的默认请传 `WithTTL(5*time.Minute)` 与 `WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)`；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithResultCache(middleware.ResultCache)`、`WithTTL`、`WithCacheMaxEntries`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheLogger`。
+- 默认缓存 `cache.NewSimpleCache(TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(MaxEntries))`（无后台协程）。TTL 与容量属于调用方策略：0 表示不过期、不限条目；要保持 v0.60 之前的默认请传 `WithTTL(5*time.Minute)` 与 `WithCacheMaxEntries(constants.DefaultMiddlewareCacheCapacity)`；键按 `tools.WithSessionID` 的会话与 `ToolInput.CallerID` 隔离，`WithCacheKeyFunc` 只决定作用域内的键；选项 `WithResultCache(middleware.ResultCache)`、`WithTTL`、`WithCacheMaxEntries`、`WithCacheKeyFunc(func(toolName string, args map[string]any) string)`、`WithCacheContextLogger`。
 - 默认键 `tool:<name>:<sha256(参数JSON) 的完整十六进制摘要>`，忽略 `__` 开头的参数；键前自动加会话与 CallerID 的哈希前缀，二者都为空时才不隔离。
 - 只缓存 `err == nil` 且 `Success=true` 的结果（不含 `__` 开头的元数据）。命中时不调用内层，返回副本并设置 `Metadata["cache_hit"]=true`、`Metadata["cached"]=true`；未命中且写入时设置 `cache_hit=false`、`cache_stored=true`。
 
-**RateLimit**：`RateLimit(opts...)`，基于 `golang.org/x/time/rate` 令牌桶。默认 10 QPS、突发 20、全局共享、不等待；选项 `WithQPS`、`WithBurst`、`WithPerToolRateLimit()`（按工具名独立限流）、`WithWaitTimeout`（大于 0 时最多等待这么久取令牌）、`WithRateLimitLogger`。拒绝时返回错误码 `errors.CodeMiddlewareExecution`，可用 `errors.IsCode(err, errors.CodeMiddlewareExecution)` 判断。
+**RateLimit**：`RateLimit(opts...)`，基于 `golang.org/x/time/rate` 令牌桶。默认 10 QPS、突发 20、全局共享、不等待；选项 `WithQPS`、`WithBurst`、`WithPerToolRateLimit()`（按工具名独立限流）、`WithWaitTimeout`（大于 0 时最多等待这么久取令牌）、`WithRateLimitContextLogger`。拒绝时返回错误码 `errors.CodeMiddlewareExecution`，可用 `errors.IsCode(err, errors.CodeMiddlewareExecution)` 判断。
 
 缓存放在限流外层时，命中不消耗限流额度。
 

@@ -89,7 +89,7 @@ snap, err := graph.Run(budget.WithController(ctx, c), runID, initial, "")
 
 **模型请求中断**：模型请求默认只允许一次尝试。恢复时按日志记录处理：
 
-| 发生了什么 | 记录 | 默认 | 开启 `WithInterruptedModelResend` |
+| 发生了什么 | 记录 | 默认 | `WithInterruptedModelResends(2)` |
 |---|---|---|---|
 | 请求发出后、终态落盘前崩溃（或终态保存失败） | pending（`ambiguous`） | 拒绝 | 尝试次数 < 3 时重发 |
 | 运行 ctx 被取消 | failed（`canceled`） | 拒绝 | 尝试次数 < 3 时重发 |

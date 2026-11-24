@@ -110,11 +110,6 @@ type AgentConfig struct {
 	// SessionState: see WithSessionState.
 	SessionState bool
 
-	// ResendInterruptedModel: see WithInterruptedModelResend.
-	//
-	// Deprecated: use InterruptedModelResends. When InterruptedModelResends is
-	// 0, true still means 2 resends (3 sends per turn).
-	ResendInterruptedModel bool
 	// InterruptedModelResends: see WithInterruptedModelResends.
 	InterruptedModelResends int
 
@@ -177,27 +172,7 @@ func (b *AgentBuilder[S]) WithDurableScope(scope string) *AgentBuilder[S] {
 // of a run; otherwise resuming reports a policy change.
 func (b *AgentBuilder[S]) WithInterruptedModelResends(n int) *AgentBuilder[S] {
 	b.config.InterruptedModelResends = n
-	b.config.ResendInterruptedModel = false
 	return b
-}
-
-// WithInterruptedModelResend enables resending interrupted model requests with
-// at most 3 sends per turn.
-//
-// Deprecated: use WithInterruptedModelResends(2), which records the same
-// durable policy.
-func (b *AgentBuilder[S]) WithInterruptedModelResend() *AgentBuilder[S] {
-	b.config.InterruptedModelResends = 0
-	b.config.ResendInterruptedModel = true
-	return b
-}
-
-// interruptedModelResends resolves the deprecated switch into a resend count.
-func (c *AgentConfig) interruptedModelResends() int {
-	if c.InterruptedModelResends == 0 && c.ResendInterruptedModel {
-		return shared.DefaultModelResendAttempts - 1
-	}
-	return c.InterruptedModelResends
 }
 
 // WithPersistTimeout bounds each background write the agent makes on a context

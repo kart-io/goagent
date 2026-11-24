@@ -27,7 +27,7 @@ Implementations: `RunnableFunc` (wraps a function), `RunnablePipe`, `RunnableSeq
 
 The `Callback` interface includes `OnStart/OnEnd/OnError`, `OnLLMStart/OnLLMEnd/OnLLMError`, `OnChainStart/OnChainEnd/OnChainError`, `OnToolStart/OnToolEnd/OnToolError`, and `OnAgentAction/OnAgentFinish`. Returning a non-nil error aborts execution. Embed `BaseCallback` to implement only the methods you care about.
 
-Built-in: `NewLoggingCallback(logger Logger, verbose bool)`, `NewMetricsCallback(MetricsCollector)`, `NewTracingCallback(Tracer)`, `NewCostTrackingCallback(pricing)`, `NewStdoutCallback(color)`, and `NewCallbackManager(...)` to combine multiple callbacks.
+Built-in: `NewContextLoggingCallback(logger logging.Logger, verbose bool)`, `NewMetricsCallback(MetricsCollector)`, `NewTracingCallback(Tracer)`, `NewCostTrackingCallback(pricing)`, `NewStdoutCallback(color)`, and `NewCallbackManager(...)` to combine multiple callbacks.
 
 ### State
 

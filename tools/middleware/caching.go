@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	loggercore "github.com/kart-io/logger/core"
-
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/logging"
@@ -41,10 +39,6 @@ type CachingConfig struct {
 	// otherwise memory grows with every distinct argument set.
 	MaxEntries int                                         `json:"max_entries,omitzero"`
 	KeyFunc    func(string, map[string]interface{}) string `json:"-"`
-	// Logger is a kart-io/logger logger.
-	//
-	// Deprecated: use ContextLogger; Logger is used only when ContextLogger is nil.
-	Logger loggercore.Logger `json:"-"`
 	// ContextLogger receives cache hits, misses and write failures; nil
 	// disables logging.
 	ContextLogger logging.Logger `json:"-"`
@@ -89,15 +83,6 @@ func WithCacheContextLogger(logger logging.Logger) CachingOption {
 	}
 }
 
-// WithCacheLogger sets a kart-io/logger logger.
-//
-// Deprecated: use WithCacheContextLogger.
-func WithCacheLogger(logger loggercore.Logger) CachingOption {
-	return func(cfg *CachingConfig) {
-		cfg.Logger = logger
-	}
-}
-
 // cachingStats 统计信息
 type cachingStats struct {
 	Hits   atomic.Int64
@@ -132,7 +117,6 @@ type CachingMiddleware struct {
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
 		KeyFunc: defaultCacheKeyFunc,
-		Logger:  nil, // 默认不使用日志（避免依赖）
 	}
 
 	for _, opt := range opts {
@@ -164,7 +148,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 缓存命中
 			m.stats.Hits.Add(1)
 
-			if l := m.log(); l != nil {
+			if l := m.config.ContextLogger; l != nil {
 				l.DebugContext(
 					ctx,
 					"工具缓存命中",
@@ -184,7 +168,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 
 		// 缓存未命中
 		m.stats.Misses.Add(1)
-		if l := m.log(); l != nil {
+		if l := m.config.ContextLogger; l != nil {
 			l.DebugContext(
 				ctx,
 				"工具缓存未命中",
@@ -218,7 +202,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 存储到缓存
 			stored := false
 			if err := m.config.Store.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
-				if l := m.log(); l != nil {
+				if l := m.config.ContextLogger; l != nil {
 					l.WarnContext(
 						ctx,
 						"缓存设置失败",

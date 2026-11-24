@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	loggerCore "github.com/kart-io/logger/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,47 +33,20 @@ func newMockLogger() *mockLogger {
 	}
 }
 
-func (m *mockLogger) Info(args ...interface{})  {}
-func (m *mockLogger) Error(args ...interface{}) {}
-
-func (m *mockLogger) Infow(msg string, keysAndValues ...interface{}) {
+func (m *mockLogger) InfoContext(_ context.Context, msg string, keysAndValues ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	entry := logEntry{
-		message: msg,
-		fields:  parseFields(keysAndValues),
-	}
-	m.infoLogs = append(m.infoLogs, entry)
+	m.infoLogs = append(m.infoLogs, logEntry{message: msg, fields: parseFields(keysAndValues)})
 }
 
-func (m *mockLogger) Errorw(msg string, keysAndValues ...interface{}) {
+func (m *mockLogger) ErrorContext(_ context.Context, msg string, keysAndValues ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	entry := logEntry{
-		message: msg,
-		fields:  parseFields(keysAndValues),
-	}
-	m.errorLogs = append(m.errorLogs, entry)
+	m.errorLogs = append(m.errorLogs, logEntry{message: msg, fields: parseFields(keysAndValues)})
 }
 
-func (m *mockLogger) Debug(args ...interface{})                       {}
-func (m *mockLogger) Warn(args ...interface{})                        {}
-func (m *mockLogger) Fatal(args ...interface{})                       {}
-func (m *mockLogger) Debugf(template string, args ...interface{})     {}
-func (m *mockLogger) Infof(template string, args ...interface{})      {}
-func (m *mockLogger) Warnf(template string, args ...interface{})      {}
-func (m *mockLogger) Errorf(template string, args ...interface{})     {}
-func (m *mockLogger) Fatalf(template string, args ...interface{})     {}
-func (m *mockLogger) Debugw(msg string, keysAndValues ...interface{}) {}
-func (m *mockLogger) Warnw(msg string, keysAndValues ...interface{})  {}
-func (m *mockLogger) Fatalw(msg string, keysAndValues ...interface{}) {}
-func (m *mockLogger) With(keyValues ...interface{}) loggerCore.Logger { return m }
-func (m *mockLogger) WithCtx(ctx context.Context, keyValues ...interface{}) loggerCore.Logger {
-	return m
-}
-func (m *mockLogger) WithCallerSkip(skip int) loggerCore.Logger { return m }
-func (m *mockLogger) SetLevel(level loggerCore.Level)           {}
-func (m *mockLogger) Flush() error                              { return nil }
+func (m *mockLogger) DebugContext(context.Context, string, ...any) {}
+func (m *mockLogger) WarnContext(context.Context, string, ...any)  {}
 
 // parseFields 将键值对数组转换为 map
 func parseFields(keysAndValues []interface{}) map[string]interface{} {
@@ -90,7 +62,7 @@ func parseFields(keysAndValues []interface{}) map[string]interface{} {
 
 func TestCleanupLoggingKeepsInputOwnedByCaller(t *testing.T) {
 	logger := newMockLogger()
-	m := NewLoggingMiddleware(WithLogger(logger))
+	m := NewLoggingMiddleware(WithContextLogger(logger))
 	input := &interfaces.ToolInput{Args: map[string]interface{}{"value": "业务输入"}, CallerID: "调用方"}
 	wrapped := m.Wrap(newMockTool(), func(_ context.Context, got *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		require.Same(t, input, got)
@@ -105,7 +77,7 @@ func TestCleanupLoggingKeepsInputOwnedByCaller(t *testing.T) {
 
 func TestCleanupLoggingPreservesPartialResultOnError(t *testing.T) {
 	logger := newMockLogger()
-	m := NewLoggingMiddleware(WithLogger(logger))
+	m := NewLoggingMiddleware(WithContextLogger(logger))
 	want := &interfaces.ToolOutput{Result: "部分结果", Success: false}
 	wantErr := errors.New("工具执行失败")
 	wrapped := m.Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -119,7 +91,7 @@ func TestCleanupLoggingPreservesPartialResultOnError(t *testing.T) {
 
 func TestCleanupLoggingAllowsNilInputAndOutput(t *testing.T) {
 	logger := newMockLogger()
-	wrapped := NewLoggingMiddleware(WithLogger(logger)).Wrap(newMockTool(), func(_ context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	wrapped := NewLoggingMiddleware(WithContextLogger(logger)).Wrap(newMockTool(), func(_ context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		require.Nil(t, input)
 		return nil, nil
 	})
@@ -131,7 +103,7 @@ func TestCleanupLoggingAllowsNilInputAndOutput(t *testing.T) {
 
 func TestCleanupLoggingConcurrentInputIsReadOnly(t *testing.T) {
 	logger := newMockLogger()
-	wrapped := NewLoggingMiddleware(WithLogger(logger)).Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	wrapped := NewLoggingMiddleware(WithContextLogger(logger)).Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{Success: true}, nil
 	})
 	input := &interfaces.ToolInput{Args: map[string]interface{}{"共享": "只读参数"}}
@@ -159,7 +131,7 @@ func TestLoggingMiddleware_Basic(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
+	middleware := NewLoggingMiddleware(WithContextLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		// 模拟一些处理时间
@@ -213,7 +185,7 @@ func TestLoggingMiddleware_InputNotLoggedByDefault(t *testing.T) {
 	logger := newMockLogger()
 
 	middleware := NewLoggingMiddleware(
-		WithLogger(logger),
+		WithContextLogger(logger),
 		WithOutputLogging(),
 	)
 
@@ -244,7 +216,7 @@ func TestLoggingMiddleware_OutputNotLoggedByDefault(t *testing.T) {
 	logger := newMockLogger()
 
 	middleware := NewLoggingMiddleware(
-		WithLogger(logger),
+		WithContextLogger(logger),
 		WithInputLogging(),
 	)
 
@@ -273,7 +245,7 @@ func TestLoggingMiddleware_MaxArgBytes(t *testing.T) {
 	logger := newMockLogger()
 
 	middleware := NewLoggingMiddleware(
-		WithLogger(logger),
+		WithContextLogger(logger),
 		WithInputLogging(),
 		WithOutputLogging(),
 		WithMaxArgBytes(50), // 设置很小的限制
@@ -311,7 +283,7 @@ func TestLoggingMiddleware_ErrorLogging(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithContextLogger(logger))
 
 	testErr := errors.New("test error")
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -340,7 +312,7 @@ func TestLoggingMiddleware_FailedOutput(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithContextLogger(logger))
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{
@@ -372,7 +344,7 @@ func TestLoggingMiddleware_StringResult(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
+	middleware := NewLoggingMiddleware(WithContextLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{
@@ -397,7 +369,7 @@ func TestLoggingMiddleware_ComplexResult(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger), WithInputLogging(), WithOutputLogging())
+	middleware := NewLoggingMiddleware(WithContextLogger(logger), WithInputLogging(), WithOutputLogging())
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{
@@ -428,7 +400,7 @@ func TestLoggingMiddleware_NilOutput(t *testing.T) {
 	tool := newMockTool()
 	logger := newMockLogger()
 
-	middleware := NewLoggingMiddleware(WithLogger(logger))
+	middleware := NewLoggingMiddleware(WithContextLogger(logger))
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{

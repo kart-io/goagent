@@ -143,9 +143,8 @@ func TestInterruptedModelResendsZeroMeansOneSend(t *testing.T) {
 	require.Equal(t, 1, model.calls)
 }
 
-func TestDeprecatedInterruptedResendStillThreeSends(t *testing.T) {
+func TestInterruptedResendTwiceMeansThreeSends(t *testing.T) {
 	for name, enable := range map[string]func(*SimpleAgentBuilder){
-		"旧开关":    func(b *SimpleAgentBuilder) { b.WithInterruptedModelResend() },
 		"重发 2 次": func(b *SimpleAgentBuilder) { b.WithInterruptedModelResends(2) },
 	} {
 		t.Run(name, func(t *testing.T) {

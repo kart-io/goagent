@@ -60,8 +60,6 @@ func Audit(log func(string, ...any)) middleware.ToolMiddlewareFunc {
 | `RateLimit(opts...)`、`NewRateLimitMiddleware` | 令牌桶限流；`GetStats()` 返回放行与拒绝次数 |
 | `WithQPS`、`WithBurst`、`WithPerToolRateLimit`、`WithWaitTimeout`、`WithRateLimitContextLogger` | 限流选项 |
 
-`WithCache`、`WithLogger`、`WithCacheLogger` 与 `WithRateLimitLogger` 已弃用，改用其 godoc 中给出的替代项。
-
 ## 行为说明
 
 - 不传中间件时 `Wrap` 返回原工具。中间件为 nil 或返回 nil 调用器时，组装阶段以 `errors.CodeInvalidConfig` 错误 panic。

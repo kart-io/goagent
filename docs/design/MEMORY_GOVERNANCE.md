@@ -168,7 +168,7 @@ type TurnMemory struct {
    因此意图只由日志决定。即使恢复时引用全部被删、实际请求里没有召回消息，意图也保持不变。`readJournaledTurn` 增加一个参数，传入本步的召回文本与占位消息；RequestError 之后重新组装（`builder/loop_hooks.go` 的替换路径）也传入同一个值。
 6. **Request 钩子**：钩子在组装之后运行。钩子不得改写或移动召回消息，否则意图会变；删除召回消息不改变意图（同第 5 条）。
 7. **RequestError 钩子**：把消息交给钩子之前，先去掉召回消息；钩子返回替换消息后重新组装时，再把召回块插回去。这样压缩等恢复逻辑不会把召回内容写进摘要。
-8. **恢复时的重发**：沿用现有策略。已完成的模型操作按意图哈希回放；被中断的模型操作，只有开启了 `ResendInterruptedModel` 才会重发（`builder/model_call.go`），否则仍按原样报错。删除不会带来新的恢复失败，但也不改变原有的恢复限制。
+8. **恢复时的重发**：沿用现有策略。已完成的模型操作按意图哈希回放；被中断的模型操作，只有 `InterruptedModelResends` 大于 0 才会重发（`builder/model_call.go`），否则仍按原样报错。删除不会带来新的恢复失败，但也不改变原有的恢复限制。
 9. **抽取跳过记忆工具**：`renderTurn` 按 assistant 消息的 `ToolCalls` 和 `MessageData.Tool.Name`，跳过记忆工具（`memory_search`、`memory_save`、`memory_forget`）的调用和结果。同一条 assistant 消息里的普通正文照常保留。
 10. **过滤遗留的召回块**：从会话日志推导历史时（`builder/session_log.go`），去掉以 `RecallPrefix` 开头的 user 消息，止住升级前已经写进历史的召回块。
 11. **只作用于原生工具流**：与现状相同，没有注册工具时请求走 `readPlainModelTurn`，不召回。长期记忆需要召回时，宿主应注册工具（例如 `m.Tools()`）。
@@ -259,7 +259,7 @@ flowchart TB
 - **持久运行恢复**：在不同步骤中断，覆盖以下情况：
   - 已完成的步骤回放。
   - 未开始的步骤，宽松还原后再发送。
-  - 中断的步骤，按 `ResendInterruptedModel` 的设置处理。
+  - 中断的步骤，按 `InterruptedModelResends` 的设置处理。
   - 期间遗忘了召回中的记录，恢复后的请求里不包含它，运行也不因此失败。
 - **命名空间**：恢复时换了写命名空间，返回 `ErrMemoryNamespaceChanged`；快照为空时同样如此。
 - **轮次绑定**：
@@ -643,7 +643,7 @@ flowchart TB
 | 关系缺少 `from` 时丢弃 | 计入 `Job.Stats.Dropped`，用评测回归检查 |
 | 被遗忘的记录正文保留到保留期满 | 0.1 已写明；需要立即删除时用 `Purge` |
 | Request 钩子不得改写或移动召回消息 | 文档写明，测试中验证 |
-| 恢复时被中断的模型调用是否重发，沿用 `ResendInterruptedModel` | 删除不带来新的恢复失败，原有限制不变 |
+| 恢复时被中断的模型调用是否重发，沿用 `InterruptedModelResends` | 删除不带来新的恢复失败，原有限制不变 |
 | 旧的失效记录没有失效原因 | 影响仅限升级前的数据 |
 | 同一轮中调用 `memory_forget`，这一轮的其他内容也不会被抽取 | `LastForgetSeq` 规则的直接后果，有意保守 |
 | 召回块不在 RequestError 钩子的消息里，上下文溢出时压缩无法缩减它 | 召回块受 `RecallRunes` 限制；溢出主要来自历史 |

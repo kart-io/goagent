@@ -81,7 +81,7 @@ return resp, nil
 c := cache.NewSimpleCache(10 * time.Minute)
 defer c.Close()
 cachedTool := middleware.Wrap(originalTool, middleware.Caching(
-    middleware.WithCache(c),
+    middleware.WithResultCache(c),
     middleware.WithTTL(10*time.Minute),
 ))
 result, err := cachedTool.Invoke(ctx, input)

@@ -89,7 +89,7 @@ The default input of `TextStep` is Input plus `[Agent]: Output` for each turn, j
 
 **Model request interruption**: by default a model request is allowed only one attempt. On recovery it is handled according to the journal record:
 
-| What happened | Record | Default | With `WithInterruptedModelResend` enabled |
+| What happened | Record | Default | `WithInterruptedModelResends(2)` |
 |---|---|---|---|
 | Crash after the request was sent and before the terminal state was persisted (or saving the terminal state failed) | pending (`ambiguous`) | Rejected | Resent while attempts < 3 |
 | The run ctx was canceled | failed (`canceled`) | Rejected | Resent while attempts < 3 |

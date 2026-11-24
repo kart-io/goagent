@@ -15,7 +15,7 @@ GoAgent（`github.com/kart-io/goagent`）是 Go 的 Agent 执行内核：Builder
 - 模型：`github.com/sashabaranov/go-openai`（OpenAI 兼容协议）、`google.golang.org/genai`（Gemini）、`github.com/anthropics/anthropic-sdk-go/v2`（Anthropic）；Ollama、Kimi、SiliconFlow 是 OpenAI 兼容预设，见 `llm/providers`
 - MCP：官方 `github.com/modelcontextprotocol/go-sdk`
 - 观测：OpenTelemetry（trace/metric/OTLP gRPC 导出）、Prometheus client
-- 日志：`github.com/kart-io/logger`
+- 日志：标准库 `log/slog`，经 `core/logging.Logger` 接口注入
 - 数据格式：统一经 `codec/json`（基于标准库 `encoding/json/v2`）与 `codec/yaml`（基于 `go.yaml.in/yaml/v3` 并经 JSON 转换），格式运行时才确定时用 `codec`；`time.Duration` 为整数纳秒，配置文件经 `json.Strict` 还接受 `30s`，保留数字原文用 `json.UseNumber` 与 `json.Number`，JSON 原文用 `json.RawMessage`；除 `codec` 及其子包外不直接导入 JSON/YAML 库
 
 ## 包依赖

@@ -200,23 +200,6 @@ type LoggingCallback struct {
 	verbose bool
 }
 
-// Logger is the logging interface used by NewLoggingCallback.
-//
-// Deprecated: use logging.Logger with NewContextLoggingCallback; a
-// *slog.Logger satisfies it directly.
-type Logger interface {
-	Info(msg string, fields ...interface{})
-	Error(msg string, fields ...interface{})
-	Debug(msg string, fields ...interface{})
-}
-
-// NewLoggingCallback creates a logging callback.
-//
-// Deprecated: use NewContextLoggingCallback.
-func NewLoggingCallback(logger Logger, verbose bool) *LoggingCallback {
-	return NewContextLoggingCallback(legacyLogger{logger}, verbose)
-}
-
 // NewContextLoggingCallback creates a callback that writes every event to
 // logger, typically a *slog.Logger or a *slogx.Logger; nil writes through
 // logging.Default(). Inputs, outputs and tool arguments are logged as given,
@@ -228,21 +211,6 @@ func NewContextLoggingCallback(logger logging.Logger, verbose bool) *LoggingCall
 		logger:       logging.OrDefault(logger),
 		verbose:      verbose,
 	}
-}
-
-// legacyLogger 把已弃用的 Logger 适配为 logging.Logger；旧接口没有 Warn，告警按 Info 记录。
-type legacyLogger struct{ l Logger }
-
-func (a legacyLogger) DebugContext(_ context.Context, msg string, args ...any) {
-	a.l.Debug(msg, args...)
-}
-
-func (a legacyLogger) InfoContext(_ context.Context, msg string, args ...any) { a.l.Info(msg, args...) }
-
-func (a legacyLogger) WarnContext(_ context.Context, msg string, args ...any) { a.l.Info(msg, args...) }
-
-func (a legacyLogger) ErrorContext(_ context.Context, msg string, args ...any) {
-	a.l.Error(msg, args...)
 }
 
 func (l *LoggingCallback) OnStart(ctx context.Context, input interface{}) error {

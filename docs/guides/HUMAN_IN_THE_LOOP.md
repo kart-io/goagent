@@ -123,6 +123,6 @@ These two Keys differ and are not interchangeable. The subgraph and the parent o
 
 ## Boundaries of Cancellation and Recovery
 
-`Handle.Interrupt` cancels the current run, and `Wait` waits for tools and cleanup to exit. To recover a cancelled run, a durable journal must have been configured beforehand and the execution identity kept; resending an interrupted model request is also governed by the `WithInterruptedModelResend` policy.
+`Handle.Interrupt` cancels the current run, and `Wait` waits for tools and cleanup to exit. To recover a cancelled run, a durable journal must have been configured beforehand and the execution identity kept; resending an interrupted model request is also governed by the `WithInterruptedModelResends` policy.
 
 The old `core.InterruptManager`, `InterruptableExecutor` and `core/checkpoint` have been removed; human waits always use the durable graph, `durable.AwaitInput` and `durable.Store` above. A complete `durable.AwaitInput` example is in [human-in-the-loop-interrupt](../../examples/human-in-the-loop-interrupt/README.md).

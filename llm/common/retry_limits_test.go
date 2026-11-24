@@ -26,18 +26,15 @@ func TestRetriesZeroMeansNoRetry(t *testing.T) {
 	require.Equal(t, 1, calls, "零值配置旧实现会尝试 3 次")
 }
 
-func TestRetriesAndMaxAttemptsPrecedence(t *testing.T) {
+func TestRetriesAttempts(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		cfg     common.RetryConfig
 		calls   int
 		invalid bool
 	}{
-		{"两者都为 0：不重试", common.RetryConfig{}, 1, false},
-		{"只设 Retries", common.RetryConfig{Retries: 2}, 3, false},
-		{"只设 MaxAttempts：旧语义", common.RetryConfig{MaxAttempts: 4}, 4, false},
-		{"只设负 MaxAttempts：旧语义 3 次", common.RetryConfig{MaxAttempts: -1}, 3, false},
-		{"两者都为正：报错", common.RetryConfig{Retries: 1, MaxAttempts: 2}, 0, true},
+		{"Retries 为 0：不重试", common.RetryConfig{}, 1, false},
+		{"Retries 为 2：共 3 次", common.RetryConfig{Retries: 2}, 3, false},
 		{"Retries 为负：报错", common.RetryConfig{Retries: -1}, 0, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
