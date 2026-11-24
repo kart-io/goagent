@@ -19,7 +19,7 @@
 
 其他脚本：
 
-- `check_coverage.sh [PROFILE] [SUMMARY_MD]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权，逐条检查 `coverage-gates.txt` 中的门槛（`*` 为整体，`.go` 结尾为单文件，其余为精确包路径，不混入子包）；`stable-packages.txt` 中的稳定包缺门槛、门槛目标缺数据都会失败。传入 `SUMMARY_MD` 时另写出 Markdown 表，供 PR 评论使用。`make coverage` 生成报告并执行门禁，`make coverage-check PROFILE=文件` 只检查已有 profile。
+- `check_coverage.sh [PROFILE] [SUMMARY_MD]`：默认读取 `coverage/coverage.out`；CI 或自定义文件可显式传入路径。由 `scripts/coveragecheck` 按语句数加权，逐条检查 `coverage-gates.txt` 中的门槛（`*` 为整体，`.go` 结尾为单文件，其余为精确包路径，不混入子包；百分比写 `-` 表示目标不得含可执行语句，写 `不计` 表示该包移出整体分母、只报告不判定，稳定包不能不计）；`stable-packages.txt` 中的稳定包缺门槛、门槛目标缺数据都会失败。传入 `SUMMARY_MD` 时另写出 Markdown 表，供 PR 评论使用。`make coverage` 生成报告并执行门禁，`make coverage-check PROFILE=文件` 只检查已有 profile。
 - `check_api_compat.sh [BASE_REF]`：用固定版本的 `golang.org/x/exp/cmd/apidiff` 比较 BASE_REF（默认最近 tag）与工作区的导出 API，`stable-packages.txt` 所列稳定包出现不兼容变更即失败；`ALLOW_BREAKING=1` 只报告。PR 流水线中由 `breaking-change` 标签设置。同一脚本还运行 `exposurecheck`，按 `api-exposure.txt` 检查稳定包导出 API 传递暴露的非稳定类型：未登记或登记过期即失败（不受 `ALLOW_BREAKING` 影响），并报告 apidiff 看不到的实验接口新增方法、实验函数类型改签名、别名改指向与标准库类型互换。见 [API 稳定性政策](../docs/API_STABILITY_CN.md)。
 - `exposurecheck/`：上述检查的实现，独立模块（依赖 `golang.org/x/tools/go/packages`，不进入主模块依赖图）；`make test-exposurecheck` 运行其测试并校验仓库登记表。
 - `create_release.sh <version> [alpha|beta|rc]`：创建并推送发布 tag。

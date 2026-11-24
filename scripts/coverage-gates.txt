@@ -1,11 +1,12 @@
 # 覆盖率门槛：<目标> <最低百分比>，由 scripts/coveragecheck 解释。
 # 目标：「*」为整体（不含 examples）；以 .go 结尾为单文件；其余为精确包路径，不含子包。
 # 百分比写「-」表示目标没有可执行语句（如只含常量的包），一旦出现语句即失败。
+# 写「不计」表示精确包移出整体分母、只报告不判定，仅用于非稳定包。
 # scripts/stable-packages.txt 中每个包都必须在此有条目，否则门禁失败。
 # 初值 = 实测最低值 − max(2pp, 4 条语句对应的百分比)，向下取整（2026-11-24 实测）。
 # 覆盖率提升后可上调（棘轮）；下调须在 PR 说明理由。
 
-*                        80
+*                        84
 
 # 稳定包
 builder                  89
@@ -45,3 +46,19 @@ management/httpapi       80
 llm/providers/openai.go  70
 llm/providers/gemini.go  65
 llm/common/base.go       50
+
+# 不计入整体：契约测试套件与 mock 由其他包的测试调用，按包统计恒为低值；scripts 不随库发布
+cache/cachetest                    不计
+core/durable/storetest             不计
+core/session/sessiontest           不计
+management/internal/managementtest 不计
+management/storetest               不计
+memory/memorytest                  不计
+testing/mocks                      不计
+testing/panictest                  不计
+testing/replay                     不计
+scripts/apicheck                   不计
+scripts/compatcheck                不计
+scripts/coveragecheck              不计
+scripts/memeval                    不计
+scripts/stabilitysoak              不计
