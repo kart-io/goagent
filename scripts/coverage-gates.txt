@@ -37,15 +37,15 @@ tools/toolargs           86
 workflow                 84
 
 # 实验性包中既有的关键门槛（沿用原值）
-multiagent               85
-management               75
-management/adapters      75
-management/httpapi       80
+multiagent               91
+management               80
+management/adapters      84
+management/httpapi       94
 
 # 既有单文件门槛
-llm/providers/openai.go  70
-llm/providers/gemini.go  65
-llm/common/base.go       50
+llm/providers/openai.go  88
+llm/providers/gemini.go  88
+llm/common/base.go       83
 
 # 不计入整体：契约测试套件与 mock 由其他包的测试调用，按包统计恒为低值；scripts 不随库发布
 cache/cachetest                    不计
