@@ -225,6 +225,45 @@ func TestCachingMiddleware_CustomCache(t *testing.T) {
 	assert.Greater(t, stats.Size, int64(0), "Custom cache should have entries")
 }
 
+// Store 优先于已弃用的 Cache，两者都未设置时使用内置缓存。
+func TestCachingStorePrecedence(t *testing.T) {
+	newCache := func() *cache.SimpleCache {
+		c := cache.NewSimpleCache(time.Minute)
+		t.Cleanup(c.Close)
+		return c
+	}
+	store, legacy := newCache(), newCache()
+	cases := []struct {
+		name               string
+		opts               []CachingOption
+		wantStore, wantOld int64
+	}{
+		{"只设 Store", []CachingOption{WithResultCache(store)}, 1, 0},
+		{"只设 Cache", []CachingOption{WithCache(legacy)}, 0, 1},
+		{"两者都设", []CachingOption{WithCache(legacy), WithResultCache(store)}, 1, 0},
+		{"都不设", nil, 0, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.NoError(t, store.Clear(context.Background()))
+			require.NoError(t, legacy.Clear(context.Background()))
+			calls := 0
+			wrapped := NewCachingMiddleware(c.opts...).Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+				calls++
+				return &interfaces.ToolOutput{Result: "r", Success: true}, nil
+			})
+			input := &interfaces.ToolInput{Args: map[string]any{"k": "v"}}
+			for range 2 {
+				_, err := wrapped(context.Background(), input)
+				require.NoError(t, err)
+			}
+			assert.Equal(t, 1, calls, "第二次调用应命中缓存")
+			assert.Equal(t, c.wantStore, store.GetStats().Size)
+			assert.Equal(t, c.wantOld, legacy.GetStats().Size)
+		})
+	}
+}
+
 // TestCachingMiddleware_CustomKeyFunc 测试自定义缓存键函数
 func TestCachingMiddleware_CustomKeyFunc(t *testing.T) {
 	ctx := context.Background()

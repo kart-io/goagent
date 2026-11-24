@@ -20,7 +20,7 @@ func TestDesignCachePreservesCompleteOutput(t *testing.T) {
 	defer borrowed.Close()
 	runs := 0
 	type resultMap map[string][]string
-	wrapped := Caching(WithCache(borrowed))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	wrapped := Caching(WithResultCache(borrowed))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		runs++
 		return &interfaces.ToolOutput{Success: true, Result: resultMap{"evidence": {"原始结果"}}, Metadata: map[string]any{"nested": map[string]string{"value": "原始元数据"}}, AdditionalContext: []string{"补充证据"}, Labels: map[string]string{"source": "test"}}, nil
 	})
@@ -52,7 +52,7 @@ func TestDesignInjectedCacheDoesNotLeakDefaultWorker(t *testing.T) {
 	}
 	before := count()
 	for range 20 {
-		_ = NewCachingMiddleware(WithCache(cache.NewNoOpCache()))
+		_ = NewCachingMiddleware(WithResultCache(cache.NewNoOpCache()))
 	}
 	runtime.GC()
 	for range 50 {
@@ -67,7 +67,7 @@ func TestDesignSharedCacheInvalidEntriesAreMisses(t *testing.T) {
 		defer c.Close()
 		require.NoError(t, c.Set(context.Background(), "shared", bad, 0))
 		calls := 0
-		wrapped := Caching(WithCache(c), WithCacheKeyFunc(func(string, map[string]any) string { return "shared" }))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+		wrapped := Caching(WithResultCache(c), WithCacheKeyFunc(func(string, map[string]any) string { return "shared" }))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 			calls++
 			return &interfaces.ToolOutput{Success: true, Result: "新结果"}, nil
 		})
@@ -81,7 +81,7 @@ func TestDesignSharedCacheInvalidEntriesAreMisses(t *testing.T) {
 }
 
 func TestDesignCacheWriteFailureDoesNotClaimStored(t *testing.T) {
-	wrapped := Caching(WithCache(cache.NewNoOpCache()))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	wrapped := Caching(WithResultCache(cache.NewNoOpCache()))(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		return &interfaces.ToolOutput{Success: true, Result: "真实结果"}, nil
 	})
 	out, err := wrapped(context.Background(), &interfaces.ToolInput{Args: map[string]any{}})

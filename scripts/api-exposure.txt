@@ -8,7 +8,7 @@
 memory.Memory          identity  # builder.WithLongTermMemory、AgentConfig.LongTermMemory：由 memory.New 构造后透传
 memory.EraseFunc       full      # builder.ModelCache.Eraser 的返回值，调用方赋给 memory.Config.OnErase
 
-cache.Cache            full      # tools/middleware.CachingConfig.Cache、WithCache：调用方实现或传 NewSimpleCache
+cache.Cache            full      # 已弃用的 tools/middleware.CachingConfig.Cache、WithCache，随其删除一并移除
 cache.CacheStats       full      # cache.Cache.GetStats 的返回值
 
 constants.Provider     full      # llm.Client.Provider() 等：实现 llm.Client 时必须使用

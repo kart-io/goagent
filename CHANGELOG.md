@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增稳定接口 `interfaces.ByteCache`、`interfaces.TaggedCache`，S1/S2 一致性契约随之迁入。`cache.Bytes`、`cache.Tagged` 改为它们的别名，`builder.ModelCache.Cache` 的字面类型改为 `interfaces.ByteCache`。
 - 类型完全相同，调用方与 contrib `cache/redis` 无需改动；`apidiff` 把命名类型改别名报为不兼容，属误报。
 
+### 弃用
+
+- `tools/middleware`：`WithCache` 与 `CachingConfig.Cache` 弃用，改用 `WithResultCache` 与 `CachingConfig.Store`。新接口 `ResultCache` 只含 `Get`/`Set`，任意 `cache.Cache` 都满足；两者都设置时 `Store` 优先。迁移：`WithCache(c)` 改为 `WithResultCache(c)`。
+
 ### 工程
 
 - API 稳定性政策新增“传递暴露”：稳定包导出 API 引用的实验包类型按 `full`/`identity`/`alias` 三种模式冻结，登记在 `scripts/api-exposure.txt`，见 [API_STABILITY](docs/API_STABILITY_CN.md#传递暴露)。

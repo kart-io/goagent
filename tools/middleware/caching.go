@@ -20,13 +20,28 @@ import (
 	"github.com/kart-io/goagent/tools"
 )
 
+// ResultCache stores tool results for the caching middleware. Values are the
+// middleware's own *interfaces.ToolOutput copies, so an in-process cache is
+// required; any cache.Cache satisfies it.
+type ResultCache interface {
+	// Get returns a non-nil error when the key is absent.
+	Get(ctx context.Context, key string) (any, error)
+	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+}
+
 // CachingConfig is the caching middleware configuration.
 type CachingConfig struct {
+	// Store holds cached results and takes precedence over Cache; when both
+	// are nil a built-in in-memory cache is used.
+	Store ResultCache `json:"-"`
+	// Cache is the cache implementation.
+	//
+	// Deprecated: use Store; Cache is used only when Store is nil.
 	Cache cache.Cache `json:"-"`
 	// TTL is how long a cached result stays valid; 0 means it never expires
 	// (it previously meant 5 minutes).
 	TTL time.Duration `json:"ttl"`
-	// MaxEntries caps the built-in cache used when Cache is nil; 0 means no
+	// MaxEntries caps the built-in cache used when Store and Cache are nil; 0 means no
 	// cap (it previously meant 10000). Set it when keys come from model input,
 	// otherwise memory grows with every distinct argument set.
 	MaxEntries int                                         `json:"max_entries,omitzero"`
@@ -43,7 +58,16 @@ type CachingConfig struct {
 // CachingOption is a caching middleware option.
 type CachingOption func(*CachingConfig)
 
+// WithResultCache sets the result store; see CachingConfig.Store.
+func WithResultCache(c ResultCache) CachingOption {
+	return func(cfg *CachingConfig) {
+		cfg.Store = c
+	}
+}
+
 // WithCache sets the cache implementation.
+//
+// Deprecated: use WithResultCache.
 func WithCache(c cache.Cache) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Cache = c
@@ -103,7 +127,7 @@ type cachingStats struct {
 // Example:
 //
 //	cachingMW := Caching(
-//	    WithCache(myCache),
+//	    WithResultCache(myCache),
 //	    WithTTL(10 * time.Minute),
 //	)
 //	wrappedTool := middleware.Wrap(myTool, cachingMW)
@@ -129,8 +153,11 @@ func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 		opt(cfg)
 	}
 
-	if cfg.Cache == nil {
-		cfg.Cache = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(cfg.MaxEntries))
+	if cfg.Store == nil && cfg.Cache != nil {
+		cfg.Store = cfg.Cache
+	}
+	if cfg.Store == nil {
+		cfg.Store = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(cfg.MaxEntries))
 	}
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = defaultCacheKeyFunc
@@ -207,7 +234,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 
 			// 存储到缓存
 			stored := false
-			if err := m.config.Cache.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
+			if err := m.config.Store.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
 				if l := m.log(); l != nil {
 					l.WarnContext(
 						ctx,
@@ -304,7 +331,7 @@ func cloneToolOutput(out *interfaces.ToolOutput) (*interfaces.ToolOutput, error)
 
 // cachedOutput 将共享缓存中的非本组件数据视为未命中，异常缓存不阻断真实工具。
 func (m *CachingMiddleware) cachedOutput(ctx context.Context, key string) (*interfaces.ToolOutput, bool) {
-	value, err := m.config.Cache.Get(ctx, key)
+	value, err := m.config.Store.Get(ctx, key)
 	if err != nil {
 		return nil, false
 	}
