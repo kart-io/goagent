@@ -27,7 +27,7 @@ agent, err := builder.NewSimpleBuilder(client).
 {"context_result":"r1","runes":12000,"read_tool":"read_context_result","stored":{"key":"…","sha256":"…"}}
 ```
 
-assistant 的工具调用、reasoning_content、结果角色和 tool_call_id 保持不变。模型以 `read_context_result` 的 `key`（`context_result` 的值）和可选 `offset` 分页读取原文；offset 按 Unicode 字符计数，每页默认 1024 字符，最大 16384。返回 `text`、`next_offset` 和 `done`。别名按对话中已有的引用数编号（`r1`、`r2`…），避免模型抄写长哈希出错；键不存在时返回 `{"error":"unknown context_result key","valid_keys":[...]}`，`offset` 非法时返回 `{"error":"invalid offset","min_offset":0,"max_offset":<原文字符数>}`，都不中止执行。读取工具本身与排除名单中的工具不卸载。
+assistant 的工具调用、reasoning_content、结果角色和 tool_call_id 保持不变。模型以 `read_context_result` 的 `key`（`context_result` 的值）和可选 `offset` 分页读取原文；offset 按 Unicode 字符计数，每页至多 `ReadPageRunes` 个字符，`ReadPageRunes` 为 0 时一次返回从 `offset` 到末尾的全部内容。返回 `text`、`next_offset` 和 `done`。别名按对话中已有的引用数编号（`r1`、`r2`…），避免模型抄写长哈希出错；键不存在时返回 `{"error":"unknown context_result key","valid_keys":[...]}`，`offset` 非法时返回 `{"error":"invalid offset","min_offset":0,"max_offset":<原文字符数>}`，都不中止执行。读取工具本身与排除名单中的工具不卸载。
 
 最后一次模型请求（`Step.Final`）不再提供工具，模型无法读取，因此把引用全部还原为原文；不承诺最终请求的上下文变小，需要时在此前用工具提取业务字段或增加预算。`WithReturnDirectTools` 返回完整工具原文。
 

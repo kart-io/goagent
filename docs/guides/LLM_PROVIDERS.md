@@ -28,7 +28,7 @@ Environment variable names and Provider types are defined centrally in `github.c
 - **OpenAI**: `WithBaseURL` can point to an OpenAI-compatible endpoint; verify the degree of compatibility yourself.
 - **Anthropic**: Based on the official `anthropic-sdk-go/v2`; supports structured streaming and native tool streaming, and the SDK does no implicit retries. The API version `2026-10-21` sent by the SDK rejects sampling parameters, so `WithTemperature` and `TopP` have no effect on Anthropic. Thinking blocks are kept in `Message.ProviderState` along with the native tool loop; if you manage message history yourself, send them back unchanged. The SDK sends the API key as `Authorization: Bearer`; when going through a proxy or gateway that only accepts `x-api-key`, also send that header with `WithCustomHeaders(map[string]string{"X-Api-Key": key})`.
 - **Kimi, SiliconFlow, Ollama**: Return `*OpenAIProvider` and support structured streaming and native tool streaming over the OpenAI-compatible protocol; `ListModels(ctx)` reads `/models`.
-- **Ollama**: Uses the `/v1` compatible endpoint; a custom `OLLAMA_BASE_URL` must include `/v1`. `NewOllamaClientSimple(model)` is equivalent to `NewOllamaWithOptions` with only the model set; when no timeout is set, 120 seconds is used.
+- **Ollama**: Uses the `/v1` compatible endpoint; a custom `OLLAMA_BASE_URL` must include `/v1`. `NewOllamaClientSimple(model)` is equivalent to `NewOllamaWithOptions` with only the model set; when no timeout is set, there is no timeout.
 
 ## Basic Chat
 
