@@ -133,7 +133,7 @@ events, err := agent.ExecuteStream(ctx, builder.UserInput{
 | `MaxImagesPerRequest` | 单次请求附带图片数上限，保留最新的；0 表示不限 |
 | `Placeholder` | `func(p llm.ImagePart, reason string) string` 生成追加到消息中、代替降级图片的文本；`reason` 为 `不可用`（`ErrImageUnavailable`）或 `不在当前上下文中`（超出 `KeepRecentTurns` 或 `MaxImagesPerRequest`）。为 nil 时文本为 `[图片 <ref>：<reason>]` |
 
-**压缩。** `contextpolicy.CompactionConfig.ImageTokens` 是一张附带图片的估算 token 数，在 `Estimate` 之外为消息中的每张图片累加；0 表示 `constants.DefaultImageTokens`（1500）。交给摘要模型的转写里，每张图片以 `[图片 <ref>]` 代替，摘要请求不携带图片。
+**压缩。** `contextpolicy.CompactionConfig.ImageTokens` 是一张附带图片的估算 token 数，在 `Estimate` 之外为消息中的每张图片累加；0 表示 `constants.DefaultImageTokens`（1500）。交给摘要模型的转写里，每张图片以 `[图片 <ref>]`（没有 ref 时为 `[图片]`）追加在消息文本之后，摘要请求不携带图片。
 
 **管理适配器。** native 管理适配器（`management/adapters`）对 JSON 字符串任务输入仍按纯文本处理。任务输入是含 `images` 键的 JSON 对象时，严格解码为 `builder.UserInput`：
 
@@ -141,13 +141,15 @@ events, err := agent.ExecuteStream(ctx, builder.UserInput{
 {"text": "这张图里有什么？", "images": [{"ref": "image:42", "mime": "image/png", "sha256": "..."}]}
 ```
 
-`images` 必须是数组，每项 `ref` 非空；`mime`、`sha256` 可省略。图片项里出现 `url` 或出现任何未知键，都以 `CodeInvalidInput` 拒绝，出站地址只来自宿主的解析器。其他 JSON 输入的行为不变。
+`images` 必须是数组，每项 `ref` 非空；`mime`、`sha256` 可省略。图片项里出现 `url` 或出现任何未知键，都以 `CodeInvalidInput` 拒绝，出站地址只来自宿主的解析器。没有精确小写 `images` 键的对象不会被当作 `UserInput`，与其他 JSON 输入一样保持原行为，按普通值渲染。
 
 提供方支持：
 
 | 提供方 | 图片 |
 |---|---|
-| OpenAI 兼容（`OpenAIProvider` 及其预设） | 支持，作为图片部件发送 |
+| `OpenAIProvider` | 声明 `CapabilityVision`，图片作为图片部件发送 |
+| MiniMax | 声明 `CapabilityVision`；带图片的请求发送 `max_completion_tokens`（视觉接口只读这个上限）而不是 `max_tokens` |
+| Kimi、SiliconFlow、Ollama 预设 | 不声明视觉能力；图片部件照常转发，是否被接受取决于所选模型 |
 | Anthropic | 拒绝 |
 | 原生 Gemini | 拒绝 |
 | DeepSeek | 拒绝 |

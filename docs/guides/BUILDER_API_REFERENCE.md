@@ -122,7 +122,7 @@ events, err := agent.ExecuteStream(ctx, builder.UserInput{
 - **Resolution.** `WithImageResolver(r, policy)` registers `ImageResolver func(ctx, ImageRequest) (url string, err error)`. It runs only while the outgoing model request is built, right before every real request, and fills `URL` (an https address or a `data:` URI) for that request only. It is not called while a recorded turn replays, and a model call cache hit does not call it again. Each call to `WithImageResolver` replaces the previous resolver and policy; a nil resolver or a negative policy limit fails `Build` with `CodeInvalidConfig`.
 - **`ImageRequest`.** `Part` is the image as recorded; `TurnAge` counts session turns back from the current one (0 is the current turn's input, 1 the previous turn's, and so on). Turns are the `turn/start` entries of the session log; steering, corrections, continuations, memory recall, and summaries do not start a turn.
 - **Errors.** Returning `builder.ErrImageUnavailable` (possibly wrapped) means the reference can never be resolved, for example the image was deleted or no longer matches its digest; the image becomes a placeholder and the request goes on. Any other error is treated as transient: the request fails and goes through the RequestError hooks like a provider error.
-- **Without a resolver.** An image without a URL, or an empty image part, fails the run with `CodeInvalidInput` before the session log is written ; this covers a part with neither `Ref` nor `URL`, and a part with only a `Ref` when no resolver is configured. A resolver that returns an empty URL fails the request with `CodeInvalidOutput`. Providers also refuse a part with `Ref` set and `URL` empty.
+- **Without a resolver.** An image without a URL, or an empty image part, fails the run with `CodeInvalidInput` before the session log is written; this covers a part with neither `Ref` nor `URL`, and a part with only a `Ref` when no resolver is configured. A resolver that returns an empty URL fails the request with `CodeInvalidOutput`. Providers also refuse a part with `Ref` set and `URL` empty.
 
 `ImagePolicy` fields:
 
@@ -133,7 +133,7 @@ events, err := agent.ExecuteStream(ctx, builder.UserInput{
 | `MaxImagesPerRequest` | Cap on attached images per request, keeping the newest; 0 means no limit |
 | `Placeholder` | `func(p llm.ImagePart, reason string) string` renders the text appended to the message in place of a degraded image; `reason` is `不可用` (`ErrImageUnavailable`) or `不在当前上下文中` (outside `KeepRecentTurns` or `MaxImagesPerRequest`). When nil, the text is `[图片 <ref>：<reason>]` |
 
-**Compaction.** `contextpolicy.CompactionConfig.ImageTokens` is the estimated token count of one attached image, added on top of `Estimate` for every image of a message; 0 means `constants.DefaultImageTokens` (1500). The transcript given to the summary model keeps `[图片 <ref>]` in place of each image, and the summary request carries no images.
+**Compaction.** `contextpolicy.CompactionConfig.ImageTokens` is the estimated token count of one attached image, added on top of `Estimate` for every image of a message; 0 means `constants.DefaultImageTokens` (1500). In the transcript given to the summary model, each image is appended after the message text as `[图片 <ref>]` (`[图片]` when it has no ref), and the summary request carries no images.
 
 **Management adapter.** The native management adapter (`management/adapters`) keeps a JSON string task input as plain text. A task input that is a JSON object with an `images` key is decoded strictly into a `builder.UserInput`:
 
@@ -141,13 +141,15 @@ events, err := agent.ExecuteStream(ctx, builder.UserInput{
 {"text": "What is in this picture?", "images": [{"ref": "image:42", "mime": "image/png", "sha256": "..."}]}
 ```
 
-`images` must be an array and every entry needs a non-empty `ref`; `mime` and `sha256` are optional. A `url` inside an image entry, or any unknown key, is rejected with `CodeInvalidInput`, so outgoing addresses come only from the host's resolver. Any other JSON input keeps its previous behavior.
+`images` must be an array and every entry needs a non-empty `ref`; `mime` and `sha256` are optional. A `url` inside an image entry, or any unknown key, is rejected with `CodeInvalidInput`, so outgoing addresses come only from the host's resolver. An object without an exact lowercase `images` key is not treated as a `UserInput`; like any other JSON input it keeps its previous behavior and is rendered as a value.
 
 Provider support:
 
 | Provider | Images |
 |---|---|
-| OpenAI-compatible (`OpenAIProvider` and its presets) | Supported; sent as image parts |
+| `OpenAIProvider` | Declares `CapabilityVision`; images are sent as image parts |
+| MiniMax | Declares `CapabilityVision`; a request with images sends `max_completion_tokens` (the only limit the vision endpoint reads) instead of `max_tokens` |
+| Kimi, SiliconFlow, Ollama presets | Do not declare vision; image parts are forwarded, and whether they are accepted depends on the model |
 | Anthropic | Rejected |
 | Native Gemini | Rejected |
 | DeepSeek | Rejected |
