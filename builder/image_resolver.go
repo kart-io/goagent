@@ -7,11 +7,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kart-io/goagent/builder/contextpolicy"
+	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
+	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
-	"github.com/kart-io/goagent/memory"
 )
 
 // ErrImageUnavailable reports that an image reference can never be resolved,
@@ -32,10 +32,11 @@ const (
 type ImageRequest struct {
 	// Part is the image as recorded in the history.
 	Part llm.ImagePart
-	// TurnAge counts user turns from the end of the request: 0 is the current
-	// turn's user message, 1 the previous one, and so on. Memory recall,
-	// compaction summaries, step context and empty-answer re-asks are not
-	// counted as turns.
+	// TurnAge counts session turns back from the current one: 0 is an image of
+	// the current turn's input, 1 of the previous turn's input, and so on.
+	// Turns are the turn/start entries of the session log; messages added
+	// within a turn (steering, corrections, continuations, memory recall,
+	// summaries) do not start a turn.
 	TurnAge int
 }
 
@@ -106,14 +107,60 @@ func (b *AgentBuilder[S]) validateImages() error {
 
 type imageConfigKey struct{}
 
-// withImageConfig 由每次运行安装（可为 nil），子 Agent 不继承父 Agent 的解析器。
-func withImageConfig(ctx context.Context, c *imageConfig) context.Context {
-	return context.WithValue(ctx, imageConfigKey{}, c)
+// imageRun 是一次运行的解析配置与轮次边界：turns 按顺序列出各会话轮次输入的图片，最后一项是本轮。
+type imageRun struct {
+	config *imageConfig
+	turns  [][]llm.ImagePart
+}
+
+// withImageConfig 由每次运行安装（c 可为 nil），子 Agent 不继承父 Agent 的解析器与轮次。
+func withImageConfig(ctx context.Context, c *imageConfig, turns [][]llm.ImagePart) context.Context {
+	return context.WithValue(ctx, imageConfigKey{}, imageRun{config: c, turns: turns})
 }
 
 func imageConfigFrom(ctx context.Context) *imageConfig {
-	c, _ := ctx.Value(imageConfigKey{}).(*imageConfig)
-	return c
+	r, _ := ctx.Value(imageConfigKey{}).(imageRun)
+	return r.config
+}
+
+// sessionTurnImages 按顺序返回未被撤销的各轮 turn/start 记录的输入图片，作为轮次边界。
+func sessionTurnImages(events []session.Event) ([][]llm.ImagePart, error) {
+	var turns [][]llm.ImagePart
+	for _, ev := range session.Active(events) {
+		if ev.Type != constants.SessionEventTurnStart {
+			continue
+		}
+		var d session.TurnStart
+		if err := json.Unmarshal(ev.Data, &d); err != nil {
+			return nil, fmt.Errorf("会话日志事件 %d：%w", ev.Seq, err)
+		}
+		turns = append(turns, d.Images)
+	}
+	return turns, nil
+}
+
+// imageAges 给每条带图消息算出 TurnAge：从最新往前按图片列表匹配各轮输入，
+// 轮次内追加的消息不带图也不改变轮次；匹配不到的（钩子加入的图）归入尚未匹配的最新一轮。
+func imageAges(messages []llm.Message, turns [][]llm.ImagePart) []int {
+	ages := make([]int, len(messages))
+	last := len(turns) - 1
+	next := last
+	for i := len(messages) - 1; i >= 0; i-- {
+		if len(messages[i].Images) == 0 {
+			continue
+		}
+		k := next
+		for k >= 0 && !slices.Equal(turns[k], messages[i].Images) {
+			k--
+		}
+		if k < 0 {
+			ages[i] = max(last-next, 0)
+			continue
+		}
+		ages[i] = last - k
+		next = k - 1
+	}
+	return ages
 }
 
 // imageCacheIdentity 是写入模型缓存键的图片配置身份；未配置解析器时为空，缓存键不变。
@@ -129,26 +176,15 @@ func unresolvedImage(p llm.ImagePart) error {
 	return agentErrors.Newf(agentErrors.CodeInvalidInput, "图片 %q 没有可发送的 URL：引用须经 WithImageResolver 解析", p.Ref).WithComponent("builder").WithOperation("resolve_images")
 }
 
-// checkImageInput 在开始轮次之前拒绝无法解析的输入图片，不写日志、不请求模型。
+// checkImageInput 在开始轮次之前拒绝无法解析的输入图片，不写日志、不请求模型：
+// 写入日志的空部件会让之后每次请求都失败。
 func (a *ConfigurableAgent[S]) checkImageInput(images []llm.ImagePart) error {
-	if a.config.images != nil {
-		return nil
-	}
 	for _, p := range images {
-		if p.URL == "" {
+		if p.URL == "" && (p.Ref == "" || a.config.images == nil) {
 			return unresolvedImage(p)
 		}
 	}
 	return nil
-}
-
-// countsAsUserTurn 认出真实的用户轮次消息，复用各合成消息已有的标记。
-func countsAsUserTurn(m llm.Message) bool {
-	return m.Role == constants.RoleUser &&
-		!strings.HasPrefix(m.Content, memory.RecallPrefix) &&
-		!contextpolicy.IsSummary(m) &&
-		!strings.HasPrefix(m.Content, stepContextPrefix) &&
-		m.Content != emptyAnswerPrompt
 }
 
 // resolveImages 返回本次真实发送的请求：按策略降级旧图，其余经解析器填入 URL。
@@ -170,14 +206,8 @@ func resolveImages(ctx context.Context, req *llm.CompletionRequest) (*llm.Comple
 		return req, nil
 	}
 	policy := c.policy
-	ages := make([]int, len(req.Messages))
-	age := -1
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if countsAsUserTurn(req.Messages[i]) {
-			age++
-		}
-		ages[i] = max(age, 0)
-	}
+	run, _ := ctx.Value(imageConfigKey{}).(imageRun)
+	ages := imageAges(req.Messages, run.turns)
 	// 从最新往前决定附带：先按轮次，再按张数上限保留最新的。
 	attach := make([][]bool, len(req.Messages))
 	attached := 0

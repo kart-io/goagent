@@ -184,7 +184,6 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 	if err := a.checkImageInput(images); err != nil {
 		return nil, err
 	}
-	ctx = withImageConfig(ctx, a.config.images)
 	evidence := ""
 	metadata := make(map[string]interface{}, len(request.Metadata))
 	for k, v := range request.Metadata {
@@ -203,6 +202,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 			return nil, err
 		}
 	}
+	var turns [][]llm.ImagePart
 	if a.config.SessionLog != nil {
 		turn, history, err := a.openSessionTurn(ctx, input, images)
 		if err != nil {
@@ -211,11 +211,13 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		if turn.completed {
 			ctx = durable.WithReplayOnly(ctx)
 		}
+		turns = turn.turnImages
 		ctx = context.WithValue(context.WithValue(ctx, historyKey{}, history), sessionLogKey{}, turn)
 		if turn.memory != nil {
 			ctx = memory.WithTurn(ctx, *turn.memory)
 		}
 	}
+	ctx = withImageConfig(ctx, a.config.images, append(turns, images))
 	ctx = withModelCacheScope(ctx, a.modelCacheScope(ctx))
 	messages, err := a.streamMessages(ctx, input, images, evidence)
 	if err != nil {

@@ -131,6 +131,8 @@ type sessionTurn struct {
 	// memory 是本轮的长期记忆绑定；未配置长期记忆时为 nil。
 	memory     *memory.TurnMemory
 	recallMode string
+	// turnImages 是本轮之前各轮输入的图片，给出 TurnAge 的轮次边界。
+	turnImages [][]llm.ImagePart
 }
 
 const (

@@ -254,25 +254,70 @@ func TestKeepRecentTurnsDegradesOlderImages(t *testing.T) {
 	}
 }
 
-func TestTurnAgeSkipsSyntheticUserMessages(t *testing.T) {
+func TestTurnAgeFollowsSessionTurnsNotUserMessages(t *testing.T) {
 	r := resolveTo(dataURL)
-	ctx := withImageConfig(context.Background(), &imageConfig{resolve: r.resolve, policy: ImagePolicy{KeepRecentTurns: 1}})
+	turns := [][]llm.ImagePart{{imageRef(1)}, nil, {imageRef(2)}, {imageRef(3)}}
+	ctx := withImageConfig(context.Background(), &imageConfig{resolve: r.resolve, policy: ImagePolicy{KeepRecentTurns: 1}}, turns)
 	req := &llm.CompletionRequest{Messages: []llm.Message{
 		{Role: constants.RoleUser, Content: "旧", Images: []llm.ImagePart{imageRef(1)}},
 		llm.UserMessage("[此前对话的摘要]\n摘要"),
+		llm.UserMessage("无图的一轮"),
 		{Role: constants.RoleUser, Content: "上一轮", Images: []llm.ImagePart{imageRef(2)}},
+		llm.UserMessage("上一轮的纠正"),
 		llm.AssistantMessage("答"),
 		{Role: constants.RoleUser, Content: "本轮", Images: []llm.ImagePart{imageRef(3)}},
+		llm.UserMessage("插话"),
 		llm.UserMessage(emptyAnswerPrompt),
 		llm.UserMessage("[相关长期记忆]\n记忆"),
 		stepContextMessage("上下文"),
 	}}
 	sent, err := resolveImages(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, []ImageRequest{{imageRef(2), 1}, {imageRef(3), 0}}, r.requests(), "合成消息不计入轮次")
+	require.Equal(t, []ImageRequest{{imageRef(2), 1}, {imageRef(3), 0}}, r.requests(), "轮次内追加的用户消息不计入轮次")
 	require.Equal(t, "旧\n[图片 image:1：不在当前上下文中]", sent.Messages[0].Content)
 	require.Equal(t, []llm.ImagePart{imageRef(1)}, req.Messages[0].Images, "原请求不变")
-	require.Equal(t, []llm.ImagePart{imageRef(3)}, req.Messages[4].Images, "原请求不变")
+	require.Equal(t, []llm.ImagePart{imageRef(3)}, req.Messages[6].Images, "原请求不变")
+}
+
+func TestTurnAgeCountsSessionTurnsNotInTurnMessages(t *testing.T) {
+	store := session.NewMemoryStore()
+	model := mocks.NewScriptedClient(mocks.TextReply("1", "答1"), mocks.TextReply("2a", "答2a"), mocks.TextReply("2b", "答2b"), mocks.TextReply("3", "答3"))
+	r := resolveTo(dataURL)
+	continued := 0
+	agent := imageAgent(t, model, store, r, ImagePolicy{KeepRecentTurns: 1}, func(b *AgentBuilder[*core.AgentState]) *AgentBuilder[*core.AgentState] {
+		return b.WithTools(plainTool()).WithTurnStopping(func(context.Context, *Stopping) (string, error) {
+			// 只在第 2 轮续跑一次：轮次内追加的用户消息不开始新轮次。
+			if len(model.Requests()) == 2 && continued == 0 {
+				continued++
+				return "再看看", nil
+			}
+			return "", nil
+		})
+	})
+	var calls [][]ImageRequest
+	for i := 1; i <= 3; i++ {
+		before := len(r.requests())
+		_, err := agent.AsRunnable().Invoke(context.Background(), UserInput{Text: fmt.Sprintf("第%d张", i), Images: []llm.ImagePart{imageRef(i)}})
+		require.NoError(t, err)
+		calls = append(calls, r.requests()[before:])
+	}
+	require.Equal(t, 1, continued)
+	require.Len(t, model.Requests(), 4)
+	require.Equal(t, []ImageRequest{{imageRef(1), 1}, {imageRef(2), 0}, {imageRef(1), 1}, {imageRef(2), 0}}, calls[1], "续跑的第二次请求仍在第 2 轮")
+	require.Equal(t, []llm.ImagePart{resolvedImage(1)}, userMessages(model.Requests()[2])[0].Images, "上一轮的图不提前降级")
+	require.Equal(t, []ImageRequest{{imageRef(2), 1}, {imageRef(3), 0}}, calls[2], "历史里的续跑消息不计入轮次")
+	require.Equal(t, []llm.ImagePart{resolvedImage(2)}, userMessages(model.Requests()[3])[1].Images)
+}
+
+func TestEmptyImagePartRejectedBeforeSessionLog(t *testing.T) {
+	store := session.NewMemoryStore()
+	model := mocks.NewScriptedClient(mocks.TextReply("好", "好"))
+	agent := imageAgent(t, model, store, resolveTo(dataURL), ImagePolicy{})
+	_, err := agent.AsRunnable().Invoke(context.Background(), UserInput{Text: "看图", Images: []llm.ImagePart{{}}})
+	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err), "%v", err)
+	require.Zero(t, model.Calls())
+	_, err = store.Read(context.Background(), "s", 0)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound, "未写入会话日志")
 }
 
 func TestMaxImagesPerRequestKeepsNewest(t *testing.T) {
@@ -309,7 +354,7 @@ func TestImageRefWithoutResolverFails(t *testing.T) {
 
 func TestHistoryRefWithoutResolverFailsBeforeModel(t *testing.T) {
 	req := &llm.CompletionRequest{Messages: []llm.Message{{Role: constants.RoleUser, Content: "看图", Images: []llm.ImagePart{imageRef(1)}}}}
-	_, err := resolveImages(withImageConfig(context.Background(), nil), req)
+	_, err := resolveImages(withImageConfig(context.Background(), nil, nil), req)
 	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
 
 	// 已有 URL 的图片不需要解析器。
@@ -390,8 +435,8 @@ func TestImagePolicyIdentityKeysModelCache(t *testing.T) {
 	legacy, ok := modelCacheKey(cacheKeyInput{Identity: "scope", Client: "c", Request: req})
 	require.True(t, ok)
 	require.Equal(t, legacy, key(context.Background()), "未配置解析器时缓存键不变")
-	v1 := key(withImageConfig(context.Background(), &imageConfig{policy: ImagePolicy{Identity: "v1"}}))
-	v2 := key(withImageConfig(context.Background(), &imageConfig{policy: ImagePolicy{Identity: "v2"}}))
+	v1 := key(withImageConfig(context.Background(), &imageConfig{policy: ImagePolicy{Identity: "v1"}}, nil))
+	v2 := key(withImageConfig(context.Background(), &imageConfig{policy: ImagePolicy{Identity: "v2"}}, nil))
 	require.NotEqual(t, legacy, v1)
 	require.NotEqual(t, v1, v2)
 	require.False(t, strings.Contains(v1, "v1"))

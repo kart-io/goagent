@@ -79,7 +79,10 @@ func (a *ConfigurableAgent[S]) turnMemory(ctx context.Context, stored json.RawMe
 // deriveHistory 从会话日志推导历史；配置长期记忆时去掉升级前写入历史的召回块。
 func (t *sessionTurn) deriveHistory(events []session.Event) ([]llm.Message, error) {
 	history, err := session.DeriveMessages(events)
-	if err != nil || t.memory == nil {
+	if err != nil {
+		return nil, err
+	}
+	if t.turnImages, err = sessionTurnImages(events); err != nil || t.memory == nil {
 		return history, err
 	}
 	return slices.DeleteFunc(history, func(msg llm.Message) bool {
