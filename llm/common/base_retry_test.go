@@ -21,9 +21,9 @@ func TestExecuteWithRetry_Success(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   1 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
+		Retries:   2,
+		BaseDelay: 1 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -47,9 +47,9 @@ func TestExecuteWithRetry_SuccessAfterRetries(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   1 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
+		Retries:   2,
+		BaseDelay: 1 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -70,9 +70,9 @@ func TestExecuteWithRetry_MaxRetriesExceeded(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   1 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
+		Retries:   2,
+		BaseDelay: 1 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -98,9 +98,9 @@ func TestExecuteWithRetry_ContextCanceled(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   1 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
+		Retries:   2,
+		BaseDelay: 1 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
 	}
 
 	_, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
@@ -127,31 +127,6 @@ func TestExecuteWithRetry_NonRetryableError(t *testing.T) {
 	assert.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
 }
 
-func TestExecuteWithRetry_DefaultMaxAttempts(t *testing.T) {
-	// Test with zero MaxAttempts uses default
-	callCount := 0
-	execute := func(ctx context.Context) (string, error) {
-		callCount++
-		if callCount < 3 {
-			return "", agentErrors.NewLLMRateLimitError("test", "test-model", 60)
-		}
-		return "success", nil
-	}
-
-	cfg := common.RetryConfig{
-		MaxAttempts: -1, // 已弃用字段保持旧语义：≤0 为 3 次
-		BaseDelay:   1 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
-	}
-
-	ctx := context.Background()
-
-	result, err := common.ExecuteWithRetry(ctx, cfg, "test-provider", execute)
-
-	require.NoError(t, err)
-	assert.Equal(t, "success", result)
-}
-
 func TestExecuteWithRetry_ExponentialBackoff(t *testing.T) {
 	// Test exponential backoff timing
 	// Use shorter delays for test stability
@@ -168,9 +143,9 @@ func TestExecuteWithRetry_ExponentialBackoff(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 3,
-		BaseDelay:   5 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
+		Retries:   2,
+		BaseDelay: 5 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -202,9 +177,9 @@ func TestExecuteWithRetry_MaxDelayLimit(t *testing.T) {
 	}
 
 	cfg := common.RetryConfig{
-		MaxAttempts: 5,
-		BaseDelay:   10 * time.Millisecond,
-		MaxDelay:    20 * time.Millisecond, // Cap at 20ms
+		Retries:   4,
+		BaseDelay: 10 * time.Millisecond,
+		MaxDelay:  20 * time.Millisecond, // Cap at 20ms
 	}
 
 	ctx := context.Background()
@@ -220,7 +195,6 @@ func TestDefaultRetryConfig(t *testing.T) {
 	cfg := common.DefaultRetryConfig()
 
 	assert.Equal(t, 2, cfg.Retries, "预设保持共 3 次尝试")
-	assert.Zero(t, cfg.MaxAttempts)
 	assert.Greater(t, cfg.BaseDelay, time.Duration(0), "BaseDelay should be positive")
 	assert.Greater(t, cfg.MaxDelay, time.Duration(0), "MaxDelay should be positive")
 	assert.GreaterOrEqual(t, cfg.MaxDelay, cfg.BaseDelay, "MaxDelay should be >= BaseDelay")

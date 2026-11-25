@@ -20,7 +20,7 @@ func TestExecuteWithRetry真实延迟边界(t *testing.T) {
 		t.Run(delay.String(), func(t *testing.T) {
 			calls := 0
 			require.NotPanics(t, func() {
-				value, err := common.ExecuteWithRetry(context.Background(), common.RetryConfig{MaxAttempts: 2, BaseDelay: delay}, "test", func(context.Context) (int, error) {
+				value, err := common.ExecuteWithRetry(context.Background(), common.RetryConfig{Retries: 1, BaseDelay: delay}, "test", func(context.Context) (int, error) {
 					calls++
 					if calls == 1 {
 						return 0, agentErrors.NewLLMRateLimitError("test", "m", 0)
@@ -47,7 +47,7 @@ func TestExecuteWithRetry取消后不再调用(t *testing.T) {
 			cancel()
 		}
 		calls := 0
-		_, err := common.ExecuteWithRetry(ctx, common.RetryConfig{MaxAttempts: 3}, "test", func(context.Context) (int, error) {
+		_, err := common.ExecuteWithRetry(ctx, common.RetryConfig{Retries: 2}, "test", func(context.Context) (int, error) {
 			calls++
 			cancel()
 			return 0, agentErrors.NewLLMRateLimitError("test", "m", 0)
@@ -73,7 +73,7 @@ func TestExecuteWithRetry超时与退避饱和(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	calls := 0
-	_, err := common.ExecuteWithRetry(ctx, common.RetryConfig{MaxAttempts: 3, BaseDelay: time.Duration(1<<63 - 1)}, "test", func(context.Context) (int, error) {
+	_, err := common.ExecuteWithRetry(ctx, common.RetryConfig{Retries: 2, BaseDelay: time.Duration(1<<63 - 1)}, "test", func(context.Context) (int, error) {
 		calls++
 		return 0, &llm.ProviderError{StatusCode: 503, Err: errors.New("服务暂不可用")}
 	})
@@ -90,7 +90,7 @@ func TestExecuteWithRetry真实HTTP保留重试信息(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
-	_, err := common.ExecuteWithRetry(context.Background(), common.RetryConfig{MaxAttempts: 2}, "test", func(ctx context.Context) (int, error) {
+	_, err := common.ExecuteWithRetry(context.Background(), common.RetryConfig{Retries: 1}, "test", func(ctx context.Context) (int, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
 		require.NoError(t, err)
 		response, err := server.Client().Do(req)

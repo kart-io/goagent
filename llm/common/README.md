@@ -65,7 +65,7 @@ A complete client must still implement `CompleteStream` and `Provider()` from `l
 
 - `GetMaxTokens` and `GetTimeout` return 0 when nothing is configured: no `max_tokens` is sent and no timeout is applied. `GetTemperature` and `GetTopP` fall back to `constants.DefaultTemperature` / `constants.DefaultTopP`; `ResolveTemperature` honors an explicit zero (`CompletionRequest.TemperatureSet`).
 - `EnsureAPIKey` rejects a client-level reasoning config for providers other than OpenAI, DeepSeek, and Gemini.
-- `RetryConfig.Retries` counts retries after the first attempt; 0 means no retry. `MaxAttempts` is deprecated; setting both is an error, as are negative retries or delays. `DefaultRetryConfig()` gives 3 attempts.
+- `RetryConfig.Retries` counts retries after the first attempt; 0 means no retry. Negative retries or delays are errors. `DefaultRetryConfig()` gives 3 attempts.
 - `ExecuteWithRetry` returns non-retryable errors immediately, stops on context cancellation or deadline (returned as an `AgentError` that still matches `context.Canceled` / `context.DeadlineExceeded` via `errors.Is`), and wraps the last error with the attempt count. With `GO_TEST_MODE=true` the base delay becomes 10ms.
 - `MapHTTPError` maps 400 to invalid input, 401/403 to invalid API key config, 404 to an LLM response error, 429 to a rate-limit error, and 5xx and other statuses to a request error. `ParseRetryAfter` falls back to 60 seconds; `RetryAfterDuration` returns 0 for missing or unparsable values.
 - `NewHTTPClient` reuses clients with the same configuration from a global cache; config custom headers override `HTTPClientConfig.Headers`.

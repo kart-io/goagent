@@ -170,8 +170,8 @@ func Wrap(tool interfaces.Tool, middlewares ...ToolMiddlewareFunc) interfaces.To
 | 中间件 | 有状态对象 | 装配函数 |
 |---|---|---|
 | 日志 | `NewLoggingMiddleware(WithLogger, WithMaxArgBytes, WithInputLogging, WithOutputLogging)` | `Logging(...)` |
-| 缓存 | `NewCachingMiddleware(WithCache, WithTTL, WithCacheKeyFunc, WithCacheLogger)` | `Caching(...)` |
-| 限流 | `NewRateLimitMiddleware(WithQPS, WithBurst, WithPerToolRateLimit, WithWaitTimeout, WithRateLimitLogger)` | `RateLimit(...)` |
+| 缓存 | `NewCachingMiddleware(WithResultCache, WithTTL, WithCacheKeyFunc, WithCacheContextLogger)` | `Caching(...)` |
+| 限流 | `NewRateLimitMiddleware(WithQPS, WithBurst, WithPerToolRateLimit, WithWaitTimeout, WithRateLimitContextLogger)` | `RateLimit(...)` |
 
 对象通过显式的 `.Wrap` 方法装配；函数按列表顺序从外向内调用，返回时反向经过各层。调用方自定义函数应保留结果与错误的组合。日志计时不写入输入参数。空函数或返回空调用器在装配时失败，其他类型不能通过编译。
 

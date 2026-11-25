@@ -75,4 +75,4 @@ agent, err := b.WithLogger(logger).BuildContext(runCtx)
 
 - `WithLogger` 把一次执行的每个 observe 事件（Agent、模型调用、重试、工具调用、缓存、用量）写成一条结构化日志，`execution.Scope` 已绑定的观察者照常收到事件。日志只含身份、耗时和错误类别，不含输入、输出和提供方错误原文。执行失败记为 Error，取消和重试记为 Warn，生命周期结束记为 Info，开始、用量和缓存命中记为 Debug。嵌套 Agent 由最外层带 Logger 的 Agent 记录整次执行。
 - 没拿到日志器的代码写入 `logging.Default()`，它每次调用时读取 `slog.Default()`；`slogx.Init` 会设置它，因此 Builder 的告警，以及 `core/middleware.NewLoggingMiddleware(nil)` 与 `tools/middleware.NewLoggingMiddleware()` 的默认输出都跟随宿主配置。
-- Builder 之外，用 `observe.NewLogObserver(logger)` 配合 `observe.AddObserver(ctx, ...)` 以同样方式记录工作流等其他事件来源。工具中间件使用 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`；接收 `kart-io/logger` 日志器的旧选项已弃用。
+- Builder 之外，用 `observe.NewLogObserver(logger)` 配合 `observe.AddObserver(ctx, ...)` 以同样方式记录工作流等其他事件来源。工具中间件使用 `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger`。

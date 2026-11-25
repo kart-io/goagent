@@ -12,32 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockLogger implements Logger interface for testing callbacks
-type mockLogger struct {
-	mu     sync.Mutex
-	infos  []string
-	errors []string
-	debugs []string
-}
-
-func (m *mockLogger) Info(msg string, fields ...interface{}) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.infos = append(m.infos, msg)
-}
-
-func (m *mockLogger) Error(msg string, fields ...interface{}) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.errors = append(m.errors, msg)
-}
-
-func (m *mockLogger) Debug(msg string, fields ...interface{}) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.debugs = append(m.debugs, msg)
-}
-
 // mockMetricsCollector implements MetricsCollector interface
 type mockMetricsCollector struct {
 	mu         sync.Mutex
@@ -187,36 +161,6 @@ func TestCallbackManager_OnMethods(t *testing.T) {
 	}
 	if err := manager.OnError(ctx, errors.New("test")); err != nil {
 		t.Errorf("OnError returned error: %v", err)
-	}
-}
-
-func TestNewLoggingCallback(t *testing.T) {
-	logger := &mockLogger{}
-	cb := NewLoggingCallback(logger, true)
-
-	if cb == nil {
-		t.Fatal("NewLoggingCallback returned nil")
-	}
-
-	ctx := context.Background()
-
-	// Test methods
-	cb.OnStart(ctx, "input")
-	cb.OnEnd(ctx, "output")
-	cb.OnError(ctx, errors.New("error"))
-	cb.OnLLMStart(ctx, []string{"prompt"}, "gpt-4")
-	cb.OnLLMEnd(ctx, "output", 100)
-	cb.OnToolStart(ctx, "tool", "input")
-	cb.OnToolEnd(ctx, "tool", "output")
-
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-
-	if len(logger.infos) == 0 {
-		t.Error("Expected some info logs")
-	}
-	if len(logger.errors) == 0 {
-		t.Error("Expected some error logs")
 	}
 }
 

@@ -66,8 +66,8 @@ func TestContextLoggerOptions(t *testing.T) {
 	}
 }
 
-// 未设置时调用日志写入 slog.Default()，显式传 nil 关闭；新字段优先于已弃用的 kart-io/logger 字段。
-func TestContextLoggerDefaultsAndPrecedence(t *testing.T) {
+// 未设置时调用日志写入 slog.Default()，显式传 nil 关闭。
+func TestContextLoggerDefaults(t *testing.T) {
 	prev := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	var def bytes.Buffer
@@ -80,20 +80,4 @@ func TestContextLoggerDefaultsAndPrecedence(t *testing.T) {
 	callTwice(t, NewLoggingMiddleware(WithContextLogger(nil)).Wrap(newMockTool(), succeed))
 	require.Empty(t, def.String())
 
-	legacy := &debugCounter{mockLogger: newMockLogger()}
-	callTwice(t, NewCachingMiddleware(WithCacheLogger(legacy)).Wrap(newMockTool(), succeed))
-	require.Equal(t, 2, legacy.debug, "只设置已弃用字段时仍写入 kart-io/logger")
-
-	legacy.debug = 0
-	var buf bytes.Buffer
-	callTwice(t, NewCachingMiddleware(WithCacheLogger(legacy), WithCacheContextLogger(bufferLogger(&buf))).Wrap(newMockTool(), succeed))
-	require.Contains(t, buf.String(), "工具缓存命中")
-	require.Zero(t, legacy.debug)
 }
-
-type debugCounter struct {
-	*mockLogger
-	debug int
-}
-
-func (d *debugCounter) Debugw(string, ...interface{}) { d.debug++ }

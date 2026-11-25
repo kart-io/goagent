@@ -150,7 +150,7 @@ func interruptedModel(t *testing.T, e *env, client *mocks.ScriptedClient, resend
 	factory := s.scripted(client, "answer", func(b *builder.SimpleAgentBuilder) *builder.SimpleAgentBuilder {
 		b = tool(b)
 		if resend {
-			b = b.WithInterruptedModelResend()
+			b = b.WithInterruptedModelResends(2)
 		}
 		return b
 	})

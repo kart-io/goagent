@@ -123,6 +123,6 @@ out, err := agent.AsRunnable().Invoke(resumeCtx, originalInput)
 
 ## 取消与恢复的边界
 
-`Handle.Interrupt` 取消当前运行，`Wait` 等待工具与清理退出。若要恢复取消的运行，必须事先配置持久日志并保持执行身份；被中断模型请求的重发还受 `WithInterruptedModelResend` 策略控制。
+`Handle.Interrupt` 取消当前运行，`Wait` 等待工具与清理退出。若要恢复取消的运行，必须事先配置持久日志并保持执行身份；被中断模型请求的重发还受 `WithInterruptedModelResends` 策略控制。
 
 原 `core.InterruptManager`、`InterruptableExecutor` 与 `core/checkpoint` 已删除，人工等待一律使用上面的持久图、`durable.AwaitInput` 与 `durable.Store`；`durable.AwaitInput` 的完整示例见 [human-in-the-loop-interrupt](../../examples/human-in-the-loop-interrupt/README.md)。

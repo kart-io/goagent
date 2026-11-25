@@ -65,7 +65,7 @@ func (p *myProvider) send(ctx context.Context, body any) (string, error) {
 
 - 未配置时 `GetMaxTokens` 与 `GetTimeout` 返回 0：不发送 `max_tokens`，不设超时。`GetTemperature` 与 `GetTopP` 回退到 `constants.DefaultTemperature` / `constants.DefaultTopP`；`ResolveTemperature` 尊重显式的 0（`CompletionRequest.TemperatureSet`）。
 - 对 OpenAI、DeepSeek、Gemini 以外的提供商，`EnsureAPIKey` 拒绝客户端级推理配置。
-- `RetryConfig.Retries` 是首次尝试之后的重试次数，0 表示不重试。`MaxAttempts` 已弃用；两者同时设置、重试次数或延迟为负都会报错。`DefaultRetryConfig()` 为 3 次尝试。
+- `RetryConfig.Retries` 是首次尝试之后的重试次数，0 表示不重试。重试次数或延迟为负会报错。`DefaultRetryConfig()` 为 3 次尝试。
 - `ExecuteWithRetry` 对不可重试错误立即返回；context 取消或到期时停止（返回的 `AgentError` 仍可用 `errors.Is` 匹配 `context.Canceled` / `context.DeadlineExceeded`）；最后一次失败会附带尝试次数。设置 `GO_TEST_MODE=true` 时基础延迟变为 10ms。
 - `MapHTTPError` 把 400 映射为无效输入，401/403 映射为 API key 配置无效，404 映射为 LLM 响应错误，429 映射为限流错误，5xx 及其他状态映射为请求错误。`ParseRetryAfter` 回退到 60 秒；`RetryAfterDuration` 对缺失或无法解析的值返回 0。
 - `NewHTTPClient` 从全局缓存复用相同配置的客户端；配置中的自定义请求头覆盖 `HTTPClientConfig.Headers`。

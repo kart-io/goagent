@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 破坏性变更：删除弃用期已满的 API
+
+以下 API 在 v0.56.0、v0.60.0 或 v0.62.0 标记弃用，弃用后均至少保留了一个次版本，主模块之外的 contrib、examples、harness、oncall-agent、k8s-agent 均未使用，本版删除。删除后核心模块不再依赖 `github.com/kart-io/logger`；`scripts/api-exposure.txt` 同步移除 `cache.Cache`、`cache.CacheStats`，`cache.Cache` 不再经稳定包暴露。
+
+| 删除项 | 弃用版本 | 迁移 |
+|---|---|---|
+| `tools/middleware.WithCache`、`CachingConfig.Cache` | v0.62.0 | `WithResultCache(c)`、`CachingConfig{Store: c}`；任何 `cache.Cache` 都满足 `ResultCache` |
+| `tools/middleware.WithLogger`、`WithCacheLogger`、`WithRateLimitLogger`，`CachingConfig.Logger`、`RateLimitConfig.Logger` | v0.56.0 | `WithContextLogger`、`WithCacheContextLogger`、`WithRateLimitContextLogger` 与 `ContextLogger` 字段，传 `*slog.Logger` |
+| `core.Logger`、`core.NewLoggingCallback` | v0.56.0 | `core.NewContextLoggingCallback(logger, verbose)`，`*slog.Logger` 直接满足 `logging.Logger` |
+| `llm/common.RetryConfig.MaxAttempts`（JSON `max_attempts`） | v0.60.0 | `Retries`：重试次数，不含首次尝试，`MaxAttempts: n` 改为 `Retries: n-1`；配置文件里的 `max_attempts` 不再生效 |
+| `builder.AgentConfig.ResendInterruptedModel`、`AgentBuilder.WithInterruptedModelResend()` | v0.60.0 | `WithInterruptedModelResends(2)` 或 `InterruptedModelResends: 2`，记录相同的持久策略 |
+
 ## [0.62.3] - 2026-11-24
 
 ### 修复

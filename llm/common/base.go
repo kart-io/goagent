@@ -262,14 +262,6 @@ type RetryConfig struct {
 	// Retries is how many times a retryable failure is retried, not counting
 	// the first attempt; 0 means no retry.
 	Retries int `json:"retries,omitzero"`
-	// MaxAttempts is the total number of attempts when positive; a negative
-	// value means 3. It is used only when Retries is 0, and setting both is
-	// rejected. With both fields 0 there is one attempt and no retry; this
-	// used to mean 3 attempts.
-	//
-	// Deprecated: use Retries, where 0 means no retry. A positive MaxAttempts
-	// keeps its old meaning so callers that set it keep their retries.
-	MaxAttempts int `json:"max_attempts"`
 	// BaseDelay is the initial delay between retries
 	BaseDelay time.Duration `json:"base_delay"`
 	// MaxDelay is the maximum delay between retries
@@ -285,22 +277,12 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
-// attempts 把 Retries 与已弃用的 MaxAttempts 换算成总尝试次数：只设 MaxAttempts 时保留旧语义
-// （≤0 为 3 次），只设 Retries 或两者都为 0 时按新语义（0 = 不重试），两者都为正时报错。
+// attempts 返回总尝试次数：首次尝试加 Retries 次重试。
 func (cfg RetryConfig) attempts(providerName string) (int, error) {
-	switch {
-	case cfg.Retries < 0:
+	if cfg.Retries < 0 {
 		return 0, agentErrors.NewInvalidConfigError(providerName, "retries", "重试次数不能为负数")
-	case cfg.Retries > 0 && cfg.MaxAttempts > 0:
-		return 0, agentErrors.NewInvalidConfigError(providerName, "retries", "Retries 与已弃用的 MaxAttempts 只能设置一个")
-	case cfg.Retries > 0:
-		return cfg.Retries + 1, nil
-	case cfg.MaxAttempts > 0:
-		return cfg.MaxAttempts, nil
-	case cfg.MaxAttempts < 0:
-		return shared2.DefaultMaxAttempts, nil
 	}
-	return 1, nil
+	return cfg.Retries + 1, nil
 }
 
 // ExecuteFunc is a function type for executing a single request.

@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	loggercore "github.com/kart-io/logger/core"
-
 	"github.com/kart-io/goagent/cache"
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/logging"
@@ -31,25 +29,16 @@ type ResultCache interface {
 
 // CachingConfig is the caching middleware configuration.
 type CachingConfig struct {
-	// Store holds cached results and takes precedence over Cache; when both
-	// are nil a built-in in-memory cache is used.
+	// Store holds cached results; when nil a built-in in-memory cache is used.
 	Store ResultCache `json:"-"`
-	// Cache is the cache implementation.
-	//
-	// Deprecated: use Store; Cache is used only when Store is nil.
-	Cache cache.Cache `json:"-"`
 	// TTL is how long a cached result stays valid; 0 means it never expires
 	// (it previously meant 5 minutes).
 	TTL time.Duration `json:"ttl"`
-	// MaxEntries caps the built-in cache used when Store and Cache are nil; 0 means no
+	// MaxEntries caps the built-in cache used when Store is nil; 0 means no
 	// cap (it previously meant 10000). Set it when keys come from model input,
 	// otherwise memory grows with every distinct argument set.
 	MaxEntries int                                         `json:"max_entries,omitzero"`
 	KeyFunc    func(string, map[string]interface{}) string `json:"-"`
-	// Logger is a kart-io/logger logger.
-	//
-	// Deprecated: use ContextLogger; Logger is used only when ContextLogger is nil.
-	Logger loggercore.Logger `json:"-"`
 	// ContextLogger receives cache hits, misses and write failures; nil
 	// disables logging.
 	ContextLogger logging.Logger `json:"-"`
@@ -62,15 +51,6 @@ type CachingOption func(*CachingConfig)
 func WithResultCache(c ResultCache) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.Store = c
-	}
-}
-
-// WithCache sets the cache implementation.
-//
-// Deprecated: use WithResultCache.
-func WithCache(c cache.Cache) CachingOption {
-	return func(cfg *CachingConfig) {
-		cfg.Cache = c
 	}
 }
 
@@ -100,15 +80,6 @@ func WithCacheKeyFunc(f func(string, map[string]interface{}) string) CachingOpti
 func WithCacheContextLogger(logger logging.Logger) CachingOption {
 	return func(cfg *CachingConfig) {
 		cfg.ContextLogger = logger
-	}
-}
-
-// WithCacheLogger sets a kart-io/logger logger.
-//
-// Deprecated: use WithCacheContextLogger.
-func WithCacheLogger(logger loggercore.Logger) CachingOption {
-	return func(cfg *CachingConfig) {
-		cfg.Logger = logger
 	}
 }
 
@@ -146,16 +117,12 @@ type CachingMiddleware struct {
 func NewCachingMiddleware(opts ...CachingOption) *CachingMiddleware {
 	cfg := &CachingConfig{
 		KeyFunc: defaultCacheKeyFunc,
-		Logger:  nil, // 默认不使用日志（避免依赖）
 	}
 
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	if cfg.Store == nil && cfg.Cache != nil {
-		cfg.Store = cfg.Cache
-	}
 	if cfg.Store == nil {
 		cfg.Store = cache.NewSimpleCache(cfg.TTL, cache.WithoutBackgroundCleanup(), cache.WithMaxEntries(cfg.MaxEntries))
 	}
@@ -181,7 +148,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 缓存命中
 			m.stats.Hits.Add(1)
 
-			if l := m.log(); l != nil {
+			if l := m.config.ContextLogger; l != nil {
 				l.DebugContext(
 					ctx,
 					"工具缓存命中",
@@ -201,7 +168,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 
 		// 缓存未命中
 		m.stats.Misses.Add(1)
-		if l := m.log(); l != nil {
+		if l := m.config.ContextLogger; l != nil {
 			l.DebugContext(
 				ctx,
 				"工具缓存未命中",
@@ -235,7 +202,7 @@ func (m *CachingMiddleware) Wrap(tool interfaces.Tool, next ToolInvoker) ToolInv
 			// 存储到缓存
 			stored := false
 			if err := m.config.Store.Set(ctx, cacheKey, cachedOutput, m.config.TTL); err != nil {
-				if l := m.log(); l != nil {
+				if l := m.config.ContextLogger; l != nil {
 					l.WarnContext(
 						ctx,
 						"缓存设置失败",

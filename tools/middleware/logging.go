@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	loggerCore "github.com/kart-io/logger/core"
-
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/core/logging"
 	"github.com/kart-io/goagent/interfaces"
@@ -48,16 +46,6 @@ type LoggingOption func(*LoggingMiddleware)
 func WithContextLogger(logger logging.Logger) LoggingOption {
 	return func(m *LoggingMiddleware) {
 		m.logger = logger
-	}
-}
-
-// WithLogger sets a kart-io/logger logger; passing nil disables logging.
-//
-// Deprecated: use WithContextLogger, which accepts a *slog.Logger and carries
-// the call context to the logger.
-func WithLogger(logger loggerCore.Logger) LoggingOption {
-	return func(m *LoggingMiddleware) {
-		m.logger = fromKartLogger(logger)
 	}
 }
 

@@ -60,8 +60,6 @@ func Audit(log func(string, ...any)) middleware.ToolMiddlewareFunc {
 | `RateLimit(opts...)`, `NewRateLimitMiddleware` | Token bucket limit; `GetStats()` returns allowed and rejected counts |
 | `WithQPS`, `WithBurst`, `WithPerToolRateLimit`, `WithWaitTimeout`, `WithRateLimitContextLogger` | Rate limit options |
 
-`WithCache`, `WithLogger`, `WithCacheLogger` and `WithRateLimitLogger` are deprecated; use the replacements named in their godoc.
-
 ## Behavior Notes
 
 - `Wrap` with no middleware returns the original tool. A nil middleware, or one that returns a nil invoker, panics with an `errors.CodeInvalidConfig` error at assembly time.

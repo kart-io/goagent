@@ -201,7 +201,7 @@ func TestCachingMiddleware_CustomCache(t *testing.T) {
 	customCache := cache.NewSimpleCache(5 * time.Minute)
 	t.Cleanup(customCache.Close)
 	middleware := NewCachingMiddleware(
-		WithCache(customCache),
+		WithResultCache(customCache),
 	)
 
 	invoker := func(ctx context.Context, input *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
@@ -225,28 +225,21 @@ func TestCachingMiddleware_CustomCache(t *testing.T) {
 	assert.Greater(t, stats.Size, int64(0), "Custom cache should have entries")
 }
 
-// Store 优先于已弃用的 Cache，两者都未设置时使用内置缓存。
-func TestCachingStorePrecedence(t *testing.T) {
-	newCache := func() *cache.SimpleCache {
-		c := cache.NewSimpleCache(time.Minute)
-		t.Cleanup(c.Close)
-		return c
-	}
-	store, legacy := newCache(), newCache()
+// 设置 Store 时结果写入 Store，未设置时使用内置缓存。
+func TestCachingStoreSelection(t *testing.T) {
+	store := cache.NewSimpleCache(time.Minute)
+	t.Cleanup(store.Close)
 	cases := []struct {
-		name               string
-		opts               []CachingOption
-		wantStore, wantOld int64
+		name      string
+		opts      []CachingOption
+		wantStore int64
 	}{
-		{"只设 Store", []CachingOption{WithResultCache(store)}, 1, 0},
-		{"只设 Cache", []CachingOption{WithCache(legacy)}, 0, 1},
-		{"两者都设", []CachingOption{WithCache(legacy), WithResultCache(store)}, 1, 0},
-		{"都不设", nil, 0, 0},
+		{"设 Store", []CachingOption{WithResultCache(store)}, 1},
+		{"不设 Store", nil, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			require.NoError(t, store.Clear(context.Background()))
-			require.NoError(t, legacy.Clear(context.Background()))
 			calls := 0
 			wrapped := NewCachingMiddleware(c.opts...).Wrap(newMockTool(), func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 				calls++
@@ -259,7 +252,6 @@ func TestCachingStorePrecedence(t *testing.T) {
 			}
 			assert.Equal(t, 1, calls, "第二次调用应命中缓存")
 			assert.Equal(t, c.wantStore, store.GetStats().Size)
-			assert.Equal(t, c.wantOld, legacy.GetStats().Size)
 		})
 	}
 }

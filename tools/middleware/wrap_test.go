@@ -90,7 +90,7 @@ func TestCleanupLoggingCacheAndRateLimitCompose(t *testing.T) {
 	tool := &mockToolForWrapper{name: "实际组合"}
 	caching := middleware.NewCachingMiddleware()
 	limit := middleware.NewRateLimitMiddleware(middleware.WithQPS(0), middleware.WithBurst(1))
-	wrapped := middleware.Wrap(tool, middleware.Logging(middleware.WithLogger(nil)), caching.Wrap, limit.Wrap)
+	wrapped := middleware.Wrap(tool, middleware.Logging(middleware.WithContextLogger(nil)), caching.Wrap, limit.Wrap)
 	input := &interfaces.ToolInput{Args: map[string]interface{}{"value": "甲"}}
 	_, err := wrapped.Invoke(context.Background(), input)
 	require.NoError(t, err)

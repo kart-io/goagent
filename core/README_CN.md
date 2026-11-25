@@ -27,7 +27,7 @@
 
 `Callback` 接口包含 `OnStart/OnEnd/OnError`、`OnLLMStart/OnLLMEnd/OnLLMError`、`OnChainStart/OnChainEnd/OnChainError`、`OnToolStart/OnToolEnd/OnToolError`、`OnAgentAction/OnAgentFinish`。返回非 nil 错误会中止执行。嵌入 `BaseCallback` 只需实现关心的方法。
 
-内置：`NewLoggingCallback(logger Logger, verbose bool)`、`NewMetricsCallback(MetricsCollector)`、`NewTracingCallback(Tracer)`、`NewCostTrackingCallback(pricing)`、`NewStdoutCallback(color)`，以及组合多个回调的 `NewCallbackManager(...)`。
+内置：`NewContextLoggingCallback(logger logging.Logger, verbose bool)`、`NewMetricsCallback(MetricsCollector)`、`NewTracingCallback(Tracer)`、`NewCostTrackingCallback(pricing)`、`NewStdoutCallback(color)`，以及组合多个回调的 `NewCallbackManager(...)`。
 
 ### State
 

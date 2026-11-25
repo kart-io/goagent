@@ -47,7 +47,7 @@ func newResendFixtureWithStore(t *testing.T, maxRequests int, inner durable.Stor
 
 func resendAgent(t *testing.T, model llm.Client) *core.StreamRunnable[any, *AgentOutput] {
 	t.Helper()
-	agent, err := NewSimpleBuilder(model).WithDurableScope("resend").WithInterruptedModelResend().Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("resend").WithInterruptedModelResends(2).Build()
 	require.NoError(t, err)
 	return agent.AsRunnable()
 }
@@ -208,7 +208,7 @@ func TestModelResendSkipsOrdinaryFailure(t *testing.T) {
 func TestModelResendWithRequestRetries(t *testing.T) {
 	f := newResendFixture(t, 5)
 	model := &flakyModel{nativeEventModel: nativeModel(answerTurn("丢失", 7), answerTurn("好的", 7)), steps: []error{unavailable(503, 0), nil, unavailable(503, 0)}}
-	agent, err := NewSimpleBuilder(model).WithDurableScope("resend").WithInterruptedModelResend().WithRequestError(2, RetryTransient(2, noWait)).Build()
+	agent, err := NewSimpleBuilder(model).WithDurableScope("resend").WithInterruptedModelResends(2).WithRequestError(2, RetryTransient(2, noWait)).Build()
 	require.NoError(t, err)
 
 	*f.crash = true
@@ -263,7 +263,7 @@ func TestModelResendInDurableToolLoop(t *testing.T) {
 		require.NoError(t, err)
 		b := NewSimpleBuilder(model).WithDurableScope("resend").WithTools(dispatch.Tools()...)
 		if resend {
-			b = b.WithInterruptedModelResend()
+			b = b.WithInterruptedModelResends(2)
 		}
 		agent, err := b.Build()
 		require.NoError(t, err)
