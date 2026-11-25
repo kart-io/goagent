@@ -103,6 +103,55 @@ return builder.NewSimpleBuilder(client).
 
 Multi-step tasks that must resume after a process restart use `core/durable` and `workflow`; see [Native Orchestration](NATIVE_ORCHESTRATION.md).
 
+## User Messages with Images
+
+Pass a `builder.UserInput` (or a pointer to it) as the input of `ExecuteStream` to attach images to the user message; any other input type still goes through the configured `InputSerializer`.
+
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithSessionLog(sessions).
+    WithImageResolver(resolve, builder.ImagePolicy{Identity: "images/v1", KeepRecentTurns: 3}).
+    Build()
+events, err := agent.ExecuteStream(ctx, builder.UserInput{
+    Text:   "What is in this picture?",
+    Images: []llm.ImagePart{{Ref: "image:42", MIME: "image/png", SHA256: sum}},
+})
+```
+
+- **References, not URLs.** The history, the session log (including `TurnStart.Images`), the durable intent, and the messages seen by `PreStep` and Request hooks keep the `llm.ImagePart` as given, normally with `Ref` set and an empty `URL`. Turn identity is the pair (`Text`, `Images`).
+- **Resolution.** `WithImageResolver(r, policy)` registers `ImageResolver func(ctx, ImageRequest) (url string, err error)`. It runs only while the outgoing model request is built, right before every real request, and fills `URL` (an https address or a `data:` URI) for that request only. It is not called while a recorded turn replays, and a model call cache hit does not call it again. Each call to `WithImageResolver` replaces the previous resolver and policy; a nil resolver or a negative policy limit fails `Build` with `CodeInvalidConfig`.
+- **`ImageRequest`.** `Part` is the image as recorded; `TurnAge` counts session turns back from the current one (0 is the current turn's input, 1 the previous turn's, and so on). Turns are the `turn/start` entries of the session log; steering, corrections, continuations, memory recall, and summaries do not start a turn.
+- **Errors.** Returning `builder.ErrImageUnavailable` (possibly wrapped) means the reference can never be resolved, for example the image was deleted or no longer matches its digest; the image becomes a placeholder and the request goes on. Any other error is treated as transient: the request fails and goes through the RequestError hooks like a provider error.
+- **Without a resolver.** An image without a URL, or an empty image part, fails the run with `CodeInvalidInput` before the session log is written ; this covers a part with neither `Ref` nor `URL`, and a part with only a `Ref` when no resolver is configured. A resolver that returns an empty URL fails the request with `CodeInvalidOutput`. Providers also refuse a part with `Ref` set and `URL` empty.
+
+`ImagePolicy` fields:
+
+| Field | Description |
+|---|---|
+| `Identity` | Identifies the resolver and policy configuration (for example a version and encoding settings). It enters the model call cache key, so cached turns are not shared across configurations; it is not part of the durable intent |
+| `KeepRecentTurns` | Attach images only from user turns whose `TurnAge` is at most this value; older images become placeholders. 0 attaches all |
+| `MaxImagesPerRequest` | Cap on attached images per request, keeping the newest; 0 means no limit |
+| `Placeholder` | `func(p llm.ImagePart, reason string) string` renders the text appended to the message in place of a degraded image; `reason` is `不可用` (`ErrImageUnavailable`) or `不在当前上下文中` (outside `KeepRecentTurns` or `MaxImagesPerRequest`). When nil, the text is `[图片 <ref>：<reason>]` |
+
+**Compaction.** `contextpolicy.CompactionConfig.ImageTokens` is the estimated token count of one attached image, added on top of `Estimate` for every image of a message; 0 means `constants.DefaultImageTokens` (1500). The transcript given to the summary model keeps `[图片 <ref>]` in place of each image, and the summary request carries no images.
+
+**Management adapter.** The native management adapter (`management/adapters`) keeps a JSON string task input as plain text. A task input that is a JSON object with an `images` key is decoded strictly into a `builder.UserInput`:
+
+```json
+{"text": "What is in this picture?", "images": [{"ref": "image:42", "mime": "image/png", "sha256": "..."}]}
+```
+
+`images` must be an array and every entry needs a non-empty `ref`; `mime` and `sha256` are optional. A `url` inside an image entry, or any unknown key, is rejected with `CodeInvalidInput`, so outgoing addresses come only from the host's resolver. Any other JSON input keeps its previous behavior.
+
+Provider support:
+
+| Provider | Images |
+|---|---|
+| OpenAI-compatible (`OpenAIProvider` and its presets) | Supported; sent as image parts |
+| Anthropic | Rejected |
+| Native Gemini | Rejected |
+| DeepSeek | Rejected |
+
 ## Middleware, Callbacks, and Metadata
 
 | Method | Description |
