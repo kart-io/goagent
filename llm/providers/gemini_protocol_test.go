@@ -303,3 +303,19 @@ func TestGeminiMalformedStreamReturnsErrorInsteadOfPanic(t *testing.T) {
 		})
 	}
 }
+
+// 服务端要求续写时只发一次请求并报未完成，不让 SDK 在一次调用内追加计费请求。
+func TestGeminiStreamDoesNotAutoContinue(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"前半\"}]},\"finishReason\":\"CONTINUATION\",\"continuationToken\":\"dG9rZW4=\"}]}\n\n")
+	}))
+	defer server.Close()
+	p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	_, err = llm.Chat(context.Background(), p, []llm.Message{llm.UserMessage("query")})
+	require.ErrorContains(t, err, "CONTINUATION")
+	require.Equal(t, int32(1), requests.Load())
+}

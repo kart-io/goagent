@@ -10,10 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 修复
 
 - `llm/providers`：go-openai 升至 v1.44.0 后，OpenAI 兼容服务对流式请求回了 JSON、HTML 等非 SSE 内容时，仍报告“上游返回的不是 SSE 事件流”。v1.42.0 起 SDK 对这类响应只返回 `io.EOF`，此前升级会让它退化为 `unexpected EOF`，与连接中断无法区分；现在由 HTTP 层嗅探响应体首个非空行判定。空响应体与截断的 SSE 仍按 `unexpected EOF` 报告。
+- `llm/providers`：OpenAI 推理模型此前无法使用：go-openai 在发送前就拒绝 `max_tokens` 与默认温度 0.7。现在按模型名改写请求，覆盖所有 OpenAI 兼容 Provider。`o1`/`o3`/`o4`/`gpt-5` 系列与 SDK 列出的 7 个 gpt-6 型号改发 `max_completion_tokens`。`o1`/`o3`/`o4`/`gpt-5` 不发 `temperature`、`top_p`；gpt-6 在推理强度不是 `none` 时同样不发。显式设置的温度与 `TopP` 对这些模型不再生效。gpt-6 开启推理时调用工具，SDK 返回 `ErrReasoningToolsRequireResponses`（须走 Responses API），请求不发出，且不可重试。
+- `llm/providers`：Gemini 关闭 genai 默认开启的 `AutomaticContinuation`。以 `CONTINUATION` 结束的响应按未完成报错，与 `RetryOptions.Attempts=1` 一致（一次调用对应一次上游请求），不再在一次调用内追加计费请求，绕过请求预算与中断重发策略。
 
 ### 工程
 
-- 依赖：go-openai v1.41.2 → v1.44.0，genai v1.77.0 → v1.79.1。genai v1.78.0 起不再在空候选（`"candidates":[null]`）上 panic，坏 JSON 帧返回 SDK 的解析错误，两种情况都在启动时或以 error 事件报出。genai 默认开启 `AutomaticContinuation`：仅当服务端以 `CONTINUATION` 结束时 SDK 会带续传令牌再次请求，各次请求分别计费，usage 由 SDK 跨请求累加后上报；GoAgent 保持该默认值。
+- 依赖：go-openai v1.41.2 → v1.44.0，genai v1.77.0 → v1.79.1。genai v1.78.0 起不再在空候选（`"candidates":[null]`）上 panic，坏 JSON 帧返回 SDK 的解析错误，两种情况都在启动时或以 error 事件报出。genai 新增的自动续传已关闭，见“修复”。
 
 ## [0.63.0] - 2026-11-25
 
