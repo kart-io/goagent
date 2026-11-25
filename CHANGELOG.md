@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复
+
+- `llm/providers`：go-openai 升至 v1.44.0 后，OpenAI 兼容服务对流式请求回了 JSON、HTML 等非 SSE 内容时，仍报告“上游返回的不是 SSE 事件流”。v1.42.0 起 SDK 对这类响应只返回 `io.EOF`，此前升级会让它退化为 `unexpected EOF`，与连接中断无法区分；现在由 HTTP 层嗅探响应体首个非空行判定。空响应体与截断的 SSE 仍按 `unexpected EOF` 报告。
+
+### 工程
+
+- 依赖：go-openai v1.41.2 → v1.44.0，genai v1.77.0 → v1.79.1。genai v1.78.0 起不再在空候选（`"candidates":[null]`）上 panic，坏 JSON 帧返回 SDK 的解析错误，两种情况都在启动时或以 error 事件报出。genai 默认开启 `AutomaticContinuation`：仅当服务端以 `CONTINUATION` 结束时 SDK 会带续传令牌再次请求，各次请求分别计费，usage 由 SDK 跨请求累加后上报；GoAgent 保持该默认值。
+
 ## [0.63.0] - 2026-11-25
 
 ### 破坏性变更：删除弃用期已满的 API

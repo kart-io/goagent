@@ -263,15 +263,23 @@ func TestGeminiRejectsInvalidInputBeforeRequest(t *testing.T) {
 	require.Zero(t, calls.Load())
 }
 
+// SDK 解码出错或流在结束原因前断开时，错误要在启动时或以 error 事件报出，不能 panic，也不能当作正常完成。
 func TestGeminiMalformedStreamReturnsErrorInsteadOfPanic(t *testing.T) {
-	for _, partial := range []bool{false, true} {
-		t.Run(fmt.Sprint(partial), func(t *testing.T) {
+	const partial = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n"
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "空候选", body: "data: {\"candidates\":[null]}\n\n"},
+		{name: "首帧不是 JSON", body: "data: {broken\n\n"},
+		{name: "部分输出后空候选", body: partial + "data: {\"candidates\":[null]}\n\n"},
+		{name: "部分输出后坏帧", body: partial + "data: {broken\n\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/event-stream")
-				if partial {
-					fmt.Fprint(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n")
-				}
-				fmt.Fprint(w, "data: {\"candidates\":[null]}\n\n")
+				fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
 			p, err := NewGeminiStreamingWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
@@ -279,17 +287,15 @@ func TestGeminiMalformedStreamReturnsErrorInsteadOfPanic(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			stream, err := p.StreamWithContext(ctx, "query")
-			if !partial {
-				require.ErrorContains(t, err, "decode stream response")
+			if err != nil {
 				require.Nil(t, stream)
 				return
 			}
-			require.NoError(t, err)
 			failed := false
 			for event := range stream {
 				require.NotEqual(t, "complete", event.Type)
 				if event.Type == "error" {
-					require.ErrorContains(t, event.Error, "decode stream response")
+					require.Error(t, event.Error)
 					failed = true
 				}
 			}

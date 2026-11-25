@@ -83,7 +83,9 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 		streamOptions = &openai.StreamOptions{IncludeUsage: true}
 	}
 	ctx, retryAfter := withRetryAfterSlot(ctx)
+	ctx, nonSSE := withNonSSESlot(ctx)
 	watch := newStreamWatchdog(ctx, p.Config.StreamIdleTimeout, p.Config.StreamTimeout)
+	//nolint:staticcheck // 兼容服务多数只认 max_tokens，仅图片请求等需要时才改发 max_completion_tokens。
 	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
 		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: maxTokens, MaxCompletionTokens: maxCompletionTokens,
 		Temperature: float32(temperature), TopP: float32(req.TopP),
@@ -134,6 +136,8 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				// 正常结束恰好碰上时限时仍按正常结束处理。
 				if stall := watch.stalled(); stall != nil && (!errors.Is(err, io.EOF) || finishReason == "") {
 					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(stall, 0))
+				} else if nonSSE.Load() && finishReason == "" && (errors.Is(err, io.EOF) || errors.Is(err, openai.ErrTooManyEmptyStreamMessages)) {
+					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(newNonSSEStreamError(), 0))
 				} else if !errors.Is(err, io.EOF) {
 					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
