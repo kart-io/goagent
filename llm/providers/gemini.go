@@ -90,9 +90,10 @@ func (p *GeminiProvider) request(req *agentllm.CompletionRequest, tools []interf
 	if err != nil {
 		return nil, nil, err
 	}
-	// 与关闭 SDK 重试同理：自动续传会在一次调用内追加计费请求，绕过请求预算与中断重发策略；CONTINUATION 按未完成报错。
-	cfg := &genai.GenerateContentConfig{AutomaticContinuation: genai.Ptr(false), ThinkingConfig: thinking, MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
+	cfg := &genai.GenerateContentConfig{ThinkingConfig: thinking, MaxOutputTokens: int32(maxTokens), Temperature: &temperature, TopP: &topP, StopSequences: append([]string(nil), req.Stop...)}
 	cfg.ResponseMIMEType = mimeType
+	// 与关闭 SDK 重试同理：自动续传会在一次调用内追加计费请求，绕过请求预算与中断重发策略；CONTINUATION 按未完成报错。
+	cfg.AutomaticContinuation = genai.Ptr(false)
 	if len(system) > 0 {
 		cfg.SystemInstruction = &genai.Content{Parts: []*genai.Part{{Text: strings.Join(system, "\n\n")}}}
 	}
