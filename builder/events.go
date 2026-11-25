@@ -181,6 +181,10 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
 		}
 	}
+	if err := a.checkImageInput(images); err != nil {
+		return nil, err
+	}
+	ctx = withImageConfig(ctx, a.config.images)
 	evidence := ""
 	metadata := make(map[string]interface{}, len(request.Metadata))
 	for k, v := range request.Metadata {

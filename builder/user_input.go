@@ -8,8 +8,10 @@ import (
 
 // UserInput is a structured user input carrying text and image references.
 // Pass it (or a pointer to it) as the input of ExecuteStream; any other input
-// type still goes through the configured InputSerializer. The images keep their
-// references only: they are recorded in the session log as given.
+// type still goes through the configured InputSerializer. The images are
+// recorded in the history and the session log as given, normally as
+// references with an empty URL; the resolver configured with
+// WithImageResolver fills URLs only in outgoing model requests.
 type UserInput struct {
 	Text   string
 	Images []llm.ImagePart

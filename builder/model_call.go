@@ -380,6 +380,11 @@ func readPlainModelTurnWithIntent(ctx context.Context, id string, client llm.Cli
 				return nil, e
 			}
 		}
+		// 与工具循环相同：只解析本次发送的副本。
+		current, e := resolveImages(callCtx, current)
+		if e != nil {
+			return nil, e
+		}
 		stream, e := client.CompleteStream(callCtx, current)
 		if e != nil {
 			return nil, e

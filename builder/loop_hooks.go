@@ -335,9 +335,12 @@ func (a *ConfigurableAgent[S]) contextText(scope PromptScope) string {
 	return renderPrompt(items, scope)
 }
 
+// stepContextPrefix 标记附在请求末尾的上下文消息。
+const stepContextPrefix = "[运行上下文]\n"
+
 // stepContextMessage 是附在请求末尾的上下文消息。
 func stepContextMessage(text string) llm.Message {
-	return llm.UserMessage("[运行上下文]\n" + text)
+	return llm.UserMessage(stepContextPrefix + text)
 }
 
 // withSections 把提示词段落追加到 system 消息，没有 system 消息时插在最前。
