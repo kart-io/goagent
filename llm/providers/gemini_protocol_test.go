@@ -263,15 +263,23 @@ func TestGeminiRejectsInvalidInputBeforeRequest(t *testing.T) {
 	require.Zero(t, calls.Load())
 }
 
+// SDK 解码出错或流在结束原因前断开时，错误要在启动时或以 error 事件报出，不能 panic，也不能当作正常完成。
 func TestGeminiMalformedStreamReturnsErrorInsteadOfPanic(t *testing.T) {
-	for _, partial := range []bool{false, true} {
-		t.Run(fmt.Sprint(partial), func(t *testing.T) {
+	const partial = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n"
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "空候选", body: "data: {\"candidates\":[null]}\n\n"},
+		{name: "首帧不是 JSON", body: "data: {broken\n\n"},
+		{name: "部分输出后空候选", body: partial + "data: {\"candidates\":[null]}\n\n"},
+		{name: "部分输出后坏帧", body: partial + "data: {broken\n\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/event-stream")
-				if partial {
-					fmt.Fprint(w, "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n")
-				}
-				fmt.Fprint(w, "data: {\"candidates\":[null]}\n\n")
+				fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
 			p, err := NewGeminiStreamingWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
@@ -279,21 +287,35 @@ func TestGeminiMalformedStreamReturnsErrorInsteadOfPanic(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			stream, err := p.StreamWithContext(ctx, "query")
-			if !partial {
-				require.ErrorContains(t, err, "decode stream response")
+			if err != nil {
 				require.Nil(t, stream)
 				return
 			}
-			require.NoError(t, err)
 			failed := false
 			for event := range stream {
 				require.NotEqual(t, "complete", event.Type)
 				if event.Type == "error" {
-					require.ErrorContains(t, event.Error, "decode stream response")
+					require.Error(t, event.Error)
 					failed = true
 				}
 			}
 			require.True(t, failed)
 		})
 	}
+}
+
+// 服务端要求续写时只发一次请求并报未完成，不让 SDK 在一次调用内追加计费请求。
+func TestGeminiStreamDoesNotAutoContinue(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"前半\"}]},\"finishReason\":\"CONTINUATION\",\"continuationToken\":\"dG9rZW4=\"}]}\n\n")
+	}))
+	defer server.Close()
+	p, err := NewGeminiWithOptions(llm.WithAPIKey("test"), llm.WithBaseURL(server.URL))
+	require.NoError(t, err)
+	_, err = llm.Chat(context.Background(), p, []llm.Message{llm.UserMessage("query")})
+	require.ErrorContains(t, err, "CONTINUATION")
+	require.Equal(t, int32(1), requests.Load())
 }

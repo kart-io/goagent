@@ -111,7 +111,7 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	if base.Config.BaseURL != "" {
 		clientConfig.BaseURL = base.Config.BaseURL
 	}
-	var doer openai.HTTPDoer = retryAfterDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}
+	var doer openai.HTTPDoer = retryAfterDoer{next: nonSSEDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}}
 	if spec.thinkingSwitch {
 		doer = thinkingDisabledDoer{next: doer}
 	}

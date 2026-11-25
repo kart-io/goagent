@@ -47,7 +47,9 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 			ctx = withThinkingDisabled(ctx)
 		}
 	}
-	maxTokens, maxCompletionTokens := p.GetMaxTokens(req.MaxTokens), 0
+	model := p.GetModel(req.Model)
+	limits := openAIModelLimitsFor(model, effort)
+	completionTokens := limits.completionTokens
 	messages := make([]openai.ChatCompletionMessage, 0, len(req.Messages)+1)
 	if p.Config.SystemPrompt != "" {
 		messages = append(messages, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: p.Config.SystemPrompt})
@@ -55,9 +57,7 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	for _, msg := range req.Messages {
 		message := openai.ChatCompletionMessage{Role: msg.Role, Content: msg.Content, Name: msg.Name, ToolCallID: msg.ToolCallID, ReasoningContent: msg.ReasoningContent}
 		if len(msg.Images) > 0 {
-			if p.imageCompletionTokens {
-				maxTokens, maxCompletionTokens = 0, p.GetMaxTokens(req.MaxTokens)
-			}
+			completionTokens = completionTokens || p.imageCompletionTokens
 			message.Content = ""
 			if msg.Content != "" {
 				message.MultiContent = append(message.MultiContent, openai.ChatMessagePart{Type: openai.ChatMessagePartTypeText, Text: msg.Content})
@@ -75,18 +75,27 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	if format := p.Config.ResponseFormat; format != nil {
 		responseFormat = &openai.ChatCompletionResponseFormat{Type: openai.ChatCompletionResponseFormatType(format.Type)}
 	}
-	model := p.GetModel(req.Model)
-	temperature := p.ResolveTemperature(req)
-	ctx = withOpenAITemperature(ctx, temperature)
+	maxTokens, maxCompletionTokens := p.GetMaxTokens(req.MaxTokens), 0
+	if completionTokens {
+		maxTokens, maxCompletionTokens = 0, maxTokens
+	}
+	temperature, topP := p.ResolveTemperature(req), req.TopP
+	if limits.omitSampling {
+		temperature, topP = 0, 0
+	} else {
+		ctx = withOpenAITemperature(ctx, temperature)
+	}
 	var streamOptions *openai.StreamOptions
 	if !p.Config.DisableStreamUsage {
 		streamOptions = &openai.StreamOptions{IncludeUsage: true}
 	}
 	ctx, retryAfter := withRetryAfterSlot(ctx)
+	ctx, nonSSE := withNonSSESlot(ctx)
 	watch := newStreamWatchdog(ctx, p.Config.StreamIdleTimeout, p.Config.StreamTimeout)
+	//nolint:staticcheck // 兼容服务多数只认 max_tokens；推理模型与只读 max_completion_tokens 的视觉接口才改发后者。
 	stream, err := p.client.CreateChatCompletionStream(watch.ctx, openai.ChatCompletionRequest{
 		ReasoningEffort: effort, Model: model, Messages: messages, Tools: p.convertTools(tools), MaxTokens: maxTokens, MaxCompletionTokens: maxCompletionTokens,
-		Temperature: float32(temperature), TopP: float32(req.TopP),
+		Temperature: float32(temperature), TopP: float32(topP),
 		Stop: req.Stop, ResponseFormat: responseFormat, Stream: true, StreamOptions: streamOptions,
 	})
 	if err != nil {
@@ -134,6 +143,8 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 				// 正常结束恰好碰上时限时仍按正常结束处理。
 				if stall := watch.stalled(); stall != nil && (!errors.Is(err, io.EOF) || finishReason == "") {
 					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(stall, 0))
+				} else if nonSSE.Load() && finishReason == "" && (errors.Is(err, io.EOF) || errors.Is(err, openai.ErrTooManyEmptyStreamMessages)) {
+					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(newNonSSEStreamError(), 0))
 				} else if !errors.Is(err, io.EOF) {
 					terminal.Error = wrapProviderError(p.ProviderName(), model, openAIProviderError(err, 0))
 				} else if finishReason == "" {
