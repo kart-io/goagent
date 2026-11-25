@@ -137,7 +137,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 This applies only to the native tool path of `ExecuteStream/AsRunnable`; Build verifies that the provider supports `ToolStreamClient` and that the names are registered uniquely. When the turn has exactly one tool call and it is on the list, a successful tool's string is output directly and other results are JSON-encoded; tool failures, empty results and cancellation are never turned into success. The final answer must already meet business display requirements: the model will not summarize, add citations or apply output-format instructions afterwards. Multiple tool calls continue the model loop, so they need a larger MaxIterations.
 
-A direct return still passes through memory, state, checkpoints, middleware and callbacks; the metadata marks `answer_source=tool` and `return_direct_tool`. Model explanations before the tool remain transient text; `done.Output` is authoritative. [Cost-control research on other frameworks](../evaluation/2026-10-26-framework-cost-research.md) explains the rationale and follow-up work.
+A direct return still passes through memory, state, checkpoints, middleware and callbacks; the metadata marks `answer_source=tool` and `return_direct_tool`. Model explanations before the tool remain transient text; `done.Output` is authoritative. Cost-control research on other frameworks explains the rationale and follow-up work.
 
 [GoAgent evaluation](../../evaluation/agentbench/README.md) uses a fixed question set and request budget to validate the Builder's native tool path. The evaluation is part of the main module; it is not a pure framework-overhead benchmark.
 

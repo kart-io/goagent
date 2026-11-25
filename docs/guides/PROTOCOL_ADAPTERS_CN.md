@@ -94,4 +94,4 @@ env -u GOROOT go test -race -count=1 ./management/protocol ./mcp/remote
 
 测试使用真实官方 SDK、HTTP transport 和管理 Worker，覆盖跨入口查询/回复/取消、审批不可绕过、Worker 重启、多轮输入、能力协商、消息幂等、首事件以及数值精度。夹具是事务内存 Store；这些测试不等于生产数据库故障恢复验收。
 
-规范依据：[A2A](https://a2a-protocol.org/latest/specification/)、[MCP 2026-07-28 elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation)。实现与本次验收范围见 [验证报告](../evaluation/2026-11-09-protocol-adapters/REPORT.md)。
+规范依据：[A2A](https://a2a-protocol.org/latest/specification/)、[MCP 2026-07-28 elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation)。实现与本次验收范围见 验证报告。

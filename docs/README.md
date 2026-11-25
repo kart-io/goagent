@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent is an agent execution kernel embedded in Go services: a native tool loop, typed workflow graphs, durable execution with approval and resume, request budgets, session logs, read-only observation and MCP. Assembly features such as presets and coding tools live in the separate goagent-harness project (see the [migration guide](guides/HARNESS_MIGRATION.md), Chinese), retrievers and multi-instance durable stores live in [goagent-contrib](https://github.com/kart-io/goagent-contrib), and business examples live in [goagent-examples](https://github.com/kart-io/goagent-examples).
+GoAgent is an agent execution kernel embedded in Go services: a native tool loop, typed workflow graphs, durable execution with approval and resume, request budgets, session logs, read-only observation and MCP. Assembly features such as presets and coding tools live in the separate goagent-harness project (see the [migration guide](guides/HARNESS_MIGRATION.md)), retrievers and multi-instance durable stores live in [goagent-contrib](https://github.com/kart-io/goagent-contrib), and business examples live in [goagent-examples](https://github.com/kart-io/goagent-examples).
 
 Pages marked *(Chinese)* are not translated yet.
 
@@ -13,7 +13,7 @@ Pages marked *(Chinese)* are not translated yet.
 - [Builder API reference](guides/BUILDER_API_REFERENCE.md): Builder methods, defaults and loop extension points
 - [Execution contract](guides/EXECUTION_CONTRACT.md): what each execution entry point can and cannot do
 
-- [Unified run management](../management/README.md) *(Chinese)*: Agent, Session, Task, Approval, Worker and read-only run observation; [migration guide](guides/MANAGEMENT_MIGRATION.md) *(Chinese)*
+- [Unified run management](../management/README.md) *(Chinese)*: Agent, Session, Task, Approval, Worker and read-only run observation; [migration guide](guides/MANAGEMENT_MIGRATION.md)
 
 ## Orchestration and durable execution
 
@@ -24,25 +24,25 @@ Pages marked *(Chinese)* are not translated yet.
 - [Composable orchestration](guides/COMPOSABLE_ORCHESTRATION.md): root budgets, sub-agent tools, durable context references and read-only observation
 - [Session log](../core/session/README.md): event log, forks, trajectory export
 - [Context policy](guides/CONTEXT_POLICY.md): tool result offloading and custom PreStep
-- [Grounded RAG and streaming](guides/GROUNDED_RAG_AND_STREAMING.md) *(Chinese)*
+- [Grounded RAG and streaming](guides/GROUNDED_RAG_AND_STREAMING.md)
 
 ## Host integration and governance
 
-- [AgentRevision and session binding](guides/AGENT_REVISIONS.md) *(Chinese)*: immutable configuration and artifact archives, loading old programs, version isolation between old and new sessions
+- [AgentRevision and session binding](guides/AGENT_REVISIONS.md): immutable configuration and artifact archives, loading old programs, version isolation between old and new sessions
 
-- [Skills loading](guides/SKILLS.md) *(Chinese)*: reusable Catalog, on-demand bodies and resources, optional tool adapter and host boundaries
+- [Skills loading](guides/SKILLS.md): reusable Catalog, on-demand bodies and resources, optional tool adapter and host boundaries
 - [Host integration](guides/HOST_INTEGRATION.md): Scope, BuildContext, resume identity and resource lifecycle
-- [HTTP/SSE/WebSocket, webhooks and hooks](guides/HTTP_AGENT.md) *(Chinese)*: installation, page and client examples, host assembly, replaceable connection interfaces
-- [Extension contract](guides/EXTENSION_CONTRACT.md) *(Chinese)*
+- [HTTP/SSE/WebSocket, webhooks and hooks](guides/HTTP_AGENT.md): installation, page and client examples, host assembly, replaceable connection interfaces
+- [Extension contract](guides/EXTENSION_CONTRACT.md)
 - [Execution governance](guides/EXECUTION_GOVERNANCE.md): budgets, diagnostics and resource governance
-- [MCP and resumable steps](guides/PRIORITY_CAPABILITIES.md) *(Chinese)*
-- [Tool middleware](guides/TOOL_MIDDLEWARE.md), [caching](guides/CACHING_GUIDE.md) *(Chinese)*, [plugins: agent capability packs and the Runnable registry](guides/PLUGIN_SYSTEM_GUIDE.md) *(Chinese)*
-- [Option pattern](guides/OPTION_PATTERN_BEST_PRACTICES.md) *(Chinese)*
+- [MCP and resumable steps](guides/PRIORITY_CAPABILITIES.md)
+- [Tool middleware](guides/TOOL_MIDDLEWARE.md), [caching](guides/CACHING_GUIDE.md), [plugins: agent capability packs](guides/PLUGIN_SYSTEM_GUIDE.md)
+- [Option pattern](guides/OPTION_PATTERN_BEST_PRACTICES.md)
 
 ## LLM providers
 
-- [LLM provider guide](guides/LLM_PROVIDERS.md), [capability matrix](guides/PROVIDER_CAPABILITIES.md), [best practices](guides/PROVIDER_BEST_PRACTICES.md) *(Chinese)*, [continuous regression](guides/PROVIDER_REGRESSION.md) *(Chinese)*
-- [MiniMax via the Anthropic protocol](guides/MINIMAX_ANTHROPIC.md) *(Chinese)*: China endpoints, explicit credentials, native tool continuation and verification limits
+- [LLM provider guide](guides/LLM_PROVIDERS.md), [capability matrix](guides/PROVIDER_CAPABILITIES.md), [best practices](guides/PROVIDER_BEST_PRACTICES.md), [continuous regression](guides/PROVIDER_REGRESSION.md)
+- [MiniMax via the Anthropic protocol](guides/MINIMAX_ANTHROPIC.md): China endpoints, explicit credentials, native tool continuation and verification limits
 - [Embedder providers](https://github.com/kart-io/goagent-contrib/blob/master/retrieval/EMBEDDER_PROVIDERS.md) (goagent-contrib)
 
 | Provider | Constructor (`llm/providers`) | `AsRunnable` and native tool streaming |
@@ -54,6 +54,7 @@ Pages marked *(Chinese)* are not translated yet.
 | Kimi | `NewKimiWithOptions` | Supported (OpenAI-compatible preset) |
 | SiliconFlow | `NewSiliconFlowWithOptions` | Supported (OpenAI-compatible preset) |
 | Ollama | `NewOllamaWithOptions` | Supported (OpenAI-compatible preset) |
+| MiniMax | `NewMiniMaxWithOptions` | Supported (OpenAI-compatible preset) |
 
 `AsRunnable` and `ExecuteStream` accept any `llm.Client`; the native tool loop, `Start` handles and loop extension points need `llm.ToolStreamClient`. Every provider marked "Supported" implements both.
 
@@ -65,7 +66,6 @@ Pages marked *(Chinese)* are not translated yet.
 - [Runtime readiness](guides/RUNTIME_READINESS.md): implemented capabilities, deployment limits, memory migration and pending evaluations
 - [Memory design](design/MEMORY_DESIGN.md), [deletion first for long-term memory](design/MEMORY_GOVERNANCE.md), [memory administration](design/MEMORY_ADMIN.md)
 - [HTTP agent design](design/HTTP_AGENT_DESIGN.md): boundary between the kernel and the network module
-- [Multi-framework survey](research/2026-10-27-framework-orchestration-review.md), [Eino comparison](research/2026-11-04-eino-comparison.md)
 
 ## API reference
 
@@ -75,8 +75,6 @@ Pages marked *(Chinese)* are not translated yet.
 
 ## Evaluation *(Chinese)*
 
-- [Execution overhead](evaluation/2026-10-31-execution-overhead/REPORT.md): three budget modes with reproducible raw results
-- [Framework performance](evaluation/2026-10-27-framework-performance-v2/REPORT.md): GoAgent/Eino baseline and rerun code
 - [GoAgent evaluation](../evaluation/agentbench/README.md)
 
 ## Development *(Chinese)*

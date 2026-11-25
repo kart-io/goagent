@@ -57,6 +57,6 @@ go test -race -count=1 -timeout=120s ./workflow/refund-recovery
 
 保存源码提交、工具链、模块依赖定位、测试数据来源、逐场景结果与跳过项。失败和取消保留在结果中，不在同一目录覆盖或删除。原始日志留在访问受控的报告目录，进入仓库的结果不包含凭据、真实个人信息或完整连接串。
 
-本轮本地证据见 [项目稳定化验收报告](../evaluation/2026-11-05-project-stabilization/REPORT.md)。业务题集与模型效果另见 [业务评测要求](../../evaluation/agentbench/BUSINESS_EVALUATION.md)，执行语义见 [执行契约](../guides/EXECUTION_CONTRACT.md)。
+本轮本地证据见 项目稳定化验收报告。业务题集与模型效果另见 [业务评测要求](../../evaluation/agentbench/BUSINESS_EVALUATION.md)，执行语义见 [执行契约](../guides/EXECUTION_CONTRACT.md)。
 
-管理层离线回归、PostgreSQL 租约清理修复和后续完整跨仓实库复验见 [管理层稳定化验收](../evaluation/2026-11-09-management-hardening/REPORT.md)。
+管理层离线回归、PostgreSQL 租约清理修复和后续完整跨仓实库复验见 管理层稳定化验收。

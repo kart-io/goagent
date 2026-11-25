@@ -391,8 +391,8 @@ func TestGeminiStreaming_DefaultValues(t *testing.T) {
 	assert.Zero(t, provider.MaxTokens(), "默认不发送 max_tokens")
 }
 
-// TestGeminiStreaming_NewGeminiStreaming_Deprecated 测试已弃用的构造函数
-func TestGeminiStreaming_NewGeminiStreaming_Deprecated(t *testing.T) {
+// TestGeminiStreaming_NewGeminiStreaming 测试基于 LLMOptions 的构造函数
+func TestGeminiStreaming_NewGeminiStreaming(t *testing.T) {
 	config := &agentllm.LLMOptions{
 		Provider: shared.ProviderGemini,
 		APIKey:   "test-api-key",
@@ -405,7 +405,7 @@ func TestGeminiStreaming_NewGeminiStreaming_Deprecated(t *testing.T) {
 	assert.Equal(t, "gemini-pro", provider.ModelName())
 }
 
-// TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey 测试已弃用构造函数缺少 API key
+// TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey 测试基于 LLMOptions 构造函数缺少 API key
 func TestGeminiStreaming_NewGeminiStreaming_MissingAPIKey(t *testing.T) {
 	// Ensure environment variable doesn't interfere with test
 	t.Setenv(shared.EnvGeminiAPIKey, "")

@@ -18,4 +18,4 @@ python3 scripts/hitl_live.py --live --out docs/evaluation/NEW-HITL-RUN
 python3 scripts/hitl_live.py --review docs/evaluation/2026-11-04-hitl-live
 ```
 
-该历史样本应返回退出码 1：Gemini 虽采用正确的 66 元，仍错误声称退款已完成。原始运行只检查流程与金额，其 `results.json.passed=true` 不包含后补的内容检查；综合结论见 `review.json`。[完整报告](../../docs/evaluation/2026-11-04-hitl-live/REPORT.md)保留了这一评测遗漏及原始驱动，不重新请求模型修饰结果。
+该历史样本应返回退出码 1：Gemini 虽采用正确的 66 元，仍错误声称退款已完成。原始运行只检查流程与金额，其 `results.json.passed=true` 不包含后补的内容检查；综合结论见 `review.json`。完整报告保留了这一评测遗漏及原始驱动，不重新请求模型修饰结果。

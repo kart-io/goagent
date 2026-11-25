@@ -44,8 +44,8 @@ HTTP适配器不默认启动图引擎或持久化全部业务。Factory可组合
 
 ## 设计记录与证据
 
-- [原始方案及后续实施修订](../superpowers/specs/2026-10-31-http-agent-design.md)：设计演进记录。
-- [实施与验收计划](../superpowers/plans/2026-10-31-httpagent-webhooks.md)、[实现验收](../evaluation/2026-10-31-httpagent-implementation/REPORT.md)。
-- [可替换WebSocket接口验收](../evaluation/2026-10-31-websocket-interfaces/REPORT.md)：默认实现、外部宿主包装及浏览器验证。
+- 原始方案及后续实施修订：设计演进记录。
+- 实施与验收计划、实现验收。
+- 可替换WebSocket接口验收：默认实现、外部宿主包装及浏览器验证。
 
 历史方案中的讨论以当时基线为准，当前公开文档以扩展使用指南/设计/API参考及对应源码为准。没有承诺生产队列后端、平台验签全适配、跨连接回放或强停任意Go函数。

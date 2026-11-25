@@ -1,2 +1,0 @@
-exit=0
-跨仓验证通过，测试及跳过项见 /tmp/goagent-validation-review-I81Lf3/child-skip-report/summary.json

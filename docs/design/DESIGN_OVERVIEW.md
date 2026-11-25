@@ -12,11 +12,11 @@
 6. **宿主拥有资源**：`execution.Scope`、`budget.Controller`、`durable.Store`、`session.Store` 都由宿主创建；框架不创建默认存储，也不关闭宿主资源。
 7. **处处有界**：`WithMaxIterations` 限制模型请求次数；根预算限制请求数、预留 Token、工具次数与期限；`DispatchConfig` 限制执行/准入并发、排队数与单次超时；`workflow` 图有最大步数（`errors.ErrWorkflowMaxSteps`）。
 
-Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与[代码能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
+Pi 设计的采纳继续遵守这些边界：复用现有可恢复子流程，补输入与完成契约；产品会话树、Sandbox 和后台调度留在 Harness/宿主。见[采纳设计](PI_CORE_ADOPTION.md)与代码能力对照。
 
 Agent/子 Agent 的共享根用量已经由 budget.Controller 统计；可通过 WithAgentID、Observer 用量事件和统一账本查询角色/调用归属，见[设计](MULTI_AGENT_HOOKS_AND_USAGE.md)与[使用指南](../guides/MULTI_AGENT_USAGE_CN.md)。
 
-Hermes 图解的增量采纳见[全文对照](../research/2026-11-10-hermes-design-review.md)和[设计提案](../superpowers/specs/2026-11-10-hermes-runtime-design.md)：优先统一 Harness 技能加载与上下文来源报告，再补固定路由、会话检索和技能候选发布。网关与日历调度由宿主复用管理任务及效果投递；这些新增能力尚未实施。
+Hermes 图解的增量采纳见全文对照和设计提案：优先统一 Harness 技能加载与上下文来源报告，再补固定路由、会话检索和技能候选发布。网关与日历调度由宿主复用管理任务及效果投递；这些新增能力尚未实施。
 
 ## 分层
 

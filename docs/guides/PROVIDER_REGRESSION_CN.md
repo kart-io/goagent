@@ -33,4 +33,4 @@ MiniMax 使用国内 Anthropic 协议，运行 `bash scripts/provider_live.sh mi
 
 `provider-live.yml` 每周一 03:30 UTC 调度，也支持手动触发。启用前在仓库变量设置 `ENABLE_PROVIDER_LIVE=true`，在 `provider-live` environment 配置 `MINIMAX_CN_API_KEY` 及上述两个密钥和 `GEMINI_MODEL`、`GEMINI_EMBEDDING_MODEL`、`DEEPSEEK_MODEL` 变量。未启用时整个任务跳过；启用后缺少配置则失败，不将缺失密钥报告成测试通过。PR 不触发付费调用，也不接收密钥。工作流只读仓库权限、20 分钟超时、Gemini/DeepSeek结果保留14天；MiniMax只输出验收状态，不上传报告。
 
-最新本地真实运行见[回归结果](../evaluation/2026-10-27-provider-regression/REPORT.md)。
+最新本地真实运行见回归结果。

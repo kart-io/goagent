@@ -81,4 +81,4 @@ Followup 的派生执行键只标识轮次内的持久操作，不会持久保�
 
 `session.Store.Fork` 复制历史事件，不撤销工具副作用。宿主分别维护 SessionID、RunID/ExecutionKey、子任务身份和 SandboxID；从旧历史继续时明确选择原环境或新的环境/产物。不要更换执行键来绕过 pending 或重复执行业务。
 
-定位和后续准入见[Pi 核心采纳设计](../design/PI_CORE_ADOPTION.md)及[能力对照](../research/2026-11-01-pi-core-gap-analysis.md)。
+定位和后续准入见[Pi 核心采纳设计](../design/PI_CORE_ADOPTION.md)及能力对照。

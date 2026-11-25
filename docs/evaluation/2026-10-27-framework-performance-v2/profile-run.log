@@ -1,7 +1,0 @@
-goos: darwin
-goarch: arm64
-pkg: github.com/kart-io/goagent-frameworkbench
-cpu: Apple M4 Pro
-BenchmarkFramework/goagent/stream_64-4         	   52483	     46352 ns/op	   22833 B/op	     192 allocs/op
-PASS
-ok  	github.com/kart-io/goagent-frameworkbench	6.325s

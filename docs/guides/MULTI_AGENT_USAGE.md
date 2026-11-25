@@ -136,7 +136,7 @@ The example includes two parallel child agents, one failed retry, and a durable 
 
 The example receives all descendant notifications through the parent Builder.WithUsageHook and prints hook: live=5 replay=2; the number of notifications is not the same as new cost, and the root total after replay is still 18.
 
-See the [design](../design/MULTI_AGENT_HOOKS_AND_USAGE.md) for the implementation basis and the [delivery report](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md) for verification.
+See the [design](../design/MULTI_AGENT_HOOKS_AND_USAGE.md) for the implementation basis and the delivery report for verification.
 
 ## Reasoning Breakdown, Actual Model, and Configuration
 

@@ -198,7 +198,7 @@ With a `llm.ToolStreamClient` and at least one tool, `agent.Start(ctx, input)` r
 - [Multi-agent usage](docs/guides/MULTI_AGENT_USAGE.md) - `WithUsageHook` for per-attempt tokens and cumulative statistics, agent identity and unified accounting; examples: [goagent-examples/agent-usage](https://github.com/kart-io/goagent-examples/tree/main/agent-usage).
 - [Multi-agent patterns](docs/guides/MULTI_AGENT_PATTERNS.md) - `multiagent`: Sequential, Loop, RouterSupervisor, `ParallelStep`, `SupervisorTools` and the text relay layer on top of `workflow`; offline example: `go run ./examples/multi-agent-patterns`.
 - [Composable orchestration](docs/guides/COMPOSABLE_ORCHESTRATION.md) - wrap a child agent or `workflow.DurableGraph` as a tool with `tools.NewRunnableToolFactory`; a child waiting for approval suspends the parent with `agentErrors.ErrAgentWaiting`.
-- [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes; [Pi design comparison](docs/research/2026-11-01-pi-core-gap-analysis.md).
+- [Agent composition and input boundaries](docs/guides/AGENT_COMPOSITION.md) - direct workflows, child-agent tools, pending input and completion scopes.
 - [Host integration](docs/guides/HOST_INTEGRATION.md) - `execution.NewScope` + `execution.ConfigureBuilder` + `BuildContext`; offline example: `go run ./examples/execution-scope`.
 - [Final validation, governance setup and upgrade checks](docs/guides/EXECUTION_ACCEPTANCE.md) - final-output validation, governed builders, recovery manifests and scale benchmarks.
 - [Extension contract](docs/guides/EXTENSION_CONTRACT.md) and [execution governance](docs/guides/EXECUTION_GOVERNANCE.md) - budgets, diagnostics and resource limits.
@@ -230,7 +230,6 @@ Other packages: `cache`, `errors`, `interfaces`, `parsers`, `store`, `middleware
 - [Builder API Reference](docs/guides/BUILDER_API_REFERENCE.md)
 - [HTTP / SSE / WebSocket, Webhooks and Hooks](docs/guides/HTTP_AGENT.md) · [Design](docs/design/HTTP_AGENT_DESIGN.md)
 - [LLM Providers](docs/guides/LLM_PROVIDERS.md)
-- [Execution overhead measurements](docs/evaluation/2026-10-31-execution-overhead/REPORT.md)
 
 See [docs/README.md](docs/README.md) for the full index and [CHANGELOG.md](CHANGELOG.md) for breaking changes.
 

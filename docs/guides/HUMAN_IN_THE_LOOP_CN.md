@@ -72,7 +72,7 @@ workflow.WithResumeHandler(func(
 
 本机文件存储适合单机；多实例共享存储使用 goagent-contrib 的 `durable/pgstore`。发现待处理运行、消息通知、审批人的登录认证与自动续跑调度由宿主负责。
 
-真实模型验证见 [Gemini / DeepSeek HITL 报告](../evaluation/2026-11-04-hitl-live/REPORT.md)及[可复现脚本](../../evaluation/hitlbench/README.md)。两者的检查点恢复通过；Gemini 的最终通知含有未经执行的退款完成声明，不能将执行成功等同于模型内容正确。
+真实模型验证见 Gemini / DeepSeek HITL 报告及[可复现脚本](../../evaluation/hitlbench/README.md)。两者的检查点恢复通过；Gemini 的最终通知含有未经执行的退款完成声明，不能将执行成功等同于模型内容正确。
 
 ## 节点或工具执行中途暂停
 

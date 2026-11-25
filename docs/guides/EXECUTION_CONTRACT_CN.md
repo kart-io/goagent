@@ -137,7 +137,7 @@ agent, err := builder.NewSimpleBuilder(client).
 
 仅 `ExecuteStream/AsRunnable` 原生工具路径生效，Build 会验证 Provider 支持 `ToolStreamClient` 且名称唯一注册。本轮只有一个工具且命中名单时，成功工具的字符串直接输出，其他结果 JSON 编码；工具失败、空结果与取消不会转成成功。最终答案必须已经满足业务展示要求，模型不会再总结、补引用或执行输出格式指令。多工具调用继续模型循环，所以需要更大的 MaxIterations。
 
-直接返回仍经过记忆、状态、检查点、中间件和回调，元数据标明 `answer_source=tool`、`return_direct_tool`。工具前模型说明仍属临时文本，最终以 `done.Output` 为准。[其他框架成本控制调研](../evaluation/2026-10-26-framework-cost-research.md) 解释了选择依据与后续工作。
+直接返回仍经过记忆、状态、检查点、中间件和回调，元数据标明 `answer_source=tool`、`return_direct_tool`。工具前模型说明仍属临时文本，最终以 `done.Output` 为准。其他框架成本控制调研 解释了选择依据与后续工作。
 
 [GoAgent 评测](../../evaluation/agentbench/README.md) 使用固定题集和请求预算验证 Builder 原生工具路径。评测已纳入主模块；它不是纯框架开销测试。
 

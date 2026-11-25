@@ -36,7 +36,7 @@ Error codes, categories, messages and error context fields live in [`errors/`](.
 
 The former forwarding entries in `interfaces`, `llm/constants`, `llm/common`, `llm`, `tools`, `store`, `parsers` and `core` are gone, and so is the `llm/constants` package, with no compatibility aliases. Use this package directly and `errors` for errors.
 
-`Provider` is a named string type; the built-in provider identifiers use it explicitly. Custom providers use `shared.Provider("minimax")`; string APIs need `string(provider)`. A client's `Provider()` method must return this type; see the [constants migration guide](../docs/guides/CONSTANTS_MIGRATION.md).
+`Provider` is a named string type; the 9 built-in provider identifiers use it explicitly. Custom providers use `shared.Provider("my-provider")`; string APIs need `string(provider)`. A client's `Provider()` method must return this type; see the [constants migration guide](../docs/guides/CONSTANTS_MIGRATION.md).
 
 Rules:
 

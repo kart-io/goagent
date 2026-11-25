@@ -34,7 +34,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [扩展契约](guides/EXTENSION_CONTRACT_CN.md)
 - [执行治理](guides/EXECUTION_GOVERNANCE_CN.md)：预算、诊断与资源治理
 - [MCP 与可恢复步骤](guides/PRIORITY_CAPABILITIES_CN.md)
-- [工具中间件](guides/TOOL_MIDDLEWARE_CN.md)、[缓存](guides/CACHING_GUIDE_CN.md)、[插件：Agent 能力包与 Runnable 注册表](guides/PLUGIN_SYSTEM_GUIDE_CN.md)
+- [工具中间件](guides/TOOL_MIDDLEWARE_CN.md)、[缓存](guides/CACHING_GUIDE_CN.md)、[插件：Agent 能力包](guides/PLUGIN_SYSTEM_GUIDE_CN.md)
 - [Option 模式](guides/OPTION_PATTERN_BEST_PRACTICES_CN.md)
 
 ## LLM 提供商
@@ -52,6 +52,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 | Kimi | `NewKimiWithOptions` | 支持（OpenAI 兼容预设） |
 | SiliconFlow | `NewSiliconFlowWithOptions` | 支持（OpenAI 兼容预设） |
 | Ollama | `NewOllamaWithOptions` | 支持（OpenAI 兼容预设） |
+| MiniMax | `NewMiniMaxWithOptions` | 支持（OpenAI 兼容预设） |
 
 `AsRunnable`、`ExecuteStream` 接受任意 `llm.Client`；原生工具循环、`Start` 句柄与循环扩展点需要 `llm.ToolStreamClient`。表中“支持”的 Provider 同时实现两者。
 
@@ -62,12 +63,7 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 - [Harness 核心设计](design/HARNESS_CORE_DESIGN.md)
 - [运行能力与后续验收](guides/RUNTIME_READINESS_CN.md)：已实现能力、部署限制、记忆迁移与后续评测清单
 - [记忆系统设计](design/MEMORY_DESIGN.md)、[长期记忆的删除优先](design/MEMORY_GOVERNANCE.md)：G0/G1/G2 已合并，包含召回块不进日志、durable.Store 存储与派生数据级联失效；[管理功能](design/MEMORY_ADMIN.md)中的分页列表与共享命名空间仍待实施
-- [Hermes 全文对照](research/2026-11-10-hermes-design-review.md)与[跨仓采纳设计](superpowers/specs/2026-11-10-hermes-runtime-design.md)：17 张图阅读、固定官方源码核对，以及技能加载、上下文来源、路由、检索和宿主调度的增量提案（未实施）
 - [HTTP Agent设计](design/HTTP_AGENT_DESIGN.md)：内核与网络模块边界、执行与接纳/通知的资源责任
-- [多框架调研与方案复审](research/2026-10-27-framework-orchestration-review.md)
-- [Eino 对照：组件、编排、ADK 与扩展生态](research/2026-11-04-eino-comparison.md)
-- [可组合编排需求](superpowers/specs/2026-10-27-composable-orchestration-requirements.md)与[实现方案](superpowers/plans/2026-10-27-composable-orchestration.md)
-- [统一管理需求](superpowers/specs/2026-11-08-unified-management-requirements.md)、[可行性调研](research/2026-11-08-unified-management-feasibility.md)、[技术设计](superpowers/specs/2026-11-08-unified-management-design.md)与[实施计划](superpowers/plans/2026-11-08-unified-management.md)：通用管理模块位于 GoAgent 核心（v0.51.0 起），PostgreSQL 后端和数据库案例位于 contrib，见[实施验收](evaluation/2026-11-08-unified-management/REPORT.md)
 
 ## API 参考
 
@@ -77,15 +73,12 @@ GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型�
 
 ## 评测
 
-- [执行开销实测](evaluation/2026-10-31-execution-overhead/REPORT.md)：三种预算模式与可复现原始结果
-- [框架性能对测](evaluation/2026-10-27-framework-performance-v2/REPORT.md)：GoAgent/Eino 基线与复跑代码
 - [GoAgent 评测](../evaluation/agentbench/README.md)
 
 ## 开发
 
 - [开发指南](development/DEVELOPMENT_GUIDE.md)、[测试最佳实践](development/TESTING_BEST_PRACTICES.md)、[Panic 处理](development/PANIC_HANDLING.md)
 - [业务接入与故障恢复验收](development/BUSINESS_ACCEPTANCE.md)：授权、业务幂等、崩溃恢复、数据库接管与验收证据
-- [优化验收清单](development/PRIORITY_IMPROVEMENTS.md)
 
 ## 相关链接
 

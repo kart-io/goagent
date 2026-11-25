@@ -31,7 +31,7 @@ go run ./orchestration/composed-order /tmp/goagent-order-demo
 
 `Snapshot` 分开报告 ReservedRequests、KnownUsageEntries、UnknownUsageEntries、KnownTokens。未知包含预留后没有证据的条目，不能当作零费用；子输出的 TokenUsage 不再作为另一笔请求加入根账本。输出 `root_budget` 是根快照，`new_model_invocations` 是本次执行范围新增实际调用数，`model_calls` 是本层逻辑回合数。父子并行时以根账本及 transport 计数为准。Provider 内部重试、宿主自定义客户端或隐藏模型调用需宿主另行管控；这个预算限制统一入口的请求次数。
 
-根账本统一支持归属查询：WithAgentID 标识角色，Attribution 按调用/角色给出 Self、Inclusive 与未知字段；Observer 的 model_attempt_start/model_usage 提供逐尝试元数据。没有格式切换或降级模式，接入见[多 Agent 用量](MULTI_AGENT_USAGE_CN.md)。[原审核](../research/2026-11-01-agent-hooks-usage-audit.md)记录实施前状态。
+根账本统一支持归属查询：WithAgentID 标识角色，Attribution 按调用/角色给出 Self、Inclusive 与未知字段；Observer 的 model_attempt_start/model_usage 提供逐尝试元数据。没有格式切换或降级模式，接入见[多 Agent 用量](MULTI_AGENT_USAGE_CN.md)。原审核记录实施前状态。
 
 `Remaining(ctx)` 返回尚可预留的模型请求次数（`MaxModelRequests` 减已预留条目）。持久预算在 Store 锁内读取，能看到其他进程的预留。结果只是时点快照，准入仍以 `Reserve` 为准。未绑定预算时 `budget.FromContext` 返回 nil 控制器，对它调用 `Remaining` 返回 `constants.BudgetUnlimited`（目标架构的 `math.MaxInt`）。子预算暂不提供。
 
@@ -75,7 +75,7 @@ Graph.Describe 或编译产物可选 Description 返回排序、独立的 `goage
 
 没有新配置时不添加预算/策略意图字段。普通工具原意图 fixture 和已有执行测试保持通过。新工具版本、策略配置或根预算配置变化会拒绝旧运行；不能删除 pending、退款或增加重试次数来强行恢复。
 
-先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 [交付验证记录](../evaluation/2026-10-27-orchestration-r2/REPORT.md)。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。接入 DeepSeek、MiniMax 与 Gemini 的可运行案例见 [orchestration/live](https://github.com/kart-io/goagent-examples/blob/main/orchestration/live/README.md)，验证记录见[真实模型编排案例](../evaluation/2026-10-28-orchestration-live/REPORT.md)。
+先停止新版本运行，保留对应版本 worker 处理存量。账本、引用和检查点统一按业务运行保留；活跃引用不能提前清理。测试与性能实测见 交付验证记录。真实模型仅由宿主显式接入并设置预算，本轮交付证据使用本地模型。接入 DeepSeek、MiniMax 与 Gemini 的可运行案例见 [orchestration/live](https://github.com/kart-io/goagent-examples/blob/main/orchestration/live/README.md)，验证记录见真实模型编排案例。
 
 ## 持久 Agent 作用域与升级
 

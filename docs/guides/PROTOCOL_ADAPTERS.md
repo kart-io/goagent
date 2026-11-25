@@ -94,4 +94,4 @@ env -u GOROOT go test -race -count=1 ./management/protocol ./mcp/remote
 
 The tests use the real official SDKs, HTTP transport, and management Worker, covering cross-entry-point query/reply/cancel, non-bypassable approvals, Worker restart, multi-round input, capability negotiation, message idempotency, first events, and numeric precision. The fixture is a transactional in-memory Store; these tests are not an acceptance of production database failure recovery.
 
-Specification references: [A2A](https://a2a-protocol.org/latest/specification/), [MCP 2026-07-28 elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation). For the implementation and the scope of this acceptance, see the [verification report](../evaluation/2026-11-09-protocol-adapters/REPORT.md).
+Specification references: [A2A](https://a2a-protocol.org/latest/specification/), [MCP 2026-07-28 elicitation](https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation). For the implementation and the scope of this acceptance, see the verification report.

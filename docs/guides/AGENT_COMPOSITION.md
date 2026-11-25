@@ -81,4 +81,4 @@ When tools execute concurrently, GoAgent keeps results, tool_end, and OnResult p
 
 `session.Store.Fork` copies history events and does not undo tool side effects. The host maintains SessionID, RunID/ExecutionKey, sub-task identity, and SandboxID separately; when continuing from old history, explicitly choose the original environment or a new environment/artifacts. Do not change the execution key to bypass pending results or repeat business execution.
 
-For positioning and follow-up admission, see the [Pi core adoption design](../design/PI_CORE_ADOPTION.md) and the [capability comparison](../research/2026-11-01-pi-core-gap-analysis.md).
+For positioning and follow-up admission, see the [Pi core adoption design](../design/PI_CORE_ADOPTION.md) and the capability comparison.

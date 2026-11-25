@@ -66,6 +66,6 @@ run_id is the identity of the current run; it is not a business session lock, an
 
 A network disconnect or an unacknowledged exit cannot prove that tool side effects did not happen. When the client has not received the business terminal state, diagnose by run_id; do not blindly retry with a new ID. To stop the service, first cancel with BeginShutdown, then wait for HTTP Shutdown and Handler.Shutdown, and close the shared Host after they succeed. For specific timeouts and resource retention design, see the extension documentation.
 
-For the documentation code blocks and the scope of source comparison, see [Extension documentation verification](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md). For measured evidence, see [Full implementation acceptance](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) and [Replaceable WS interface acceptance](../evaluation/2026-10-31-websocket-interfaces/REPORT.md).
+For the documentation code blocks and the scope of source comparison, see [Extension documentation verification](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md). For measured evidence, see Full implementation acceptance and Replaceable WS interface acceptance.
 
-For checks after merging into the main branch, see [Merge acceptance](../evaluation/2026-10-31-httpagent-merge/REPORT.md).
+For checks after merging into the main branch, see Merge acceptance.

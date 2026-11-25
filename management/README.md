@@ -80,13 +80,13 @@ env -u GOROOT GOTOOLCHAIN=go1.27.4 GOWORK=off go build ./...
 
 跨仓实库验收使用 `make compatibility-postgres`，须配置专用测试数据库和允许重启的容器。它要求数据库存储契约、崩溃接管、重启、同步提交、管理审批进程恢复、Fork 崩溃恢复，以及 Harness 跨连接恢复、旧持有者失效和 Inbox 去重具有实际通过事件；缺失或跳过即失败。
 
-新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 [扩展案例验收](../docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)。
+新增20组HTTP与4项数据库业务案例的功能映射、红绿修复和执行结果见 扩展案例验收。
 
-DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际用量结果见 [真实模型验收](../docs/evaluation/2026-11-08-management-live-model/REPORT.md)。
+DeepSeek与Gemini的真实模型、审批续跑、多轮会话、Fork及实际用量结果见 真实模型验收。
 
-真实模型验收工具的失败退出、请求增量证据和配置前检修复见 [可靠性修复](../docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。
+真实模型验收工具的失败退出、请求增量证据和配置前检修复见 可靠性修复。
 
-纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 [管理层稳定化验收](../docs/evaluation/2026-11-09-management-hardening/REPORT.md)。
+纯聊天支持、恢复分页、覆盖门禁及跨仓数据库复验见 管理层稳定化验收。
 
 A2A、HTTP 与 MCP 共用任务的装配及互操作约束见 [协议接入指南](../docs/guides/PROTOCOL_ADAPTERS_CN.md)。
 

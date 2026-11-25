@@ -1,10 +1,10 @@
 # 真实业务评测要求
 
-当前状态：执行入口与 OpenAI/DeepSeek 原生工具流契约已有回归；评测工具支持 Provider 选择、可配置预算和参数标签。[DeepSeek 合成退款实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)已完成 12 次运行，答案、参数和调用契约全部通过。[退款审批恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)验证检查图后的持久化边界、进程退出和独立模拟账本幂等。尚未收到真实业务题集及验收标准，因此这些结果不代表业务质量验收。
+当前状态：执行入口与 OpenAI/DeepSeek 原生工具流契约已有回归；评测工具支持 Provider 选择、可配置预算和参数标签。DeepSeek 合成退款实测已完成 12 次运行，答案、参数和调用契约全部通过。[退款审批恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)验证检查图后的持久化边界、进程退出和独立模拟账本幂等。尚未收到真实业务题集及验收标准，因此这些结果不代表业务质量验收。
 
 ## 提供的数据
 
-2026-11-04 使用当前 GoAgent 工作区复测了本地 goagent-examples 的 SQLite 退款案例，并核验主模块审批续跑、预算重启与工具回放测试，见[工程与离线业务验证报告](../../docs/evaluation/2026-11-04-project-followup/REPORT.md)。这些是独立的模拟业务和执行契约证据，真实支付、生产认证及单一业务完整链路仍需宿主验收。
+2026-11-04 使用当前 GoAgent 工作区复测了本地 goagent-examples 的 SQLite 退款案例，并核验主模块审批续跑、预算重启与工具回放测试，见工程与离线业务验证报告。这些是独立的模拟业务和执行契约证据，真实支付、生产认证及单一业务完整链路仍需宿主验收。
 
 - 使用已脱敏、有来源和版本的业务问题，提供唯一 ID、类别、问题、标准答案和可用证据。用量、超时、失败均保留，不只统计成功样本。
 - 需要参数评分时提供 `lookup.parameters` 与 `lookup.expected_arguments`。执行器提供固定证据或按参数查询的 `lookup.orders` 隔离订单后端；后者由宿主绑定租户，只接受 order_id。多工具、写入及多次检索需接入实际业务适配后才能评测。
@@ -22,7 +22,7 @@
 | 延迟与失败 | 分组 P50/P95，错误与取消保留 | 报告每组独立题目数和重复数，小样本不用于长期尾延迟结论 |
 | 恢复与副作用 | 独立退款示例覆盖进程退出和模拟账本幂等，未纳入模型评分 | 生产接入仍需明确身份授权、恢复点、存储、审批及幂等要求，另做重启/故障注入验收 |
 
-固定 evidence 模式不根据参数改变返回值，标签只参与评分。新增的 `lookup.orders` 模式真正按参数与租户查询，并验证跨租户隔离；它不读取评分标签，但仍是内存测试数据库，不能证明生产后端权限正确。[新增实测](../../docs/evaluation/2026-10-27-deepseek-tenant-orders/REPORT.md)保留全部 12 次 DeepSeek 结果。
+固定 evidence 模式不根据参数改变返回值，标签只参与评分。新增的 `lookup.orders` 模式真正按参数与租户查询，并验证跨租户隔离；它不读取评分标签，但仍是内存测试数据库，不能证明生产后端权限正确。新增实测保留全部 12 次 DeepSeek 结果。
 
 ## 执行顺序
 

@@ -33,4 +33,4 @@ There is no automatic retry; failures save results and return non-zero. DeepSeek
 
 `provider-live.yml` is scheduled every Monday at 03:30 UTC and can also be triggered manually. Before enabling it, set `ENABLE_PROVIDER_LIVE=true` in the repository variables, and configure `MINIMAX_CN_API_KEY` and the two keys above, plus the `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`, and `DEEPSEEK_MODEL` variables, in the `provider-live` environment. When not enabled, the whole job is skipped; once enabled, missing configuration fails the job, so missing keys are never reported as passing tests. PRs do not trigger paid calls and do not receive keys. The workflow has read-only repository permissions and a 20-minute timeout, and Gemini/DeepSeek results are kept for 14 days; MiniMax only outputs the acceptance status and uploads no report.
 
-For the latest local live run see the [regression results](../evaluation/2026-10-27-provider-regression/REPORT.md).
+For the latest local live run see the regression results.

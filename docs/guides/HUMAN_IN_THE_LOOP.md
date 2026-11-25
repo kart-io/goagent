@@ -72,7 +72,7 @@ The handler runs inside the run lock, must be side-effect free, and must not re-
 
 The local file store suits a single host; for storage shared by multiple instances use goagent-contrib's `durable/pgstore`. Discovering pending runs, sending notifications, authenticating approvers and scheduling automatic resumes are the host's responsibility.
 
-For real-model validation see the [Gemini / DeepSeek HITL report](../evaluation/2026-11-04-hitl-live/REPORT.md) and the [reproducible script](../../evaluation/hitlbench/README.md). Checkpoint recovery passed for both; Gemini's final notification contained a refund-completed claim for an action that was never executed, so successful execution must not be equated with correct model content.
+For real-model validation see the Gemini / DeepSeek HITL report and the [reproducible script](../../evaluation/hitlbench/README.md). Checkpoint recovery passed for both; Gemini's final notification contained a refund-completed claim for an action that was never executed, so successful execution must not be equated with correct model content.
 
 ## Pausing Mid-Node or Mid-Tool
 

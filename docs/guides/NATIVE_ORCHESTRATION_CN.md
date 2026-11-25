@@ -139,7 +139,7 @@ go test -race ./workflow/business-cases
 
 三个案例默认使用离线规则，可通过 `-live -provider gemini|deepseek|minimax -model MODEL` 接入真实模型；业务效果始终为本地模拟。模型判断持久化后，审批恢复和流程重放不再调用模型。测试覆盖审批前零效果、Schema 校验、失败/取消恢复、跨进程崩溃与业务 ID 去重。
 
-真实模型测试使用 `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE`（或 `deepseek`、`minimax`），从环境读取相应 API Key 和模型名称；每个 Provider 最多 6 次请求，失败项保留、无自动重试。见[Gemini / DeepSeek 报告](../evaluation/2026-10-27-business-cases-live/REPORT.md)及[MiniMax 报告](../evaluation/2026-10-27-business-cases-minimax/REPORT.md)。
+真实模型测试使用 `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE`（或 `deepseek`、`minimax`），从环境读取相应 API Key 和模型名称；每个 Provider 最多 6 次请求，失败项保留、无自动重试。见Gemini / DeepSeek 报告及MiniMax 报告。
 
 ## 后续能力边界
 
@@ -190,7 +190,7 @@ go test -race ./workflow/business-cases -run TestNativeToolLoopProcessRecovery
 DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
 ```
 
-同一个 Agent 节点执行 A、B 两个工具，在 B 效果落盘后 `os.Exit(86)`；新进程应跳过 A、恢复 B 并仅请求最终回答；第三次进程启动应零模型/工具调用。效果按子执行键去重，断言只有两条记录、两个不同键及最终答案包含两条回执。见[三模型实测及首次失败记录](../evaluation/2026-10-27-durable-tool-loop/REPORT.md)。
+同一个 Agent 节点执行 A、B 两个工具，在 B 效果落盘后 `os.Exit(86)`；新进程应跳过 A、恢复 B 并仅请求最终回答；第三次进程启动应零模型/工具调用。效果按子执行键去重，断言只有两条记录、两个不同键及最终答案包含两条回执。见三模型实测及首次失败记录。
 
 ## 可组合编排 R2
 

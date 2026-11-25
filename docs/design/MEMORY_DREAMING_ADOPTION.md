@@ -1,6 +1,6 @@
 # 记忆后台整理与上下文装配设计
 
-状态：本地实现与专项验收已完成，正式版本发布另设依赖门禁。使用方式见[运行与恢复指南](../guides/MEMORY_RUNTIME_CN.md)。执行入口：[统一实施方案](../superpowers/plans/2026-11-22-agent-system-execution.md)。现有协议以[删除治理](MEMORY_GOVERNANCE.md)、[G2派生](MEMORY_G2_DERIVATION.md)及当前代码为准。
+状态：本地实现与专项验收已完成，正式版本发布另设依赖门禁。使用方式见[运行与恢复指南](../guides/MEMORY_RUNTIME_CN.md)。执行入口：统一实施方案。现有协议以[删除治理](MEMORY_GOVERNANCE.md)、[G2派生](MEMORY_G2_DERIVATION.md)及当前代码为准。
 
 ## 1. 图示与现状
 

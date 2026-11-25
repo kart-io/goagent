@@ -45,7 +45,7 @@ The durable journal only replays operation results; it does not save `WithState`
 
 ## Overhead and Acceptance
 
-The [measurement report](../evaluation/2026-10-31-execution-overhead/REPORT.md) contains the three budget modes, the 10/100/1000-operation matrix, fixed-ledger micro-benchmarks, and raw data. The probe can be run standalone:
+The measurement report contains the three budget modes, the 10/100/1000-operation matrix, fixed-ledger micro-benchmarks, and raw data. The probe can be run standalone:
 
 ```bash
 go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,memory,file -timeout=10m

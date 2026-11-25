@@ -670,7 +670,7 @@ flowchart LR
 - **G1 中途的状态**：`Update` 修改正文时不会触发级联，这一点在 G2 补上。
 - **G2 已实施**（G2a–G2d），与设计的差异见 [G2 设计](MEMORY_G2_DERIVATION.md) 第 14–16 节。
 - **每个阶段单独提交。** 验收条件：`go build ./...`、`go vet ./...`、`go test ./...` 全部通过，并且本阶段列出的测试全部完成。
-- **G2 完成后**，重新灌入数据，用 `scripts/memeval` 跑 LOCOMO 分层 200 题。准确率应落在 [2026-11-10 结果](../evaluation/2026-11-10-memory/README.md) 的 95% 区间内（graph 为 46–60%）。
+- **G2 完成后**，重新灌入数据，用 `scripts/memeval` 跑 LOCOMO 分层 200 题。准确率应落在 2026-11-10 结果 的 95% 区间内（graph 为 46–60%）。
 
 ## 7. 不兼容变更与迁移
 

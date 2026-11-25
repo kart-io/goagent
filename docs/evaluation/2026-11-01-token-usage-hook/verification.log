@@ -1,3 +1,0 @@
-PASS: 83 local documentation links; changed Go formatting; staged git diff --check.
-PASS: root suite, scoped race, five-round hook regression and offline example.
-REVIEW: both Important findings addressed with real execution RED->GREEN regressions.

@@ -1,6 +1,6 @@
 # Framework performance comparison
 
-[Recorded comparison report](../../docs/evaluation/2026-10-27-framework-performance-v2/REPORT.md)
+Recorded comparison report
 
 This is an isolated benchmark module. Its dependencies do not change the main GoAgent module.
 

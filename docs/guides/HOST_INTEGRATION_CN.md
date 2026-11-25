@@ -45,7 +45,7 @@ Builder 的持久化入口各管一件事，不能相互替代：
 
 ## 开销与验收
 
-[实测报告](../evaluation/2026-10-31-execution-overhead/REPORT.md) 保存三种预算模式、10/100/1000 操作矩阵、固定账本微基准与原始数据。探针可独立运行：
+实测报告 保存三种预算模式、10/100/1000 操作矩阵、固定账本微基准与原始数据。探针可独立运行：
 
 ```bash
 go run ./evaluation/executionbench/cmd/run -operations=10,100,1000 -modes=none,memory,file -timeout=10m

@@ -14,4 +14,4 @@ UsageEvent 包含 Model（逐尝试证据）、Statistics（同一账本累计�
 
 启用钩子但使用未计量的旧工具选择客户端时，在模型请求前拒绝；无工具的 `llm.Client` 路径仍支持。控制钩子、业务路由与后台调度语义不变。
 
-使用见[指南](../guides/MULTI_AGENT_USAGE_CN.md)，回归与审核见[交付报告](../evaluation/2026-11-01-token-usage-hook/REPORT.md)。
+使用见[指南](../guides/MULTI_AGENT_USAGE_CN.md)，回归与审核见交付报告。

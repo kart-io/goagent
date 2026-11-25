@@ -57,9 +57,9 @@ go run ./evaluation/agentbench/cmd/stress \
   -mode all -repeats 3 -workers 1 -out /tmp/goagent-refund-preview
 ```
 
-已保留 [DeepSeek 真实测试报告](../../docs/evaluation/2026-10-27-deepseek-refund/REPORT.md)：GoAgent 12/12 通过，共 21 个模型请求。报告注明原始参数和当前运行命令的区别；示例题不代表生产业务验收。
+已保留 DeepSeek 真实测试报告：GoAgent 12/12 通过，共 21 个模型请求。报告注明原始参数和当前运行命令的区别；示例题不代表生产业务验收。
 
-新增 [DeepSeek 原生 Provider 参数实测](../../docs/evaluation/2026-10-27-deepseek-native-refund/REPORT.md)使用 [refund-parameter-cases.json](testdata/refund-parameter-cases.json)：答案、调用契约和订单参数均为 12/12，共 21 个模型请求、8,466 Token。它是本轮重新执行的合成题实测，历史报告保持原样。写操作恢复另见[退款审批与崩溃恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)。
+新增 DeepSeek 原生 Provider 参数实测使用 [refund-parameter-cases.json](testdata/refund-parameter-cases.json)：答案、调用契约和订单参数均为 12/12，共 21 个模型请求、8,466 Token。它是本轮重新执行的合成题实测，历史报告保持原样。写操作恢复另见[退款审批与崩溃恢复案例](https://github.com/kart-io/goagent-examples/blob/main/workflow/refund-recovery/README.md)。
 
 `-dataset /path/to/cases.json` 替代生成题集：
 
@@ -140,11 +140,11 @@ go run ./evaluation/agentbench/cmd/stress -live \
   -out /tmp/goagent-tenant-orders-live
 ```
 
-去掉 `-live` 可生成计划。已完成的[DeepSeek 实测](../../docs/evaluation/2026-10-27-deepseek-tenant-orders/REPORT.md)为 12/12，共 16 次请求、7,068 Token。此后端是隔离测试数据库，租户绑定模拟宿主授权上下文；没有接入真实订单服务、登录身份或生产权限系统。
+去掉 `-live` 可生成计划。已完成的DeepSeek 实测为 12/12，共 16 次请求、7,068 Token。此后端是隔离测试数据库，租户绑定模拟宿主授权上下文；没有接入真实订单服务、登录身份或生产权限系统。
 
 小题集入口 `go run ./cmd/run -live -dataset testdata/cases.json` 使用环境中的模型与凭据；终态小题集为 `testdata/direct-cases.json`，可加 `-direct-tools`。该入口支持 `-max-calls`、`-max-output-tokens`、`-token-stop`、`-repeats` 和 `-timeout`。
 
-历史报告仅保留 GoAgent 记录，数据清理标记写在 `record_processing`；记录未重新调用模型，汇总按保留记录计算。原有失败仍在。完整说明见 [评测报告](../../docs/evaluation/README.md)。
+历史报告仅保留 GoAgent 记录，数据清理标记写在 `record_processing`；记录未重新调用模型，汇总按保留记录计算。原有失败仍在。完整说明见 评测报告。
 
 ### 真实 Gemini 测试
 
@@ -161,8 +161,8 @@ go run ./evaluation/agentbench/cmd/stress -live \
 
 这条路径以 OpenAI 协议适配器调用 Google 官方服务，**不是 OpenAI 模型，也不是旧 `GeminiProvider` 的验证**。模型须在当前 Key 可用列表中；本轮选择 `gemini-2.5-flash`。Google 可能将完整工具调用一次性放在结束帧中且省略索引，解析器仅对包含唯一 ID、名称与完整对象参数的独立结束帧补索引；不接受无索引的分片或混合帧。新型号和其他能力需另行验证。
 
-[真实 Gemini 报告](../../docs/evaluation/2026-10-27-gemini-tenant-orders/REPORT.md)保留首次失败、协议诊断、修复后的冒烟和完整题集结果。Token 总量使用供应商报告值，可能包含未拆出的思考 Token，不强行等于输入与可见输出之和。
+真实 Gemini 报告保留首次失败、协议诊断、修复后的冒烟和完整题集结果。Token 总量使用供应商报告值，可能包含未拆出的思考 Token，不强行等于输入与可见输出之和。
 
-旧 `GeminiProvider` 已另行修复并完成[原生 API 验证](../../docs/evaluation/2026-10-27-gemini-provider/REPORT.md)，入口为 `go run ./examples/llm/gemini-verify -live`。该验证与此处 `gemini-openai` 路径分别记录。
+旧 `GeminiProvider` 已另行修复并完成原生 API 验证，入口为 `go run ./examples/llm/gemini-verify -live`。该验证与此处 `gemini-openai` 路径分别记录。
 
-GeminiProvider 的原生工具循环和 Embedding 已补齐；真实验证运行 `go run ./examples/llm/gemini-verify -live -suite native`，见[能力报告](../../docs/evaluation/2026-10-27-gemini-native-support/REPORT.md)。此处 stress 命令的 `gemini-openai` 保留其兼容端点含义。
+GeminiProvider 的原生工具循环和 Embedding 已补齐；真实验证运行 `go run ./examples/llm/gemini-verify -live -suite native`，见能力报告。此处 stress 命令的 `gemini-openai` 保留其兼容端点含义。

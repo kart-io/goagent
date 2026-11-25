@@ -1,6 +1,6 @@
 # Agent / 子 Agent 钩子与 Token 归属设计
 
-日期：2026-11-01。基线：`de6c61a`。状态：**核心功能已实施**；实现覆盖身份、观察钩子、字段证据与统一归属账本。接入见[指南](../guides/MULTI_AGENT_USAGE_CN.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
+日期：2026-11-01。基线：`de6c61a`。状态：**核心功能已实施**；实现覆盖身份、观察钩子、字段证据与统一归属账本。接入见[指南](../guides/MULTI_AGENT_USAGE_CN.md)，验证见交付报告。定位：GoAgent 继续是可嵌入、可恢复、可计量的通用编排内核。
 
 ## 1. 结论与方案
 
@@ -20,7 +20,7 @@
 | 用量输出 | AgentOutput.TokenUsage 是本层逻辑调用用量；root_budget 是累计根快照 | 明确 self、inclusive、root 口径和 unknown |
 | 供应商字段 | llm.Usage 有输入/输出/总量；TokenUsage 另有缓存字段 | 缓存及部分字段的可用性协议，不能将未报告当成零 |
 
-审核证据见[能力核对](../research/2026-11-01-agent-hooks-usage-audit.md)，当前可运行反例见[多 Agent 计量回归](../../builder/multi_agent_usage_audit_test.go)。
+审核证据见能力核对，当前可运行反例见[多 Agent 计量回归](../../builder/multi_agent_usage_audit_test.go)。
 
 ## 3. 身份：业务运行、逻辑调用与本次访问分开
 
@@ -146,4 +146,4 @@ Token 数不等于货币费用。宿主维护生效时间、供应商、模型�
 3. **U3 统一归属**：统一预算账本、原子预留/归属、查询与严格格式边界；重启和真实故障窗口验证不重复发送/计费。
 4. **U4 宿主案例**：父 Agent + 两个并行子 Agent + 汇总；输出 Self/Inclusive/Root 和未知状态，接入 OTel 或宿主计价器。业务案例放 goagent-examples。
 
-实现采用 Event.Agent 和 Event.Usage（模型元数据包含在 Usage 中），不增加重复的 Model 字段；证据状态由 KnownFields 推导，Replayed 表示恢复交付。Complete 只针对基本三字段，缓存未知另行统计。所有预算默认支持 partial 字段证据，没有格式降级分支。实施与验收任务见[计划](../superpowers/plans/2026-11-01-multi-agent-hooks-usage.md)。
+实现采用 Event.Agent 和 Event.Usage（模型元数据包含在 Usage 中），不增加重复的 Model 字段；证据状态由 KnownFields 推导，Replayed 表示恢复交付。Complete 只针对基本三字段，缓存未知另行统计。所有预算默认支持 partial 字段证据，没有格式降级分支。实施与验收任务见计划。

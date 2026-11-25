@@ -172,7 +172,7 @@ type ClassifiedError struct {
 
 ## 配置选项
 
-`ClientOption` 修改 `LLMOptions`；`DefaultLLMOptions()` 默认 `MaxTokens` 2000、`Temperature` 0.7、`Timeout` 60 秒。
+`ClientOption` 修改 `LLMOptions`；`DefaultLLMOptions()` 默认 `Temperature` 0.7、`TopP` 1.0，不设置 `MaxTokens`（0 表示不发送）与 `Timeout`（0 表示不设超时）。
 
 | 选项 | 说明 |
 |---|---|
@@ -187,7 +187,7 @@ type ClassifiedError struct {
 | `WithCustomHeaders` | 附加到所有内置 Provider 的请求，覆盖 SDK 设置的同名头 |
 | `WithProvider` | 由构造函数自行设置，通常不需要 |
 
-模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 HTTP 调用（目前只有 `Embed`）内置固定次数的重试，不可配置；OpenAI、Gemini 与 Anthropic 不做隐式重试。
+模型调用的重试应在 Builder 层用 `WithRequestError` + `RetryTransient` 配置。DeepSeek 的非流式 `Embed` 调用默认不重试，可通过 `llm.WithEmbeddingRetries(n)` 配置重试次数；OpenAI、Gemini 与 Anthropic 不做隐式重试。
 
 ## Provider 构造函数
 
@@ -202,6 +202,7 @@ type ClassifiedError struct {
 | `NewOllamaWithOptions`、`NewOllamaClientSimple(model)` | `*OpenAIProvider` | `ProviderOllama` |
 | `NewKimiWithOptions` | `*OpenAIProvider` | `ProviderKimi` |
 | `NewSiliconFlowWithOptions` | `*OpenAIProvider` | `ProviderSiliconFlow` |
+| `NewMiniMaxWithOptions` | `*OpenAIProvider` | `ProviderMiniMax` |
 
 `NewDeepSeekStreamingWithOptions` / `NewDeepSeekStreaming(*LLMOptions)` 与 `NewGeminiStreamingWithOptions` / `NewGeminiStreaming(*LLMOptions)` 返回嵌入基础 Provider 的包装类型，能力与基础 Provider 相同。
 

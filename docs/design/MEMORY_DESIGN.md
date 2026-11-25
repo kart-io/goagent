@@ -1,6 +1,6 @@
 # 记忆系统设计
 
-2026-11-22增补提案：[后台整理与上下文装配](MEMORY_DREAMING_ADOPTION.md)，包括持久派生重试、背景预算、引用装配与纯聊天兼容；overview仅保留为后续候选。本次增量尚未实现，执行范围见[统一实施方案](../superpowers/plans/2026-11-22-agent-system-execution.md)。
+2026-11-22增补提案：[后台整理与上下文装配](MEMORY_DREAMING_ADOPTION.md)，包括持久派生重试、背景预算、引用装配与纯聊天兼容；overview仅保留为后续候选。该增量已于 v0.61.0 合并实现，运行与升级说明见[记忆运行指南](../guides/MEMORY_RUNTIME_CN.md)。
 
 状态于 2026-11-14 核对：压缩、长期记忆、时序图谱与社区摘要已实现；后续 G0/G1/G2 已合并到 master（v0.53.0）。本文是最初方案，包含已被后续存储与删除治理取代的接口和改造前问题。当前接口、能力限制和升级步骤见[运行能力与后续验收](../guides/RUNTIME_READINESS_CN.md)，管理端分页与共享命名空间仍待实施。
 
@@ -169,7 +169,7 @@ type Record struct {
 - 评分：判定用 LongMemEval 官方按题型的提示词（原文照录），回答含 yes 即正确；LOCOMO 另算官方的词级 F1（未做 Porter 词干化，略偏低），作答要求日期写成 "7 May 2023" 的格式以与标准答案一致；证据召回率是召回块所依据的会话（`Retrieval.Sessions`：记录的全部来源与关系的来源）中含答案所在会话的比例。
 - 统计：`-repeats K` 重复整个评测，每轮重新抽取记忆。准确率以题目为单位（各轮先平均），给出 95% Wilson 区间与各轮范围；两两比较按同一轮同一道题配对，用双侧精确符号检验给出 p 值，p ≥ 0.05 的差异不作结论。
 - 运行：`go run ./scripts/memeval -format locomo -data locomo10.json -sample 200 -repeats 2 -concurrency 8 -chat deepseek -judge openai:gpt-4o-2024-08-06 -embed gemini:gemini-embedding-001 -out docs/evaluation/<日期>-memory/locomo.md -results locomo.jsonl`。长期记忆方案每个会话有一次抽取和若干次整理调用，`longmemeval_s` 每题约 50 个会话，先用较小的 `-sample` 估算费用。官方判定模型是 gpt-4o-2024-08-06，换用其他模型时结果只在本仓库内可比。
-- 结果存入 `docs/evaluation/`。[2026-11-10-memory](../evaluation/2026-11-10-memory/README.md)：LOCOMO 分层抽样 200 题 × 2 轮、gpt-4o 判定，准确率 recent 25.0%、memory 46.5%、graph 53.0%、community 54.8%；memory 显著好于 recent，graph 显著好于 memory（p = 0.013），community 与 graph 无显著差异（p = 0.48），因此社区摘要默认关闭。
+- 结果存入 `docs/evaluation/`。2026-11-10-memory：LOCOMO 分层抽样 200 题 × 2 轮、gpt-4o 判定，准确率 recent 25.0%、memory 46.5%、graph 53.0%、community 54.8%；memory 显著好于 recent，graph 显著好于 memory（p = 0.013），community 与 graph 无显著差异（p = 0.48），因此社区摘要默认关闭。
 
 ## 7. 后续：可管理性
 

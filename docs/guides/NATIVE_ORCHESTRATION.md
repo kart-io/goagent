@@ -139,7 +139,7 @@ go test -race ./workflow/business-cases
 
 All three cases use offline rules by default and can be wired to real models with `-live -provider gemini|deepseek|minimax -model MODEL`; business effects are always simulated locally. Once the model's judgment is persisted, approval recovery and flow replay no longer call the model. Tests cover zero effects before approval, Schema validation, failure/cancellation recovery, cross-process crashes and business ID deduplication.
 
-Real-model tests use `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE` (or `deepseek`, `minimax`), reading the corresponding API key and model name from the environment; at most 6 requests per provider, failures are kept, and there are no automatic retries. See the [Gemini / DeepSeek report](../evaluation/2026-10-27-business-cases-live/REPORT.md) and the [MiniMax report](../evaluation/2026-10-27-business-cases-minimax/REPORT.md).
+Real-model tests use `bash scripts/business_cases_live.sh gemini NEW_REPORT_FILE` (or `deepseek`, `minimax`), reading the corresponding API key and model name from the environment; at most 6 requests per provider, failures are kept, and there are no automatic retries. See the Gemini / DeepSeek report and the MiniMax report.
 
 ## Capability Boundaries and Follow-up Work
 
@@ -190,7 +190,7 @@ go test -race ./workflow/business-cases -run TestNativeToolLoopProcessRecovery
 DEEPSEEK_MODEL=deepseek-flash bash scripts/business_tool_loop_live.sh deepseek /tmp/deepseek-loop.json
 ```
 
-The same Agent node runs two tools, A and B, and calls `os.Exit(86)` after B's effect is persisted; the new process should skip A, recover B and request only the final answer; a third process start should make zero model/tool calls. Effects are deduplicated by child execution key, asserting there are only two records, two distinct keys, and that the final answer contains both receipts. See [three-model measurements and first-failure records](../evaluation/2026-10-27-durable-tool-loop/REPORT.md).
+The same Agent node runs two tools, A and B, and calls `os.Exit(86)` after B's effect is persisted; the new process should skip A, recover B and request only the final answer; a third process start should make zero model/tool calls. Effects are deduplicated by child execution key, asserting there are only two records, two distinct keys, and that the final answer contains both receipts. See three-model measurements and first-failure records.
 
 ## Composable Orchestration R2
 

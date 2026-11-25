@@ -6,7 +6,7 @@ The `multiagent` package provides, on top of `workflow`, three graph constructor
 
 Graph start/end and the route-finish marker are all imported from `github.com/kart-io/goagent/constants`, as `WorkflowStart`, `WorkflowEnd`, and `MultiagentFinish`; the old `workflow.START/END` and `multiagent.Finish` entry points have been removed.
 
-This package has the same name as the old `multiagent` removed in v0.17, but its API and semantics are incompatible, and old code cannot be migrated directly. For the design rationale see [Multi-Agent Prebuilt Patterns Design](../superpowers/specs/2026-11-05-multiagent-patterns-design.md); for an offline example see [`examples/multi-agent-patterns`](../../examples/multi-agent-patterns/README.md). The four `examples/advanced/multi-agent-*` examples demonstrate hand-written topologies; this package demonstrates prebuilt patterns.
+This package has the same name as the old `multiagent` removed in v0.17, but its API and semantics are incompatible, and old code cannot be migrated directly. For the design rationale see Multi-Agent Prebuilt Patterns Design; for an offline example see [`examples/multi-agent-patterns`](../../examples/multi-agent-patterns/README.md). The four `examples/advanced/multi-agent-*` examples demonstrate hand-written topologies; this package demonstrates prebuilt patterns.
 
 ## Choosing a Pattern
 

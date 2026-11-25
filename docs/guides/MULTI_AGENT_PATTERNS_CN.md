@@ -6,7 +6,7 @@
 
 图起止和路由完成标识统一导入 `github.com/kart-io/goagent/constants`，使用 `WorkflowStart`、`WorkflowEnd` 和 `MultiagentFinish`；原 `workflow.START/END` 与 `multiagent.Finish` 入口已删除。
 
-本包与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。设计依据见[多 Agent 预置模式设计](../superpowers/specs/2026-11-05-multiagent-patterns-design.md)，离线示例见 [`examples/multi-agent-patterns`](../../examples/multi-agent-patterns/README.md)。`examples/advanced/multi-agent-*` 四个示例演示手写拓扑，本包演示预置模式。
+本包与 v0.17 删除的旧 `multiagent` 同名，但 API 与语义不兼容，旧代码不能直接迁移。设计依据见多 Agent 预置模式设计，离线示例见 [`examples/multi-agent-patterns`](../../examples/multi-agent-patterns/README.md)。`examples/advanced/multi-agent-*` 四个示例演示手写拓扑，本包演示预置模式。
 
 ## 选择模式
 

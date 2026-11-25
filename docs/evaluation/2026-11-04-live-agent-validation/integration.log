@@ -1,3 +1,0 @@
-harness_compaction_real_agent true 
-invoke_with_live_reranker true 
-http_native_binding_real_agent true 

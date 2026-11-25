@@ -136,7 +136,7 @@ go run ./agent-usage
 
 示例通过父 Builder.WithUsageHook 取得所有后代通知，打印 hook: live=5 replay=2；通知次数不等于新增费用，回放后的根累计仍为18。
 
-实现依据见[设计](../design/MULTI_AGENT_HOOKS_AND_USAGE.md)，验证见[交付报告](../evaluation/2026-11-01-multi-agent-usage-implementation/REPORT.md)。
+实现依据见[设计](../design/MULTI_AGENT_HOOKS_AND_USAGE.md)，验证见交付报告。
 
 ## 推理明细、实际模型与配置
 

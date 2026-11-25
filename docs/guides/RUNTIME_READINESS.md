@@ -43,7 +43,7 @@ Recovery must still bind to the namespace of the original round; a change return
 
 ## Next Round of Memory Effectiveness Acceptance
 
-The existing [G2 LOCOMO evaluation](../evaluation/2026-11-13-memory-g2/README.md) had graph accuracy of 50.5% and 51.0% across two runs, not significantly different from G1. The increase in evidence session recall is affected by the change to the source-union measurement, and cannot on its own be taken as evidence of improved effectiveness. The existing [G1 temporal question diagnosis](../evaluation/2026-11-13-memory-g1/README.md) found extraction omissions, relative time handling, and ranking problems; follow-up work should verify each stage first.
+The existing G2 LOCOMO evaluation had graph accuracy of 50.5% and 51.0% across two runs, not significantly different from G1. The increase in evidence session recall is affected by the change to the source-union measurement, and cannot on its own be taken as evidence of improved effectiveness. The existing G1 temporal question diagnosis found extraction omissions, relative time handling, and ranking problems; follow-up work should verify each stage first.
 
 The next round of experiments proceeds in the following order, with the result of each step deciding the change in the next:
 

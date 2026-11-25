@@ -66,6 +66,6 @@ run_id为当前运行身份，不等于业务会话锁、事件去重键或已�
 
 网络断开或退出未确认不能证明工具副作用没发生。客户端没有收到业务终态时，应按run_id诊断，不能盲目换ID重试。停服先BeginShutdown取消，再等HTTP Shutdown与Handler.Shutdown，成功后关闭共享Host。具体超时与资源保留设计见扩展文档。
 
-文档代码块及源码对照范围见 [扩展文档验证](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md)。实测证据见 [完整实现验收](../evaluation/2026-10-31-httpagent-implementation/REPORT.md) 与 [可替换WS接口验收](../evaluation/2026-10-31-websocket-interfaces/REPORT.md)。
+文档代码块及源码对照范围见 [扩展文档验证](https://github.com/kart-io/goagent-contrib/blob/master/httpagent/docs/VERIFICATION.md)。实测证据见 完整实现验收 与 可替换WS接口验收。
 
-合并到主分支后的检查见 [合并验收](../evaluation/2026-10-31-httpagent-merge/REPORT.md)。
+合并到主分支后的检查见 合并验收。
