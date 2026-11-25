@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.63.1] - 2026-11-25
+
 ### 修复
 
 - `llm/providers`：go-openai 升至 v1.44.0 后，OpenAI 兼容服务对流式请求回了 JSON、HTML 等非 SSE 内容时，仍报告“上游返回的不是 SSE 事件流”。v1.42.0 起 SDK 对这类响应只返回 `io.EOF`，此前升级会让它退化为 `unexpected EOF`，与连接中断无法区分；现在由 HTTP 层嗅探响应体首个非空行判定。空响应体与截断的 SSE 仍按 `unexpected EOF` 报告。
@@ -1649,7 +1651,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.63.0...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.63.1...HEAD
+[0.63.1]: https://github.com/kart-io/goagent/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/kart-io/goagent/compare/v0.62.3...v0.63.0
 [0.62.3]: https://github.com/kart-io/goagent/compare/v0.62.2...v0.62.3
 [0.62.2]: https://github.com/kart-io/goagent/compare/v0.62.1...v0.62.2
