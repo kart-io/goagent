@@ -174,9 +174,12 @@ func (a *ConfigurableAgent[S]) executeStream(ctx context.Context, input interfac
 }
 
 func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middleware.MiddlewareRequest, client llm.Client, emit func(AgentEvent) error) (*middleware.MiddlewareResponse, error) {
-	input, err := a.inputSerializer.Serialize(request.Input)
-	if err != nil {
-		return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
+	input, images, ok := splitUserInput(request.Input)
+	if !ok {
+		var err error
+		if input, err = a.inputSerializer.Serialize(request.Input); err != nil {
+			return nil, agentErrors.Wrap(err, agentErrors.CodeInvalidInput, "failed to serialize input")
+		}
 	}
 	evidence := ""
 	metadata := make(map[string]interface{}, len(request.Metadata))
@@ -197,7 +200,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		}
 	}
 	if a.config.SessionLog != nil {
-		turn, history, err := a.openSessionTurn(ctx, input)
+		turn, history, err := a.openSessionTurn(ctx, input, images)
 		if err != nil {
 			return nil, fmt.Errorf("会话日志: %w", err)
 		}
@@ -210,7 +213,7 @@ func (a *ConfigurableAgent[S]) runEvents(ctx context.Context, request *middlewar
 		}
 	}
 	ctx = withModelCacheScope(ctx, a.modelCacheScope(ctx))
-	messages, err := a.streamMessages(ctx, input, evidence)
+	messages, err := a.streamMessages(ctx, input, images, evidence)
 	if err != nil {
 		return nil, err
 	}

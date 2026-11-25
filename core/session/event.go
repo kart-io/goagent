@@ -41,6 +41,9 @@ func (s *Surface) covers(seq int64) bool { return s != nil && seq >= s.Start && 
 // TurnStart is the data of turn/start.
 type TurnStart struct {
 	Input string `json:"input"`
+	// Images are the image references attached to the turn's user input; they
+	// are part of the turn identity together with Input.
+	Images []llm.ImagePart `json:"images,omitempty"`
 	// ExecutionKey is the execution key the host passed to the durable run
 	// (before DurableScope derivation); resuming with the same execution key
 	// continues this turn.
