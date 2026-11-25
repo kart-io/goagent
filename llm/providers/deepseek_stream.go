@@ -6,6 +6,7 @@ import (
 
 	"github.com/sashabaranov/go-openai"
 
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/interfaces"
 	agentllm "github.com/kart-io/goagent/llm"
 )
@@ -26,8 +27,27 @@ func (p *DeepSeekProvider) nativeStreamProvider() *OpenAIProvider {
 	return &OpenAIProvider{BaseProvider: p.BaseProvider, client: openai.NewClientWithConfig(config), thinkingNoneOnly: true}
 }
 
+// rejectImages refuses image input before any request is built: DeepSeek does
+// not accept images.
+func rejectImages(request *agentllm.CompletionRequest) error {
+	if request == nil {
+		return nil
+	}
+	for _, msg := range request.Messages {
+		if len(msg.Images) > 0 {
+			return agentErrors.New(agentErrors.CodeInvalidInput, "deepseek: images not supported").
+				WithComponent("deepseek").
+				WithOperation("build_request")
+		}
+	}
+	return nil
+}
+
 // CompleteStream implements structured streaming with terminal status and usage.
 func (p *DeepSeekProvider) CompleteStream(ctx context.Context, request *agentllm.CompletionRequest) (<-chan *agentllm.StreamChunk, error) {
+	if err := rejectImages(request); err != nil {
+		return nil, err
+	}
 	return p.nativeStreamProvider().CompleteStream(ctx, request)
 }
 
@@ -35,6 +55,9 @@ func (p *DeepSeekProvider) CompleteStream(ctx context.Context, request *agentllm
 // DSML tool calls written into the content are restored as ToolCalls; see
 // recoverDSMLToolCalls.
 func (p *DeepSeekProvider) CompleteToolsStream(ctx context.Context, request *agentllm.CompletionRequest, tools []interfaces.Tool) (<-chan *agentllm.StreamChunk, error) {
+	if err := rejectImages(request); err != nil {
+		return nil, err
+	}
 	chunks, err := p.nativeStreamProvider().CompleteToolsStream(ctx, request, tools)
 	if err != nil || len(tools) == 0 {
 		return chunks, err

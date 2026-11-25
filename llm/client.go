@@ -33,14 +33,23 @@ type Message struct {
 	// ProviderState preserves opaque response parts (e.g. Gemini signatures).
 	// Replay unchanged with the matching assistant content and tool calls.
 	ProviderState *ProviderState `json:"provider_state,omitzero"`
-	// Images 随消息一起发送；仅 OpenAI 兼容族支持，其余提供商会拒绝。
+	// Images are sent with the message. The OpenAI-compatible family supports
+	// them; Anthropic, native Gemini and DeepSeek reject them.
 	Images []ImagePart `json:"images,omitempty"`
 }
 
-// ImagePart 是消息携带的一张图片。
+// ImagePart is one image carried by a message.
 type ImagePart struct {
-	// URL 可以是 https 地址或 data: URI。
-	URL string `json:"url"`
+	// URL is an https address or a data: URI. It is what providers send.
+	URL string `json:"url,omitempty"`
+	// Ref is an opaque host reference to the image. It lives in stored history
+	// only: a resolver must fill URL before a request, and providers refuse a
+	// part with Ref set and URL empty.
+	Ref string `json:"ref,omitempty"`
+	// MIME is the media type of the referenced image.
+	MIME string `json:"mime,omitempty"`
+	// SHA256 is the hex digest of the referenced image bytes.
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 type ProviderState struct {
