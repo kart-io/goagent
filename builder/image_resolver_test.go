@@ -416,7 +416,6 @@ func TestWithImageResolverValidatesPolicy(t *testing.T) {
 		{"解析器为空", nil, ImagePolicy{}},
 		{"轮数为负", r, ImagePolicy{KeepRecentTurns: -1}},
 		{"张数为负", r, ImagePolicy{MaxImagesPerRequest: -1}},
-		{"估算为负", r, ImagePolicy{EstimateTokensPerImage: -1}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewSimpleBuilder(mocks.NewScriptedClient()).WithImageResolver(test.resolver, test.policy).Build()

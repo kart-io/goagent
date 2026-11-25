@@ -62,9 +62,6 @@ type ImagePolicy struct {
 	// MaxImagesPerRequest caps the attached images of one request, keeping
 	// the newest; 0 means no limit.
 	MaxImagesPerRequest int
-	// EstimateTokensPerImage is the estimated token cost of one attached
-	// image.
-	EstimateTokensPerImage int
 	// Placeholder renders the text appended to the message in place of a
 	// degraded image. reason is "不可用" (ErrImageUnavailable) or
 	// "不在当前上下文中" (outside KeepRecentTurns or MaxImagesPerRequest).
@@ -99,8 +96,8 @@ func (b *AgentBuilder[S]) validateImages() error {
 		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "WithImageResolver 需要非空解析器").WithComponent("builder").WithOperation("validate_images")
 	}
 	p := c.policy
-	if p.KeepRecentTurns < 0 || p.MaxImagesPerRequest < 0 || p.EstimateTokensPerImage < 0 {
-		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "图片策略的 KeepRecentTurns、MaxImagesPerRequest、EstimateTokensPerImage 不能为负").WithComponent("builder").WithOperation("validate_images")
+	if p.KeepRecentTurns < 0 || p.MaxImagesPerRequest < 0 {
+		return agentErrors.Newf(agentErrors.CodeInvalidConfig, "图片策略的 KeepRecentTurns、MaxImagesPerRequest 不能为负").WithComponent("builder").WithOperation("validate_images")
 	}
 	return nil
 }
