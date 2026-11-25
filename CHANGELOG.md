@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-25
+
 ### 破坏性变更：删除弃用期已满的 API
 
 以下 API 在 v0.56.0、v0.60.0 或 v0.62.0 标记弃用，弃用后均至少保留了一个次版本，主模块之外的 contrib、examples、harness、oncall-agent、k8s-agent 均未使用，本版删除。删除后核心模块不再依赖 `github.com/kart-io/logger`；`scripts/api-exposure.txt` 同步移除 `cache.Cache`、`cache.CacheStats`，`cache.Cache` 不再经稳定包暴露。
@@ -1637,7 +1639,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.62.3...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.63.0...HEAD
+[0.63.0]: https://github.com/kart-io/goagent/compare/v0.62.3...v0.63.0
 [0.62.3]: https://github.com/kart-io/goagent/compare/v0.62.2...v0.62.3
 [0.62.2]: https://github.com/kart-io/goagent/compare/v0.62.1...v0.62.2
 [0.62.1]: https://github.com/kart-io/goagent/compare/v0.62.0...v0.62.1
