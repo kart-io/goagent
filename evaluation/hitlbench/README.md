@@ -3,7 +3,7 @@
 在仓库根目录运行，凭据从 `GEMINI_API_KEY`、`DEEPSEEK_API_KEY` 环境变量读取：
 
 ```sh
-python3 scripts/hitl_live.py --live --out docs/evaluation/NEW-HITL-RUN
+python3 scripts/hitl_live.py --live --out /tmp/hitl-live-run
 ```
 
 输出目录必须不存在。默认测试 `gemini-2.5-flash` 与 `deepseek-flash`，可通过 `GEMINI_MODEL` / `DEEPSEEK_MODEL` 指定模型，或用 `--providers deepseek` 仅测试一家。每家最多 3 次调用，每次最多 512 输出 Token，不自动重试；真实请求可能计费。
@@ -15,7 +15,5 @@ python3 scripts/hitl_live.py --live --out docs/evaluation/NEW-HITL-RUN
 只复核已保存结果，不调用模型：
 
 ```sh
-python3 scripts/hitl_live.py --review docs/evaluation/2026-11-04-hitl-live
+python3 scripts/hitl_live.py --review /tmp/hitl-live-run
 ```
-
-该历史样本应返回退出码 1：Gemini 虽采用正确的 66 元，仍错误声称退款已完成。原始运行只检查流程与金额，其 `results.json.passed=true` 不包含后补的内容检查；综合结论见 `review.json`。完整报告保留了这一评测遗漏及原始驱动，不重新请求模型修饰结果。

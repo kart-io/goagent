@@ -498,7 +498,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 迁移与验证
 
 - 通用管理入口由 contrib 迁入核心，直接使用 `github.com/kart-io/goagent/management`；领域错误使用 `errors.ErrManagement*`，JSON 使用 `codec/json`。不保留旧根包转发、错误别名或版本回退，详见[管理层迁移指南](docs/guides/MANAGEMENT_MIGRATION.md)。PostgreSQL 实现、数据库集成案例与可选 Harness 适配仍在 contrib。
-- 已归档[20组HTTP与数据库扩展案例](docs/evaluation/2026-11-08-management-expanded-cases/REPORT.md)、[DeepSeek与Gemini真实模型案例](docs/evaluation/2026-11-08-management-live-model/REPORT.md)及[验收可靠性修复](docs/evaluation/2026-11-08-management-live-reliability/REPORT.md)。真实模型验证覆盖审批续跑、多轮会话、精确 Fork、版本绑定和实际用量；合成退款只写入隔离数据库。
+- 已归档 20 组 HTTP 与数据库扩展案例、DeepSeek 与 Gemini 真实模型案例及验收可靠性修复。真实模型验证覆盖审批续跑、多轮会话、精确 Fork、版本绑定和实际用量；合成退款只写入隔离数据库。
 
 ## [0.50.0] - 2026-11-08
 
@@ -1203,7 +1203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.17.0] - 2026-10-30
 
-按[定位决策](docs/research/2026-10-29-goagent-positioning.md)收敛为可恢复编排内核，删除外围模块。主模块 `go.mod` 由 125 行降到 81 行，不再依赖 aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3（cgo）、nats、goquery、pdf、viper、go-redis。删除的代码保留在 `v0.16.1`，需要时可从该版本恢复。
+按定位决策收敛为可恢复编排内核，删除外围模块。主模块 `go.mod` 由 125 行降到 81 行，不再依赖 aiplatform、cohere、qdrant、google api、gorm 系列、pgx、lib/pq、mysql、go-sqlite3（cgo）、nats、goquery、pdf、viper、go-redis。删除的代码保留在 `v0.16.1`，需要时可从该版本恢复。
 
 ### Breaking
 
