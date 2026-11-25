@@ -41,11 +41,14 @@ func TestOpenAIStreamRejectsUnresolvedImageRef(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req := imageRefRequest(agentllm.ImagePart{Ref: "image:1"})
-	_, err = client.CompleteStream(ctx, req)
-	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
-	_, err = client.CompleteToolsStream(ctx, req, nil)
-	require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err))
+	// 空 URL 一律不出站：未解析的引用与全空部件同样拒绝。
+	for _, part := range []agentllm.ImagePart{{Ref: "image:1"}, {}} {
+		req := imageRefRequest(part)
+		_, err = client.CompleteStream(ctx, req)
+		require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err), "%+v", part)
+		_, err = client.CompleteToolsStream(ctx, req, nil)
+		require.Equal(t, agentErrors.CodeInvalidInput, agentErrors.GetCode(err), "%+v", part)
+	}
 	require.Zero(t, atomic.LoadInt32(requests))
 }
 

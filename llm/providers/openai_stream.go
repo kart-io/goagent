@@ -57,8 +57,8 @@ func (p *OpenAIProvider) completeStream(ctx context.Context, req *agentllm.Compl
 	for _, msg := range req.Messages {
 		message := openai.ChatCompletionMessage{Role: msg.Role, Content: msg.Content, Name: msg.Name, ToolCallID: msg.ToolCallID, ReasoningContent: msg.ReasoningContent}
 		for _, image := range msg.Images {
-			// 未解析的宿主引用绝不能出站
-			if image.Ref != "" && image.URL == "" {
+			// 未解析的宿主引用与空图片部件绝不能出站
+			if image.URL == "" {
 				return nil, agentErrors.New(agentErrors.CodeInvalidInput, "openai: unresolved image reference").
 					WithComponent("openai").
 					WithOperation("build_request")
