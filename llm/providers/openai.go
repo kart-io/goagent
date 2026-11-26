@@ -68,6 +68,8 @@ type openAICompatibleSpec struct {
 	reasoning      bool
 	// thinkingSwitch 表示服务用 thinking 开关控制推理：effort=none 时按模型改写为 thinking 禁用。
 	thinkingSwitch bool
+	// reasoningSplit 表示服务缺省把思维链内联在 content 中，须在请求体声明 reasoning_split 才分到 reasoning_content。
+	reasoningSplit bool
 	// imageCompletionTokens 表示服务的视觉接口只读 max_completion_tokens、忽略 max_tokens。
 	imageCompletionTokens bool
 	capabilities          []agentllm.Capability
@@ -114,6 +116,9 @@ func newOpenAICompatible(spec openAICompatibleSpec, opts ...agentllm.ClientOptio
 	var doer openai.HTTPDoer = retryAfterDoer{next: nonSSEDoer{next: responseHeaderTimeoutClient(timeout, base.Config.CustomHeaders, base.Config.HTTPClient)}}
 	if spec.thinkingSwitch {
 		doer = thinkingDisabledDoer{next: doer}
+	}
+	if spec.reasoningSplit {
+		doer = reasoningSplitDoer{next: doer}
 	}
 	clientConfig.HTTPClient = zeroTemperatureDoer{next: doer}
 
