@@ -174,6 +174,9 @@ func (b *AgentBuilder[S]) BuildContext(ctx context.Context) (*ConfigurableAgent[
 	if err := b.validateModelCache(); err != nil {
 		return nil, err
 	}
+	if err := b.validateImages(); err != nil {
+		return nil, err
+	}
 
 	// 如果未提供则设置默认值
 	var zero S

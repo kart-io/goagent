@@ -261,7 +261,7 @@ func resolveModelCache(ctx context.Context, cr cacheRequest) *modelCacheEntry {
 		observe.Emit(ctx, observe.Event{Type: "model_cache_read_error", Path: "cache", ErrorKind: observe.ErrorKind(err)})
 		return nil
 	}
-	key, ok := modelCacheKey(cacheKeyInput{Identity: s.identity, SessionID: s.sessionID, Client: client, Request: cr.req, Tools: cr.tools, Memory: version})
+	key, ok := modelCacheKey(cacheKeyInput{Identity: s.identity, SessionID: s.sessionID, Client: client, Request: cr.req, Tools: cr.tools, Memory: version, Images: imageCacheIdentity(ctx)})
 	if !ok {
 		return nil
 	}

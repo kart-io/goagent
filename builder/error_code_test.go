@@ -17,7 +17,7 @@ func TestBuilderConfigurationErrorsExposeCodeAndContext(t *testing.T) {
 	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 	require.Equal(t, "builder", agentErrors.GetComponent(err))
 	require.Equal(t, "native_tool_stream", agentErrors.GetContext(err)["config_key"])
-	_, _, err = a.openSessionTurn(context.Background(), "run")
+	_, _, err = a.openSessionTurn(context.Background(), "run", nil)
 	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
 	require.Equal(t, "builder", agentErrors.GetComponent(err))
 	require.Equal(t, "session_id", agentErrors.GetContext(err)["config_key"])

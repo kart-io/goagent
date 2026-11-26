@@ -11,6 +11,9 @@ var (
 	ErrAgentHandleDone = newSentinel(CodeInvalidInput, "agent handle is done")
 	ErrModelRedirected = newSentinel(CodeLLMRequest, "model request redirected")
 	ErrAgentWaiting    = newSentinel(CodeWaiting, "agent is waiting for host continuation")
+	// ErrImageUnavailable is the signal behind builder.ErrImageUnavailable: an
+	// image reference can never be resolved.
+	ErrImageUnavailable = newSentinel(CodeNotFound, "图片不可用")
 	// memory: the namespace bound by the host on resume differs from the one at
 	// the start of the turn.
 	ErrMemoryNamespaceChanged = newSentinel(CodeConflict, "长期记忆的命名空间与轮次开始时不同")

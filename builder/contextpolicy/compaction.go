@@ -38,6 +38,10 @@ type CompactionConfig struct {
 	// tool result cannot fill the summary model's context; 0 sends messages
 	// whole. Before limits became caller-owned it was fixed at 4000.
 	MaxRenderedRunes int `json:"max_rendered_runes,omitzero"`
+	// ImageTokens is the estimated token count of one attached image; 0 means
+	// constants.DefaultImageTokens. It is added on top of Estimate for every image of a
+	// message.
+	ImageTokens int `json:"image_tokens,omitzero"`
 	// Instructions are additional requirements for the summary, such as
 	// information that must be preserved.
 	Instructions string `json:"instructions"`
@@ -102,12 +106,20 @@ func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 	if cfg.KeepTokens == 0 {
 		cfg.KeepTokens = cfg.MaxTokens / 4
 	}
-	if cfg.MaxTokens < 0 || cfg.KeepTokens < 0 || (cfg.MaxTokens == 0 && cfg.KeepTokens == 0) || (cfg.MaxTokens > 0 && cfg.KeepTokens >= cfg.MaxTokens) || cfg.MaxRenderedRunes < 0 {
-		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compaction 需要 0 < keep_tokens，设置 max_tokens 时 keep_tokens < max_tokens，且上限不能为负").WithComponent("builder/contextpolicy").WithOperation("new_compaction")
+	if cfg.MaxTokens < 0 || cfg.KeepTokens < 0 || (cfg.MaxTokens == 0 && cfg.KeepTokens == 0) || (cfg.MaxTokens > 0 && cfg.KeepTokens >= cfg.MaxTokens) || cfg.MaxRenderedRunes < 0 || cfg.ImageTokens < 0 {
+		return nil, agentErrors.Newf(agentErrors.CodeInvalidConfig, "compaction 需要 0 < keep_tokens，设置 max_tokens 时 keep_tokens < max_tokens，且上限与 image_tokens 不能为负").WithComponent("builder/contextpolicy").WithOperation("new_compaction")
+	}
+	// 指纹只含调用方显式设置的值，未设置时旧配置的身份保持不变。
+	explicitImageTokens := cfg.ImageTokens
+	if cfg.ImageTokens == 0 {
+		cfg.ImageTokens = constants.DefaultImageTokens
 	}
 	if cfg.Estimate == nil {
 		cfg.Estimate = EstimateTokens
 	}
+	// 图片成本只在这里叠加一次，触发判断、保留区与 KeepUserMessages 都经由 cfg.Estimate。
+	textEstimate, imageTokens := cfg.Estimate, cfg.ImageTokens
+	cfg.Estimate = func(m llm.Message) int { return textEstimate(m) + len(m.Images)*imageTokens }
 	if cfg.Keep == nil {
 		cfg.Keep = func(span []llm.Message, limit int) []llm.Message {
 			return KeepUserMessages(span, limit, cfg.Estimate, nil)
@@ -118,7 +130,8 @@ func NewCompaction(cfg CompactionConfig) (*Compaction, error) {
 		Max, Keep                 int
 		Model                     bool
 		Render                    int `json:",omitzero"`
-	}{cfg.ID, cfg.Version, cfg.Instructions, cfg.MaxTokens, cfg.KeepTokens, cfg.Model != nil, cfg.MaxRenderedRunes})
+		Image                     int `json:",omitzero"`
+	}{cfg.ID, cfg.Version, cfg.Instructions, cfg.MaxTokens, cfg.KeepTokens, cfg.Model != nil, cfg.MaxRenderedRunes, explicitImageTokens})
 	return &Compaction{config: cfg, identity: cfg.ID + ":" + cfg.Version + ":" + digest(fingerprint)}, nil
 }
 
@@ -346,6 +359,13 @@ func renderTranscript(messages []llm.Message, limit int) string {
 			content = SummaryPrefix + SummaryBody(content)
 		} else {
 			content = clip(content)
+		}
+		for _, img := range m.Images {
+			if img.Ref == "" {
+				content += "\n[图片]"
+			} else {
+				content += "\n[图片 " + img.Ref + "]"
+			}
 		}
 		fmt.Fprintf(&sb, "[%s]\n%s\n", m.Role, content)
 		for _, tc := range m.ToolCalls {

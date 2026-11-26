@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.64.1] - 2026-11-26
+
+### 修复
+
+- `llm/providers`：MiniMax（OpenAI 兼容协议）缺省把思维链以 `<think>…</think>` 内联在 `content` 中，此前 goagent 把它当作答案文本写进 `Content` 与 `Delta`，`ReasoningContent` 为空。现在 `NewMiniMaxWithOptions` 的每个 chat/completions 请求都带 `reasoning_split: true`，思维改由 `reasoning_content` 返回并写入 `ReasoningContent`；`Reasoning{Effort:"none"}` 关闭 thinking 时同样发送，不影响结果。多轮工具调用沿用把上一轮 `ReasoningContent` 作为 `reasoning_content` 回传的做法，MiniMax-M3 实测会读取。
+
+## [0.64.0] - 2026-11-26
+
+### 新增
+
+- `builder`：`UserInput{Text, Images}`（或其指针）可作为 `ExecuteStream` 的输入，在用户消息上附带图片引用；引用写入历史与会话日志（`TurnStart.Images`），轮次身份为（文本、图片）。
+- `builder`：`WithImageResolver(ImageResolver, ImagePolicy)` 只在出站模型请求里把图片引用解析为 URL，重放与模型缓存命中不调用；`ImageRequest.TurnAge` 按会话轮次计；`ErrImageUnavailable` 降级为占位文本，其他错误按请求错误处理；`ImagePolicy` 提供 `Identity`（进入缓存键）、`KeepRecentTurns`、`MaxImagesPerRequest` 与 `Placeholder`。没有 URL 且无法解析的图片在写日志前以 `CodeInvalidInput` 拒绝。
+- `llm`：`ImagePart` 增加 `Ref`、`MIME`、`SHA256`；URL 为空的图片部件在各 Provider 出站前被拒绝。`OpenAIProvider` 与 MiniMax 声明视觉能力并发送图片，Kimi、SiliconFlow、Ollama 预设照常转发、是否接受取决于模型，Anthropic、原生 Gemini 与 DeepSeek 拒绝。
+- `builder/contextpolicy`：`CompactionConfig.ImageTokens`（0 取 `constants.DefaultImageTokens`，1500）把图片计入压缩估算；摘要转写以 `[图片 <ref>]` 保留图片位置，摘要请求不携带图片。
+- `management/adapters`：native 适配器把含 `images` 键的 JSON 对象任务输入严格解码为 `builder.UserInput`（图片项只允许 `ref`、`mime`、`sha256`，`ref` 必填，`url` 与未知键被拒）；其他输入行为不变。
+
+### 文档
+
+- `BUILDER_API_REFERENCE` 中英文新增「用户消息附带图片」一节。
+
 ## [0.63.1] - 2026-11-25
 
 ### 修复
@@ -1651,7 +1671,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.63.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.64.1...HEAD
+[0.64.1]: https://github.com/kart-io/goagent/compare/v0.64.0...v0.64.1
+[0.64.0]: https://github.com/kart-io/goagent/compare/v0.63.1...v0.64.0
 [0.63.1]: https://github.com/kart-io/goagent/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/kart-io/goagent/compare/v0.62.3...v0.63.0
 [0.62.3]: https://github.com/kart-io/goagent/compare/v0.62.2...v0.62.3

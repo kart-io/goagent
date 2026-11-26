@@ -34,7 +34,7 @@ func isEmptyAnswer(turn *llm.StreamChunk) bool {
 }
 
 // streamMessages 保留消息角色，系统指令与证据各发送一次，避免重复包装。
-func (a *ConfigurableAgent[S]) streamMessages(ctx context.Context, input, evidence string) ([]llm.Message, error) {
+func (a *ConfigurableAgent[S]) streamMessages(ctx context.Context, input string, images []llm.ImagePart, evidence string) ([]llm.Message, error) {
 	system := a.buildSystemPromptContent()
 	if a.retriever != nil {
 		system += "\n" + retrievalInstruction
@@ -50,7 +50,9 @@ func (a *ConfigurableAgent[S]) streamMessages(ctx context.Context, input, eviden
 	if evidence != "" {
 		input = evidence + "\n用户请求：" + input
 	}
-	return append(messages, llm.UserMessage(input)), nil
+	user := llm.UserMessage(input)
+	user.Images = images
+	return append(messages, user), nil
 }
 
 // runToolEvents 每轮直接选择工具或输出答案，MaxIterations 包含最终答案请求。

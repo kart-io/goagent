@@ -27,12 +27,16 @@ func readJournaledTurn(ctx context.Context, round int, client llm.Client, req *l
 	ctx = withModelMetadata(ctx, client, req)
 	ctx = withTokenRequest(ctx, req, tools)
 	invoke := func(callCtx context.Context, emit func(AgentEvent) error) (*llm.StreamChunk, error) {
+		// 图片只在真实发送的副本中解析：意图与缓存键已由 req 中的引用算出，回放不会走到这里。
+		sent, err := resolveImages(callCtx, req)
+		if err != nil {
+			return nil, err
+		}
 		var stream <-chan *llm.StreamChunk
-		var err error
 		if native, ok := client.(llm.ToolStreamClient); ok {
-			stream, err = native.CompleteToolsStream(callCtx, req, tools)
+			stream, err = native.CompleteToolsStream(callCtx, sent, tools)
 		} else {
-			stream, err = client.CompleteStream(callCtx, req)
+			stream, err = client.CompleteStream(callCtx, sent)
 		}
 		if err != nil {
 			return nil, err

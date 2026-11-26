@@ -31,6 +31,8 @@ type cacheKeyInput struct {
 	Request   *llm.CompletionRequest
 	Tools     []interfaces.Tool
 	Memory    []memory.NamespaceVersion
+	// Images 是图片解析配置的身份，未配置解析器时为空。
+	Images string
 }
 
 // lengthWriter 把每个字段先写 8 字节大端长度再写内容，拼接边界不会产生歧义。
@@ -82,6 +84,10 @@ func modelCacheKey(in cacheKeyInput) (string, bool) {
 		w.str(v.Scope)
 		w.num(v.LastForgetSeq)
 		w.num(v.LastRewindSeq)
+	}
+	// 只在配置了图片解析器时追加，已有缓存键保持不变。
+	if in.Images != "" {
+		w.str(in.Images)
 	}
 	return modelCacheKeyPrefix + hex.EncodeToString(h.Sum(nil)), true
 }
