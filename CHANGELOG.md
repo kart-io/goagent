@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 修复
+
+- `llm/providers`：MiniMax（OpenAI 兼容协议）缺省把思维链以 `<think>…</think>` 内联在 `content` 中，此前 goagent 把它当作答案文本写进 `Content` 与 `Delta`，`ReasoningContent` 为空。现在 `NewMiniMaxWithOptions` 的每个 chat/completions 请求都带 `reasoning_split: true`，思维改由 `reasoning_content` 返回并写入 `ReasoningContent`；`Reasoning{Effort:"none"}` 关闭 thinking 时同样发送，不影响结果。多轮工具调用沿用把上一轮 `ReasoningContent` 作为 `reasoning_content` 回传的做法，MiniMax-M3 实测会读取。
+
 ## [0.64.0] - 2026-11-26
 
 ### 新增
