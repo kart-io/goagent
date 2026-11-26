@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-11-26
+
 ### 新增
 
 - `builder`：`UserInput{Text, Images}`（或其指针）可作为 `ExecuteStream` 的输入，在用户消息上附带图片引用；引用写入历史与会话日志（`TurnStart.Images`），轮次身份为（文本、图片）。
@@ -1663,7 +1665,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.63.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.64.0...HEAD
+[0.64.0]: https://github.com/kart-io/goagent/compare/v0.63.1...v0.64.0
 [0.63.1]: https://github.com/kart-io/goagent/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/kart-io/goagent/compare/v0.62.3...v0.63.0
 [0.62.3]: https://github.com/kart-io/goagent/compare/v0.62.2...v0.62.3
