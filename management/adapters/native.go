@@ -13,6 +13,7 @@ import (
 	"github.com/kart-io/goagent/core/durable"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
+	"github.com/kart-io/goagent/llm"
 	mg "github.com/kart-io/goagent/management"
 	"github.com/kart-io/goagent/tools"
 )
@@ -62,10 +63,50 @@ func callObserve(ctx context.Context, f func(context.Context, mg.Task, builder.A
 	f(ctx, task, ev)
 }
 
+// structuredInput 是带图片引用的任务输入；URL 不在其中，出站地址只由宿主解析器在请求时给出。
+type structuredInput struct {
+	Text   string             `json:"text"`
+	Images *[]structuredImage `json:"images"`
+}
+
+type structuredImage struct {
+	Ref    string `json:"ref"`
+	MIME   string `json:"mime"`
+	SHA256 string `json:"sha256"`
+}
+
+// userInput 仅在顶层对象含 images 键时调用，按严格结构解码。
+func userInput(raw json.RawMessage) (builder.UserInput, error) {
+	invalid := func(format string, args ...any) error {
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, format, args...).WithComponent("management").WithOperation("input")
+	}
+	var in structuredInput
+	if err := json.Unmarshal(raw, &in, json.Strict); err != nil {
+		return builder.UserInput{}, invalid("带图片的输入无效：%v", err)
+	}
+	if in.Images == nil {
+		return builder.UserInput{}, invalid("带图片的输入的 images 必须是数组")
+	}
+	out := builder.UserInput{Text: in.Text, Images: make([]llm.ImagePart, 0, len(*in.Images))}
+	for i, img := range *in.Images {
+		if img.Ref == "" {
+			return builder.UserInput{}, invalid("images[%d] 缺少 ref", i)
+		}
+		out.Images = append(out.Images, llm.ImagePart{Ref: img.Ref, MIME: img.MIME, SHA256: img.SHA256})
+	}
+	return out, nil
+}
+
 func inputValue(raw json.RawMessage) (any, error) {
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
 		return text, nil
+	}
+	var members map[string]json.RawMessage
+	if json.Unmarshal(raw, &members) == nil {
+		if _, ok := members["images"]; ok {
+			return userInput(raw)
+		}
 	}
 	var value any
 	err := json.Unmarshal(raw, &value, json.UseNumber)

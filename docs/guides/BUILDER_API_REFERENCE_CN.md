@@ -103,6 +103,57 @@ return builder.NewSimpleBuilder(client).
 
 需要进程重启后续跑的多步任务使用 `core/durable` 与 `workflow`，见[原生编排](NATIVE_ORCHESTRATION_CN.md)。
 
+## 用户消息附带图片
+
+把 `builder.UserInput`（或其指针）作为 `ExecuteStream` 的输入，即可在用户消息上附带图片；其他输入类型仍走配置的 `InputSerializer`。
+
+```go
+agent, err := builder.NewSimpleBuilder(client).
+    WithSessionLog(sessions).
+    WithImageResolver(resolve, builder.ImagePolicy{Identity: "images/v1", KeepRecentTurns: 3}).
+    Build()
+events, err := agent.ExecuteStream(ctx, builder.UserInput{
+    Text:   "这张图里有什么？",
+    Images: []llm.ImagePart{{Ref: "image:42", MIME: "image/png", SHA256: sum}},
+})
+```
+
+- **存引用，不存 URL。** 历史、会话日志（含 `TurnStart.Images`）、持久化意图，以及 `PreStep` 与 Request 钩子看到的消息，都按传入原样保留 `llm.ImagePart`，通常只有 `Ref`、`URL` 为空。轮次身份是（`Text`、`Images`）这一对。
+- **解析。** `WithImageResolver(r, policy)` 注册 `ImageResolver func(ctx, ImageRequest) (url string, err error)`。它只在构造出站模型请求时、每次真实请求之前调用，仅为该次请求填入 `URL`（https 地址或 `data:` URI）。已记录的轮次重放时不调用，模型调用缓存命中时也不再调用。多次调用 `WithImageResolver` 以最后一次为准；解析器为 nil 或策略上限为负，`Build` 返回 `CodeInvalidConfig`。
+- **`ImageRequest`。** `Part` 是历史中记录的图片；`TurnAge` 从当前轮向前按会话轮次计数（0 为当前轮输入，1 为上一轮输入，依此类推）。轮次指会话日志的 `turn/start` 记录；引导、纠正、续跑、记忆召回与摘要都不开启新轮次。
+- **错误。** 返回 `builder.ErrImageUnavailable`（可被包装）表示该引用永远解析不了，例如图片已删除或与摘要不符；该图片降级为占位文本，请求继续。其他错误视为暂时性错误：请求失败，并像提供方错误一样经过 RequestError 钩子。
+- **没有解析器时。** 没有 URL 的图片或空图片部件，会在写会话日志之前以 `CodeInvalidInput` 终止运行；包括 `Ref` 与 `URL` 都为空的部件，以及未配置解析器时只有 `Ref` 的部件。解析器返回空 URL 时请求以 `CodeInvalidOutput` 失败。提供方对只有 `Ref`、`URL` 为空的部件也会拒绝。
+
+`ImagePolicy` 字段：
+
+| 字段 | 说明 |
+|---|---|
+| `Identity` | 标识解析器与策略配置（例如版本与编码设置）。它进入模型调用缓存键，不同配置之间不共用缓存的轮次；不属于持久化意图 |
+| `KeepRecentTurns` | 只附带 `TurnAge` 不超过该值的用户轮次的图片，更早的图片变为占位文本；0 表示全部附带 |
+| `MaxImagesPerRequest` | 单次请求附带图片数上限，保留最新的；0 表示不限 |
+| `Placeholder` | `func(p llm.ImagePart, reason string) string` 生成追加到消息中、代替降级图片的文本；`reason` 为 `不可用`（`ErrImageUnavailable`）或 `不在当前上下文中`（超出 `KeepRecentTurns` 或 `MaxImagesPerRequest`）。为 nil 时文本为 `[图片 <ref>：<reason>]` |
+
+**压缩。** `contextpolicy.CompactionConfig.ImageTokens` 是一张附带图片的估算 token 数，在 `Estimate` 之外为消息中的每张图片累加；0 表示 `constants.DefaultImageTokens`（1500）。交给摘要模型的转写里，每张图片以 `[图片 <ref>]`（没有 ref 时为 `[图片]`）追加在消息文本之后，摘要请求不携带图片。
+
+**管理适配器。** native 管理适配器（`management/adapters`）对 JSON 字符串任务输入仍按纯文本处理。任务输入是含 `images` 键的 JSON 对象时，严格解码为 `builder.UserInput`：
+
+```json
+{"text": "这张图里有什么？", "images": [{"ref": "image:42", "mime": "image/png", "sha256": "..."}]}
+```
+
+`images` 必须是数组，每项 `ref` 非空；`mime`、`sha256` 可省略。图片项里出现 `url` 或出现任何未知键，都以 `CodeInvalidInput` 拒绝，出站地址只来自宿主的解析器。没有精确小写 `images` 键的对象不会被当作 `UserInput`，与其他 JSON 输入一样保持原行为，按普通值渲染。
+
+提供方支持：
+
+| 提供方 | 图片 |
+|---|---|
+| `OpenAIProvider` | 声明 `CapabilityVision`，图片作为图片部件发送 |
+| MiniMax | 声明 `CapabilityVision`；带图片的请求发送 `max_completion_tokens`（视觉接口只读这个上限）而不是 `max_tokens` |
+| Kimi、SiliconFlow、Ollama 预设 | 不声明视觉能力；图片部件照常转发，是否被接受取决于所选模型 |
+| Anthropic | 拒绝 |
+| 原生 Gemini | 拒绝 |
+| DeepSeek | 拒绝 |
+
 ## 中间件、回调与元数据
 
 | 方法 | 说明 |

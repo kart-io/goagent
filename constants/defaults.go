@@ -29,4 +29,7 @@ const (
 	// unlimited); callers that want the old value pass it explicitly.
 	DefaultDispatcherConcurrency = 4
 	DefaultDispatcherAttempts    = 3
+	// DefaultImageTokens is the estimated token count of one attached image
+	// when compaction is not given one.
+	DefaultImageTokens = 1500
 )

@@ -76,6 +76,9 @@ type AgentConfig struct {
 	// ModelCache is the model call cache configured by WithModelCache.
 	ModelCache *ModelCache `json:"-"`
 
+	// images 是 WithImageResolver 配置的解析器与策略。
+	images *imageConfig
+
 	// ReturnDirectTools lets a single tool call provide the final answer
 	// directly; it applies only to the native tool stream.
 	ReturnDirectTools []string

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/constants"
+	agentErrors "github.com/kart-io/goagent/errors"
 	"github.com/kart-io/goagent/llm"
 )
 
@@ -191,4 +192,85 @@ func TestCompactionZeroLimitsAreUnlimited(t *testing.T) {
 	_, err = c.Reduce(context.Background(), in, 1)
 	require.NoError(t, err)
 	require.Contains(t, model.requests[0].Messages[1].Content, long, "MaxRenderedRunes 为 0 时不截断")
+}
+
+func imageConversation() []llm.Message {
+	return []llm.Message{
+		llm.SystemMessage("系统"),
+		{Role: "user", Content: "看图", Images: []llm.ImagePart{{Ref: "image:1"}, {Ref: "image:2"}}},
+		{Role: "assistant", Content: "好的"},
+		llm.UserMessage("再问"),
+	}
+}
+
+// triggers 报告在给定配置下 Reduce 是否改写了对话。
+func triggers(t *testing.T, cfg CompactionConfig, in []llm.Message) bool {
+	t.Helper()
+	cfg.Estimate = lengthEstimate
+	c, err := NewCompaction(cfg)
+	require.NoError(t, err)
+	out, err := c.Reduce(context.Background(), in, 1)
+	require.NoError(t, err)
+	return len(out) != len(in) || out[1].Content != in[1].Content
+}
+
+func TestEstimateCountsImages(t *testing.T) {
+	in := imageConversation()
+	text := 0
+	for _, m := range in {
+		text += lengthEstimate(m)
+	}
+	with := text + 2*constants.DefaultImageTokens
+	require.False(t, triggers(t, CompactionConfig{MaxTokens: with, KeepTokens: 10}, in), "恰在阈值上不触发")
+	require.True(t, triggers(t, CompactionConfig{MaxTokens: with - 1, KeepTokens: 10}, in), "文本加两张图超过阈值")
+}
+
+func TestCustomImageTokens(t *testing.T) {
+	in := imageConversation()
+	text := 0
+	for _, m := range in {
+		text += lengthEstimate(m)
+	}
+	require.False(t, triggers(t, CompactionConfig{MaxTokens: text + 20, KeepTokens: 10, ImageTokens: 10}, in))
+	require.True(t, triggers(t, CompactionConfig{MaxTokens: text + 19, KeepTokens: 10, ImageTokens: 10}, in))
+}
+
+func TestNegativeImageTokensRejected(t *testing.T) {
+	_, err := NewCompaction(CompactionConfig{MaxTokens: 100, ImageTokens: -1})
+	require.Equal(t, agentErrors.CodeInvalidConfig, agentErrors.GetCode(err))
+}
+
+func TestImageTokensChangeIdentity(t *testing.T) {
+	a, _ := NewCompaction(CompactionConfig{MaxTokens: 100})
+	b, _ := NewCompaction(CompactionConfig{MaxTokens: 100, ImageTokens: 10})
+	require.NotEqual(t, a.Identity(), b.Identity())
+}
+
+func TestTranscriptKeepsImagePlaceholder(t *testing.T) {
+	model := &summaryModel{reply: "摘要"}
+	c, err := NewCompaction(CompactionConfig{MaxTokens: 100, KeepTokens: 10, Model: model, Estimate: lengthEstimate})
+	require.NoError(t, err)
+	in := imageConversation()
+	in[1].Images = append(in[1].Images, llm.ImagePart{})
+	_, err = c.Reduce(context.Background(), in, 1)
+	require.NoError(t, err)
+	require.Len(t, model.requests, 1)
+	text := model.requests[0].Messages[1].Content
+	require.Contains(t, text, "[图片 image:1]")
+	require.Contains(t, text, "[图片 image:2]")
+	require.Contains(t, text, "\n[图片]\n")
+}
+
+func TestSummaryRequestHasNoImages(t *testing.T) {
+	model := &summaryModel{reply: "摘要"}
+	c, err := NewCompaction(CompactionConfig{MaxTokens: 100, KeepTokens: 10, Model: model, Estimate: lengthEstimate})
+	require.NoError(t, err)
+	_, err = c.Reduce(context.Background(), imageConversation(), 1)
+	require.NoError(t, err)
+	require.NotEmpty(t, model.requests)
+	for _, req := range model.requests {
+		for _, m := range req.Messages {
+			require.Empty(t, m.Images)
+		}
+	}
 }

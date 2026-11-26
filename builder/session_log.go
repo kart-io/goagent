@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/kart-io/goagent/codec/json"
 	"github.com/kart-io/goagent/constants"
@@ -130,6 +131,8 @@ type sessionTurn struct {
 	// memory 是本轮的长期记忆绑定；未配置长期记忆时为 nil。
 	memory     *memory.TurnMemory
 	recallMode string
+	// turnImages 是本轮之前各轮输入的图片，给出 TurnAge 的轮次边界。
+	turnImages [][]llm.ImagePart
 }
 
 const (
@@ -175,7 +178,7 @@ func (a *ConfigurableAgent[S]) sessionLogID(ctx context.Context) string {
 }
 
 // openSessionTurn 读取日志、处理未结束的轮次并开始本轮，返回日志推导的历史。
-func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string) (*sessionTurn, []llm.Message, error) {
+func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string, images []llm.ImagePart) (*sessionTurn, []llm.Message, error) {
 	id := a.sessionLogID(ctx)
 	if id == "" {
 		return nil, nil, agentErrors.NewInvalidConfigError("builder", "session_id", "会话日志需要会话 ID")
@@ -191,7 +194,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 	turn := &sessionTurn{rec: rec, tools: map[string]session.ToolMeta{}}
 	events := rec.Events()
 	if key != "" {
-		start, err := completedSessionTurn(events, key, input)
+		start, err := completedSessionTurn(events, key, input, images)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -220,7 +223,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			return nil, nil, fmt.Errorf("会话日志事件 %d：%w", open.Seq, err)
 		}
 		if key != "" && d.ExecutionKey == key {
-			if d.Input != input {
+			if d.Input != input || !slices.Equal(d.Images, images) {
 				return nil, nil, agentErrors.Newf(agentErrors.CodeConflict, "同一执行键的原始输入不能改变").WithComponent("builder").WithOperation("open_session_turn")
 			}
 			// 恢复中的持久运行：历史是本轮之前的对话，本轮已记录的部分在同步时与回放的消息一致。
@@ -287,7 +290,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 			turn.recallMode = plainMemoryMode
 		}
 	}
-	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, ExecutionKey: key, Memory: binding, RecallMode: turn.recallMode})
+	start, err := session.NewEvent(constants.SessionEventTurnStart, session.TurnStart{Input: input, Images: images, ExecutionKey: key, Memory: binding, RecallMode: turn.recallMode})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -300,7 +303,7 @@ func (a *ConfigurableAgent[S]) openSessionTurn(ctx context.Context, input string
 }
 
 // completedSessionTurn 仅恢复当前最后一轮；退回或后续新轮次之后须使用新的执行键。
-func completedSessionTurn(events []session.Event, key, input string) (int, error) {
+func completedSessionTurn(events []session.Event, key, input string, images []llm.ImagePart) (int, error) {
 	laterTurn := false
 	for i := len(events) - 1; i >= 0; i-- {
 		if events[i].Type != constants.SessionEventTurnStart {
@@ -314,7 +317,7 @@ func completedSessionTurn(events []session.Event, key, input string) (int, error
 			laterTurn = true
 			continue
 		}
-		if start.Input != input || laterTurn {
+		if start.Input != input || !slices.Equal(start.Images, images) || laterTurn {
 			return -1, agentErrors.Newf(agentErrors.CodeConflict, "执行键已绑定其他输入或历史轮次，须使用新的执行键").WithComponent("builder").WithOperation("completed_session_turn")
 		}
 		for _, ev := range events[i+1:] {
