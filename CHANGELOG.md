@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-11-27
+
 ### 新增
 
 - `management`：`Limits.KindWorkers`（`RunnerKind` → 槽数）在 `Workers` 之外为某类任务另留专用槽。该类任务先占专用槽，占满后溢出到共享槽；其他类型的任务不能占用。用于一类任务被另一类任务同步等待的宿主：等待方占满共享槽时，被等待的任务仍有槽可跑。
@@ -1679,7 +1681,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/kart-io/goagent/compare/v0.64.1...HEAD
+[Unreleased]: https://github.com/kart-io/goagent/compare/v0.65.0...HEAD
+[0.65.0]: https://github.com/kart-io/goagent/compare/v0.64.1...v0.65.0
 [0.64.1]: https://github.com/kart-io/goagent/compare/v0.64.0...v0.64.1
 [0.64.0]: https://github.com/kart-io/goagent/compare/v0.63.1...v0.64.0
 [0.63.1]: https://github.com/kart-io/goagent/compare/v0.63.0...v0.63.1
