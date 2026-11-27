@@ -6,7 +6,6 @@ import (
 	"context"
 	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -196,16 +195,10 @@ func (tx *transaction) List(ctx context.Context, kind string, selection mg.Selec
 	var cursorTime time.Time
 	var cursorID string
 	if q.Cursor != "" {
-		parts := strings.SplitN(q.Cursor, "|", 2)
-		if len(parts) != 2 {
-			return nil, agentErrors.ErrManagementInvalid
-		}
 		var err error
-		cursorTime, err = time.Parse(time.RFC3339Nano, parts[0])
-		if err != nil {
-			return nil, agentErrors.ErrManagementInvalid
+		if cursorTime, cursorID, err = mg.ParseCursor(q.Cursor); err != nil {
+			return nil, err
 		}
-		cursorID = parts[1]
 	}
 	out := []mg.Document{}
 	for _, d := range tx.docs {

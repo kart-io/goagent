@@ -13,6 +13,8 @@
 
 宿主向 `management.New(Config)` 注入管理 Store、Session Store、HistoryReader、Authorizer 和固定版本 Factory；显式启动 `NewWorker(service).Run(ctx)`，通过 `httpapi.New` 生成 Handler。构造器不建表、不监听端口，也不自动启动后台工作。宿主负责认证、数据库迁移、资源关闭和确认旧进程停止后的 owner 回收。
 
+存储由三个端口注入：`Store`（实体）、`HistoryReader`（业务历史）和 `ReconciliationStore`（核对记录，`Config.Reconciliations` 只需要其中的读接口）。端口的通用规则在本包：`FormatCursor` / `ParseCursor` 是分页游标的格式，`HistoryVisible` / `FilterHistory` 是业务历史的可见规则和分页形状，`NormalizeReconciliation` / `SameReconciliation` 是核对记录的存储形式和幂等判等。`memstore` 提供进程内实现，`SessionHistory` 在任意 `session.Store` 上实现 `HistoryReader`；自己实现端口时用 `management/storetest` 的三组一致性测试验证。
+
 PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于 [contrib/management](https://github.com/kart-io/goagent-contrib/tree/master/management)。可选 Harness 适配保持独立；核心管理包不依赖 pgx、contrib 或 Harness。
 
 ## 请求与执行合约

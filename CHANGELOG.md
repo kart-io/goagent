@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-11-27
+
+### 新增
+
+- `management`：存储端口的通用规则移入核心，后端实现只需要读写数据。
+  - `ReconciliationStore`（`ReconciliationReader` + `RecordReconciliation`）是核对记录的写端口；`NormalizeReconciliation` 与 `SameReconciliation` 给出存储形式和幂等判等规则，`memstore.Reconciliations` 是进程内实现。
+  - `HistoryVisible`、`HistoryHiddenPrefix`、`FilterHistory` 给出业务历史的可见规则和分页形状；`SessionHistory` 在任意 `session.Store` 上实现 `HistoryReader`。
+  - `FormatCursor` / `ParseCursor` 统一 `Query.Cursor` 的格式。
+  - `management/storetest` 新增 `RunHistoryConformance` 与 `RunReconciliationConformance`，`RunListConformance` 新增非法游标用例。
+
+### 变更
+
+- `memstore.History` 成为 `management.SessionHistory` 的别名。会话还没有日志时返回空页而不是 `ErrSessionNotFound`，limit 为负返回 `ErrManagementInvalid`，与 PostgreSQL 实现一致。
+
+## [0.66.0] - 2026-11-27
+
+### 新增
+
+- `core/durable/leasestore`：基于租约的 `durable.Store` 与 `session.Store` 引擎，不含 SQL 和驱动依赖。进程内闸门、租约令牌、续约、补偿与关闭在引擎里，读写经调用方实现的 `Backend` / `SessionBackend`；`leasestore/backendtest` 是后端的一致性测试。
+
 ## [0.65.0] - 2026-11-27
 
 ### 新增
