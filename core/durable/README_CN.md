@@ -90,6 +90,12 @@ func charge(ctx context.Context, in durable.StepInput) (json.RawMessage, error) 
 
 - [migrate](migrate/README_CN.md)：把旧操作账本显式一次性转换为 `goagent-operation-v2`
 - `storetest`：`Store` 实现的一致性测试（`storetest.Run`）
+- `leasestore`：用带过期时间的租约实现多实例共享的 `Store`、`Scoped` 与 `session.Store`，不含 SQL 和驱动依赖。进程内闸门、令牌、续约与补偿在本包；读写经调用方实现的 `leasestore.Backend`、`leasestore.SessionBackend` 完成，可以用任意数据库、驱动或 ORM 和自己的表。实现后用 `leasestore/backendtest.Run` 验证。PostgreSQL 的现成后端是 goagent-contrib 的 `durable/pgstore`
+
+```go
+store, err := leasestore.New(leasestore.Config{Backend: myBackend})
+sessions, err := leasestore.NewSessionStore(store, myBackend)
+```
 
 ## 另见
 

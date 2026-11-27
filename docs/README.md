@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent is an agent execution kernel embedded in Go services: a native tool loop, typed workflow graphs, durable execution with approval and resume, request budgets, session logs, read-only observation and MCP. Assembly features such as presets and coding tools live in the separate goagent-harness project (see the [migration guide](guides/HARNESS_MIGRATION.md)), retrievers and multi-instance durable stores live in [goagent-contrib](https://github.com/kart-io/goagent-contrib), and business examples live in [goagent-examples](https://github.com/kart-io/goagent-examples).
+GoAgent is an agent execution kernel embedded in Go services: a native tool loop, typed workflow graphs, durable execution with approval and resume, request budgets, session logs, read-only observation and MCP. Assembly features such as presets and coding tools live in the separate goagent-harness project (see the [migration guide](guides/HARNESS_MIGRATION.md)), retrievers and multi-instance durable stores live in [goagent-contrib](https://github.com/kart-io/goagent-contrib), and business examples live in [goagent-examples](https://github.com/kart-io/goagent-examples). The two repositories are split by third-party dependency: interfaces, generic logic without third-party dependencies, in-memory implementations and conformance suites stay here, and goagent-contrib holds only the implementations bound to a specific driver or service (the rules are in the "模块边界" section of its README).
 
 Pages marked *(Chinese)* are not translated yet.
 
