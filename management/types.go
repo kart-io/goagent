@@ -4,6 +4,7 @@ package management
 import (
 	"cmp"
 	"context"
+	"maps"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -343,6 +344,16 @@ type Limits struct {
 	PageSize, MaxPageSize, MaxInputBytes, MaxOutputBytes int
 	// Workers is the number of tasks one Worker runs at once (0 = 4).
 	Workers int
+	// KindWorkers adds slots that only tasks of one Version.RunnerKind may
+	// take, on top of Workers. A task of that kind takes one of its own slots
+	// first and a shared slot when they are full, so a kind that other tasks
+	// wait on (a tool that submits a task and blocks on it) cannot be starved
+	// by them. Nil reserves nothing.
+	KindWorkers map[string]int
+	// ActorWorkers caps how many shared slots the tasks of one Actor (tenant
+	// and subject) hold at once (0 = no cap). Tasks over the cap stay queued;
+	// slots reserved by KindWorkers do not count.
+	ActorWorkers int
 	// MaxPending caps unfinished tasks per tenant, counted page by page at
 	// submit time (0 = no cap).
 	MaxPending int
@@ -380,11 +391,17 @@ func DefaultLimits() Limits {
 }
 
 func (l Limits) normalize() (Limits, error) {
-	for _, n := range []int{l.PageSize, l.MaxPageSize, l.MaxInputBytes, l.MaxOutputBytes, l.Workers, l.MaxPending} {
+	for _, n := range []int{l.PageSize, l.MaxPageSize, l.MaxInputBytes, l.MaxOutputBytes, l.Workers, l.MaxPending, l.ActorWorkers} {
 		if n < 0 {
 			return l, agentErrors.ErrManagementInvalid
 		}
 	}
+	for kind, n := range l.KindWorkers {
+		if kind == "" || n < 0 {
+			return l, agentErrors.ErrManagementInvalid
+		}
+	}
+	l.KindWorkers = maps.Clone(l.KindWorkers)
 	for _, d := range []time.Duration{l.IdempotencyRetention, l.TaskRetention, l.AuditRetention, l.PollInterval, l.OutboxPollInterval, l.PersistTimeout, l.DeliveryTimeout, l.DeliveryBackoffMax, l.BuildRetryDelay} {
 		if d < 0 {
 			return l, agentErrors.ErrManagementInvalid

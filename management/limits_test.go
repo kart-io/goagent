@@ -96,3 +96,25 @@ func TestRequestBytesAntiAbuseCap(t *testing.T) {
 		require.Equal(t, tc.want, got)
 	}
 }
+
+func TestSlotLimitsValidated(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		l    Limits
+	}{
+		{"负的 ActorWorkers", Limits{ActorWorkers: -1}},
+		{"负的 KindWorkers", Limits{KindWorkers: map[string]int{"text": -1}}},
+		{"空 RunnerKind", Limits{KindWorkers: map[string]int{"": 1}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.l.normalize()
+			require.ErrorIs(t, err, agentErrors.ErrManagementInvalid)
+		})
+	}
+	kinds := map[string]int{"text": 2}
+	got, err := Limits{KindWorkers: kinds, ActorWorkers: 3}.normalize()
+	require.NoError(t, err)
+	kinds["text"] = 9
+	require.Equal(t, 2, got.KindWorkers["text"], "规范化后的配置不随调用方的 map 变化")
+	require.Equal(t, 3, got.ActorWorkers)
+}

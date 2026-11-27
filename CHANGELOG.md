@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 新增
+
+- `management`：`Limits.KindWorkers`（`RunnerKind` → 槽数）在 `Workers` 之外为某类任务另留专用槽。该类任务先占专用槽，占满后溢出到共享槽；其他类型的任务不能占用。用于一类任务被另一类任务同步等待的宿主：等待方占满共享槽时，被等待的任务仍有槽可跑。
+- `management`：`Limits.ActorWorkers` 限制同一 Actor（租户 + Subject）同时占用的共享槽数，超出的任务留在队列，其他 Actor 的任务照常启动；专用槽不计入。0 表示不限。
+
 ## [0.64.1] - 2026-11-26
 
 ### 修复

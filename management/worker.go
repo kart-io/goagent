@@ -20,19 +20,62 @@ import (
 )
 
 type Worker struct {
-	s       *Service
-	id      string
-	slot    string
-	mu      sync.Mutex
-	live    map[string]context.CancelFunc
+	s    *Service
+	id   string
+	slot string
+	mu   sync.Mutex
+	live map[string]context.CancelFunc
+	// held记录已准入任务占的槽位；seen缓存排队任务的归属，免得每轮轮询都读库。
+	held    map[string]slot
+	seen    map[string]slot
 	closing bool
 	cancel  context.CancelFunc
 	done    chan struct{}
 	wg      sync.WaitGroup
 }
 
+// slot是一个任务的槽位归属：RunnerKind、提交者，以及占的是否为该类型的专用槽。
+type slot struct {
+	kind, actor string
+	dedicated   bool
+}
+
 func NewWorker(s *Service) *Worker {
-	return &Worker{s: s, id: uuid.NewString(), slot: "default", live: map[string]context.CancelFunc{}, done: make(chan struct{})}
+	return &Worker{s: s, id: uuid.NewString(), slot: "default", live: map[string]context.CancelFunc{}, held: map[string]slot{}, seen: map[string]slot{}, done: make(chan struct{})}
+}
+
+// capacity是专用槽与共享槽之和，只用于构造前的粗筛。
+func (w *Worker) capacity() int {
+	n := w.s.cfg.Limits.Workers
+	for _, k := range w.s.cfg.Limits.KindWorkers {
+		n += k
+	}
+	return n
+}
+
+// admit在持有w.mu时判定任务能占哪种槽：先占本类型专用槽，满了再占共享槽。
+func (w *Worker) admit(want slot) (slot, bool) {
+	limits := w.s.cfg.Limits
+	var own, shared, mine int
+	for _, h := range w.held {
+		switch {
+		case h.dedicated && h.kind == want.kind:
+			own++
+		case !h.dedicated:
+			shared++
+			if h.actor == want.actor {
+				mine++
+			}
+		}
+	}
+	if own < limits.KindWorkers[want.kind] {
+		want.dedicated = true
+		return want, true
+	}
+	if shared >= limits.Workers || (limits.ActorWorkers > 0 && mine >= limits.ActorWorkers) {
+		return want, false
+	}
+	return want, true
 }
 
 func (w *Worker) BeginShutdown() {
@@ -255,6 +298,7 @@ func (w *Worker) poll(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	w.forget(cs)
 	for _, c := range cs {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -292,6 +336,24 @@ func (w *Worker) poll(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// forget丢弃已无待处理命令的任务的归属缓存，例如排队中被取消的任务。
+func (w *Worker) forget(cs []Command) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.seen) == 0 {
+		return
+	}
+	pending := make(map[string]bool, len(cs))
+	for _, c := range cs {
+		pending[c.TaskID] = true
+	}
+	for id := range w.seen {
+		if !pending[id] {
+			delete(w.seen, id)
+		}
+	}
 }
 
 func (w *Worker) commandState(ctx context.Context, c Command, state string, cause error) error {
@@ -352,9 +414,15 @@ func (w *Worker) blockStart(ctx context.Context, c Command, err error) error {
 
 func (w *Worker) start(ctx context.Context, c Command) error {
 	w.mu.Lock()
-	if w.closing || len(w.live) >= w.s.cfg.Limits.Workers || w.live[c.TaskID] != nil {
+	if w.closing || len(w.live) >= w.capacity() || w.live[c.TaskID] != nil {
 		w.mu.Unlock()
 		return agentErrors.ErrManagementBusy
+	}
+	if known, ok := w.seen[c.TaskID]; ok {
+		if _, ok = w.admit(known); !ok {
+			w.mu.Unlock()
+			return agentErrors.ErrManagementBusy
+		}
 	}
 	// 构造前预留槽位；生命周期锁不包数据库或宿主校验。
 	// 即使校验不响应取消，Shutdown也能按期限返回，并保留owner等待它实际退出。
@@ -369,6 +437,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 			cancel()
 			w.mu.Lock()
 			delete(w.live, c.TaskID)
+			delete(w.held, c.TaskID)
 			w.mu.Unlock()
 			w.wg.Done()
 		}
@@ -388,6 +457,19 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 		}
 		if _, e = validateFactory(ctx, factory, version); e != nil {
 			return w.blockStart(ctx, c, agentErrors.ErrManagementUnsupported)
+		}
+		want := slot{kind: version.RunnerKind, actor: preview.Actor.TenantID + "\x00" + preview.Actor.Subject}
+		w.mu.Lock()
+		got, ok := w.admit(want)
+		if ok {
+			w.held[c.TaskID] = got
+			delete(w.seen, c.TaskID)
+		} else {
+			w.seen[c.TaskID] = want
+		}
+		w.mu.Unlock()
+		if !ok {
+			return agentErrors.ErrManagementBusy
 		}
 	}
 	if ctx.Err() != nil {
@@ -547,7 +629,7 @@ func (w *Worker) start(ctx context.Context, c Command) error {
 	go func() {
 		defer w.wg.Done()
 		defer cancel()
-		defer func() { w.mu.Lock(); delete(w.live, task.ID); w.mu.Unlock() }()
+		defer func() { w.mu.Lock(); delete(w.live, task.ID); delete(w.held, task.ID); w.mu.Unlock() }()
 		tracer := w.s.cfg.Tracer
 		if tracer == nil {
 			tracer = observe.TracerFromContext(runCtx)
