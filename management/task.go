@@ -36,7 +36,7 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 		if !ag.Enabled || se.Status != "ready" {
 			return Task{}, agentErrors.ErrManagementConflict
 		}
-		if e = s.checkPending(ctx, tx, a.TenantID); e != nil {
+		if e = s.checkPending(ctx, tx, a); e != nil {
 			return Task{}, e
 		}
 		t := Task{Meta: s.meta(a), SessionID: se.ID, AgentID: se.AgentID, Version: se.Version, RevisionID: se.RevisionID, Input: r.Input, InputHash: digest(r.Input), State: Queued, Actor: a}
@@ -53,22 +53,36 @@ func (s *Service) SubmitTask(ctx context.Context, a Actor, r SubmitTaskRequest) 
 	})
 }
 
-// checkPending enforces Limits.MaxPending for one tenant. It counts page by
-// page and stops at the cap, so no Store-specific count query is needed.
-func (s *Service) checkPending(ctx context.Context, tx Tx, tenant string) error {
-	if s.cfg.Limits.MaxPending == 0 {
+// checkPending enforces Limits.MaxPending for the tenant and
+// Limits.ActorPending for the Actor. It counts page by page and stops at a
+// cap, so no Store-specific count query is needed.
+func (s *Service) checkPending(ctx context.Context, tx Tx, a Actor) error {
+	limits := s.cfg.Limits
+	if limits.MaxPending == 0 && limits.ActorPending == 0 {
 		return nil
 	}
-	n := 0
+	var all, mine int
+	full := func() error {
+		switch {
+		case limits.ActorPending > 0 && mine >= limits.ActorPending:
+			return agentErrors.ErrManagementActorBusy
+		case limits.MaxPending > 0 && all >= limits.MaxPending:
+			return agentErrors.ErrManagementBusy
+		}
+		return nil
+	}
 	q := Query{Statuses: []string{string(Queued), string(Running), string(WaitingApproval), string(WaitingInput), string(Canceling), string(Attention)}}
-	err := each(ctx, tx, "tasks", tenant, q, func(Task) (bool, error) { n++; return n >= s.cfg.Limits.MaxPending, nil })
+	err := each(ctx, tx, "tasks", a.TenantID, q, func(t Task) (bool, error) {
+		all++
+		if t.Actor == a {
+			mine++
+		}
+		return full() != nil, nil
+	})
 	if err != nil {
 		return err
 	}
-	if n >= s.cfg.Limits.MaxPending {
-		return agentErrors.ErrManagementBusy
-	}
-	return nil
+	return full()
 }
 
 func (s *Service) CancelTask(ctx context.Context, a Actor, r CancelTaskRequest) (Task, error) {

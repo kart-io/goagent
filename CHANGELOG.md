@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 新增
+
+- `management`：`Limits.KindWorkers`（`RunnerKind` → 槽数）在 `Workers` 之外为某类任务另留专用槽。该类任务先占专用槽，占满后溢出到共享槽；其他类型的任务不能占用。用于一类任务被另一类任务同步等待的宿主：等待方占满共享槽时，被等待的任务仍有槽可跑。
+- `core/session`：可选接口 `Deleter`（`Delete(ctx, id)`）删除会话及其全部事件，会话不存在时同样成功；`MemoryStore` 与 `FileStore` 已实现，`sessiontest.Run` 对实现了它的 Store 追加删除用例。
+- `management`：`Service.DeleteSession` 删除没有任务记录的 Session 及其会话日志与会话命令（授权动作 `session.delete`）。还有任务记录、待处理命令或未就绪的分叉时返回 `ErrManagementConflict`，日志后端未实现 `session.Deleter` 时返回 `ErrManagementUnsupported`。删除途中会话状态为新增的 `deleting`，失败后重复调用即可完成。
+- `management`：`Limits.ActorWorkers` 限制同一 Actor（租户 + Subject）同时占用的共享槽数，超出的任务留在队列，其他 Actor 的任务照常启动；专用槽不计入。0 表示不限。
+- `management`：`Limits.ActorPending` 限制同一 Actor 的未完成任务数，与 `MaxPending` 在提交时一并计数；超出时 `SubmitTask` 返回新增的 `ErrManagementActorBusy`（`httpapi` 为 429 `actor_busy`），其他 Actor 不受影响。0 表示不限。
+
 ## [0.64.1] - 2026-11-26
 
 ### 修复

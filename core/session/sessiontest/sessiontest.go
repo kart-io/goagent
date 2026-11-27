@@ -66,6 +66,14 @@ func Run(t *testing.T, newPair func(t *testing.T) (a, b session.Store), opts Opt
 			c.run(t, a, b)
 		})
 	}
+	t.Run("删除", func(t *testing.T) {
+		a, b := newPair(t)
+		d, ok := a.(session.Deleter)
+		if !ok {
+			t.Skip("后端未实现 session.Deleter")
+		}
+		testDelete(t, d, a, b)
+	})
 	t.Run("DurableStore", func(t *testing.T) {
 		// 租约钩子收到的是 DurableStore 视图，按创建时的对应关系找回底层实例。
 		var mu sync.Mutex
@@ -123,6 +131,28 @@ func seqs(events []session.Event) []int64 {
 		out[i] = ev.Seq
 	}
 	return out
+}
+
+func testDelete(t *testing.T, d session.Deleter, a, b session.Store) {
+	ctx := context.Background()
+	for _, id := range []string{"s", "keep"} {
+		_, err := a.Append(ctx, id, 0, user(t, "一"), user(t, "二"))
+		require.NoError(t, err)
+	}
+	require.NoError(t, a.Fork(ctx, "s", "copy", 0))
+	require.NoError(t, d.Delete(ctx, "s"))
+	_, err := b.Read(ctx, "s", 0)
+	require.ErrorIs(t, err, agentErrors.ErrSessionNotFound, "删除对其他实例可见")
+	ids, err := b.List(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"copy", "keep"}, ids)
+	require.Equal(t, []int64{1, 2}, seqs(read(t, b, "copy", 0)), "分叉出的会话不随来源删除")
+	require.Equal(t, []int64{1, 2}, seqs(read(t, b, "keep", 0)))
+	require.NoError(t, d.Delete(ctx, "s"), "删除不存在的会话不报错")
+	require.Error(t, d.Delete(ctx, ""))
+	_, err = b.Append(ctx, "s", 0, user(t, "重建"))
+	require.NoError(t, err, "删除后的 ID 可重新写入")
+	require.Equal(t, []int64{1}, seqs(read(t, a, "s", 0)))
 }
 
 func testNotFound(t *testing.T, a, _ session.Store) {

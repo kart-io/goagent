@@ -8,7 +8,7 @@ import (
 	"github.com/kart-io/goagent/codec/json"
 )
 
-// Prune 显式回收过期且无未确认依赖的管理记录；会话日志与版本仍由宿主单独保留。
+// Prune 显式回收过期且无未确认依赖的管理记录；会话与版本不在其列，会话由宿主经 DeleteSession 删除。
 // 保留期为 0 的类别永不回收；IdempotencyRetention 为 0 时写入的记录没有过期时间。
 func (s *Service) Prune(ctx context.Context, a Actor) (map[string]int, error) {
 	counts := map[string]int{}

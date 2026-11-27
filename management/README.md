@@ -37,11 +37,18 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - JSON 使用 codec/json，精确保留数字并拒绝重复键；HTTP DTO 使用 Strict 规则，拒绝未知字段、非法 UTF-8 和不匹配大小写的字段名。
 - 查询只读取已存在的日志/用量证据，未知消耗保留未知；运行汇总不把查询页大小当作总量限制。
 
+## 删除会话
+
+`Service.DeleteSession(ctx, actor, id)` 删除一个 Session、它的会话日志和会话命令，授权动作为 `session.delete`。删哪些会话由宿主决定，`Prune` 不删会话。以下情况返回 `ErrManagementConflict`：会话还有任务记录（已结束的任务由 `Prune` 在 `TaskRetention` 之后回收）、有待处理命令、或有尚未就绪的分叉；`Config.Sessions` 未实现 `session.Deleter` 时返回 `ErrManagementUnsupported`。
+
+删除分三步：先把会话标为 `deleting`（此后不再接收任务与分叉），再删日志，最后删管理记录。中途失败时会话停在 `deleting`，再次调用即完成。任务的持久快照按执行键存放，不在本接口范围内。
+
 ## 限额配置
 
 限额属于宿主策略，`Config.Limits` 的每个字段按类别独立解释，不再有“全零才套默认”：
 
-- 限额类：`MaxPageSize`、`MaxPending`（按租户分页计数，到上限即停）、`MaxInputBytes`、`MaxOutputBytes`、`IdempotencyRetention`、`TaskRetention`、`AuditRetention`，0 表示不限制或永不清理。保留期在写入时算出 `ExpiresAt`，改配置只影响新行。`PageSize` 为 0 时取 `constants.DefaultManagementPageSize`（50），`DeliveryTimeout` 为 0 时只受 ctx 约束。
+- 限额类：`MaxPageSize`、`MaxPending`（按租户分页计数，到上限即停）、`ActorPending`（同一 Actor 的未完成任务数，超出时提交返回 `ErrManagementActorBusy`）、`MaxInputBytes`、`MaxOutputBytes`、`IdempotencyRetention`、`TaskRetention`、`AuditRetention`，0 表示不限制或永不清理。保留期在写入时算出 `ExpiresAt`，改配置只影响新行。`PageSize` 为 0 时取 `constants.DefaultManagementPageSize`（50），`DeliveryTimeout` 为 0 时只受 ctx 约束。
+- 槽位分配：`KindWorkers`（`RunnerKind` → 槽数）在 `Workers` 之外为某类任务另留专用槽，该类任务先占专用槽，占满后再占共享槽；别的任务会提交并等待的那类任务（例如工具内部提交的子任务）应配专用槽，否则共享槽被等待方占满时双方都不前进。`ActorWorkers` 限制同一 Actor（租户 + Subject）同时占用的共享槽数，超出的任务留在队列，专用槽不计入；二者为 0 或 nil 表示不启用，负数报错。
 - 必需值：`Workers`、`PollInterval`、`OutboxPollInterval`、`PersistTimeout`、`DeliveryBackoffMax`、`BuildRetryDelay`，0 取同名 `Default*` 常量，负数报错。
 - 任务预算：`Config.DefaultTaskBudget` 与 `SubmitTaskRequest.Budget`（`MaxModelRequests`、`MaxToolCalls`、`MaxAgentCalls`、`Timeout`），0 表示不限，计入幂等哈希并随 Task 以 `management/v2` 持久化；`management/v1` 任务解码时把 `MaxAgentCalls` 补成 1000。远程调用方无法自带预算（httpapi、a2a、mcpserver 都丢弃客户端提交的预算），所以 `DefaultTaskBudget` 为零值时这三个入口构造报错；确需远程任务不限时设置 `Config.UnlimitedRemoteTaskBudget`。自建远程入口应在构造时调用 `Service.ValidateRemoteTaskBudget()`。
 - 入站请求大小（`httpapi`、`a2a`、`mcpserver` 的 `MaxInputBytes`）是防滥用上限：0 取 `constants.DefaultManagementMaxRequestBytes`（1 MiB），`UnlimitedRequestBytes` 显式取消。

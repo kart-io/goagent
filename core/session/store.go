@@ -49,6 +49,14 @@ type Store interface {
 	Lock(ctx context.Context, id, name string) (unlock func() error, err error)
 }
 
+// Deleter is an optional Store capability: Delete removes a session and all of
+// its events, and succeeds when the session does not exist. Sessions forked
+// from it are independent copies and stay. The caller must make sure nothing
+// still appends to the session; a later Append with expected 0 recreates it.
+type Deleter interface {
+	Delete(ctx context.Context, id string) error
+}
+
 // AppendBatch is one session's append in Store.AppendAll.
 type AppendBatch struct {
 	ID       string
@@ -180,6 +188,20 @@ func (s *MemoryStore) Read(ctx context.Context, id string, after int64) ([]Event
 	}
 	n := sort.Search(len(events), func(i int) bool { return events[i].Seq > after })
 	return cloneEvents(events[n:]), nil
+}
+
+// Delete implements Deleter.
+func (s *MemoryStore) Delete(ctx context.Context, id string) error {
+	if err := validID(id); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, id)
+	return nil
 }
 
 func (s *MemoryStore) List(context.Context) ([]string, error) {
