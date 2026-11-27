@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型化工作流图、持久执行与审批恢复、请求预算、会话日志、只读观察与 MCP。Preset、编码工具等装配能力位于独立项目 goagent-harness（见[迁移指南](guides/HARNESS_MIGRATION_CN.md)），检索器与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)，业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。
+GoAgent 是嵌入 Go 服务的 Agent 执行内核：原生工具循环、类型化工作流图、持久执行与审批恢复、请求预算、会话日志、只读观察与 MCP。Preset、编码工具等装配能力位于独立项目 goagent-harness（见[迁移指南](guides/HARNESS_MIGRATION_CN.md)），检索器与多实例持久存储位于 [goagent-contrib](https://github.com/kart-io/goagent-contrib)，业务案例位于 [goagent-examples](https://github.com/kart-io/goagent-examples)。两个仓库按第三方依赖划分：接口、不带第三方依赖的通用逻辑、内存实现与一致性测试套件留在本仓库，goagent-contrib 只放绑定具体驱动或服务的实现（判断规则见其 README 的"模块边界"）。
 
 ## 入门
 
