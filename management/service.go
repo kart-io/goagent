@@ -148,7 +148,7 @@ func each[T any](ctx context.Context, r Reader, kind, tenant string, q Query, fn
 			return nil
 		}
 		last := ds[len(ds)-1]
-		q.Cursor = last.CreatedAt.Format(time.RFC3339Nano) + "|" + last.ID
+		q.Cursor = FormatCursor(last.CreatedAt, last.ID)
 	}
 }
 

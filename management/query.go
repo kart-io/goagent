@@ -5,10 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/kart-io/goagent/codec/json"
-	"github.com/kart-io/goagent/constants"
 	"github.com/kart-io/goagent/core/budget"
 	"github.com/kart-io/goagent/core/session"
 	agentErrors "github.com/kart-io/goagent/errors"
@@ -125,7 +123,7 @@ func listAuthorized[T any](s *Service, ctx context.Context, a Actor, kind, actio
 	}
 	if len(ds) > limit {
 		last := ds[limit-1]
-		out.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(hash + "#" + last.CreatedAt.Format(time.RFC3339Nano) + "|" + last.ID))
+		out.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(hash + "#" + FormatCursor(last.CreatedAt, last.ID)))
 		ds = ds[:limit]
 	}
 	for _, d := range ds {
@@ -191,7 +189,7 @@ func (s *Service) History(ctx context.Context, a Actor, r HistoryRequest) (Histo
 		return HistoryPage{}, agentErrors.ErrManagementInvalid
 	}
 	for _, typ := range r.Types {
-		if typ == constants.SessionEventBoundarySnapshot || strings.HasPrefix(typ, "management/") {
+		if !HistoryVisible(typ) {
 			return HistoryPage{}, agentErrors.ErrManagementForbidden
 		}
 	}

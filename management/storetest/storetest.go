@@ -1,5 +1,6 @@
-// Package storetest provides conformance checks shared by management.Store
-// implementations, so every backend honours the same List contract.
+// Package storetest provides conformance checks shared by the implementations
+// of management's storage ports (Store, HistoryReader, ReconciliationStore),
+// so every backend honours the same contracts.
 package storetest
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/codec/json"
+	agentErrors "github.com/kart-io/goagent/errors"
 	mg "github.com/kart-io/goagent/management"
 )
 
@@ -60,7 +62,7 @@ func RunListConformance(t *testing.T, newStore func(t *testing.T) mg.Store) {
 			require.True(t, a.CreatedAt.Before(b.CreatedAt) || a.CreatedAt.Equal(b.CreatedAt) && a.ID < b.ID, "rows must be ordered by CreatedAt then ID: %s before %s", a.ID, b.ID)
 		}
 	}
-	cursor := func(d mg.Document) string { return d.CreatedAt.Format(time.RFC3339Nano) + "|" + d.ID }
+	cursor := func(d mg.Document) string { return mg.FormatCursor(d.CreatedAt, d.ID) }
 
 	t.Run("zero limit returns every row", func(t *testing.T) {
 		docs, err := list(t, seed(t), mg.Query{})
@@ -96,6 +98,13 @@ func RunListConformance(t *testing.T, newStore func(t *testing.T) mg.Store) {
 			q.Cursor = cursor(docs[len(docs)-1])
 		}
 		require.Equal(t, ids(whole), ids(paged))
+	})
+	t.Run("malformed cursor is invalid", func(t *testing.T) {
+		st := seed(t)
+		for _, c := range []string{"no-separator", "not-a-time|row-0001"} {
+			_, err := list(t, st, mg.Query{Cursor: c})
+			require.ErrorIs(t, err, agentErrors.ErrManagementInvalid, c)
+		}
 	})
 	t.Run("filters combine with paging", func(t *testing.T) {
 		st := seed(t)
