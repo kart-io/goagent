@@ -103,6 +103,7 @@ func TestSlotLimitsValidated(t *testing.T) {
 		l    Limits
 	}{
 		{"负的 ActorWorkers", Limits{ActorWorkers: -1}},
+		{"负的 ActorPending", Limits{ActorPending: -1}},
 		{"负的 KindWorkers", Limits{KindWorkers: map[string]int{"text": -1}}},
 		{"空 RunnerKind", Limits{KindWorkers: map[string]int{"": 1}}},
 	} {

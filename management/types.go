@@ -357,6 +357,10 @@ type Limits struct {
 	// MaxPending caps unfinished tasks per tenant, counted page by page at
 	// submit time (0 = no cap).
 	MaxPending int
+	// ActorPending caps unfinished tasks per Actor (tenant and subject),
+	// counted the same way; a submit over it fails with
+	// ErrManagementActorBusy (0 = no cap).
+	ActorPending int
 	// Retentions are applied when a row is written (IdempotencyRetention sets
 	// ExpiresAt) or when Prune runs; 0 keeps the rows forever. Changing
 	// IdempotencyRetention only affects rows written afterwards.
@@ -391,7 +395,7 @@ func DefaultLimits() Limits {
 }
 
 func (l Limits) normalize() (Limits, error) {
-	for _, n := range []int{l.PageSize, l.MaxPageSize, l.MaxInputBytes, l.MaxOutputBytes, l.Workers, l.MaxPending, l.ActorWorkers} {
+	for _, n := range []int{l.PageSize, l.MaxPageSize, l.MaxInputBytes, l.MaxOutputBytes, l.Workers, l.MaxPending, l.ActorPending, l.ActorWorkers} {
 		if n < 0 {
 			return l, agentErrors.ErrManagementInvalid
 		}

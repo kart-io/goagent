@@ -227,6 +227,23 @@ func TestMaxPendingCountsByPages(t *testing.T) {
 	require.NotErrorIs(t, err, agentErrors.ErrManagementBusy, "MaxPending is counted per tenant")
 }
 
+func TestActorPendingCapsOneActorsUnfinishedTasks(t *testing.T) {
+	f := mt.NewFixture(t)
+	withConfig(t, f, func(c *mg.Config) { c.Limits = mg.Limits{ActorPending: 2} })
+	se := f.ReadySession(t)
+	for i := 0; i < 2; i++ {
+		_, err := submit(t, f, se, fmt.Sprint("p", i), nil)
+		require.NoError(t, err)
+	}
+	_, err := submit(t, f, se, "p2", nil)
+	require.ErrorIs(t, err, agentErrors.ErrManagementActorBusy)
+	require.NotErrorIs(t, err, agentErrors.ErrManagementBusy, "租户容量未满时不报租户级信号")
+	other := f.Actor
+	other.Subject = "someone-else"
+	_, err = f.Service.SubmitTask(context.Background(), other, mg.SubmitTaskRequest{IdempotencyKey: "o0", SessionID: se.ID, Input: []byte(`{}`)})
+	require.NoError(t, err, "ActorPending 按 Actor 计数，不影响同租户的其他 Actor")
+}
+
 // oldScanLimit is the fixed scan size internal reads used to truncate at.
 const oldScanLimit = 10000
 

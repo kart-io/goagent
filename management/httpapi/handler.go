@@ -154,6 +154,10 @@ func (h *Handler) problem(w http.ResponseWriter, err error) {
 		status = 422
 		code = "unsupported_capability"
 		message = "不支持所需能力"
+	case errors.Is(err, agentErrors.ErrManagementActorBusy):
+		status = 429
+		code = "actor_busy"
+		message = "该调用者的未完成任务已达上限"
 	case errors.Is(err, agentErrors.ErrManagementBusy):
 		status = 429
 		code = "busy"

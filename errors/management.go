@@ -14,6 +14,7 @@ var (
 	ErrManagementUnavailable      = newSentinel(CodeStoreConnection, "依赖暂不可用")
 	ErrManagementApprovalRequired = newSentinel(CodeApprovalRequired, "审批等待必须通过审批决定处理")
 	ErrManagementBusy             = newSentinel(CodeOverloaded, "容量已满")
+	ErrManagementActorBusy        = newSentinel(CodeOverloaded, "该调用者的未完成任务已达上限")
 	ErrManagementOwner            = newSentinel(CodeConflict, "执行宿主已被占用")
 	ErrManagementAgentDisabled    = newSentinel(CodeWaiting, "Agent已停用，命令等待重新启用")
 	ErrManagementUsageMissing     = newSentinel(CodeNotFound, "该运行尚无持久用量证据")
