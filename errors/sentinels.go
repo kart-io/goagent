@@ -32,11 +32,13 @@ var (
 	ErrInterruptNotDurable = newSentinel(CodeInvalidConfig, "暂停需要持久日志")
 	ErrReplayOnly          = newSentinel(CodeReplayOnly, "只读重放需要已完成的持久记录")
 	ErrOperationAttention  = newSentinel(CodeAttentionRequired, "durable operation needs host attention")
-	ErrWaitNotResumable    = newSentinel(CodeInvalidConfig, "等待只能由声明 Resumable 的持久操作承载")
-	ErrApprovalRequired    = newSentinel(CodeApprovalRequired, "durable step requires approval")
-	ErrLockUnavailable     = newSentinel(CodeLockUnavailable, "持久运行锁不可用")
-	ErrLeaseLost           = newSentinel(CodeLeaseLost, "持久运行锁已失效，拒绝写入")
-	ErrScopeRemoved        = newSentinel(CodeScopeRemoved, "持久作用域已删除，拒绝读写")
+	// ErrOperationIntentChanged：同一操作 ID 的输入或尝试策略与已有记录不同，回放被拒绝。
+	ErrOperationIntentChanged = newSentinel(CodeConflict, "operation intent or attempt policy changed")
+	ErrWaitNotResumable       = newSentinel(CodeInvalidConfig, "等待只能由声明 Resumable 的持久操作承载")
+	ErrApprovalRequired       = newSentinel(CodeApprovalRequired, "durable step requires approval")
+	ErrLockUnavailable        = newSentinel(CodeLockUnavailable, "持久运行锁不可用")
+	ErrLeaseLost              = newSentinel(CodeLeaseLost, "持久运行锁已失效，拒绝写入")
+	ErrScopeRemoved           = newSentinel(CodeScopeRemoved, "持久作用域已删除，拒绝读写")
 	// ErrEffectUnknown is returned (wrapped) by a durable operation's run
 	// function when it cannot tell whether its effect took place, for example
 	// when a connection drops after the request was sent. durable.Do records it

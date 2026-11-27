@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"sync"
@@ -23,6 +24,8 @@ type probe struct {
 	mu                   sync.Mutex
 	requests, effects, n int
 	store                session.Store
+	// description 是工具说明，空值取默认；改它等于宿主在发布间改了工具定义。
+	description string
 }
 
 func newProbe(t *testing.T, dir string, n int) *probe {
@@ -69,7 +72,7 @@ func (p *probe) run(ctx context.Context, inputs map[string]string) (*builder.Age
 		ctx = durable.WithResume(ctx, key, input)
 	}
 	reg := tools.NewRegistry()
-	if err := reg.Register(concurrentTool{tools.NewBaseTool("effect", "操作", `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
+	if err := reg.Register(concurrentTool{tools.NewBaseTool("effect", cmp.Or(p.description, "操作"), `{"type":"object"}`, func(context.Context, *interfaces.ToolInput) (*interfaces.ToolOutput, error) {
 		p.mu.Lock()
 		p.effects++
 		p.mu.Unlock()

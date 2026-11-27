@@ -868,6 +868,12 @@ func (w *Worker) execute(ctx, parent context.Context, c Command, t Task, se Sess
 		} else {
 			result.Outcome = "failed"
 			result.ErrorKind = "execution"
+			// 版本或宿主工具定义在本轮开始后变了，已完成的操作无法按原意图回放；重试同一任务不会成功。
+			if errors.Is(runErr, agentErrors.ErrOperationIntentChanged) {
+				result.ErrorKind = "intent_changed"
+			}
+			// 任务记录只留 ErrorKind，原因交给宿主。
+			w.report("run", runErr)
 		}
 	}
 	if result.Outcome == "" {
