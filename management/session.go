@@ -128,6 +128,80 @@ func (s *Service) ForkSession(ctx context.Context, a Actor, r ForkSessionRequest
 	})
 }
 
+// DeleteSession removes a Session together with its session log and its
+// session commands. It refuses with ErrManagementConflict while the Session
+// still has a task record (Prune removes finished ones after TaskRetention), a
+// pending command or a fork that is not ready yet, and with
+// ErrManagementUnsupported when Config.Sessions is not a session.Deleter.
+//
+// The Session is first marked "deleting", which stops new tasks and forks;
+// a call that fails after that point is completed by calling it again.
+func (s *Service) DeleteSession(ctx context.Context, a Actor, id string) error {
+	if err := s.auth(ctx, a, "session.delete", "sessions", id); err != nil {
+		return err
+	}
+	logs, ok := s.cfg.Sessions.(session.Deleter)
+	if !ok {
+		return agentErrors.ErrManagementUnsupported
+	}
+	var se Session
+	err := s.cfg.Store.WithinTx(ctx, func(tx Tx) (err error) {
+		if se, err = read[Session](ctx, tx, "sessions", a.TenantID, id); err != nil || se.Status == "deleting" {
+			return err
+		}
+		busy := se.ActiveTaskID != ""
+		if err = each(ctx, tx, "tasks", a.TenantID, Query{SessionID: id}, func(Meta) (bool, error) {
+			busy = true
+			return true, nil
+		}); err != nil {
+			return err
+		}
+		// 未完成的分叉还要读本会话的日志；待处理命令数量很小，逐条核对。
+		if err = each(ctx, tx, "commands", a.TenantID, Query{Statuses: []string{"pending", "blocked"}}, func(c Command) (bool, error) {
+			if c.SessionID == id {
+				busy = true
+			} else if c.Kind == "fork" {
+				child, e := read[Session](ctx, tx, "sessions", a.TenantID, c.SessionID)
+				if e != nil {
+					return false, e
+				}
+				busy = busy || child.ParentID == id
+			}
+			return busy, nil
+		}); err != nil {
+			return err
+		}
+		if busy {
+			return agentErrors.ErrManagementConflict
+		}
+		old := se.Revision
+		se.Status = "deleting"
+		se.Revision++
+		if err = update(ctx, tx, "sessions", se, old); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, a, "sessions", id, "delete", "")
+	})
+	if err != nil {
+		return err
+	}
+	if err = logs.Delete(ctx, se.LogID); err != nil {
+		return err
+	}
+	return s.cfg.Store.WithinTx(ctx, func(tx Tx) error {
+		if e := each(ctx, tx, "commands", a.TenantID, Query{SessionID: id}, func(m Meta) (bool, error) {
+			return false, tx.Delete(ctx, "commands", a.TenantID, m.ID, m.Revision)
+		}); e != nil {
+			return e
+		}
+		cur, e := read[Session](ctx, tx, "sessions", a.TenantID, id)
+		if e != nil {
+			return e
+		}
+		return tx.Delete(ctx, "sessions", a.TenantID, id, cur.Revision)
+	})
+}
+
 func prefixEvents(events []session.Event, seq int64) []session.Event {
 	out := []session.Event{}
 	for _, ev := range events {

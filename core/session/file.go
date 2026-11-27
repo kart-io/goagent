@@ -343,6 +343,26 @@ func syncDir(dir string) error {
 	return d.Sync()
 }
 
+// Delete implements Deleter. The session's lock file stays: removing it would
+// race with a writer waiting on it.
+func (s *FileStore) Delete(ctx context.Context, id string) (err error) {
+	if err := validID(id); err != nil {
+		return err
+	}
+	unlock, err := lockFile(ctx, s.path(id)+".lock")
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+	if err := s.recover(ctx); err != nil {
+		return err
+	}
+	if err := os.Remove(s.path(id)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return syncDir(s.dir)
+}
+
 // List implements Store.
 func (s *FileStore) List(ctx context.Context) ([]string, error) {
 	if err := s.recover(ctx); err != nil {

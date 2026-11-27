@@ -37,6 +37,12 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - JSON 使用 codec/json，精确保留数字并拒绝重复键；HTTP DTO 使用 Strict 规则，拒绝未知字段、非法 UTF-8 和不匹配大小写的字段名。
 - 查询只读取已存在的日志/用量证据，未知消耗保留未知；运行汇总不把查询页大小当作总量限制。
 
+## 删除会话
+
+`Service.DeleteSession(ctx, actor, id)` 删除一个 Session、它的会话日志和会话命令，授权动作为 `session.delete`。删哪些会话由宿主决定，`Prune` 不删会话。以下情况返回 `ErrManagementConflict`：会话还有任务记录（已结束的任务由 `Prune` 在 `TaskRetention` 之后回收）、有待处理命令、或有尚未就绪的分叉；`Config.Sessions` 未实现 `session.Deleter` 时返回 `ErrManagementUnsupported`。
+
+删除分三步：先把会话标为 `deleting`（此后不再接收任务与分叉），再删日志，最后删管理记录。中途失败时会话停在 `deleting`，再次调用即完成。任务的持久快照按执行键存放，不在本接口范围内。
+
 ## 限额配置
 
 限额属于宿主策略，`Config.Limits` 的每个字段按类别独立解释，不再有“全零才套默认”：
