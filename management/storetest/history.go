@@ -16,7 +16,8 @@ import (
 // RunHistoryConformance checks the HistoryReader contract: hidden events are
 // never returned, types narrow the visible ones, a positive limit is exact
 // and limit 0 returns everything, NextSeq resumes after the last returned
-// event, an empty page has non-nil Items and NextSeq equal to after, a
+// event, events keep their Type, Time, Data and Surface, an empty page has
+// non-nil Items and NextSeq equal to after, a
 // session without a log is an empty page and a negative limit is invalid.
 // newReader returns the reader and the session.Store it reads from.
 func RunHistoryConformance(t *testing.T, newReader func(t *testing.T) (mg.HistoryReader, session.Store)) {
@@ -51,6 +52,8 @@ func RunHistoryConformance(t *testing.T, newReader func(t *testing.T) (mg.Histor
 		require.NoError(t, err)
 		events[i] = ev
 	}
+	// turn/end 带遮蔽区间；读取方必须原样返回，否则调用方判断不了哪些事件被撤销。
+	events[3].Surface = &session.Surface{Start: 1, End: 3}
 	// 快照事件受持久运行锁保护，写入时必须持有对应的锁。
 	unlock, err := sessions.Lock(ctx, id, session.DurableLockName(""))
 	require.NoError(t, err)
@@ -69,6 +72,8 @@ func RunHistoryConformance(t *testing.T, newReader func(t *testing.T) (mg.Histor
 				seqs[i] = ev.Seq
 				require.Equal(t, types[ev.Seq-1], ev.Type)
 				require.JSONEq(t, string(events[ev.Seq-1].Data), string(ev.Data))
+				require.Equal(t, events[ev.Seq-1].Surface, ev.Surface)
+				require.False(t, ev.Time.IsZero())
 			}
 			require.Equal(t, c.want, seqs)
 			require.Equal(t, c.nextSeq, page.NextSeq)
