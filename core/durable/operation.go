@@ -340,7 +340,7 @@ func Do(ctx context.Context, id string, input json.RawMessage, policy OperationP
 	if err == nil {
 		record.ParentKey = parentKey
 		if record.InputHash != inputHash || record.MaxAttempts != policy.MaxAttempts {
-			return record, agentErrors.Newf(agentErrors.CodeConflict, "operation intent or attempt policy changed").WithComponent("durable_operation").WithOperation("do")
+			return record, agentErrors.Wrap(agentErrors.ErrOperationIntentChanged, agentErrors.CodeConflict, "replay refused").WithComponent("durable_operation").WithOperation("do")
 		}
 		if record.Status == "completed" {
 			record.Replayed = true

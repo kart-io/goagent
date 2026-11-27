@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kart-io/goagent/core/durable"
+	agentErrors "github.com/kart-io/goagent/errors"
 )
 
 func TestNativeApprovalAfterRestart(t *testing.T) {
@@ -29,6 +30,21 @@ func TestNativeApprovalAfterRestart(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 宿主在等待审批期间改了工具说明：恢复时已完成的模型回合无法按原意图回放，写工具不执行。
+func TestNativeResumeAfterToolDefinitionChange(t *testing.T) {
+	dir := t.TempDir()
+	p := newProbe(t, dir, 1)
+	_, err := p.run(context.Background(), nil)
+	waits := durable.Waits(err)
+	require.Len(t, waits, 1)
+	q := newProbe(t, dir, 1)
+	q.description = "改过的说明"
+	key := waits[0].Path[len(waits[0].Path)-1].Key
+	_, err = q.run(context.Background(), map[string]string{key: `"approve"`})
+	require.ErrorIs(t, err, agentErrors.ErrOperationIntentChanged)
+	require.Zero(t, q.effects)
 }
 
 func TestParallelApprovalsStayIsolated(t *testing.T) {

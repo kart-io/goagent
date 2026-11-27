@@ -33,6 +33,7 @@ PostgreSQL 参考实现、真实数据库集成测试、退款业务案例位于
 - `Inspect` 对本轮中断的工具记录一律返回 `absent`，只统计本任务所在轮次；续跑中的 `durable.Do` 按工具策略处理。默认策略（`MaxAttempts` 3、`RetryInterrupted`）的工具自动重跑；声明 `{MaxAttempts: 1}` 的工具先调用 `tools.ReconcilableTool.Reconcile`，查到结果即定案，查不到才进入 attention，`Task.Operations` 只列出这些调用（`tool/` 前缀，带 `ParentKey`）。
 - 宿主核对后以 `ResumeTask{ReconciliationRef}` 续跑。`Reconcile` 要求 `OperationRefs` 恰好覆盖本轮未决的工具调用，否则返回 `ErrManagementConflict`；通过后返回 `absent`，worker 带着结论调用 `Run`。结论对整组统一适用：`applied` 取工具 `Reconcile` 的成功结果，取不到时工具结果为 `operation was verified as applied; output unavailable`；`not_applied` 记为业务拒绝 `operation was not applied; call again if still needed`，不调用工具 `Reconcile`、不重跑。未列入的调用照常按策略执行。需要逐个给结论时，宿主应让写工具串行，使未决调用最多一项。
 - 子智能体（RunnableTool、Supervisor 成员）内层工具未决时，外层调用记录保持 pending、不消耗尝试次数；续跑时无论外层是否 `Resumable` 都重新进入，只回放内层已完成的步骤，核对结论直接作用于内层记录。
+- 运行报错的任务转为 `failed`：`ErrorKind` 为 `execution`；错误链含 `errors.ErrOperationIntentChanged`（版本、插件或宿主工具定义在本轮开始后变了，已完成的操作无法按原意图回放）时为 `intent_changed`，重试同一任务不会成功，只能重新提交。两种情况的原因都经 `Config.Report("run", err)` 交给宿主，任务记录只留 `ErrorKind`。
 - `Task.Operations` 是历史记录：核对成功、任务之后成功或被取消都不清空，表示最近一次进入 attention 时的未决操作。
 - 审批等待的 `Wait.Info` 带 `arguments`（工具调用参数），供审批人判断。
 - 审批必须经 DecideApproval；决定和续跑命令原子持久化，普通 ResumeTask 不能绕过审批。

@@ -3,6 +3,7 @@ package management_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -81,6 +82,7 @@ func TestOfflineExecutionTaskOutcomes(t *testing.T) {
 		{name: "成功", result: mg.RunResult{Outcome: "completed", Output: []byte(`{"结果":"完成"}`)}, state: mg.Succeeded},
 		{name: "业务失败", result: mg.RunResult{Outcome: "failed", ErrorKind: "business_rejected"}, state: mg.Failed, errorKind: "business_rejected"},
 		{name: "执行报错", err: errors.New("离线执行失败"), state: mg.Failed, errorKind: "execution"},
+		{name: "回放时意图已变", err: fmt.Errorf("模型回合: %w", agentErrors.ErrOperationIntentChanged), state: mg.Failed, errorKind: "intent_changed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -758,4 +760,30 @@ func TestOfflineExecutionResumeRechecksPermission(t *testing.T) {
 	require.Equal(t, int32(2), calls.Load())
 	applied := offlineExecutionWaitCommand(t, f, cmd.ID, "applied")
 	require.Empty(t, applied.ErrorKind)
+}
+
+func TestOfflineExecutionReportsRunError(t *testing.T) {
+	f := managementtest.NewFixture(t)
+	reported := make(chan error, 1)
+	cfg := f.Config()
+	cfg.Report = func(stage string, err error) {
+		if stage == "run" {
+			reported <- err
+		}
+	}
+	var err error
+	f.Service, err = mg.New(cfg)
+	require.NoError(t, err)
+	se := f.ReadySession(t)
+	cause := errors.New("离线执行失败")
+	f.Factory.RunFunc = func(context.Context, mg.RunSpec) (mg.RunResult, error) { return mg.RunResult{}, cause }
+	task := offlineExecutionSubmit(t, f, se, "执行")
+	f.StartWorker(t)
+	offlineExecutionWaitTask(t, f, task.ID, mg.Failed)
+	select {
+	case got := <-reported:
+		require.ErrorIs(t, got, cause)
+	case <-time.After(5 * time.Second):
+		t.Fatal("任务失败的原因应交给 Report")
+	}
 }

@@ -39,6 +39,8 @@ func TestOperationsDistinctKeysReplayAndIntent(t *testing.T) {
 		require.Equal(t, 1, calls)
 		_, err = Do(ctx, id, json.RawMessage(`{"amount":20}`), OperationPolicy{}, fn)
 		require.ErrorContains(t, err, "intent")
+		require.ErrorIs(t, err, agentErrors.ErrOperationIntentChanged)
+		require.Equal(t, agentErrors.CodeConflict, agentErrors.GetCode(err))
 	}
 	require.Len(t, keys, 2)
 }
