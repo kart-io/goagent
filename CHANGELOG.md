@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.67.1] - 2026-11-27
+
+### 修复
+
+- `management/storetest`：`RunHistoryConformance` 检查读取方原样返回事件的 `Surface` 与 `Time`。此前没有用例覆盖，PostgreSQL 实现丢掉了 `Surface`，调用方读不到遮蔽区间。
+
 ## [0.67.0] - 2026-11-27
 
 ### 新增

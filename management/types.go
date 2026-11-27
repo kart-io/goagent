@@ -599,6 +599,8 @@ type Config struct {
 // HistoryReader reads business-visible session events after a sequence.
 // limit 0 means no limit: the reader returns every matching event and the
 // caller pages with NextSeq. Implementations must not impose their own cap.
+// Events are returned as stored, including Surface. management/storetest
+// checks this contract.
 type HistoryReader interface {
 	History(context.Context, string, int64, int, []string) (HistoryPage, error)
 }
