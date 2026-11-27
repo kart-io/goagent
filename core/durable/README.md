@@ -90,6 +90,12 @@ func charge(ctx context.Context, in durable.StepInput) (json.RawMessage, error) 
 
 - [migrate](migrate/README.md): explicit one-off conversion of old operation ledgers to `goagent-operation-v2`
 - `storetest`: conformance tests for `Store` implementations (`storetest.Run`)
+- `leasestore`: a `Store`, `Scoped` and `session.Store` shared by several instances, built on leases with an expiry and free of SQL and driver dependencies. The in-process gates, tokens, renewal and compensation live in this package; reads and writes go through a `leasestore.Backend` and `leasestore.SessionBackend` that the caller implements with any database, driver or ORM and its own tables. Verify an implementation with `leasestore/backendtest.Run`. The ready-made PostgreSQL backend is goagent-contrib's `durable/pgstore`
+
+```go
+store, err := leasestore.New(leasestore.Config{Backend: myBackend})
+sessions, err := leasestore.NewSessionStore(store, myBackend)
+```
 
 ## See Also
 
