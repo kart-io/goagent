@@ -2,7 +2,6 @@ package leasestore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -36,14 +35,14 @@ var (
 // NewSessionStore returns a session store on backend that locks through root.
 func NewSessionStore(root *Store, backend SessionBackend) (*SessionStore, error) {
 	if root == nil || backend == nil {
-		return nil, fmt.Errorf("leasestore.NewSessionStore 需要 Store 与 SessionBackend")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "leasestore.NewSessionStore 需要 Store 与 SessionBackend")
 	}
 	return &SessionStore{root: root, backend: backend}, nil
 }
 
 func validSessionID(id string) error {
 	if id == "" {
-		return errors.New("会话 ID 不能为空")
+		return agentErrors.New(agentErrors.CodeInvalidInput, "会话 ID 不能为空")
 	}
 	return nil
 }

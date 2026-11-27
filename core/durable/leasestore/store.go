@@ -18,7 +18,7 @@ import (
 )
 
 // ErrClosed means the Store is closed and accepts no new Lock.
-var ErrClosed = errors.New("leasestore 已关闭")
+var ErrClosed = agentErrors.New(agentErrors.CodeStoreConnection, "leasestore 已关闭")
 
 // Config configures a Store. A zero duration selects the default.
 type Config struct {
@@ -98,7 +98,7 @@ var (
 // New validates cfg and starts background renewal.
 func New(cfg Config) (*Store, error) {
 	if cfg.Backend == nil {
-		return nil, fmt.Errorf("leasestore 需要 Backend")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "leasestore 需要 Backend")
 	}
 	if cfg.RenewBackend == nil {
 		cfg.RenewBackend = cfg.Backend
@@ -119,7 +119,7 @@ func New(cfg Config) (*Store, error) {
 		cfg.ExpiredGrace = 10 * cfg.LeaseTTL
 	}
 	if cfg.LeaseTTL < 0 || cfg.RenewInterval <= 0 || cfg.RenewInterval >= cfg.LeaseTTL || cfg.PollInterval < 0 || cfg.OpTimeout < 0 || cfg.ExpiredGrace < 0 {
-		return nil, fmt.Errorf("leasestore 配置无效：须满足 0 < RenewInterval < LeaseTTL，其余时长非负")
+		return nil, agentErrors.New(agentErrors.CodeInvalidConfig, "leasestore 配置无效：须满足 0 < RenewInterval < LeaseTTL，其余时长非负")
 	}
 	if cfg.Owner == "" {
 		host, _ := os.Hostname()
@@ -251,6 +251,7 @@ func (s *Store) acquire(ctx context.Context, ns, id string) (func() error, error
 			s.mu.Unlock()
 			return s.unlocker(k, g, h), nil
 		}
+		// #nosec G404 -- 轮询抖动，与安全无关
 		wait := s.cfg.PollInterval + rand.N(s.cfg.PollInterval+1)
 		select {
 		case <-time.After(wait):
@@ -386,7 +387,7 @@ func (s *Store) RemoveScope(ctx context.Context, name string) error {
 // retry or recovery window.
 func (s *Store) PruneRemoved(ctx context.Context, olderThan time.Duration) error {
 	if olderThan < 0 {
-		return fmt.Errorf("墓碑保留时长不能为负：%v", olderThan)
+		return agentErrors.Newf(agentErrors.CodeInvalidInput, "墓碑保留时长不能为负：%v", olderThan)
 	}
 	return s.cfg.Backend.PruneScopes(ctx, olderThan)
 }
